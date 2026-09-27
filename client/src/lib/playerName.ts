@@ -86,3 +86,24 @@ export function expandUnambiguousPlayerName(value: string, aliases: Map<string, 
   if (!key) return formatted;
   return aliases.get(key) || formatted;
 }
+/**
+ * Shortens a name to an initial plus the family name, the way a box score
+ * prints it: "Tychique Malengana Nsangu" becomes "T. Malengana Nsangu".
+ *
+ * Everything after the first word is kept, because double-barrelled and
+ * two-word family names are common in this data ("Dang Akodo",
+ * "Bigby-Williams") and dropping half of one would misidentify the player.
+ * A single-word name is returned untouched.
+ */
+export function abbreviatePlayerName(value: string | null | undefined): string {
+  const cleaned = cleanNamePart(value);
+  if (!cleaned) return "";
+
+  const parts = cleaned.split(" ");
+  if (parts.length < 2) return cleaned;
+
+  const [first, ...rest] = parts;
+  // Already an initial ("J" or "J.") — normalise rather than re-abbreviate.
+  const initial = first.replace(/\.$/, "").charAt(0).toUpperCase();
+  return `${initial}. ${rest.join(" ")}`;
+}

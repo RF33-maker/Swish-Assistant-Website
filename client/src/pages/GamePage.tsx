@@ -2,6 +2,7 @@ import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import BoxScoreTable from "@/components/BoxScoreTable";
 import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
@@ -1502,143 +1503,20 @@ export default function GamePage() {
                     </div>
                   ) : (
                     <>
-                      <div className="bg-white dark:bg-neutral-800 rounded-lg overflow-hidden border border-orange-100 dark:border-neutral-700">
-                        <div className="bg-orange-500 px-4 py-3 flex items-center gap-3 text-white">
-                          <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
-                          <h4 className="font-semibold">{gameData.hometeam}</h4>
-                          {homeScore !== null && <span className="ml-auto text-2xl font-bold">{homeScore}</span>}
-                        </div>
-                        {homePlayerStats.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead className="bg-orange-50 dark:bg-neutral-900 text-slate-600 dark:text-slate-400">
-                                <tr>
-                                  <th className="text-left py-2 px-3 sticky left-0 bg-orange-50 dark:bg-neutral-900">Player</th>
-                                  <th className="text-center py-2 px-2">MIN</th>
-                                  <th className="text-center py-2 px-2">PTS</th>
-                                  <th className="text-center py-2 px-2">REB</th>
-                                  <th className="text-center py-2 px-2">AST</th>
-                                  <th className="text-center py-2 px-2">STL</th>
-                                  <th className="text-center py-2 px-2">BLK</th>
-                                  <th className="text-center py-2 px-2">TO</th>
-                                  <th className="text-center py-2 px-2">PF</th>
-                                  <th className="text-center py-2 px-2">FG</th>
-                                  <th className="text-center py-2 px-2">3PT</th>
-                                  <th className="text-center py-2 px-2">FT</th>
-                                  <th className="text-center py-2 px-2">EFF</th>
-                                </tr>
-                              </thead>
-                              <tbody className="text-slate-800 dark:text-slate-200">
-                                {homePlayerStats.map((player, idx) => {
-                                  const eff = (player.spoints || 0) + (player.sreboundstotal || 0) + (player.sassists || 0) + (player.ssteals || 0) + (player.sblocks || 0)
-                                    - ((player.sfieldgoalsattempted || 0) - (player.sfieldgoalsmade || 0))
-                                    - ((player.sfreethrowsattempted || 0) - (player.sfreethrowsmade || 0))
-                                    - (player.sturnovers || 0);
-                                  return (
-                                  <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
-                                    <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
-                                      {player.shirtnumber != null && String(player.shirtnumber).trim() !== "" && (
-                                        <span className="text-slate-400 dark:text-slate-500 text-xs mr-1.5">#{player.shirtnumber}</span>
-                                      )}
-                                      {player.full_name || player.player_name || `${player.firstname || ''} ${player.familyname || ''}`.trim() || 'Unknown'}
-                                    </td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
-                                    <td className="text-center py-2 px-2 font-semibold text-orange-500">{player.spoints || 0}</td>
-                                    <td className="text-center py-2 px-2">{player.sreboundstotal || 0}</td>
-                                    <td className="text-center py-2 px-2">{player.sassists || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.ssteals || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.sblocks || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.sturnovers || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.sfoulspersonal || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
-                                      {player.sfieldgoalsmade || 0}/{player.sfieldgoalsattempted || 0}
-                                    </td>
-                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
-                                      {player.sthreepointersmade || 0}/{player.sthreepointersattempted || 0}
-                                    </td>
-                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
-                                      {player.sfreethrowsmade || 0}/{player.sfreethrowsattempted || 0}
-                                    </td>
-                                    <td className="text-center py-2 px-2 font-semibold text-slate-600 dark:text-slate-300">{eff}</td>
-                                  </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <p className="p-4 text-slate-500 text-center italic">No player stats available</p>
-                        )}
-                      </div>
-
-                      <div className="bg-white dark:bg-neutral-800 rounded-lg overflow-hidden border border-orange-100 dark:border-neutral-700">
-                        <div className="bg-orange-500 px-4 py-3 flex items-center gap-3 text-white">
-                          <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                          <h4 className="font-semibold">{gameData.awayteam}</h4>
-                          {awayScore !== null && <span className="ml-auto text-2xl font-bold">{awayScore}</span>}
-                        </div>
-                        {awayPlayerStats.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead className="bg-orange-50 dark:bg-neutral-900 text-slate-600 dark:text-slate-400">
-                                <tr>
-                                  <th className="text-left py-2 px-3 sticky left-0 bg-orange-50 dark:bg-neutral-900">Player</th>
-                                  <th className="text-center py-2 px-2">MIN</th>
-                                  <th className="text-center py-2 px-2">PTS</th>
-                                  <th className="text-center py-2 px-2">REB</th>
-                                  <th className="text-center py-2 px-2">AST</th>
-                                  <th className="text-center py-2 px-2">STL</th>
-                                  <th className="text-center py-2 px-2">BLK</th>
-                                  <th className="text-center py-2 px-2">TO</th>
-                                  <th className="text-center py-2 px-2">PF</th>
-                                  <th className="text-center py-2 px-2">FG</th>
-                                  <th className="text-center py-2 px-2">3PT</th>
-                                  <th className="text-center py-2 px-2">FT</th>
-                                  <th className="text-center py-2 px-2">EFF</th>
-                                </tr>
-                              </thead>
-                              <tbody className="text-slate-800 dark:text-slate-200">
-                                {awayPlayerStats.map((player, idx) => {
-                                  const eff = (player.spoints || 0) + (player.sreboundstotal || 0) + (player.sassists || 0) + (player.ssteals || 0) + (player.sblocks || 0)
-                                    - ((player.sfieldgoalsattempted || 0) - (player.sfieldgoalsmade || 0))
-                                    - ((player.sfreethrowsattempted || 0) - (player.sfreethrowsmade || 0))
-                                    - (player.sturnovers || 0);
-                                  return (
-                                  <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
-                                    <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
-                                      {player.shirtnumber != null && String(player.shirtnumber).trim() !== "" && (
-                                        <span className="text-slate-400 dark:text-slate-500 text-xs mr-1.5">#{player.shirtnumber}</span>
-                                      )}
-                                      {player.full_name || player.player_name || `${player.firstname || ''} ${player.familyname || ''}`.trim() || 'Unknown'}
-                                    </td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
-                                    <td className="text-center py-2 px-2 font-semibold text-orange-500">{player.spoints || 0}</td>
-                                    <td className="text-center py-2 px-2">{player.sreboundstotal || 0}</td>
-                                    <td className="text-center py-2 px-2">{player.sassists || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.ssteals || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.sblocks || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.sturnovers || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.sfoulspersonal || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
-                                      {player.sfieldgoalsmade || 0}/{player.sfieldgoalsattempted || 0}
-                                    </td>
-                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
-                                      {player.sthreepointersmade || 0}/{player.sthreepointersattempted || 0}
-                                    </td>
-                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
-                                      {player.sfreethrowsmade || 0}/{player.sfreethrowsattempted || 0}
-                                    </td>
-                                    <td className="text-center py-2 px-2 font-semibold text-slate-600 dark:text-slate-300">{eff}</td>
-                                  </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <p className="p-4 text-slate-500 text-center italic">No player stats available</p>
-                        )}
-                      </div>
+                      <BoxScoreTable
+                        players={homePlayerStats}
+                        teamName={gameData.hometeam}
+                        score={homeScore}
+                        leagueId={gameData.league_id}
+                        formatMinutes={parseMinutes}
+                      />
+                      <BoxScoreTable
+                        players={awayPlayerStats}
+                        teamName={gameData.awayteam}
+                        score={awayScore}
+                        leagueId={gameData.league_id}
+                        formatMinutes={parseMinutes}
+                      />
                     </>
                   )}
                 </TabsContent>
