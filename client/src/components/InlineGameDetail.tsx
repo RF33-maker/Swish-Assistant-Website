@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Calendar, Clock, MapPin, Link as LinkIcon, Check, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import SharedBoxScore from "@/components/BoxScoreTable";
 import { TeamLogo } from "./TeamLogo";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
 import type { ShotData } from "./ShotChart";
@@ -566,68 +567,14 @@ export function InlineGameDetail({
   const tabActiveStyle = { backgroundColor: brandColor, color: "#fff" };
 
   const BoxScoreTable = ({ players, teamName, score }: { players: PlayerStat[]; teamName: string; score: number }) => (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg overflow-hidden border border-orange-100 dark:border-neutral-700">
-      <div className="px-4 py-3 flex items-center gap-3 text-white" style={{ backgroundColor: brandColor }}>
-        {leagueId && <TeamLogo teamName={teamName} leagueId={leagueId} size="sm" />}
-        <h4 className="font-semibold flex-1 truncate">{teamName}</h4>
-        {score != null && <span className="ml-auto text-2xl font-bold">{score}</span>}
-      </div>
-      {players.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-orange-50 dark:bg-neutral-900 text-slate-600 dark:text-slate-400">
-              <tr>
-                <th className="text-left py-2 px-3 sticky left-0 bg-orange-50 dark:bg-neutral-900">Player</th>
-                <th className="text-center py-2 px-2">MIN</th>
-                <th className="text-center py-2 px-2">PTS</th>
-                <th className="text-center py-2 px-2">REB</th>
-                <th className="text-center py-2 px-2">AST</th>
-                <th className="text-center py-2 px-2">STL</th>
-                <th className="text-center py-2 px-2">BLK</th>
-                <th className="text-center py-2 px-2">TO</th>
-                <th className="text-center py-2 px-2">PF</th>
-                <th className="text-center py-2 px-2">FG</th>
-                <th className="text-center py-2 px-2">3PT</th>
-                <th className="text-center py-2 px-2">FT</th>
-                <th className="text-center py-2 px-2">EFF</th>
-              </tr>
-            </thead>
-            <tbody className="text-slate-800 dark:text-slate-200">
-              {players.map((p, i) => {
-                const eff = (p.spoints || 0) + (p.sreboundstotal || 0) + (p.sassists || 0) + (p.ssteals || 0) + (p.sblocks || 0)
-                  - ((p.sfieldgoalsattempted || 0) - (p.sfieldgoalsmade || 0))
-                  - ((p.sfreethrowsattempted || 0) - (p.sfreethrowsmade || 0))
-                  - (p.sturnovers || 0);
-                return (
-                <tr key={i} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
-                  <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
-                    {p.jersey_number != null && String(p.jersey_number).trim() !== "" && (
-                      <span className="text-slate-400 dark:text-slate-500 text-xs mr-1.5">#{p.jersey_number}</span>
-                    )}
-                    {p.firstname} {p.familyname}
-                  </td>
-                  <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(p.sminutes)}</td>
-                  <td className="text-center py-2 px-2 font-semibold" style={{ color: readable.body }}>{p.spoints || 0}</td>
-                  <td className="text-center py-2 px-2">{p.sreboundstotal || 0}</td>
-                  <td className="text-center py-2 px-2">{p.sassists || 0}</td>
-                  <td className="text-center py-2 px-2 text-slate-500">{p.ssteals || 0}</td>
-                  <td className="text-center py-2 px-2 text-slate-500">{p.sblocks || 0}</td>
-                  <td className="text-center py-2 px-2 text-slate-500">{p.sturnovers || 0}</td>
-                  <td className="text-center py-2 px-2 text-slate-500">{p.sfoulspersonal || 0}</td>
-                  <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">{p.sfieldgoalsmade || 0}/{p.sfieldgoalsattempted || 0}</td>
-                  <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">{p.sthreepointersmade || 0}/{p.sthreepointersattempted || 0}</td>
-                  <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">{p.sfreethrowsmade || 0}/{p.sfreethrowsattempted || 0}</td>
-                  <td className="text-center py-2 px-2 font-semibold text-slate-600 dark:text-slate-300">{eff}</td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="p-4 text-slate-500 text-center italic">No player stats available</p>
-      )}
-    </div>
+    <SharedBoxScore
+      players={players}
+      teamName={teamName}
+      score={score}
+      leagueId={leagueId ?? undefined}
+      headerColor={brandColor}
+      formatMinutes={parseMinutes}
+    />
   );
 
   return (
