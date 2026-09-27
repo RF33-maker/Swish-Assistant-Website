@@ -147,12 +147,39 @@ async function getServerLogoMap(leagueId: string): Promise<Record<string, string
   return fetchPromise;
 }
 
+/**
+ * Mirrors logoNameKey in server/routes.ts so both sides agree on what counts
+ * as the same club.
+ */
+function logoKey(name: string): string {
+  return (name || "")
+    .replace(/_/g, " ")
+    .replace(/!/g, "")
+    .replace(/\s+Senior\s+(Men|Women)\b/gi, "")
+    .replace(/\s+I\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function findInLogoMap(map: Record<string, string>, teamName: string): string | undefined {
   if (map[teamName]) return map[teamName];
   const lower = teamName.toLowerCase();
   // Exact case-insensitive match
   const exact = Object.entries(map).find(([k]) => k.toLowerCase() === lower);
   if (exact) return exact[1];
+
+  // Normalised match, using the server's own key. The prefix fallback below
+  // cannot handle a suffix that ends up in the middle: the stats tables show
+  // "London Lions II" while storage has "London Lions Senior Men II", and
+  // neither string is a prefix of the other, so a reserve team silently lost
+  // its logo. Stripping "Senior Men" from both first makes them agree.
+  const key = logoKey(teamName);
+  if (key) {
+    const keyed = Object.entries(map).find(([k]) => logoKey(k) === key);
+    if (keyed) return keyed[1];
+  }
+
   // Prefix match: storage file names sometimes have a trailing roman numeral or
   // "Senior Men" suffix that the stats table omits (e.g. "Barking Abbey Senior
   // Men" matches "Barking Abbey Senior Men I"). Prefer the longest match.
