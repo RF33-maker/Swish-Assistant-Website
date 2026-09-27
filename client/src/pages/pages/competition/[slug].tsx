@@ -127,8 +127,17 @@ export default function CompetitionPage() {
 
   // Scoped to the selected gender when this is a gender-split brand;
   // otherwise every competition is in scope, unchanged from before.
+  //
+  // A competition with no gender set (someone created it via the league
+  // admin panel and left that field blank -- it's free text with no
+  // default) doesn't belong to either tab under a strict `===` filter, so it
+  // silently disappeared from the page entirely rather than showing under
+  // "no competitions available". Surfacing it under every gender tab is the
+  // safer default: worst case a competition appears once too often, instead
+  // of an admin's real, public, is_public=true competition being invisible
+  // with no error and no indication anything is missing.
   const genderScopedSeasons = useMemo(
-    () => (availableGenders.length > 0 ? seasons.filter((c) => c.gender === selectedGender) : seasons),
+    () => (availableGenders.length > 0 ? seasons.filter((c) => !c.gender || c.gender === selectedGender) : seasons),
     [seasons, availableGenders, selectedGender],
   );
 
