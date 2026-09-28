@@ -50,12 +50,41 @@ type AuthContextType = {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ── Local "view as team" (dev server only) ────────────────────────────────
+// Lets you build coach features from a team's point of view without signing
+// in to that team's account: open any page with `?viewAsTeam=<team_id>` and
+// the app treats you as that team's coach until `?viewAsTeam=off`. Gated on
+// import.meta.env.DEV, so production builds drop it entirely. It only changes
+// what the browser *thinks* the role is — the server never trusts it (coach
+// data is read through public endpoints, admin endpoints check the real JWT).
+const DEV_VIEW_AS_KEY = "swish:devViewAsTeam";
+
+function readDevViewAsTeam(): string | null {
+  if (!import.meta.env.DEV || typeof window === "undefined") return null;
+  try {
+    const param = new URLSearchParams(window.location.search).get("viewAsTeam");
+    if (param === "off") window.localStorage.removeItem(DEV_VIEW_AS_KEY);
+    else if (param) window.localStorage.setItem(DEV_VIEW_AS_KEY, param);
+    return window.localStorage.getItem(DEV_VIEW_AS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function clearDevViewAsTeam() {
+  try {
+    window.localStorage.removeItem(DEV_VIEW_AS_KEY);
+  } catch {
+    // storage unavailable — nothing to clear
+  }
+}
+
 function useAuthProviderValue(): AuthContextType {
   const { toast } = useToast();
   const [_, setLocation] = useLocation();
 
   const {
-    data: user = null,
+    data: realUser = null,
     error,
     isLoading,
   } = useQuery<any, Error>({
@@ -75,6 +104,14 @@ function useAuthProviderValue(): AuthContextType {
   // Derive admin/coach and email-confirmed state from the Supabase user object.
   // app_metadata is authoritative — it can only be written server-side via the
   // service-role key, so it cannot be spoofed from the browser.
+  const devViewAsTeam = readDevViewAsTeam();
+  const user = devViewAsTeam
+    ? {
+        ...(realUser ?? { id: "00000000-0000-0000-0000-000000000000", email: "coach-preview@localhost" }),
+        email_confirmed_at: realUser?.email_confirmed_at ?? new Date(0).toISOString(),
+        app_metadata: { ...(realUser?.app_metadata ?? {}), role: "coach", team_id: devViewAsTeam },
+      }
+    : realUser;
   const isAdmin = user?.app_metadata?.role === "admin";
   const isCoach = user?.app_metadata?.role === "coach";
   const teamId = isCoach ? (user?.app_metadata?.team_id ?? null) : null;
@@ -136,6 +173,7 @@ function useAuthProviderValue(): AuthContextType {
 
   const logoutMutation = useMutation<void, Error, void>({
     mutationFn: async () => {
+      clearDevViewAsTeam();
       const { error } = await supabase.auth.signOut();
       if (error) throw new Error(error.message);
     },
@@ -167,7 +205,20 @@ function useAuthProviderValue(): AuthContextType {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useAuthProviderValue();
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {import.meta.env.DEV && value.isCoach && value.user?.app_metadata?.team_id && readDevViewAsTeam() && (
+        <a
+          href="?viewAsTeam=off"
+          className="fixed bottom-3 right-3 z-[10000] rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-amber-600"
+          title="Local-only coach preview. Click to exit."
+        >
+          Viewing as team coach (local) · Exit
+        </a>
+      )}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextType {

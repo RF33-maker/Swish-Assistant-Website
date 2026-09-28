@@ -278,6 +278,13 @@ function projectShot(shot: ShotData): { sx: number; sy: number; zone: string } {
   return { sx, sy, zone };
 }
 
+/** Court zone a shot falls in, using the same geometry the chart draws. */
+export function shotZone(shot: ShotData): string {
+  return projectShot(shot).zone;
+}
+
+export { ZONES as SHOT_ZONES, ZONE_POINTS as SHOT_ZONE_POINTS };
+
 export default function ShotChart({
   shots,
   filters = {},

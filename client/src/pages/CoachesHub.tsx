@@ -23,6 +23,7 @@ import UnifiedScoutingEditor from '@/components/scout-editor/UnifiedScoutingEdit
 import { ordinal } from '@/lib/gameReport';
 import MatchReport from '@/components/coaches-hub/MatchReport';
 import OpponentScoutReport from '@/components/coaches-hub/OpponentScoutReport';
+import FormComparison from '@/components/coaches-hub/FormComparison';
 import { safelyParseReport } from "@/utils/parseReport";
 import { ScoutingReport } from "@/types/reportSchema";
 import { namesMatch, strictNamesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
@@ -139,7 +140,7 @@ export interface MyTeamGame {
   matchTime: string | null;
 }
 
-type HubTab = 'overview' | 'rankings' | 'lineups' | 'trends' | 'scouting';
+type HubTab = 'overview' | 'compare' | 'rankings' | 'lineups' | 'trends' | 'scouting';
 
 interface TopLeagueShortcut {
   // Display label/logo prefer the parent league brand (shorter, more
@@ -907,6 +908,8 @@ export default function CoachesHub() {
     {
       group: 'Stats', tabs: [
         { id: 'overview', label: 'Overview' },
+        // Needs a team of your own to compare from, so team (coach) logins only.
+        ...(myTeam ? [{ id: 'compare' as HubTab, label: 'Compare' }] : []),
         { id: 'rankings', label: 'Rankings' },
         { id: 'lineups', label: 'Lineups' },
         { id: 'trends', label: 'Trends' },
@@ -1267,11 +1270,11 @@ export default function CoachesHub() {
                     "Build" to make something — instead of one flat row. */}
                 <div className="flex flex-wrap items-end gap-x-8 gap-y-3 pb-4 border-b border-gray-200 dark:border-neutral-800">
                   {tabGroups.map((g) => (
-                    <div key={g.group}>
+                    <div key={g.group} className="min-w-0 max-w-full">
                       <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-neutral-500 mb-1.5">
                         {g.group}
                       </div>
-                      <div className="flex gap-1.5">
+                      <div className="flex flex-wrap gap-1.5">
                         {g.tabs.map((tab) => (
                           <button
                             key={tab.id}
@@ -1599,6 +1602,21 @@ export default function CoachesHub() {
                     <SectionKicker n="01" label="Lineups" color={readableBrand} />
                     <AdvancedInsights leagueId={selectedLeague.league_id} teamId={isCoach ? coachTeamId ?? undefined : undefined} showHeading={false} />
                   </div>
+                )}
+
+                {/* Compare: your recent form against an opponent's */}
+                {activeTab === 'compare' && myTeam && (
+                  <FormComparison
+                    leagueId={selectedLeague.league_id}
+                    myTeamId={myTeam.team_id}
+                    myTeamName={myTeam.team_name}
+                    standings={standings}
+                    gameResults={leagueGameResults}
+                    nextOpponentName={
+                      nextGame ? (nextGame.home_team_id === myTeam.team_id ? nextGame.awayteam : nextGame.hometeam) : null
+                    }
+                    brandColor={readableBrand}
+                  />
                 )}
 
                 {/* Trends */}

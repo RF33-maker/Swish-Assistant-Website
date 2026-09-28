@@ -1430,8 +1430,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) return res.status(401).json({ error: "Authentication required" });
 
       const { kind, facts, sectionKeys } = req.body || {};
-      if (kind !== "match" && kind !== "scout") {
-        return res.status(400).json({ error: "kind must be 'match' or 'scout'" });
+      if (kind !== "match" && kind !== "scout" && kind !== "compare") {
+        return res.status(400).json({ error: "kind must be 'match', 'scout' or 'compare'" });
       }
       if (!facts || typeof facts !== "object") {
         return res.status(400).json({ error: "facts object is required" });

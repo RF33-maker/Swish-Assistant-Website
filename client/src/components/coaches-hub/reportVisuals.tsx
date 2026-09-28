@@ -27,23 +27,36 @@ export function ComparisonBarRow({
   theirColor,
   myLabel,
   theirLabel,
+  showDifference = false,
 }: {
   row: ComparisonRow;
   myColor: string;
   theirColor: string;
   myLabel: string;
   theirLabel: string;
+  /** Show your value minus theirs under the label, coloured by who it favours. */
+  showDifference?: boolean;
 }) {
   const mine = row.mine ?? 0;
   const theirs = row.theirs ?? 0;
   const total = mine + theirs;
   const minePct = total > 0 ? (mine / total) * 100 : 50;
   const better =
-    row.mine == null || row.theirs == null
+    row.mine == null || row.theirs == null || row.neutral
       ? null
       : row.lowerIsBetter
         ? row.mine < row.theirs
         : row.mine > row.theirs;
+  const difference = row.mine != null && row.theirs != null ? row.mine - row.theirs : null;
+  const decimals = row.decimals ?? 0;
+  // Percentages differ by percentage points, not by percent.
+  const isLevel = difference != null && Math.abs(difference) < 0.5 * 10 ** -decimals;
+  const differenceText =
+    difference == null
+      ? null
+      : isLevel
+        ? 'Level'
+        : `${difference > 0 ? '+' : '−'}${Math.abs(difference).toFixed(decimals)}${row.unit === '%' ? ' pts' : row.unit ?? ''}`;
 
   return (
     <div className="py-2">
@@ -55,8 +68,20 @@ export function ComparisonBarRow({
         >
           {formatValue(row.mine, row.unit, row.decimals ?? 0)}
         </span>
-        <span className="text-[11px] md:text-xs font-medium text-gray-600 dark:text-neutral-400 text-center flex-1 truncate">
-          {row.label}
+        <span className="text-[11px] md:text-xs font-medium text-gray-600 dark:text-neutral-400 text-center flex-1 min-w-0">
+          <span className="block truncate">{row.label}</span>
+          {showDifference && differenceText && (
+            <span
+              className={`block text-[11px] font-semibold tabular-nums ${better === true && !isLevel ? '' : 'text-gray-500 dark:text-neutral-400'}`}
+              style={better === true && !isLevel ? { color: myColor } : undefined}
+              title={`${myLabel} minus ${theirLabel}${row.lowerIsBetter ? ' (lower is better)' : ''}`}
+              data-testid="comparison-difference"
+            >
+              {differenceText}
+              {!isLevel && better === false && <span className="font-normal"> · their edge</span>}
+              {!isLevel && better === true && <span className="font-normal"> · your edge</span>}
+            </span>
+          )}
         </span>
         <span
           className={`text-sm font-bold tabular-nums ${better === false ? 'text-gray-700 dark:text-neutral-200' : MUTED}`}

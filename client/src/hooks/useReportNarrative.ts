@@ -20,7 +20,7 @@ type Status = 'idle' | 'loading' | 'ready' | 'unavailable';
  * facts sent are complete.
  */
 export function useReportNarrative(
-  kind: 'match' | 'scout',
+  kind: 'match' | 'scout' | 'compare',
   facts: unknown,
   sectionKeys: string[],
   enabled: boolean
