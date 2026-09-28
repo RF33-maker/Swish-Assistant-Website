@@ -35,7 +35,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
   )
 }
 
-export default function SiteNav({ inSheet = false }: { inSheet?: boolean }) {
+export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet?: boolean; layout?: "rail" | "sheet" }) {
   const [location] = useLocation()
   const { user } = useAuth()
   const { data: scores } = useScores()
@@ -60,7 +60,10 @@ export default function SiteNav({ inSheet = false }: { inSheet?: boolean }) {
   }
 
   return (
-    <nav aria-label="Site" className="flex flex-col p-3 gap-0.5">
+    // In the rail the nav fills the column and the account / More from Swish /
+    // Subscribe group is pushed to the bottom, so the rail reads as anchored
+    // top and bottom instead of stopping partway down with blank space below.
+    <nav aria-label="Site" className={`flex flex-col p-3 gap-0.5 ${layout === "rail" ? "flex-1" : ""}`}>
       {internalLink("/", location === "/", <>
         <Home className="h-4 w-4 shrink-0" aria-hidden="true" />
         Home
@@ -89,6 +92,7 @@ export default function SiteNav({ inSheet = false }: { inSheet?: boolean }) {
         </>
       )}
 
+      <div className={`flex flex-col gap-0.5 ${layout === "rail" ? "mt-auto pt-2" : ""}`}>
       <SectionLabel>Account</SectionLabel>
       <a href="/auth" data-testid="sidebar-login" className={itemClass(false)}>
         <LogIn className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -145,6 +149,7 @@ export default function SiteNav({ inSheet = false }: { inSheet?: boolean }) {
       >
         Subscribe
       </a>
+      </div>
     </nav>
   )
 }

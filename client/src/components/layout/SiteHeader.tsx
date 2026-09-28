@@ -34,18 +34,24 @@ export default function SiteHeader() {
           type="button"
           aria-label="Go to home"
           onClick={() => setLocation('/')}
-          className="flex items-center gap-2 px-5 py-4 border-b border-neutral-800 hover:opacity-90 transition-opacity"
+          className="flex h-[65px] shrink-0 items-center gap-2 px-6 border-b border-neutral-800 hover:opacity-90 transition-opacity"
         >
           <img src={SwishLogo} alt="" className="h-8" />
           <span className="font-semibold text-white">Swish Assistant</span>
         </button>
-        <SiteNav />
+        <SiteNav layout="rail" />
       </aside>
 
-      <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
+      {/* Brand line across the very top. On desktop it's fixed and full-width
+          so it runs over the rail as well as the content; in-flow on mobile. */}
+      <div className="lg:hidden h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
+      <div className="hidden lg:block fixed top-0 inset-x-0 z-50 h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
 
       <header className="bg-[#0a0a0f] border-b border-neutral-800">
-        <div className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3">
+        {/* Fixed height on desktop so this bottom border meets the rail's logo
+            row border in one continuous line. The rail row is 65px because its
+            border is inside its box, while this one sits outside the 64px row. */}
+        <div className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 lg:py-0 lg:h-16">
           {/* On desktop the logo sits at the top of the rail instead. */}
           <button
             type="button"
