@@ -71,6 +71,16 @@ function teamLevel(name: string): string {
   return `${age}|${reserve}|${gender}`;
 }
 
+// True when two imported names are the same club side across competitions,
+// e.g. NBL's "Gloucester City Kings Senior Men I" and BCB's "Gloucester City
+// Kings". "Senior Men" is the default side, so it is dropped before comparing
+// levels — otherwise its "men" reads as a gender and splits the club — while
+// "Women", age groups and reserve sides (II, III) still stay separate.
+export function isSameTeam(a: string, b: string): boolean {
+  const level = (name: string) => teamLevel((name || "").replace(/\s+Senior\s+Men\b/gi, " "));
+  return identityKey(a) === identityKey(b) && level(a) === level(b);
+}
+
 function jaroWinkler(a: string, b: string): number {
   if (a === b) return 1;
   if (!a || !b) return 0;

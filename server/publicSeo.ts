@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { supabaseAdmin } from "./supabaseServiceClient";
+import { isSameTeam } from "./teamIdentityService";
 
 const SITE_BASE = "https://swishassistant.com";
 const GAME_PAGE_SIZE = 25;
@@ -430,7 +431,7 @@ async function renderTeam(teamSegment: string, competitionSlug?: string): Promis
       .select("name, league_id")
       .ilike("name", `%${decoded}%`)
       .limit(50);
-    for (const candidate of (candidates || []).filter((row: any) => slugifyTeam(row.name || "") === slugifyTeam(decoded))) {
+    for (const candidate of (candidates || []).filter((row: any) => slugifyTeam(row.name || "") === slugifyTeam(decoded) || isSameTeam(row.name || "", decoded))) {
       const resolved = await resolvePublicCompetition(candidate.league_id);
       if (resolved) {
         competition = resolved;
@@ -449,7 +450,11 @@ async function renderTeam(teamSegment: string, competitionSlug?: string): Promis
     .limit(500);
   if (leagueIds.length) statQuery = statQuery.in("league_id", leagueIds);
   const { data: rawStats } = await statQuery;
-  const stats = (rawStats || []).filter((row: any) => slugifyTeam(row.team_name || "") === slugifyTeam(decoded));
+  // Same club identity as the team profile, so "Gloucester City Kings" finds
+  // NBL's "Gloucester City Kings Senior Men I" rows instead of 404ing.
+  const stats = (rawStats || []).filter((row: any) =>
+    slugifyTeam(row.team_name || "") === slugifyTeam(decoded) || isSameTeam(row.team_name || "", decoded)
+  );
   if (!stats.length) return undefined;
   const teamName = stats[0].team_name;
   const playerIds = Array.from(new Set(stats.map((row: any) => row.player_id).filter(Boolean))) as string[];
