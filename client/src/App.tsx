@@ -33,6 +33,7 @@ import WidgetPage from "@/pages/widgets/WidgetPage";
 import WidgetDemo from "@/pages/widget-demo";
 import EmbedGuide from "@/pages/embed-guide";
 import GamePage from "@/pages/GamePage";
+import ScoresPage from "@/pages/ScoresPage";
 import { AuthProvider } from "./hooks/use-auth";
 import { AdminRoute, ProtectedRoute, TeamRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
@@ -88,6 +89,7 @@ function Router() {
       <Route path="/cookies" component={CookiePolicyPage} />
       <Route path="/contact-sales" component={ContactSalesPage} />
       <Route path="/game/:gameKey" component={GamePage} />
+      <Route path="/scores" component={ScoresPage} />
       <Route path="/widget/:type" component={WidgetPage} />
       <Route path="/widget-demo" component={WidgetDemo} />
       <Route path="/embed" component={EmbedGuide} />

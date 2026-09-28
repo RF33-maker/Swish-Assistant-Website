@@ -3093,6 +3093,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
   }
 
+  // ── Scores page (/scores) ───────────────────────────────────────────────────
+  // One place for "what's on": live games, what's coming up next, and results
+  // from the last day. The homepage ticker is capped at a few games per league,
+  // which hid up to half of a busy Saturday; this endpoint is the complete view
+  // behind it.
+  //
+  // The rolling rules live here rather than in the client so every consumer
+  // (the page, and later the homepage block) agrees on them:
+  //   live      in progress now
+  //   upcoming  the rest of today (UK time); if nothing is left today, the
+  //             next day that has games — so midweek never shows an empty page
+  //   results   finished games that tipped off in the last 24 hours
+  //
+  // Competition scope and feed-child remapping reuse fetchHomeCompetitionScope,
+  // so private feed competitions (e.g. the BCB Trophy) appear under their public
+  // parent and REBA stays excluded, exactly as on the homepage.
+  const SCORES_TTL_MS = 30 * 1000;
+  const SCORES_RESULTS_WINDOW_MS = 24 * 60 * 60 * 1000;
+  // A game whose tip-off has passed but whose feed hasn't flipped to live yet
+  // stays in "coming up" for a while rather than vanishing from the page.
+  const SCORES_LATE_START_GRACE_MS = 3 * 60 * 60 * 1000;
+  const SCORES_LOOKAHEAD_MS = 21 * 24 * 60 * 60 * 1000;
+  let scoresCache: { data: any; at: number } | null = null;
+  let scoresInFlight: Promise<any> | null = null;
+
+  // The feed stores tip-offs as UK wall-clock time labelled +00 (a 19:30
+  // tip-off is stored as 19:30+00 even during BST), which is why the rest of
+  // the site formats match times in UTC. So a game's calendar day is read in
+  // UTC, while "today" is the real date in the UK. The instant comparisons
+  // below (live window, late-start grace, 24h results) are therefore up to an
+  // hour off in summer; they are hours-wide windows, so that is tolerable,
+  // but don't tighten them to minutes without converting properly first.
+  const dateKey = (d: Date, timeZone: string): string =>
+    new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  const gameDayKey = (iso: string): string => dateKey(new Date(iso), "UTC");
+  const ukTodayKey = (): string => dateKey(new Date(), "Europe/London");
+
+  // "British Championship Basketball 2026-2027" -> "British Championship Basketball"
+  const stripSeason = (name: string): string =>
+    name
+      .replace(/\s+(20\d{2}\s*[-/]\s*(20)?\d{2}|\d{2}\s*[-/]\s*\d{2}|20\d{2})\s*$/i, "")
+      .trim() || name;
+
+  async function fetchScores() {
+    const scope = await fetchHomeCompetitionScope();
+    const empty = { generatedAt: new Date().toISOString(), leagues: [], live: [], upcoming: { date: null, games: [] }, results: [] };
+    if (scope.sourceIds.length === 0) return empty;
+
+    const now = Date.now();
+    const [resultsRes, scheduleRes] = await Promise.all([
+      supabaseAdmin
+        .from("v_game_results")
+        .select("game_key,league_id,match_time,home_team,away_team,home_score,away_score,game_status")
+        .in("league_id", scope.sourceIds)
+        .gte("match_time", new Date(now - 36 * 60 * 60 * 1000).toISOString())
+        .order("match_time", { ascending: false })
+        .limit(400),
+      supabaseAdmin
+        .from("game_schedule")
+        .select("game_key,league_id,matchtime,hometeam,awayteam,status")
+        .in("league_id", scope.sourceIds)
+        .gte("matchtime", new Date(now - 36 * 60 * 60 * 1000).toISOString())
+        .lte("matchtime", new Date(now + SCORES_LOOKAHEAD_MS).toISOString())
+        .order("matchtime", { ascending: true })
+        .limit(1000),
+    ]);
+    if (resultsRes.error) throw new Error(`Scores results lookup failed: ${resultsRes.error.message}`);
+    if (scheduleRes.error) throw new Error(`Scores schedule lookup failed: ${scheduleRes.error.message}`);
+
+    const display = (leagueId: string) => scope.sourceToDisplay.get(leagueId) || null;
+    const toGame = (d: any, row: {
+      game_key: string; match_time: string; home_team: string; away_team: string;
+      home_score: number | null; away_score: number | null; status: string | null;
+    }) => ({
+      game_key: row.game_key,
+      league_id: d.league_id,
+      league_name: stripSeason(d.name),
+      league_slug: d.slug,
+      match_time: row.match_time,
+      home_team: row.home_team,
+      away_team: row.away_team,
+      home_score: row.home_score,
+      away_score: row.away_score,
+      status: row.status,
+    });
+
+    // game_schedule's status is authoritative for live/final; v_game_results
+    // carries the scores (including partial scores while live).
+    const scheduleByKey = new Map<string, any>();
+    for (const s of scheduleRes.data || []) if (s.game_key) scheduleByKey.set(s.game_key, s);
+
+    const live: any[] = [];
+    const results: any[] = [];
+    const seen = new Set<string>();
+
+    for (const g of resultsRes.data || []) {
+      if (!g.game_key || !g.home_team || !g.away_team || seen.has(g.game_key)) continue;
+      const d = display(g.league_id);
+      if (!d) continue;
+      const status = scheduleByKey.get(g.game_key)?.status || g.game_status;
+      const row = {
+        game_key: g.game_key, match_time: g.match_time, home_team: g.home_team, away_team: g.away_team,
+        home_score: g.home_score, away_score: g.away_score, status,
+      };
+      if (isHomeCurrentLive(status, g.match_time)) {
+        live.push(toGame(d, row));
+        seen.add(g.game_key);
+      } else if (isHomeFinalStatus(status) && g.home_score != null && g.away_score != null) {
+        const tip = Date.parse(g.match_time);
+        if (Number.isFinite(tip) && now - tip <= SCORES_RESULTS_WINDOW_MS) results.push(toGame(d, row));
+        seen.add(g.game_key);
+      }
+    }
+
+    const upcomingPool: any[] = [];
+    for (const s of scheduleRes.data || []) {
+      if (!s.game_key || !s.hometeam || !s.awayteam || !s.matchtime || seen.has(s.game_key)) continue;
+      const d = display(s.league_id);
+      if (!d) continue;
+      const row = {
+        game_key: s.game_key, match_time: s.matchtime, home_team: s.hometeam, away_team: s.awayteam,
+        home_score: null, away_score: null, status: s.status,
+      };
+      if (isHomeCurrentLive(s.status, s.matchtime)) {
+        // Live in the schedule but no score row yet — still live.
+        live.push(toGame(d, row));
+        seen.add(s.game_key);
+        continue;
+      }
+      if (isHomeFinalStatus(s.status)) continue;
+      const tip = Date.parse(s.matchtime);
+      if (!Number.isFinite(tip) || tip < now - SCORES_LATE_START_GRACE_MS) continue;
+      upcomingPool.push(toGame(d, row));
+    }
+
+    // Roll forward: today's remaining games, else the next day with games.
+    const todayKey = ukTodayKey();
+    const byDay = new Map<string, any[]>();
+    for (const g of upcomingPool) {
+      const key = gameDayKey(g.match_time);
+      if (key < todayKey) continue;
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key)!.push(g);
+    }
+    const nextDay = Array.from(byDay.keys()).sort()[0] || null;
+    const upcomingGames = nextDay ? byDay.get(nextDay)! : [];
+
+    live.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time));
+    upcomingGames.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time));
+    results.sort((a, b) => Date.parse(b.match_time) - Date.parse(a.match_time));
+
+    // Filter chips: only competitions with something to show, in trending order.
+    const present = new Set([...live, ...upcomingGames, ...results].map((g) => g.league_id));
+    const leagues = scope.displayRows
+      .filter((l) => present.has(l.league_id))
+      .map((l) => ({ league_id: l.league_id, name: stripSeason(l.name), slug: l.slug }));
+
+    return {
+      generatedAt: new Date(now).toISOString(),
+      leagues,
+      live,
+      upcoming: { date: nextDay, isToday: nextDay === todayKey, games: upcomingGames },
+      results,
+    };
+  }
+
+  app.get("/api/scores", async (_req: Request, res: Response) => {
+    const now = Date.now();
+    if (scoresCache && now - scoresCache.at < SCORES_TTL_MS) {
+      res.set("Cache-Control", "public, max-age=15");
+      return res.json(scoresCache.data);
+    }
+    if (!scoresInFlight) {
+      scoresInFlight = fetchScores().finally(() => { scoresInFlight = null; });
+    }
+    try {
+      const data = await scoresInFlight;
+      scoresCache = { data, at: Date.now() };
+      res.set("Cache-Control", "public, max-age=15");
+      return res.json(data);
+    } catch (err: any) {
+      console.error("[Scores] fetch error", err.message);
+      if (scoresCache) return res.json(scoresCache.data);
+      return res.status(500).json({ error: "Failed to load scores" });
+    }
+  });
+
   app.get("/api/home/latest-games", async (_req: Request, res: Response) => {
     const now = Date.now();
     if (homeGamesCache && now - homeGamesCache.at < HOME_GAMES_TTL_MS) {
