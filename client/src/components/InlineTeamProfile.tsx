@@ -16,7 +16,8 @@ import {
 } from "@/lib/playerName";
 import { buildTeamSeasonOptions, type TeamSeasonCompetition } from "@/lib/teamSeasons";
 import { AccoladeBadges } from "@/components/AccoladeBadges";
-import { computeTeamAccolades } from "@/lib/accolades";
+import { computeClubAccolades, computeTeamAccolades, topAccolades } from "@/lib/accolades";
+import { useTeamCompetitions } from "@/hooks/useTeamCompetitions";
 import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
 import { TeamLineupsPanel } from "@/components/TeamLineupsPanel";
 import {
@@ -522,10 +523,13 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
     enabled: gameKeys.length > 0 && activeTab === 'shotChart',
   });
 
-  const teamAccolades = useMemo(
-    () => teamData?.games ? computeTeamAccolades(teamData.games, teamRecordMaxes, activeSeason?.label) : [],
-    [teamData?.games, teamRecordMaxes, activeSeason?.label]
-  );
+  // Club-wide (every competition the club has played in), matching the full
+  // team profile — falls back to this competition's games when unmatched.
+  const { data: clubCompetitions = [] } = useTeamCompetitions(normalizedTeamName);
+  const teamAccolades = useMemo(() => {
+    if (clubCompetitions.length > 0) return computeClubAccolades(clubCompetitions);
+    return teamData?.games ? computeTeamAccolades(teamData.games, teamRecordMaxes, activeSeason?.label) : [];
+  }, [clubCompetitions, teamData?.games, teamRecordMaxes, activeSeason?.label]);
 
   const cTd = "px-2 py-1.5 text-center text-xs whitespace-nowrap";
   const isPreSeason = !!(teamData?.preSeasonRoster && teamData.preSeasonRoster.length > 0 && teamData.roster.length === 0);
@@ -594,7 +598,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                     </>
                   )}
                 </div>
-                <AccoladeBadges accolades={teamAccolades} accentColor={readableBrand.body} />
+                <AccoladeBadges accolades={topAccolades(teamAccolades, 4)} accentColor={readableBrand.body} />
               </div>
             </div>
             {seasonOptions.length > 1 && (

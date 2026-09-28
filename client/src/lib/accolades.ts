@@ -299,6 +299,20 @@ export function computeTeamAccolades(
   return accolades;
 }
 
+interface ClubCompetitionLike {
+  name: string;
+  games: TeamGameLike[];
+  recordMaxes: RecordMaxes;
+}
+
+// A club's accolades across every competition it has played in, each judged
+// against that competition's own records and labelled with it. Independent
+// of which competition the profile is being viewed through, so they hold
+// when switching between a club's league, cup and trophy pages.
+export function computeClubAccolades(competitions: ClubCompetitionLike[]): Accolade[] {
+  return competitions.flatMap(c => computeTeamAccolades(c.games, c.recordMaxes, c.name));
+}
+
 const TIER_PRIORITY: Record<AccoladeTier, number> = {
   diamond: 0,
   platinum: 1,

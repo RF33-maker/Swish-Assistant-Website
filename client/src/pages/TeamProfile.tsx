@@ -20,7 +20,7 @@ import {
   getImportedPlayerName,
   resolvePlayerDisplayName,
 } from "@/lib/playerName";
-import { buildTeamSeasonOptions, type TeamSeasonCompetition } from "@/lib/teamSeasons";
+import type { TeamSeasonCompetition } from "@/lib/teamSeasons";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import GameDetailModal from "@/components/GameDetailModal";
 import {
@@ -35,7 +35,8 @@ import { Instagram } from "lucide-react";
 import { AccoladeBadges } from "@/components/AccoladeBadges";
 import { ProfileChip } from "@/components/ProfileChip";
 import { PillTabBar } from "@/components/PillTabBar";
-import { computeTeamAccolades, topAccolades } from "@/lib/accolades";
+import { computeClubAccolades, computeTeamAccolades, topAccolades } from "@/lib/accolades";
+import { useTeamCompetitions } from "@/hooks/useTeamCompetitions";
 import { TeamLineupsPanel } from "@/components/TeamLineupsPanel";
 import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
 
@@ -396,24 +397,25 @@ export default function TeamProfile() {
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS');
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc');
   const [seasonCompetitions, setSeasonCompetitions] = useState<TeamSeasonCompetition[]>([]);
-  const [selectedSeason, setSelectedSeason] = useState("");
-  const seasonOptions = useMemo(
-    () => buildTeamSeasonOptions(seasonCompetitions),
-    [seasonCompetitions],
-  );
-  const activeSeason = seasonOptions.find(option => option.key === selectedSeason) || seasonOptions[0];
-  const selectedLeagueIds = activeSeason?.leagueIds || [];
-  // Competition whose lineups the "Lineups" tab reads: the URL's, if it is in the chosen season.
-  const lineupsSlug = useMemo(() => {
-    const inSeason = seasonCompetitions.filter(c => c.slug && (activeSeason?.leagueIds || []).includes(c.league_id));
-    return (inSeason.find(c => c.slug === leagueSlug) ?? inSeason[0])?.slug || leagueSlug || "";
-  }, [seasonCompetitions, activeSeason?.key, leagueSlug]);
-  // Sibling seasons of this same team/competition — used as a branding/logo
-  // fallback when the current season's own `teams` row hasn't been populated
-  // yet (common for newly-created seasons before data import catches up).
+  // Record, stats and games are scoped to the URL's competition only — a
+  // National Cup game must not count towards the NBL league record, even
+  // though both competitions share a brand and a season.
+  const currentCompetition = seasonCompetitions.find(c => c.slug === leagueSlug);
+  const selectedLeagueIds = currentCompetition ? [currentCompetition.league_id] : [];
+  const lineupsSlug = leagueSlug || "";
+  // Every competition this club has played in (league, cup, trophy, past
+  // seasons) — drives the competition switcher and the club-wide accolades.
+  const decodedTeamName = teamName ? decodeURIComponent(teamName) : "";
+  const { data: clubCompetitions = [] } = useTeamCompetitions(decodedTeamName);
+  // Other competitions of this same club — used as a branding/logo fallback
+  // when the current competition's own `teams` row hasn't been populated yet
+  // (common for newly-created seasons before data import catches up).
   const siblingLeagueIds = useMemo(
-    () => seasonCompetitions.map(c => c.league_id).filter(Boolean),
-    [seasonCompetitions],
+    () => Array.from(new Set([
+      ...seasonCompetitions.map(c => c.league_id),
+      ...clubCompetitions.map(c => c.league_id),
+    ].filter(Boolean))),
+    [seasonCompetitions, clubCompetitions],
   );
 
   // Extract team branding colors
@@ -467,10 +469,23 @@ export default function TeamProfile() {
     return () => { cancelled = true; };
   }, [team?.league?.league_id]);
 
-  const teamAccolades = useMemo(
-    () => team ? computeTeamAccolades(team.games, teamRecordMaxes, activeSeason?.label) : [],
-    [team, teamRecordMaxes, activeSeason?.label]
-  );
+  // Club-wide, so they stay the same whichever competition the profile is
+  // opened through. Falls back to this competition's own games for a team
+  // with no team_stats rows to match on.
+  const teamAccolades = useMemo(() => {
+    if (clubCompetitions.length > 0) return computeClubAccolades(clubCompetitions);
+    return team ? computeTeamAccolades(team.games, teamRecordMaxes, team.league?.name) : [];
+  }, [clubCompetitions, team, teamRecordMaxes]);
+
+  // The switcher always lists the competition being viewed, even before (or
+  // without) a match in the club list.
+  const competitionOptions = useMemo(() => {
+    const options = clubCompetitions.map(c => ({ slug: c.slug, name: c.name, record: `${c.wins}-${c.losses}` }));
+    if (leagueSlug && !options.some(o => o.slug === leagueSlug)) {
+      options.unshift({ slug: leagueSlug, name: currentCompetition?.name || leagueSlug, record: "" });
+    }
+    return options;
+  }, [clubCompetitions, leagueSlug, currentCompetition?.name]);
 
   const activePlayerStatColumns = useMemo(() => {
     return PLAYER_STAT_COLUMNS[playerStatsCategory] || PLAYER_STAT_COLUMNS['Traditional'];
@@ -673,7 +688,24 @@ export default function TeamProfile() {
         .select("league_id, competition_id, name, slug, season")
         .eq("slug", leagueSlug)
         .maybeSingle();
-      if (!current || cancelled) return;
+      if (cancelled) return;
+      if (!current) {
+        // A private competition isn't readable by anon, but its public stats
+        // still are — resolve it through the service-role branding endpoint.
+        try {
+          const response = await fetch(`/api/public/league-branding/${encodeURIComponent(leagueSlug)}`);
+          const branding = response.ok ? await response.json() : null;
+          if (cancelled) return;
+          if (branding?.league_id) {
+            setSeasonCompetitions([{ league_id: branding.league_id, name: branding.name, slug: branding.slug }]);
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to resolve competition:", error);
+        }
+        if (!cancelled) setLoading(false);
+        return;
+      }
 
       let competitions: TeamSeasonCompetition[] = [current];
       if (current.competition_id) {
@@ -1226,7 +1258,7 @@ export default function TeamProfile() {
     };
 
     fetchTeamData();
-  }, [teamName, leagueSlug, activeSeason?.key, selectedLeagueIds.join(",")]);
+  }, [teamName, leagueSlug, selectedLeagueIds.join(",")]);
 
   if (loading) {
     return (
@@ -1417,18 +1449,25 @@ export default function TeamProfile() {
                   </a>
                 )}
               </div>
-              {seasonOptions.length > 1 && (
-                <div className="mt-4 w-full max-w-[220px] mx-auto md:mx-0 text-slate-900">
+              {competitionOptions.length > 1 && (
+                <div className="mt-4 w-full max-w-[320px] mx-auto md:mx-0 text-slate-900">
                   <label className="mb-1 block text-left text-xs font-semibold uppercase tracking-wide text-white/90">
-                    Season
+                    Competition
                   </label>
-                  <Select value={activeSeason?.key} onValueChange={setSelectedSeason}>
-                    <SelectTrigger className="bg-white/95 border-white/40">
-                      <SelectValue placeholder="Select season" />
+                  <Select
+                    value={leagueSlug}
+                    onValueChange={(slug) => {
+                      if (slug !== leagueSlug) navigate(`/competition/${slug}/team/${encodeURIComponent(decodedTeamName)}`);
+                    }}
+                  >
+                    <SelectTrigger className="bg-white/95 border-white/40" data-testid="select-team-competition">
+                      <SelectValue placeholder="Select competition" />
                     </SelectTrigger>
                     <SelectContent>
-                      {seasonOptions.map(option => (
-                        <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+                      {competitionOptions.map(option => (
+                        <SelectItem key={option.slug} value={option.slug}>
+                          {option.name}{option.record ? ` (${option.record})` : ""}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2050,7 +2089,7 @@ export default function TeamProfile() {
             {teamAccolades.length > 0 ? (
               <AccoladeBadges accolades={teamAccolades} accentColor={readablePrimary.body} />
             ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">No accolades yet this season</div>
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">No accolades yet</div>
             )}
           </div>
         )}

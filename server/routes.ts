@@ -9,6 +9,7 @@ import { generateReportNarrative, narrativeAvailable } from "./matchNarrative";
 import { computeLineups } from "./lineupsService";
 import type { LineupMetric } from "./lineups";
 import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague } from "./teamIdentityService";
+import { getTeamCompetitions } from "./teamCompetitions";
 import multer from 'multer';
 import OpenAI from 'openai';
 import { XMLParser } from 'fast-xml-parser';
@@ -1077,6 +1078,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(data || []);
     } catch (err: any) {
       console.error("Error fetching league competitions:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Every competition a club has played in (record, games, record thresholds),
+  // matched on club identity rather than a per-competition team_id.
+  app.get("/api/public/team-competitions", async (req: Request, res: Response) => {
+    try {
+      const team = String(req.query.team || "").trim();
+      if (!team) return res.status(400).json({ error: "team is required" });
+      const competitions = await getTeamCompetitions(team);
+      res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=600");
+      res.json(competitions);
+    } catch (err: any) {
+      console.error("Error fetching team competitions:", err.message);
       res.status(500).json({ error: "Internal server error" });
     }
   });
