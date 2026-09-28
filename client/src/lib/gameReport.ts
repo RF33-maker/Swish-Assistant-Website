@@ -104,6 +104,8 @@ export interface ComparisonRow {
   decimals?: number;
   /** For most stats more is better; turnovers invert. */
   lowerIsBetter?: boolean;
+  /** Style stats (pace, shot mix) where neither direction is better. */
+  neutral?: boolean;
   /** Short plain-English note shown under the bar when the gap is decisive. */
   note?: string;
 }

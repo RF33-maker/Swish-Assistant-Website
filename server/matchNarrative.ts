@@ -90,7 +90,7 @@ const NARRATIVE_JSON_SCHEMA = {
 // per-report content goes in the user message, after the breakpoint.
 const SYSTEM_PROMPT = `You are an experienced basketball analyst writing for a coach who already has the numbers in front of them.
 
-You will be given pre-computed facts about either a completed game (a match report) or an upcoming opponent (a scout report), along with the section keys the report is rendering.
+You will be given pre-computed facts about a completed game (a match report), an upcoming opponent (a scout report), or the recent form of the coach's team set against an opponent's (a form comparison), along with the section keys the report is rendering.
 
 Rules:
 - Interpret and explain; do not simply restate numbers the coach can already read. Say what a number means and what follows from it.
@@ -112,7 +112,7 @@ export function narrativeAvailable(): boolean {
 }
 
 export interface NarrativeRequest {
-  kind: "match" | "scout";
+  kind: "match" | "scout" | "compare";
   facts: unknown;
   sectionKeys: string[];
 }
@@ -126,7 +126,7 @@ export async function generateReportNarrative({
   if (!client) return null;
 
   const userContent =
-    `Report type: ${kind === "match" ? "post-game match report" : "pre-game scout report"}\n\n` +
+    `Report type: ${kind === "match" ? "post-game match report" : kind === "scout" ? "pre-game scout report" : "recent-form comparison against an opponent"}\n\n` +
     `Section keys to write for: ${sectionKeys.join(", ")}\n\n` +
     `Facts (JSON):\n${JSON.stringify(facts, null, 2)}`;
 
