@@ -1,12 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
-import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation, useSearch } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { CalendarClock } from "lucide-react";
-import { TeamLogo } from "@/components/TeamLogo";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { normalizeTeamName } from "@/lib/teamUtils";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import SiteHeader from "@/components/layout/SiteHeader";
+import ScoreGameCard from "@/components/scores/ScoreGameCard";
+import { dayLabel, useScores, type ScoreGame } from "@/lib/scores";
 
 /**
  * /scores — every live game, what's coming up next, and results from the
@@ -22,106 +20,20 @@ import SwishLogo from "@/assets/Swish Assistant Logo.png";
  * asks the visitor to work out which day to look at.
  */
 
-interface ScoreGame {
-  game_key: string;
-  league_id: string;
-  league_name: string;
-  league_slug: string;
-  match_time: string;
-  home_team: string;
-  away_team: string;
-  home_score: number | null;
-  away_score: number | null;
-  status: string | null;
+// The app has no global scroll reset, so arriving here from partway down the
+// homepage used to open this page partway down too, with the header and "Live
+// now" off-screen. Reset on arrival — but not on back/forward, or tapping
+// back from a game would throw away your place in the list. The listener is
+// registered at import time, ahead of the router's own, so the flag is set
+// before this page re-renders.
+let lastPopStateAt = 0;
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => { lastPopStateAt = Date.now(); });
 }
 
-interface ScoresPayload {
-  generatedAt: string;
-  leagues: Array<{ league_id: string; name: string; slug: string }>;
-  live: ScoreGame[];
-  upcoming: { date: string | null; isToday?: boolean; games: ScoreGame[] };
-  results: ScoreGame[];
-}
-
-const UK = "Europe/London";
 const CANONICAL = "https://swishassistant.com/scores";
 const META_DESCRIPTION =
   "Live scores, upcoming fixtures and the latest results from British basketball, updated as games happen.";
-
-/**
- * Match times are stored as UK wall-clock time labelled +00, so they're read
- * back in UTC — the same convention as every other time on the site. Using
- * Europe/London here would show every tip-off an hour late during BST.
- */
-function formatTime(iso: string): string {
-  return new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
-}
-
-/** "Today", "Tomorrow", or "Friday 2 October" for a YYYY-MM-DD UK date. */
-function dayLabel(dateKey: string | null, isToday?: boolean): string {
-  if (!dateKey) return "";
-  if (isToday) return "Today";
-  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: UK, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const tomorrow = new Date(`${todayKey}T12:00:00Z`);
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  if (tomorrow.toISOString().slice(0, 10) === dateKey) return "Tomorrow";
-  return new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
-    .format(new Date(`${dateKey}T12:00:00Z`));
-}
-
-/** The feed's live status is things like "Q3", "live", "halftime". */
-function liveLabel(status: string | null): string {
-  const s = (status || "").trim();
-  if (/^q[1-4]/i.test(s)) return s.toUpperCase().slice(0, 2);
-  if (/^ot/i.test(s)) return "OT";
-  if (/half/i.test(s)) return "Half time";
-  return "Live";
-}
-
-function TeamRow({
-  name, leagueId, score, muted,
-}: { name: string; leagueId: string; score: number | null; muted?: boolean }) {
-  // Logos are looked up by the raw feed name; only the displayed text is
-  // tidied, so "Gloucester City Kings Senior Men I" reads as the club.
-  return (
-    <div className={`flex items-center gap-3 ${muted ? "text-slate-400 dark:text-neutral-500" : "text-slate-900 dark:text-white"}`}>
-      <TeamLogo teamName={name} leagueId={leagueId} size="sm" />
-      <span className="flex-1 min-w-0 truncate text-[15px] font-medium">{normalizeTeamName(name) || name}</span>
-      {score != null && <span className="text-lg font-bold tabular-nums">{score}</span>}
-    </div>
-  );
-}
-
-function GameCard({ game, kind }: { game: ScoreGame; kind: "live" | "upcoming" | "result" }) {
-  const hasScores = game.home_score != null && game.away_score != null;
-  const homeWon = kind === "result" && hasScores && game.home_score! > game.away_score!;
-  const awayWon = kind === "result" && hasScores && game.away_score! > game.home_score!;
-
-  return (
-    <Link
-      href={`/competition/${game.league_slug}/game/${encodeURIComponent(game.game_key)}`}
-      className="block rounded-2xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 py-3 active:scale-[0.99] hover:border-orange-300 dark:hover:border-neutral-600 transition"
-    >
-      <div className="flex items-center justify-between gap-3 mb-2.5 text-xs">
-        <span className="truncate text-slate-500 dark:text-neutral-400">{game.league_name}</span>
-        {kind === "live" ? (
-          <span className="flex items-center gap-1.5 shrink-0 font-semibold text-red-600 dark:text-red-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            {liveLabel(game.status)}
-          </span>
-        ) : kind === "upcoming" ? (
-          <span className="shrink-0 font-semibold text-slate-700 dark:text-neutral-200 tabular-nums">{formatTime(game.match_time)}</span>
-        ) : (
-          <span className="shrink-0 text-slate-500 dark:text-neutral-400">Final</span>
-        )}
-      </div>
-      <div className="flex flex-col gap-2">
-        <TeamRow name={game.home_team} leagueId={game.league_id} score={kind === "upcoming" ? null : game.home_score} muted={awayWon} />
-        <TeamRow name={game.away_team} leagueId={game.league_id} score={kind === "upcoming" ? null : game.away_score} muted={homeWon} />
-      </div>
-    </Link>
-  );
-}
 
 function Section({ title, meta, children }: { title: string; meta?: string; children: React.ReactNode }) {
   return (
@@ -140,18 +52,11 @@ export default function ScoresPage() {
   const search = useSearch();
   const leagueParam = new URLSearchParams(search).get("league") || "";
 
-  const { data, isLoading, isError } = useQuery<ScoresPayload>({
-    queryKey: ["scores-page"],
-    queryFn: async () => {
-      const res = await fetch("/api/scores");
-      if (!res.ok) throw new Error("Failed to load scores");
-      return res.json();
-    },
-    staleTime: 15 * 1000,
-    // Live scores move; poll while the page is open, same cadence as the ticker.
-    refetchInterval: 30 * 1000,
-    refetchOnWindowFocus: true,
-  });
+  const { data, isLoading, isError } = useScores();
+
+  useEffect(() => {
+    if (Date.now() - lastPopStateAt > 1000) window.scrollTo(0, 0);
+  }, []);
 
   // An unknown ?league= (a stale social link, or a league with nothing on)
   // falls back to showing everything rather than an empty page.
@@ -180,14 +85,7 @@ export default function ScoresPage() {
         <meta property="og:type" content="website" />
         <link rel="canonical" href={CANONICAL} />
       </Helmet>
-      <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400" />
-      <header className="sticky top-0 z-30 bg-white/90 dark:bg-neutral-950/90 backdrop-blur border-b border-orange-100 dark:border-neutral-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src={SwishLogo} alt="Swish Assistant" className="h-7 cursor-pointer" onClick={() => setLocation("/")} />
-          <span className="text-lg font-bold">Scores</span>
-        </div>
-        <ThemeToggle />
-      </header>
+      <SiteHeader />
 
       <main className="max-w-xl mx-auto px-4 pt-4 pb-16 flex flex-col gap-6">
         {data && data.leagues.length > 1 && (
@@ -227,19 +125,19 @@ export default function ScoresPage() {
 
         {live.length > 0 && (
           <Section title="Live now" meta={`${live.length} ${live.length === 1 ? "game" : "games"}`}>
-            {live.map((g) => <GameCard key={g.game_key} game={g} kind="live" />)}
+            {live.map((g) => <ScoreGameCard key={g.game_key} game={g} kind="live" />)}
           </Section>
         )}
 
         {upcoming.length > 0 && (
           <Section title="Coming up" meta={dayLabel(data?.upcoming.date ?? null, data?.upcoming.isToday)}>
-            {upcoming.map((g) => <GameCard key={g.game_key} game={g} kind="upcoming" />)}
+            {upcoming.map((g) => <ScoreGameCard key={g.game_key} game={g} kind="upcoming" />)}
           </Section>
         )}
 
         {results.length > 0 && (
           <Section title="Results" meta="Last 24 hours">
-            {results.map((g) => <GameCard key={g.game_key} game={g} kind="result" />)}
+            {results.map((g) => <ScoreGameCard key={g.game_key} game={g} kind="result" />)}
           </Section>
         )}
 

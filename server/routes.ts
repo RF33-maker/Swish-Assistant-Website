@@ -3240,9 +3240,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const nextDay = Array.from(byDay.keys()).sort()[0] || null;
     const upcomingGames = nextDay ? byDay.get(nextDay)! : [];
 
-    live.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time));
-    upcomingGames.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time));
-    results.sort((a, b) => Date.parse(b.match_time) - Date.parse(a.match_time));
+    // Games often share a tip-off time (a whole league at 19:30), and the
+    // database returns ties in no fixed order — so without a tie-break the
+    // list could reshuffle on every 30-second refresh. League, then home team.
+    const tieBreak = (a: any, b: any) =>
+      a.league_name.localeCompare(b.league_name) || a.home_team.localeCompare(b.home_team);
+    live.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time) || tieBreak(a, b));
+    upcomingGames.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time) || tieBreak(a, b));
+    results.sort((a, b) => Date.parse(b.match_time) - Date.parse(a.match_time) || tieBreak(a, b));
 
     // Filter chips: only competitions with something to show, in trending order.
     const present = new Set([...live, ...upcomingGames, ...results].map((g) => g.league_id));
