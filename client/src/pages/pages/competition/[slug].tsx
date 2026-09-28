@@ -2,8 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Trophy, ArrowLeft, Users } from "lucide-react";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import BCBLogo from "@/assets/BCB Logo.jpg";
 import LeagueDefaultImage from "@/assets/league-default.png";
 
@@ -202,18 +201,8 @@ export default function CompetitionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100">
-      <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400" />
-
-      <header className="sticky top-0 z-30 bg-white/90 dark:bg-neutral-950/90 backdrop-blur border-b border-orange-100 dark:border-neutral-800 px-6 py-3 flex items-center justify-between">
-        <img
-          src={SwishLogo}
-          alt="Swish Assistant"
-          className="h-6 md:h-9 cursor-pointer"
-          onClick={() => setLocation("/")}
-        />
-        <ThemeToggle />
-      </header>
+    <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100`}>
+      <SiteHeader />
 
       {/* Hero */}
       <div

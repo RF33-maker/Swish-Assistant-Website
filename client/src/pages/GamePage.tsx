@@ -6,6 +6,7 @@ import BoxScoreTable from "@/components/BoxScoreTable";
 import { getTeamAbbreviation } from "@/lib/teamUtils";
 import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
@@ -868,7 +869,8 @@ export default function GamePage() {
 
   if (gameLoading) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">
+      <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-[#fffaf1] dark:bg-neutral-950`}>
+        <SiteHeader />
         <div className="max-w-6xl mx-auto px-4 py-8">
           <Skeleton className="h-8 w-32 mb-6 bg-orange-100 dark:bg-neutral-700" />
           <div className="bg-white dark:bg-neutral-900 rounded-xl p-6 border border-orange-100 dark:border-neutral-800">
@@ -886,7 +888,9 @@ export default function GamePage() {
 
   if (gameError || !gameData) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white flex items-center justify-center">
+      <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white flex flex-col`}>
+        <SiteHeader />
+        <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Game Not Found</h1>
           <p className="text-slate-500 mb-6">The game you're looking for doesn't exist or has been removed.</p>
@@ -898,6 +902,7 @@ export default function GamePage() {
             Back to Home
           </button>
         </div>
+        </div>
       </div>
     );
   }
@@ -906,11 +911,14 @@ export default function GamePage() {
   // Keep this branch ahead of the recap UI so an upcoming game never looks missing.
   if (isScheduled) {
     return (
-      <UpcomingGamePreview
-        game={gameData}
-        onRefresh={() => window.location.reload()}
-        leagueSlug={leagueSlug}
-      />
+      <div className={SITE_RAIL_OFFSET}>
+        <SiteHeader />
+        <UpcomingGamePreview
+          game={gameData}
+          onRefresh={() => window.location.reload()}
+          leagueSlug={leagueSlug}
+        />
+      </div>
     );
   }
 
@@ -966,7 +974,8 @@ export default function GamePage() {
   const awayScore = awayTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[1] : null);
 
   return (
-    <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white transition-colors">
+    <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white transition-colors`}>
+      <SiteHeader />
       {gameData?.league_id && (
         <GameSwitcherBar leagueId={gameData.league_id} currentGameKey={gameKey} isTestMode={isTestMode} />
       )}

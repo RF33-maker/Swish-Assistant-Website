@@ -9,6 +9,7 @@ import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { Helmet } from "react-helmet-async";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
@@ -21,7 +22,6 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
 import { InstagramFeedSection } from "@/components/InstagramFeedSection";
 import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram } from "lucide-react";
-import { useGlobalSearch, type SearchSuggestion } from "@/hooks/useGlobalSearch";
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -578,7 +578,7 @@ export default function LeaguePage() {
         : "";
 
     const [location, navigate] = useLocation();
-    const { query: search, setQuery: setSearch, suggestions, handleSelect: handleSelectSearch, handleSubmit: handleSubmitSearch } = useGlobalSearch();
+    // Site search now lives in the shared SiteHeader.
     const [league, setLeague] = useState(null);
     const [topScorer, setTopScorer] = useState<PlayerStat | null>(null);
     const [topRebounder, setTopRebounder] = useState<PlayerStat | null>(null);
@@ -3938,7 +3938,7 @@ export default function LeaguePage() {
   
  return (
       
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-700 relative">
+      <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-700 relative`}>
         {leagueBrandColors && (
           <>
             <div
@@ -3958,93 +3958,13 @@ export default function LeaguePage() {
           </>
         )}
         <div className="relative z-10">
-        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-4">
-          <div className="flex items-center gap-2 md:flex-row md:gap-4">
-            <div className="flex items-center shrink-0">
-              <img
-                src={SwishLogo}
-                alt="Swish Assistant"
-                className="h-6 md:h-9 cursor-pointer"
-                onClick={() => navigate("/")}
-              />
-            </div>
-
-            <div className="relative flex-1 md:max-w-md md:mx-6">
-              <form onSubmit={handleSubmitSearch} className="flex items-center">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 md:h-4 md:w-4 text-gray-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Search league, team or player"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full pl-8 md:pl-9 pr-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
-                  />
-                </div>
-              </form>
-
-              {suggestions.length > 0 && (
-                <ul className="absolute z-50 mt-1 w-full bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 rounded-md shadow-lg max-h-72 overflow-y-auto">
-                  {suggestions.map((item: SearchSuggestion, index: number) => (
-                    <li
-                      key={index}
-                      onClick={() => handleSelectSearch(item)}
-                      className="px-4 py-2.5 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
-                    >
-                      <div className="flex items-center gap-3">
-                        {item.type === 'league' ? (
-                          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
-                            <Trophy className="h-3.5 w-3.5 text-white" />
-                          </div>
-                        ) : item.type === 'team' ? (
-                          <div className="h-7 w-7 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
-                            <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
-                          </div>
-                        ) : (
-                          <PlayerSearchAvatar name={item.name} photoUrl={item.photo_url} />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-orange-900 dark:text-orange-300 text-xs md:text-sm truncate">{item.name}</div>
-                          {item.type === 'player' && item.team && (
-                            <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.team}</div>
-                          )}
-                          {item.type === 'team' && (
-                            <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.league_name}</div>
-                          )}
-                          {item.type === 'league' && (
-                            <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
-                          )}
-                        </div>
-                        <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
-                          {item.type}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {currentUser && (
-              <div className="flex items-center gap-1 md:gap-2 shrink-0">
-                <button
-                  onClick={() => navigate("/coaches-hub")}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap"
-                >
-                  Coaches Hub
-                </button>
-                <button
-                  onClick={() => navigate("/league-management")}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap"
-                >
-                  League Admin
-                </button>
-              </div>
-            )}
-
-            <ThemeToggle />
-          </div>
-
+        {/* Shared site header (sidebar on desktop, menu on mobile) plus this
+            league's own games carousel. Kept sticky together, as the old
+            header was. The Coaches Hub / League Admin buttons that used to
+            sit here now live in the sidebar's Account section. */}
+        <div className="sticky top-0 z-50">
+          <SiteHeader />
+          <div className="bg-white dark:bg-neutral-900 shadow-sm px-3 md:px-6">
           {/* Game Results / Live / Upcoming Carousel */}
           {league?.league_id && (
             <div className="-mx-3 md:-mx-6">
@@ -4059,7 +3979,8 @@ export default function LeaguePage() {
               />
             </div>
           )}
-        </header>
+          </div>
+        </div>
 
         <section>
           <div

@@ -269,7 +269,7 @@ export function InstagramFeedSection({
             href={`https://www.instagram.com/${effectiveHandle}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-gray-100 dark:border-neutral-700 p-6 sm:p-8 hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors group"
+            className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-center items-center gap-5 rounded-xl border border-gray-100 dark:border-neutral-700 p-6 sm:p-8 hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors group"
           >
             {/* Large Instagram gradient icon */}
             <div
@@ -283,7 +283,7 @@ export function InstagramFeedSection({
             </div>
 
             {/* Text block */}
-            <div className="text-center sm:text-left flex-1">
+            <div className="text-center sm:text-left flex-1 basis-48 min-w-0">
               <p className="font-bold text-slate-800 dark:text-white text-lg">
                 @{effectiveHandle}
               </p>
