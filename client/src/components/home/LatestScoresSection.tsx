@@ -177,11 +177,11 @@ function buildRecords(games: GameRow[]): Record<string, string> {
 
 function ScoreCardSkeleton() {
   return (
-    <div className="flex-shrink-0 w-36 sm:w-56 rounded-lg bg-neutral-900 border border-neutral-800 p-3 animate-pulse">
-      <div className="h-3 w-16 bg-neutral-800 rounded mb-3" />
+    <div className="flex-shrink-0 w-36 sm:w-56 rounded-lg bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 p-3 animate-pulse">
+      <div className="h-3 w-16 bg-slate-100 dark:bg-neutral-800 rounded mb-3" />
       <div className="space-y-2">
-        <div className="h-5 bg-neutral-800 rounded" />
-        <div className="h-5 bg-neutral-800 rounded" />
+        <div className="h-5 bg-slate-100 dark:bg-neutral-800 rounded" />
+        <div className="h-5 bg-slate-100 dark:bg-neutral-800 rounded" />
       </div>
     </div>
   );
@@ -409,14 +409,14 @@ export default function LatestScoresSection() {
   };
 
   return (
-    <section className="bg-[#0a0a0f] text-white border-b border-neutral-800">
+    <section className="bg-slate-50 dark:bg-[#0a0a0f] text-slate-900 dark:text-white border-b border-slate-200 dark:border-neutral-800">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4 relative">
         {loading ? (
           <div className="flex gap-3 overflow-hidden">
             {[0, 1, 2, 3, 4].map((i) => <ScoreCardSkeleton key={i} />)}
           </div>
         ) : groups.length === 0 ? (
-          <div className="text-xs text-neutral-400 py-2 text-center">
+          <div className="text-xs text-slate-500 dark:text-neutral-400 py-2 text-center">
             No recent or upcoming games yet.
           </div>
         ) : (
@@ -426,9 +426,9 @@ export default function LatestScoresSection() {
               type="button"
               onClick={() => scrollBy(-1)}
               aria-label="Scroll scores left"
-              className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 items-center justify-center rounded-full bg-neutral-800/90 hover:bg-neutral-700 border border-neutral-700 shadow"
+              className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-neutral-800/90 hover:bg-slate-100 dark:hover:bg-neutral-700 border border-slate-300 dark:border-neutral-700 shadow"
             >
-              <ChevronLeft className="h-4 w-4 text-white" />
+              <ChevronLeft className="h-4 w-4 text-slate-900 dark:text-white" />
             </button>
 
             <div
@@ -439,7 +439,7 @@ export default function LatestScoresSection() {
               {groups.map((grp) => (
                 <div key={grp.league_id} className="flex flex-col gap-1.5 flex-shrink-0">
                   <div
-                    className="text-[11px] font-bold tracking-wider text-white truncate max-w-[260px]"
+                    className="text-[11px] font-bold tracking-wider text-slate-900 dark:text-white truncate max-w-[260px]"
                     title={grp.league_name}
                   >
                     {grp.league_name.toUpperCase()}
@@ -452,11 +452,11 @@ export default function LatestScoresSection() {
                           <Link
                             key={g.game_key}
                             href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
-                            className="snap-start text-left flex-shrink-0 w-[216px] sm:w-[240px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-red-500/60 hover:border-red-500/90 transition-colors duration-200 p-2.5"
+                            className="snap-start text-left flex-shrink-0 w-[216px] sm:w-[240px] rounded-md bg-white dark:bg-neutral-900 hover:bg-slate-50 dark:hover:bg-neutral-800 border border-red-500/60 hover:border-red-500/90 transition-colors duration-200 p-2.5"
                             data-testid={`live-card-${g.game_key}`}
                           >
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[10px] text-neutral-300 font-medium">
+                              <span className="text-[10px] text-slate-600 dark:text-neutral-300 font-medium">
                                 {formatDate(g.match_time)}
                               </span>
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">
@@ -467,27 +467,27 @@ export default function LatestScoresSection() {
 
                             <div className="flex items-center justify-between gap-2 py-0.5">
                               <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
+                                <div className="h-5 w-5 flex-shrink-0 rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
                                   <TeamLogo teamName={g.home_team} leagueId={g.league_id} size="xs" />
                                 </div>
-                                <span className={`text-xs truncate ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                                <span className={`text-xs truncate ${homeWon ? "font-bold text-slate-900 dark:text-white" : "text-slate-600 dark:text-neutral-300"}`}>
                                   {teamLabel(g.home_team)}
                                 </span>
                               </div>
-                              <span className={`text-sm tabular-nums ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                              <span className={`text-sm tabular-nums ${homeWon ? "font-bold text-slate-900 dark:text-white" : "text-slate-600 dark:text-neutral-300"}`}>
                                 {g.home_score ?? "—"}
                               </span>
                             </div>
                             <div className="flex items-center justify-between gap-2 py-0.5">
                               <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
+                                <div className="h-5 w-5 flex-shrink-0 rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
                                   <TeamLogo teamName={g.away_team} leagueId={g.league_id} size="xs" />
                                 </div>
-                                <span className={`text-xs truncate ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                                <span className={`text-xs truncate ${!homeWon ? "font-bold text-slate-900 dark:text-white" : "text-slate-600 dark:text-neutral-300"}`}>
                                   {teamLabel(g.away_team)}
                                 </span>
                               </div>
-                              <span className={`text-sm tabular-nums ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                              <span className={`text-sm tabular-nums ${!homeWon ? "font-bold text-slate-900 dark:text-white" : "text-slate-600 dark:text-neutral-300"}`}>
                                 {g.away_score ?? "—"}
                               </span>
                             </div>
@@ -499,11 +499,11 @@ export default function LatestScoresSection() {
                           <Link
                             key={g.game_key}
                             href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
-                            className="snap-start text-left flex-shrink-0 w-[216px] sm:w-[240px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-orange-500/40 hover:border-orange-500/70 transition-colors duration-200 p-2.5"
+                            className="snap-start text-left flex-shrink-0 w-[216px] sm:w-[240px] rounded-md bg-white dark:bg-neutral-900 hover:bg-slate-50 dark:hover:bg-neutral-800 border border-orange-500/40 hover:border-orange-500/70 transition-colors duration-200 p-2.5"
                             data-testid={`upcoming-card-${g.game_key}`}
                           >
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[10px] text-neutral-300 font-medium">
+                              <span className="text-[10px] text-slate-600 dark:text-neutral-300 font-medium">
                                 {formatDate(g.match_time)} · {formatTime(g.match_time)}
                               </span>
                               <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">
@@ -512,18 +512,18 @@ export default function LatestScoresSection() {
                             </div>
 
                             <div className="flex items-center gap-1.5 py-0.5 min-w-0">
-                              <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
+                              <div className="h-5 w-5 flex-shrink-0 rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
                                 <TeamLogo teamName={g.home_team} leagueId={g.league_id} size="xs" />
                               </div>
-                              <span className="text-xs text-neutral-200 truncate">
+                              <span className="text-xs text-slate-700 dark:text-neutral-200 truncate">
                                 {teamLabel(g.home_team)}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 py-0.5 min-w-0">
-                              <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
+                              <div className="h-5 w-5 flex-shrink-0 rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
                                 <TeamLogo teamName={g.away_team} leagueId={g.league_id} size="xs" />
                               </div>
-                              <span className="text-xs text-neutral-200 truncate">
+                              <span className="text-xs text-slate-700 dark:text-neutral-200 truncate">
                                 {teamLabel(g.away_team)}
                               </span>
                             </div>
@@ -536,14 +536,14 @@ export default function LatestScoresSection() {
                         <Link
                           key={g.game_key}
                           href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
-                          className="snap-start text-left flex-shrink-0 w-[216px] sm:w-[240px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 transition-colors duration-200 p-2.5"
+                          className="snap-start text-left flex-shrink-0 w-[216px] sm:w-[240px] rounded-md bg-white dark:bg-neutral-900 hover:bg-slate-50 dark:hover:bg-neutral-800 border border-slate-200 dark:border-neutral-800 hover:border-slate-300 dark:hover:border-neutral-700 transition-colors duration-200 p-2.5"
                           data-testid={`score-card-${g.game_key}`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] text-neutral-300 font-medium">
+                            <span className="text-[10px] text-slate-600 dark:text-neutral-300 font-medium">
                               {formatDate(g.match_time)}
                             </span>
-                            <span className="text-[10px] text-neutral-400 font-medium uppercase">
+                            <span className="text-[10px] text-slate-500 dark:text-neutral-400 font-medium uppercase">
                               Final
                             </span>
                           </div>
@@ -551,36 +551,36 @@ export default function LatestScoresSection() {
                           {/* Home row */}
                           <div className="flex items-center justify-between gap-2 py-0.5">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
+                              <div className="h-5 w-5 flex-shrink-0 rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
                                 <TeamLogo teamName={g.home_team} leagueId={g.league_id} size="xs" />
                               </div>
-                              <span className={`text-xs truncate ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                              <span className={`text-xs truncate ${homeWon ? "font-bold text-slate-900 dark:text-white" : "text-slate-600 dark:text-neutral-300"}`}>
                                 {teamLabel(g.home_team)}
                               </span>
                             </div>
                             <div className="flex items-center justify-end gap-1 w-[46px] flex-shrink-0">
-                              <span className={`text-sm tabular-nums ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                              <span className={`text-sm tabular-nums ${homeWon ? "font-bold text-slate-900 dark:text-white" : "text-slate-600 dark:text-neutral-300"}`}>
                                 {g.home_score}
                               </span>
-                              {homeWon && <ChevronLeft className="h-3 w-3 text-white" />}
+                              {homeWon && <ChevronLeft className="h-3 w-3 text-slate-900 dark:text-white" />}
                             </div>
                           </div>
 
                           {/* Away row */}
                           <div className="flex items-center justify-between gap-2 py-0.5">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
+                              <div className="h-5 w-5 flex-shrink-0 rounded-full bg-slate-100 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
                                 <TeamLogo teamName={g.away_team} leagueId={g.league_id} size="xs" />
                               </div>
-                              <span className={`text-xs truncate ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                              <span className={`text-xs truncate ${!homeWon ? "font-bold text-slate-900 dark:text-white" : "text-slate-600 dark:text-neutral-300"}`}>
                                 {teamLabel(g.away_team)}
                               </span>
                             </div>
                             <div className="flex items-center justify-end gap-1 w-[46px] flex-shrink-0">
-                              <span className={`text-sm tabular-nums ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                              <span className={`text-sm tabular-nums ${!homeWon ? "font-bold text-slate-900 dark:text-white" : "text-slate-600 dark:text-neutral-300"}`}>
                                 {g.away_score}
                               </span>
-                              {!homeWon && <ChevronLeft className="h-3 w-3 text-white" />}
+                              {!homeWon && <ChevronLeft className="h-3 w-3 text-slate-900 dark:text-white" />}
                             </div>
                           </div>
                         </Link>
@@ -592,11 +592,11 @@ export default function LatestScoresSection() {
                     {(scoresCountBySlug[grp.league_slug] || 0) > 0 && (
                       <Link
                         href={`/scores?league=${encodeURIComponent(grp.league_slug)}`}
-                        className="snap-start flex-shrink-0 w-[108px] rounded-md border border-dashed border-neutral-700 hover:border-orange-500 hover:bg-neutral-900 transition-colors duration-200 p-2.5 flex flex-col items-center justify-center gap-1 text-center"
+                        className="snap-start flex-shrink-0 w-[108px] rounded-md border border-dashed border-slate-300 dark:border-neutral-700 hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-neutral-900 transition-colors duration-200 p-2.5 flex flex-col items-center justify-center gap-1 text-center"
                         data-testid={`score-see-all-${grp.league_slug}`}
                       >
-                        <span className="text-xs font-semibold text-white">See all</span>
-                        <span className="text-[10px] text-neutral-400">
+                        <span className="text-xs font-semibold text-slate-900 dark:text-white">See all</span>
+                        <span className="text-[10px] text-slate-500 dark:text-neutral-400">
                           {scoresCountBySlug[grp.league_slug]} {scoresCountBySlug[grp.league_slug] === 1 ? "game" : "games"}
                         </span>
                         <ArrowRight className="h-3.5 w-3.5 text-orange-400" />
@@ -612,9 +612,9 @@ export default function LatestScoresSection() {
               type="button"
               onClick={() => scrollBy(1)}
               aria-label="Scroll scores right"
-              className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 items-center justify-center rounded-full bg-neutral-800/90 hover:bg-neutral-700 border border-neutral-700 shadow"
+              className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 items-center justify-center rounded-full bg-white/90 dark:bg-neutral-800/90 hover:bg-slate-100 dark:hover:bg-neutral-700 border border-slate-300 dark:border-neutral-700 shadow"
             >
-              <ChevronRight className="h-4 w-4 text-white" />
+              <ChevronRight className="h-4 w-4 text-slate-900 dark:text-white" />
             </button>
           </div>
         )}

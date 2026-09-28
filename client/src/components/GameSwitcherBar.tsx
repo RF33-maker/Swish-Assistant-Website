@@ -198,59 +198,59 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
   }
 
   return (
-    <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white">
-      <div className="flex items-center border-b border-white/10">
+    <div className="bg-slate-50 dark:bg-gradient-to-r dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 text-slate-900 dark:text-white border-b border-slate-200 dark:border-transparent">
+      <div className="flex items-center border-b border-slate-200 dark:border-white/10">
         <button
           onClick={() => setActiveTab("results")}
           className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
             activeTab === "results"
-              ? "border-orange-400 text-orange-400"
-              : "border-transparent text-white/60 hover:text-white/80"
+              ? "border-orange-500 text-orange-600 dark:border-orange-400 dark:text-orange-400"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:text-white/60 dark:hover:text-white/80"
           }`}
         >
           <CheckCircle2 className="w-3.5 h-3.5" />
           <span>Results</span>
           {tabCounts.results > 0 && (
-            <span className="text-[10px] bg-white/10 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{tabCounts.results}</span>
+            <span className="text-[10px] bg-slate-200 dark:bg-white/10 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{tabCounts.results}</span>
           )}
         </button>
         <button
           onClick={() => setActiveTab("live")}
           className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
             activeTab === "live"
-              ? "border-red-400 text-red-400"
-              : "border-transparent text-white/60 hover:text-white/80"
+              ? "border-red-500 text-red-600 dark:border-red-400 dark:text-red-400"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:text-white/60 dark:hover:text-white/80"
           }`}
         >
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${liveCount > 0 ? 'bg-red-500 animate-pulse' : 'bg-white/30'}`}></span>
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${liveCount > 0 ? 'bg-red-500 animate-pulse' : 'bg-slate-300 dark:bg-white/30'}`}></span>
           <span>Live</span>
           {tabCounts.live > 0 && (
-            <span className="text-[10px] bg-red-500/20 text-red-400 rounded-full px-1.5 py-0.5 min-w-[18px] text-center font-bold">{tabCounts.live}</span>
+            <span className="text-[10px] bg-red-500/15 text-red-600 dark:bg-red-500/20 dark:text-red-400 rounded-full px-1.5 py-0.5 min-w-[18px] text-center font-bold">{tabCounts.live}</span>
           )}
         </button>
         <button
           onClick={() => setActiveTab("upcoming")}
           className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
             activeTab === "upcoming"
-              ? "border-blue-400 text-blue-400"
-              : "border-transparent text-white/60 hover:text-white/80"
+              ? "border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+              : "border-transparent text-slate-500 hover:text-slate-800 dark:text-white/60 dark:hover:text-white/80"
           }`}
         >
           <Clock className="w-3.5 h-3.5" />
           <span>Upcoming</span>
           {tabCounts.upcoming > 0 && (
-            <span className="text-[10px] bg-white/10 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{tabCounts.upcoming}</span>
+            <span className="text-[10px] bg-slate-200 dark:bg-white/10 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{tabCounts.upcoming}</span>
           )}
         </button>
       </div>
 
       <div
         ref={scrollRef}
-        className="overflow-x-auto pb-1 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-slate-800 [&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-slate-500"
+        className="overflow-x-auto pb-1 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-slate-200 dark:[&::-webkit-scrollbar-track]:bg-slate-800 [&::-webkit-scrollbar-thumb]:bg-slate-400 dark:[&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-slate-500"
       >
         {filteredGames.length === 0 ? (
           <div className="flex items-center justify-center py-3 px-4">
-            <span className="text-xs text-white/40">
+            <span className="text-xs text-slate-500 dark:text-white/40">
               {activeTab === "live" ? "No live games right now" : activeTab === "results" ? "No recent results" : "No upcoming games"}
             </span>
           </div>
@@ -267,10 +267,10 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
                   className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[200px] sm:min-w-[250px] ${
                     isCurrent
                       ? 'bg-orange-500 text-white ring-1 ring-orange-400'
-                      : 'bg-white/5 hover:bg-white/15 text-white/90'
+                      : 'bg-white hover:bg-orange-50 border border-slate-200 text-slate-800 dark:bg-white/5 dark:hover:bg-white/15 dark:border-transparent dark:text-white/90'
                   }`}
                 >
-                  <span className={`text-[10px] ${isCurrent ? 'text-white/80' : 'text-white/40'}`}>
+                  <span className={`text-[10px] ${isCurrent ? 'text-white/80' : 'text-slate-500 dark:text-white/40'}`}>
                     {formatGameDate(game.matchtime)}
                   </span>
 
@@ -286,7 +286,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
                           {game.home_score} - {game.away_score}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-white/30">vs</span>
+                        <span className="text-[10px] text-slate-400 dark:text-white/30">vs</span>
                       )}
                     </div>
 
@@ -297,7 +297,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
                   </div>
 
                   {category === 'live' && (
-                    <span className="text-[9px] sm:text-[10px] font-bold text-red-400 uppercase tracking-wider flex items-center gap-1">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
                       <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                       {game.current_period
                         ? `${game.current_period <= 4 ? `Q${game.current_period}` : `OT${game.current_period - 4}`}${game.current_clock ? ` ${game.current_clock.split(':').slice(0, 2).join(':')}` : ''}`
@@ -305,7 +305,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
                     </span>
                   )}
                   {category === 'results' && (
-                    <span className={`text-[9px] sm:text-[10px] ${isCurrent ? 'text-white/70' : 'text-green-400/70'} uppercase tracking-wider`}>
+                    <span className={`text-[9px] sm:text-[10px] ${isCurrent ? 'text-white/70' : 'text-green-600 dark:text-green-400/70'} uppercase tracking-wider`}>
                       Final
                     </span>
                   )}

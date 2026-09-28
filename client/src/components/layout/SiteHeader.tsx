@@ -28,16 +28,16 @@ export default function SiteHeader() {
     <>
       <aside
         aria-label="Site navigation"
-        className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-60 flex-col bg-[#0a0a0f] border-r border-neutral-800 overflow-y-auto"
+        className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-60 flex-col bg-white dark:bg-[#0a0a0f] border-r border-slate-200 dark:border-neutral-800 overflow-y-auto"
       >
         <button
           type="button"
           aria-label="Go to home"
           onClick={() => setLocation('/')}
-          className="flex h-[65px] shrink-0 items-center gap-2 px-6 border-b border-neutral-800 hover:opacity-90 transition-opacity"
+          className="flex h-[65px] shrink-0 items-center gap-2 px-6 border-b border-slate-200 dark:border-neutral-800 hover:opacity-90 transition-opacity"
         >
           <img src={SwishLogo} alt="" className="h-8" />
-          <span className="font-semibold text-white">Swish Assistant</span>
+          <span className="font-semibold text-slate-900 dark:text-white">Swish Assistant</span>
         </button>
         <SiteNav layout="rail" />
       </aside>
@@ -47,7 +47,7 @@ export default function SiteHeader() {
       <div className="lg:hidden h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
       <div className="hidden lg:block fixed top-0 inset-x-0 z-50 h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
 
-      <header className="bg-[#0a0a0f] border-b border-neutral-800">
+      <header className="bg-white dark:bg-[#0a0a0f] border-b border-slate-200 dark:border-neutral-800">
         {/* Fixed height on desktop so this bottom border meets the rail's logo
             row border in one continuous line. The rail row is 65px because its
             border is inside its box, while this one sits outside the 64px row. */}
@@ -65,18 +65,18 @@ export default function SiteHeader() {
 
           <div className="flex-1 flex justify-center relative">
             <div className="w-full max-w-xl md:max-w-2xl relative">
-            <div className="search-bar-animated-border" style={{ background: '#0a0a0f' }}>
+            <div className="search-bar-animated-border dark:!bg-[#0a0a0f]">
               <form
                 onSubmit={handleSubmit}
-                className="flex items-center bg-neutral-900 rounded-full overflow-hidden relative z-10"
+                className="flex items-center bg-slate-100 dark:bg-neutral-900 rounded-full overflow-hidden relative z-10"
               >
-                <Search className="ml-3 md:ml-4 h-4 w-4 md:h-5 md:w-5 text-neutral-400 flex-shrink-0" />
+                <Search className="ml-3 md:ml-4 h-4 w-4 md:h-5 md:w-5 text-slate-400 dark:text-neutral-400 flex-shrink-0" />
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search league, team or player"
-                  className="flex-1 min-w-0 px-3 py-2 md:py-2.5 text-sm md:text-base text-white bg-transparent placeholder:text-neutral-500 focus:outline-none"
+                  className="flex-1 min-w-0 px-3 py-2 md:py-2.5 text-sm md:text-base text-slate-900 dark:text-white bg-transparent placeholder:text-slate-400 dark:placeholder:text-neutral-500 focus:outline-none"
                   data-testid="header-search-input"
                 />
               </form>
@@ -147,13 +147,13 @@ export default function SiteHeader() {
                 type="button"
                 aria-label="Open menu"
                 data-testid="sidebar-trigger"
-                className="inline-flex lg:hidden items-center justify-center h-10 w-10 flex-shrink-0 rounded-md text-white hover:bg-neutral-800 transition-colors"
+                className="inline-flex lg:hidden items-center justify-center h-10 w-10 flex-shrink-0 rounded-md text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-neutral-800 transition-colors"
               >
                 <Menu className="h-6 w-6" />
               </button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-72 bg-neutral-950 text-white border-l border-neutral-800 p-0 overflow-y-auto">
-              <div className="flex items-center gap-2 px-5 py-4 border-b border-neutral-800">
+            <SheetContent side="right" className="w-72 bg-white text-slate-900 border-l border-slate-200 dark:bg-neutral-950 dark:text-white dark:border-neutral-800 p-0 overflow-y-auto">
+              <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-200 dark:border-neutral-800">
                 <img src={SwishLogo} alt="Swish Logo" className="h-8" />
                 <span className="font-semibold">Swish Assistant</span>
               </div>
