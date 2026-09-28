@@ -2,7 +2,8 @@ import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { TeamLogo } from "@/components/TeamLogo";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { useScores } from "@/lib/scores";
 
 interface LeagueRow {
   league_id: string;
@@ -190,6 +191,18 @@ const SLOTS_PER_LEAGUE = 4;
 
 export default function LatestScoresSection() {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Per-league counts from the Scores page, for the "See all" card closing each
+  // group. They come from /api/scores rather than this ticker's own data on
+  // purpose: the ticker reaches back a week of results while /scores keeps 24
+  // hours, so a count taken from here would promise games the page doesn't
+  // show. Shares the cached query with the rest of the page.
+  const { data: scores } = useScores();
+  const scoresCountBySlug: Record<string, number> = {};
+  if (scores) {
+    for (const g of [...scores.live, ...scores.upcoming.games, ...scores.results]) {
+      scoresCountBySlug[g.league_slug] = (scoresCountBySlug[g.league_slug] || 0) + 1;
+    }
+  }
 
   const { data: groups = [], isLoading: loading } = useQuery<LeagueGroup[]>({
     queryKey: ["home", "latest-scores", "v2-competition-families"],
@@ -573,6 +586,22 @@ export default function LatestScoresSection() {
                         </Link>
                       );
                     })}
+                    {/* Hand-off to the full list for this league. Only shown when
+                        /scores actually has games for it — otherwise the link
+                        would open an empty or unfiltered page. */}
+                    {(scoresCountBySlug[grp.league_slug] || 0) > 0 && (
+                      <Link
+                        href={`/scores?league=${encodeURIComponent(grp.league_slug)}`}
+                        className="snap-start flex-shrink-0 w-[108px] rounded-md border border-dashed border-neutral-700 hover:border-orange-500 hover:bg-neutral-900 transition-colors duration-200 p-2.5 flex flex-col items-center justify-center gap-1 text-center"
+                        data-testid={`score-see-all-${grp.league_slug}`}
+                      >
+                        <span className="text-xs font-semibold text-white">See all</span>
+                        <span className="text-[10px] text-neutral-400">
+                          {scoresCountBySlug[grp.league_slug]} {scoresCountBySlug[grp.league_slug] === 1 ? "game" : "games"}
+                        </span>
+                        <ArrowRight className="h-3.5 w-3.5 text-orange-400" />
+                      </Link>
+                    )}
                   </div>
                 </div>
               ))}

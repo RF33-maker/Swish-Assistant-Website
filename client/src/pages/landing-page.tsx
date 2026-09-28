@@ -20,7 +20,7 @@ import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSec
 import { InstagramFeedSection } from "@/components/InstagramFeedSection"
 import { useGlobalSearch } from "@/hooks/useGlobalSearch"
 import { useAuth } from "@/hooks/use-auth"
-import SiteHeader from "@/components/layout/SiteHeader"
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader"
 
 const PLATFORM_INSTAGRAM_HANDLE = "swishassistant"
 
@@ -179,7 +179,7 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-300">
+    <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-300`}>
       {/* The homepage's title used to come only from index.html, so once other
           pages started setting theirs via Helmet (e.g. /scores), navigating
           back here kept their title. Declaring it restores it in-app. */}

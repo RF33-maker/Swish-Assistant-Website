@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { useLocation, useSearch } from "wouter";
 import { CalendarClock } from "lucide-react";
-import SiteHeader from "@/components/layout/SiteHeader";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import ScoreGameCard from "@/components/scores/ScoreGameCard";
 import { dayLabel, useScores, type ScoreGame } from "@/lib/scores";
 
@@ -73,7 +73,7 @@ export default function ScoresPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-neutral-950 text-slate-900 dark:text-slate-100">
+    <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-slate-50 dark:bg-neutral-950 text-slate-900 dark:text-slate-100`}>
       {/* Managed through Helmet rather than document.title so the title is
           released when you navigate on to a game, instead of sticking. */}
       <Helmet>
