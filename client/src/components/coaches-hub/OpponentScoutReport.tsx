@@ -5,6 +5,7 @@ import { useTeamBranding } from '@/hooks/useTeamBranding';
 import ShotChart, { type ShotData } from '@/components/ShotChart';
 import { ComparisonBarRow, NarrativeSummary, RankTrack, SectionNarrative } from './reportVisuals';
 import { useReportNarrative } from '@/hooks/useReportNarrative';
+import AgentGamePlan from './AgentGamePlan';
 import { num, ordinal, toPlayerLine, type PlayerGameRow, type PlayerLine } from '@/lib/gameReport';
 import type { PlayerSeasonAverage, StandingRow, TeamSeasonAverage } from '@/pages/CoachesHub';
 
@@ -298,6 +299,8 @@ export default function OpponentScoutReport({
           {opponent.games_played ? ` · ${opponent.games_played} games played` : ''}
         </p>
       </div>
+
+      <AgentGamePlan leagueId={leagueId} opponentName={opponentName} myTeamName={myTeamName} color={brand} />
 
       <NarrativeSummary
         headline={narrative?.headline}
