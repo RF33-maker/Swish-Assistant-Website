@@ -576,7 +576,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             <div className="flex items-center gap-4 mb-3">
               <TeamLogo teamName={teamData.name} leagueId={leagueId} size="xl" className="flex-shrink-0" />
               <div>
-                <h1 className="text-xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
+                <h1 className="ch-display uppercase text-[1.75rem] md:text-[2.5rem] lg:text-[3rem] font-bold tracking-tight text-slate-900 dark:text-white leading-[0.95]">
                   {teamData.name}
                 </h1>
                 <div className="flex flex-wrap items-center gap-2 mt-2">

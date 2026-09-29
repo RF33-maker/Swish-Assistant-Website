@@ -87,12 +87,53 @@ export async function extractColorsFromImage(imageUrl: string): Promise<TeamColo
           return;
         }
         
-        const sortedColors = Array.from(colorMap.values())
-          .sort((a, b) => b.count - a.count);
-        
-        const primaryColor = sortedColors[0];
-        const secondaryColor = sortedColors.length > 1 ? sortedColors[1] : primaryColor;
-        
+        // Rank by hue *family*, not by exact shade. Counting fine RGB
+        // buckets alone let a flat fill (e.g. an orange basketball) beat a
+        // team's real colour whenever that colour is drawn with shading or
+        // anti-aliasing and so spreads across many buckets — Bristol
+        // Hurricanes' crest is ~75% navy but came out orange. Each hue bin is
+        // scored with its neighbours so a colour straddling a bin edge isn't
+        // split in two.
+        const HUE_BINS = 12; // 30° each
+        const hueOf = (r: number, g: number, b: number) => {
+          const max = Math.max(r, g, b);
+          const d = max - Math.min(r, g, b);
+          let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+          h = (h * 60 + 360) % 360;
+          return h;
+        };
+        const buckets = Array.from(colorMap.values()).map(c => ({
+          ...c,
+          bin: Math.floor(hueOf(c.r, c.g, c.b) / (360 / HUE_BINS)) % HUE_BINS,
+        }));
+        const binCounts = new Array(HUE_BINS).fill(0);
+        buckets.forEach(c => { binCounts[c.bin] += c.count; });
+        const windowScore = (bin: number) =>
+          binCounts[bin] + binCounts[(bin + 1) % HUE_BINS] + binCounts[(bin + HUE_BINS - 1) % HUE_BINS];
+        const binDistance = (a: number, b: number) => {
+          const d = Math.abs(a - b) % HUE_BINS;
+          return Math.min(d, HUE_BINS - d);
+        };
+        const totalCount = binCounts.reduce((sum, n) => sum + n, 0);
+        const rankedBins = binCounts
+          .map((_, bin) => ({ bin, score: windowScore(bin) }))
+          .sort((a, b) => b.score - a.score);
+
+        // The most common exact shade within ±1 bin of the winning hue.
+        const representative = (centre: number) =>
+          buckets
+            .filter(c => binDistance(c.bin, centre) <= 1)
+            .sort((a, b) => b.count - a.count)[0];
+
+        const primaryBin = rankedBins[0].bin;
+        const primaryColor = representative(primaryBin);
+        // Secondary: the strongest hue family clearly distinct from the
+        // primary (≥ 60° away) that still makes up a real share of the logo.
+        const secondaryBin = rankedBins.find(
+          b => binDistance(b.bin, primaryBin) >= 2 && b.score >= totalCount * 0.08
+        )?.bin;
+        const secondaryColor = (secondaryBin != null && representative(secondaryBin)) || primaryColor;
+
         const primaryRgb = { r: primaryColor.r, g: primaryColor.g, b: primaryColor.b };
         const secondaryRgb = { r: secondaryColor.r, g: secondaryColor.g, b: secondaryColor.b };
         
@@ -131,7 +172,7 @@ export function adjustOpacity(rgb: { r: number; g: number; b: number }, opacity:
 
 export async function extractTeamColors(teamName: string, leagueId: string, extraLeagueIds?: string[]): Promise<TeamColors | null> {
   const CACHE_KEY = 'team_colors_cache';
-  const CACHE_VERSION = '4';
+  const CACHE_VERSION = '5'; // bumped: hue-family ranking changed extracted colours
   const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   // Resolve the exact same logo URL that TeamLogo renders. This includes logos

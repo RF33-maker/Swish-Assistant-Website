@@ -34,9 +34,11 @@ export interface TeamGameLogRow {
 interface TeamPerformanceTrendsProps {
   teamGameLog: TeamGameLogRow[];
   leagueId: string;
+  /** Hide the built-in title row when the host page already labels the section (Coaches Hub). */
+  showHeading?: boolean;
 }
 
-export default function TeamPerformanceTrends({ teamGameLog, leagueId }: TeamPerformanceTrendsProps) {
+export default function TeamPerformanceTrends({ teamGameLog, leagueId, showHeading = true }: TeamPerformanceTrendsProps) {
   const [teamTrends, setTeamTrends] = useState<TeamTrend[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [animationPhase, setAnimationPhase] = useState(0);
@@ -216,15 +218,17 @@ export default function TeamPerformanceTrends({ teamGameLog, leagueId }: TeamPer
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-orange-200 dark:border-neutral-800 p-6">
-      <div className="flex items-center gap-2 mb-6">
-        <Activity className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-        <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Team Performance Trends</h3>
-        <div className="ml-auto flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-          <BarChart3 className="w-4 h-4" />
-          <span>Analyzing {teamTrends.length} teams</span>
+    <div className={`bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-orange-200 dark:border-neutral-800 ${showHeading ? 'p-6' : 'p-3 sm:p-4 md:p-6'}`}>
+      {showHeading && (
+        <div className="flex items-center gap-2 mb-6">
+          <Activity className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Team Performance Trends</h3>
+          <div className="ml-auto flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <BarChart3 className="w-4 h-4" />
+            <span>Analyzing {teamTrends.length} teams</span>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-1 xl:grid-cols-2">
         {teamTrends.map((teamTrend, index) => (

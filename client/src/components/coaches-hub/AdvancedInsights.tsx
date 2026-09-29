@@ -345,10 +345,10 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+      <div className="ch-card p-4 md:p-6">
         {showHeading && (
           <div className="flex items-center gap-3 mb-4">
-            <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
+            <LineChart className="w-5 md:w-6 h-5 md:h-6 text-slate-400 dark:text-neutral-500" />
             <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{headingText}</h2>
           </div>
         )}
@@ -361,7 +361,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
     <select
       value={timeRange}
       onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-      className="px-3 py-1.5 text-xs md:text-sm border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-neutral-700 text-slate-800 dark:text-white"
+      className="ch-input px-3 h-8 text-[13px] font-medium cursor-pointer"
     >
       {TIME_RANGE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
     </select>
@@ -372,10 +372,10 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
   // has been processed for this league/team at all" below.
   if (noRecentGames) {
     return (
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+      <div className="ch-card p-4 md:p-6">
         {showHeading && (
           <div className="flex items-center gap-3 mb-4">
-            <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
+            <LineChart className="w-5 md:w-6 h-5 md:h-6 text-slate-400 dark:text-neutral-500" />
             <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{headingText}</h2>
           </div>
         )}
@@ -389,10 +389,10 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
 
   if (!hasAnyData) {
     return (
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+      <div className="ch-card p-4 md:p-6">
         {showHeading && (
           <div className="flex items-center gap-3 mb-2">
-            <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
+            <LineChart className="w-5 md:w-6 h-5 md:h-6 text-slate-400 dark:text-neutral-500" />
             <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{headingText}</h2>
           </div>
         )}
@@ -404,19 +404,19 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+    <div className="ch-card p-3 sm:p-4 md:p-6">
       {showHeading && (
         <div className="flex items-center gap-3 mb-4 md:mb-6">
-          <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
+          <LineChart className="w-5 md:w-6 h-5 md:h-6 text-slate-400 dark:text-neutral-500" />
           <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{headingText}</h2>
         </div>
       )}
 
       {/* Best lineups — by any category, not just net rating */}
-      <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700 mb-4 md:mb-6">
+      <div className="ch-tile p-4 mb-4 md:mb-6">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
           <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Users2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <Users2 className="w-4 h-4 text-slate-400 dark:text-neutral-500" />
             Best Lineups
           </h4>
         </div>
@@ -425,7 +425,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
           <select
             value={lineupCategoryKey}
             onChange={(e) => setLineupCategoryKey(e.target.value)}
-            className="px-3 py-1.5 text-xs md:text-sm border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-neutral-700 text-slate-800 dark:text-white"
+            className="ch-input px-3 h-8 text-[13px] font-medium cursor-pointer"
           >
             {LINEUP_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
@@ -458,9 +458,9 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Plus-minus leaders */}
-        <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+        <div className="ch-tile p-4">
           <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <Activity className="w-4 h-4 text-slate-400 dark:text-neutral-500" />
             Plus-Minus Leaders
           </h4>
           {plusMinusLeaders.length === 0 ? (
@@ -470,8 +470,8 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
               {plusMinusLeaders.slice(0, 5).map((p, i) => (
                 <div key={p.playerId} className="flex items-center justify-between py-1">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${
-                      i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-gray-400' : i === 2 ? 'bg-amber-600' : 'bg-slate-300 dark:bg-neutral-600'
+                    <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white shrink-0 tabular-nums ${
+                      i === 0 ? 'bg-slate-900 dark:bg-white dark:!text-slate-900' : 'bg-slate-400 dark:bg-neutral-600'
                     }`}>
                       {i + 1}
                     </div>
@@ -487,7 +487,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
         </div>
 
         {/* Minutes leaders */}
-        <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+        <div className="ch-tile p-4">
           <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
             <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             Minutes Leaders

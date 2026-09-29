@@ -143,21 +143,21 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
 
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-3">
+      <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px] mb-4">
         <ArrowLeft className="w-3.5 h-3.5" /> Back to rankings
       </button>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 overflow-hidden mb-4">
+      <div className="ch-card overflow-hidden mb-4">
         <div className="p-4 md:p-6" style={{ background: `linear-gradient(135deg, ${brandColor}14, transparent)` }}>
-          <h2 className="text-xl font-bold text-slate-800 dark:text-white">{team.team_name}</h2>
+          <h2 className="ch-display uppercase text-[1.9rem] md:text-[2.5rem] font-bold tracking-tight leading-none text-slate-900 dark:text-white">{team.team_name}</h2>
           <span className="text-sm text-slate-500 dark:text-slate-400">{roster.length} tracked players</span>
         </div>
 
         <div className="grid grid-cols-4 sm:grid-cols-7 border-t border-gray-200 dark:border-neutral-800">
           {headerStats.map((s, i) => (
-            <div key={s.label} className={`text-center py-3 ${i > 0 ? 'border-l border-gray-100 dark:border-neutral-800' : ''}`}>
-              <div className="text-base md:text-lg font-bold text-slate-800 dark:text-white">{s.value}</div>
-              <div className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-neutral-500">{s.label}</div>
+            <div key={s.label} className={`text-center py-3.5 md:py-4 ${i > 0 ? 'border-l border-gray-100 dark:border-neutral-800' : ''}`}>
+              <div className="ch-display ch-num text-xl md:text-2xl font-bold leading-none text-slate-900 dark:text-white">{s.value}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-neutral-500 mt-1">{s.label}</div>
             </div>
           ))}
         </div>
@@ -178,11 +178,11 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
 
       {tab === 'profile' ? (
         <div className="space-y-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+          <div className="ch-card p-4 md:p-6">
             <div className="flex items-baseline justify-between mb-3">
-              <div className="flex items-baseline gap-2">
-                <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color: readableBrand.body }}>01</span>
-                <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League percentile</h3>
+              <div className="flex items-center gap-2.5">
+                <span className="ch-kicker-n" style={{ color: readableBrand.body }}>01</span>
+                <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">League percentile</h3>
               </div>
               <span className="text-xs text-slate-400 dark:text-neutral-500">vs {teams.length} teams</span>
             </div>
@@ -198,10 +198,10 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
             </div>
           </div>
 
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color: readableBrand.body }}>02</span>
-              <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Roster</h3>
+          <div className="ch-card p-4 md:p-6">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="ch-kicker-n" style={{ color: readableBrand.body }}>02</span>
+              <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Roster</h3>
             </div>
             {roster.length === 0 ? (
               <p className="text-sm text-slate-400 dark:text-neutral-500 py-4 text-center">No tracked players for this team yet.</p>
@@ -237,10 +237,10 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
             )}
           </div>
 
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color: readableBrand.body }}>03</span>
-              <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Game log</h3>
+          <div className="ch-card p-4 md:p-6">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="ch-kicker-n" style={{ color: readableBrand.body }}>03</span>
+              <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Game log</h3>
             </div>
             {loading ? (
               <p className="text-sm text-slate-400 dark:text-neutral-500 py-4 text-center">Loading…</p>
@@ -290,7 +290,7 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
       ) : tab === 'lineups' ? (
         <AdvancedInsights leagueId={team.league_id} teamId={team.team_id} />
       ) : (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-8 text-center">
+        <div className="ch-card p-8 text-center">
           <Video className="w-12 h-12 text-gray-300 dark:text-neutral-700 mx-auto mb-3" />
           <h3 className="text-base font-semibold text-slate-800 dark:text-white mb-1">Video is on the way</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">

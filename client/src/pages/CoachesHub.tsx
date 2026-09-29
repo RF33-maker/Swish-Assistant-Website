@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import { useGlobalSearch, type SearchSuggestion } from '@/hooks/useGlobalSearch';
 import { useLeagueBranding } from '@/hooks/useLeagueBranding';
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
+import { useTeamBranding } from '@/hooks/useTeamBranding';
 import { TeamLogo } from '@/components/TeamLogo';
 import { PlayerSearchAvatar } from '@/components/PlayerSearchAvatar';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -16,7 +17,7 @@ import TeamDetail from '@/components/coaches-hub/TeamDetail';
 import CoachTeamOverview from '@/components/coaches-hub/CoachTeamOverview';
 import CoachTeamBanner from '@/components/coaches-hub/CoachTeamBanner';
 import LeagueChatbot from '@/components/LeagueChatbot';
-import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, User, Calendar, Trophy, X, ChevronDown } from 'lucide-react';
+import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
 import UnifiedScoutingEditor from '@/components/scout-editor/UnifiedScoutingEditor';
@@ -193,11 +194,11 @@ async function fetchTopLeagueShortcuts(limit = 6): Promise<TopLeagueShortcut[]> 
 // Small numbered section header — same "01 · label" convention used across
 // the tab panels below, borrowed from the sectioned-page pattern coaches
 // pointed to as a reference (Epinoia), recolored to the league's own brand.
-function SectionKicker({ n, label, color, className = 'mb-3' }: { n: string; label: string; color: string; className?: string }) {
+function SectionKicker({ n, label, color, className = 'mb-4' }: { n: string; label: string; color: string; className?: string }) {
   return (
-    <div className={`flex items-baseline gap-2 ${className}`}>
-      <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color }}>{n}</span>
-      <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">{label}</h3>
+    <div className={`flex items-center gap-2.5 ${className}`}>
+      <span className="ch-kicker-n" style={{ color }}>{n}</span>
+      <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">{label}</h3>
     </div>
   );
 }
@@ -895,7 +896,17 @@ export default function CoachesHub() {
     manualPrimaryColor: selectedLeague?.brand_primary_colour,
     enabled: !!selectedLeague,
   });
-  const brandColor = brandColors?.primary || '#f97316';
+  const leagueBrandColor = brandColors?.primary || '#f97316';
+  // A coach's hub wears their own team's colours (Hurricanes navy, not the
+  // league's orange); league owners and visitors keep the league brand.
+  const { colors: myTeamColors, isLoading: myTeamBrandLoading } = useTeamBranding({
+    teamName: myTeam?.team_name ?? '',
+    leagueId: selectedLeague?.league_id ?? '',
+    enabled: !!(isCoach && myTeam && selectedLeague),
+  });
+  const brandColor = isCoach && myTeam && !myTeamBrandLoading && myTeamColors?.primary
+    ? myTeamColors.primary
+    : leagueBrandColor;
   // Contrast-safe variant for text/icons — the raw brandColor above can be a
   // dark team colour that disappears against the dark-mode surface.
   const readableBrand = useReadableTeamColor(brandColor).body;
@@ -904,30 +915,36 @@ export default function CoachesHub() {
   // as two different jobs, not five flat equal-weight options. "Lineups" used
   // to be labelled "Advanced Insights", which collided with the "Advanced"
   // category group inside Rankings below — renamed to what it actually shows.
-  const tabGroups: { group: string; tabs: { id: HubTab; label: string }[] }[] = [
+  const tabGroups: { group: string; tabs: { id: HubTab; label: string; icon: LucideIcon }[] }[] = [
     {
       group: 'Stats', tabs: [
-        { id: 'overview', label: 'Overview' },
+        { id: 'overview', label: 'Overview', icon: LayoutDashboard },
         // Needs a team of your own to compare from, so team (coach) logins only.
-        ...(myTeam ? [{ id: 'compare' as HubTab, label: 'Compare' }] : []),
-        { id: 'rankings', label: 'Rankings' },
-        { id: 'lineups', label: 'Lineups' },
-        { id: 'trends', label: 'Trends' },
+        ...(myTeam ? [{ id: 'compare' as HubTab, label: 'Compare', icon: ArrowLeftRight }] : []),
+        { id: 'rankings', label: 'Rankings', icon: ListOrdered },
+        { id: 'lineups', label: 'Lineups', icon: Users },
+        { id: 'trends', label: 'Trends', icon: LineChart },
       ]
     },
     {
       group: 'Build', tabs: [
-        { id: 'scouting', label: 'Scouting Reports' },
+        { id: 'scouting', label: 'Scouting Reports', icon: ClipboardList },
       ]
     },
   ];
 
+  // Everything inside the hub reads its accent from this one variable.
+  const hubStyle = { '--ch-accent': readableBrand } as CSSProperties;
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
-          <p className="mt-4 text-slate-600 dark:text-slate-400">Loading your coaching hub...</p>
+      <div className="coach-hub sa-pro min-h-screen flex items-center justify-center" style={hubStyle}>
+        <div className="flex flex-col items-center gap-5">
+          <img src={SwishLogo} alt="Swish Assistant" className="h-8 opacity-90" />
+          <div className="w-40 h-1 rounded-full overflow-hidden bg-[color:var(--ch-surface-3)]">
+            <div className="h-full w-1/3 rounded-full bg-[color:var(--ch-accent)] animate-[ch-load_1.1s_ease-in-out_infinite]" />
+          </div>
+          <p className="text-[13px] text-[color:var(--ch-text-2)]">Preparing your Coaches Hub…</p>
         </div>
       </div>
     );
@@ -935,85 +952,426 @@ export default function CoachesHub() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-4">Access Denied</h1>
-          <p className="text-slate-600 dark:text-slate-400 mb-6">Please log in to access the Coaches Hub.</p>
-          <Link href="/auth" className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition">
-            Log In
+      <div className="coach-hub sa-pro min-h-screen flex items-center justify-center px-4" style={hubStyle}>
+        <div className="ch-card max-w-sm w-full p-8 text-center">
+          <div className="w-12 h-12 rounded-xl ch-tile flex items-center justify-center mx-auto mb-5">
+            <Lock className="w-5 h-5 text-[color:var(--ch-text-2)]" />
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight text-[color:var(--ch-text)] mb-2">Sign in to Coaches Hub</h1>
+          <p className="text-sm text-[color:var(--ch-text-2)] mb-6">Scouting, rankings and game plans for your team — log in to continue.</p>
+          <Link href="/auth" className="ch-btn ch-btn-primary w-full justify-center h-10">
+            Log in
           </Link>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">
-      {/* Header — same pattern as the public league pages */}
-      <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-4">
-        <div className="flex items-center gap-2 md:gap-4">
-          <div className="flex items-center shrink-0">
-            <img
-              src={SwishLogo}
-              alt="Swish Assistant"
-              className="h-6 md:h-9 cursor-pointer"
-              onClick={() => navigate('/')}
-            />
-          </div>
+  const leagueSwitcher = selectedLeague && (
+    <div className="relative shrink-0">
+      <button
+        onClick={() => setLeaguePickerOpen(o => !o)}
+        className="flex items-center gap-2 pl-1.5 pr-2.5 h-9 rounded-lg border border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] hover:border-[color:var(--ch-border-strong)] transition-colors w-full md:w-auto md:max-w-[320px]"
+        aria-haspopup="listbox"
+        aria-expanded={leaguePickerOpen}
+      >
+        {selectedLeague.logo_url ? (
+          <img
+            src={selectedLeague.logo_url}
+            alt=""
+            className="w-6 h-6 rounded-md object-contain bg-white ring-1 ring-black/5 shrink-0"
+          />
+        ) : (
+          <span className="w-6 h-6 rounded-md ch-tile flex items-center justify-center shrink-0">
+            <Trophy className="w-3.5 h-3.5 text-[color:var(--ch-text-2)]" />
+          </span>
+        )}
+        <span className="text-[13px] font-medium text-[color:var(--ch-text)] truncate flex-1 min-w-0 text-left">{selectedLeague.name}</span>
+        <span className="text-[11px] text-[color:var(--ch-muted)] hidden xl:inline whitespace-nowrap ch-num shrink-0">
+          {statsLoading ? 'Loading…' : `${playerSeasonAverages.length} players`}
+        </span>
+        <ChevronDown className="w-3.5 h-3.5 text-[color:var(--ch-muted)] shrink-0" />
+      </button>
 
-          <div className="relative flex-1 md:max-w-md md:mx-2">
+      {leaguePickerOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setLeaguePickerOpen(false)} />
+          <div className="absolute left-0 md:left-auto md:right-0 z-20 mt-2 w-[min(20rem,calc(100vw-2rem))] ch-card shadow-[var(--ch-shadow-lg)] p-2 ch-rise">
+            <div className="relative mb-1.5">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--ch-muted)]" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Switch league…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="ch-input w-full pl-9 pr-3 h-9 text-sm"
+              />
+            </div>
+
+            {searchQuery ? (
+              filteredLeagues.length > 0 ? (
+                <div className="max-h-64 overflow-y-auto">
+                  {filteredLeagues.map((league) => (
+                    <button
+                      key={league.league_id}
+                      onClick={() => { setSelectedLeague(league); setSearchQuery(''); setLeaguePickerOpen(false); }}
+                      className="w-full text-left px-3 py-2 text-[13px] text-[color:var(--ch-text)] rounded-md hover:bg-[color:var(--ch-surface-3)]"
+                    >
+                      {league.name}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="px-3 py-2 text-[13px] text-[color:var(--ch-muted)]">No leagues found matching "{searchQuery}"</p>
+              )
+            ) : (
+              <div className="max-h-64 overflow-y-auto">
+                <div className="ch-eyebrow px-3 pt-1.5 pb-1">Your leagues</div>
+                {leagues.map((league) => {
+                  const isCurrent = league.league_id === selectedLeague.league_id;
+                  return (
+                    <button
+                      key={league.league_id}
+                      onClick={() => { setSelectedLeague(league); setLeaguePickerOpen(false); }}
+                      className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 text-[13px] rounded-md hover:bg-[color:var(--ch-surface-3)]"
+                      style={isCurrent ? { color: readableBrand, fontWeight: 600 } : { color: 'var(--ch-text)' }}
+                    >
+                      <span className="truncate">{league.name}</span>
+                      {isCurrent && <Check className="w-4 h-4 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const rankTile = (stat: { label: string; value: string; rank: { rank: number; of: number } | null }) => {
+    const pct = stat.rank ? (stat.rank.of > 1 ? (stat.rank.of - stat.rank.rank) / (stat.rank.of - 1) : 1) : 0;
+    const topThird = stat.rank ? stat.rank.rank <= Math.max(1, Math.ceil(stat.rank.of / 3)) : false;
+    return (
+      <div key={stat.label} className="ch-tile p-4">
+        <div className="flex items-center justify-between gap-2">
+          <span className="ch-eyebrow">{stat.label}</span>
+          {stat.rank && topThird && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ color: readableBrand, backgroundColor: 'var(--ch-accent-soft)' }}>
+              Top third
+            </span>
+          )}
+        </div>
+        <div className="ch-display ch-num text-[2rem] md:text-[2.25rem] font-bold leading-none mt-2 text-[color:var(--ch-text)]">
+          {stat.value}
+        </div>
+        {stat.rank && (
+          <div className="mt-3">
+            <div className="h-1 rounded-full bg-[color:var(--ch-surface-3)] overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${Math.max(pct * 100, 4)}%`, backgroundColor: readableBrand }} />
+            </div>
+            <div className="text-[11px] text-[color:var(--ch-text-2)] mt-1.5 ch-num">
+              {ordinal(stat.rank.rank)} of {stat.rank.of} in the league
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const plainTile = (label: string, value: string | number, Icon: LucideIcon, small = false) => (
+    <div key={label} className="ch-tile p-4">
+      <div className="ch-eyebrow flex items-center gap-1.5">
+        <Icon className="w-3.5 h-3.5" /> {label}
+      </div>
+      <div className={`${small ? 'text-base font-semibold tracking-tight mt-2.5 leading-snug' : 'ch-display ch-num text-[2rem] md:text-[2.25rem] font-bold leading-none mt-2'} text-[color:var(--ch-text)]`}>
+        {value}
+      </div>
+    </div>
+  );
+
+  const rankBadge = (index: number) => (
+    <span
+      className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold ch-num shrink-0"
+      style={index === 0
+        ? { backgroundColor: readableBrand, color: '#fff' }
+        : { backgroundColor: 'var(--ch-surface-3)', color: 'var(--ch-text-2)' }}
+    >
+      {index + 1}
+    </span>
+  );
+
+  const loadingPanels = (
+    <div className="space-y-4 md:space-y-5">
+      <div className="ch-card p-5 md:p-6">
+        <div className="ch-skel h-4 w-40 mb-5" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="ch-skel h-[104px]" />)}
+        </div>
+      </div>
+      <div className="ch-card p-5 md:p-6">
+        <div className="ch-skel h-4 w-32 mb-5" />
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => <div key={i} className="ch-skel h-9" />)}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Season profile + squad — shared by the coach dashboard (inside
+  // CoachTeamOverview's main column) and the league-owner overview.
+  const seasonPanels = statsLoading && !hasStats ? loadingPanels : hasStats ? (
+    <>
+      <div className="ch-card p-5 md:p-6">
+        <SectionKicker n="01" label={myTeam ? `${myTeam.team_name} in this competition` : 'Season snapshot'} color={readableBrand} />
+        {myTeam && teamRanks ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {rankTile({ label: 'Points', value: Number(myTeam.avg_pts ?? 0).toFixed(1), rank: teamRanks.pts })}
+            {rankTile({ label: 'Rebounds', value: Number(myTeam.avg_reb ?? 0).toFixed(1), rank: teamRanks.reb })}
+            {rankTile({ label: 'Assists', value: Number(myTeam.avg_ast ?? 0).toFixed(1), rank: teamRanks.ast })}
+            {rankTile({
+              label: 'FG%',
+              value: myTeam.season_fg_pct != null ? `${Number(myTeam.season_fg_pct).toFixed(1)}%` : '—',
+              rank: teamRanks.fg,
+            })}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {plainTile('Teams', standings.length || teamSeasonAverages.length, Users)}
+            {plainTile('Players', playerSeasonAverages.length, User)}
+            {plainTile('Games', uniqueGameCount, Calendar)}
+            {plainTile('Top scoring team', topTeam ? topTeam.team_name : 'No Data', Award, true)}
+          </div>
+        )}
+      </div>
+
+      <div className="ch-card p-5 md:p-6">
+        <SectionKicker n="02" label={myRosterLeaders ? 'Your squad' : 'Team leaders'} color={readableBrand} />
+        {myRosterLeaders ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="ch-tile p-4">
+              <h4 className="ch-eyebrow mb-3">Leading scorers</h4>
+              <div className="space-y-1">
+                {myRosterLeaders.scorers.map((player, index) => {
+                  const top = Number(myRosterLeaders.scorers[0]?.avg_pts ?? 0) || 1;
+                  const ppg = Number(player.avg_pts ?? 0);
+                  return (
+                    <button
+                      key={`${player.player_name}-${index}`}
+                      onClick={() => setDetailView({ type: 'player', player })}
+                      className="group w-full flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 hover:bg-[color:var(--ch-surface)] transition-colors text-left"
+                    >
+                      {rankBadge(index)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[13.5px] font-medium text-[color:var(--ch-text)] truncate group-hover:underline underline-offset-2">
+                            {player.player_name}
+                          </span>
+                          <span className="text-[13px] font-semibold ch-num text-[color:var(--ch-text)] shrink-0">
+                            {ppg.toFixed(1)} <span className="text-[color:var(--ch-muted)] font-medium">ppg</span>
+                          </span>
+                        </div>
+                        <div className="h-1 mt-1.5 rounded-full bg-[color:var(--ch-surface-3)] overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${(ppg / top) * 100}%`, backgroundColor: index === 0 ? readableBrand : 'var(--ch-muted)' }} />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="ch-tile p-4">
+              <h4 className="ch-eyebrow mb-3">Who leads what</h4>
+              <div className="divide-y divide-[color:var(--ch-border)]">
+                {[
+                  { label: 'Rebounding', icon: BarChart3, player: myRosterLeaders.rebounder, value: myRosterLeaders.rebounder ? Number(myRosterLeaders.rebounder.avg_reb ?? 0).toFixed(1) : null, unit: 'rpg' },
+                  { label: 'Playmaking', icon: Users, player: myRosterLeaders.passer, value: myRosterLeaders.passer ? Number(myRosterLeaders.passer.avg_ast ?? 0).toFixed(1) : null, unit: 'apg' },
+                  {
+                    label: 'Stocks (stl+blk)', icon: Shield, player: myRosterLeaders.defender,
+                    value: myRosterLeaders.defender ? (Number(myRosterLeaders.defender.avg_stl ?? 0) + Number(myRosterLeaders.defender.avg_blk ?? 0)).toFixed(1) : null,
+                    unit: 'per game',
+                  },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                    <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ color: readableBrand, backgroundColor: 'var(--ch-accent-soft)' }}>
+                      <row.icon className="w-4 h-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[11px] text-[color:var(--ch-muted)]">{row.label}</div>
+                      {row.player ? (
+                        <button
+                          onClick={() => setDetailView({ type: 'player', player: row.player! })}
+                          className="text-[13.5px] font-medium text-[color:var(--ch-text)] truncate hover:underline underline-offset-2 text-left max-w-full"
+                        >
+                          {row.player.player_name}
+                        </button>
+                      ) : (
+                        <div className="text-[13.5px] text-[color:var(--ch-muted)]">No Data</div>
+                      )}
+                    </div>
+                    {row.value && (
+                      <div className="text-right shrink-0">
+                        <div className="text-[15px] font-semibold ch-num text-[color:var(--ch-text)]">{row.value}</div>
+                        <div className="text-[10.5px] text-[color:var(--ch-muted)]">{row.unit}</div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="ch-tile p-4 md:max-w-lg">
+            <h4 className="ch-eyebrow mb-3">Top scoring teams</h4>
+            <div className="space-y-1">
+              {teamSeasonAverages.slice(0, 3).map((team, index) => (
+                <button
+                  key={`${team.team_id ?? 'team'}-${index}`}
+                  onClick={() => setDetailView({ type: 'team', team })}
+                  className="group w-full flex items-center gap-3 rounded-lg px-2 py-2 -mx-2 hover:bg-[color:var(--ch-surface)] transition-colors text-left"
+                >
+                  {rankBadge(index)}
+                  <span className="w-6 h-6 shrink-0 flex items-center justify-center">
+                    <TeamLogo teamName={team.team_name} leagueId={selectedLeague?.league_id} size="xs" />
+                  </span>
+                  <span className="flex-1 min-w-0 text-[13.5px] font-medium text-[color:var(--ch-text)] truncate group-hover:underline underline-offset-2">{team.team_name}</span>
+                  <span className="text-[13px] font-semibold ch-num text-[color:var(--ch-text)] shrink-0">
+                    {Number(team.avg_pts ?? 0).toFixed(1)} <span className="text-[color:var(--ch-muted)] font-medium">avg pts</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  ) : (
+    <div className="ch-card p-10 text-center">
+      <div className="w-12 h-12 rounded-xl ch-tile flex items-center justify-center mx-auto mb-4">
+        <BarChart3 className="w-5 h-5 text-[color:var(--ch-muted)]" />
+      </div>
+      <h3 className="text-base font-semibold text-[color:var(--ch-text)] mb-1">No data yet</h3>
+      <p className="text-sm text-[color:var(--ch-text-2)]">
+        Upload player statistics for this league to see analytics.
+      </p>
+    </div>
+  );
+
+  const quickActions = selectedLeague && (
+    <div className="ch-card p-5">
+      <SectionKicker n="03" label="Quick actions" color={readableBrand} />
+      <div className="-mx-2 space-y-0.5">
+        {[
+          // League-owner action -- a coach account has no access to
+          // /league-admin, so offering it here only leads them to a
+          // permission wall.
+          ...(!isCoach ? [{ href: '/league-admin', label: 'Upload Player Stats', sub: 'Add box scores to this league', icon: Upload }] : []),
+          { href: `/competition/${selectedLeague.slug}`, label: 'View Public League Page', sub: 'Fixtures, results and teams', icon: Eye },
+          { href: `/league-leaders/${selectedLeague.slug}`, label: 'View League Leaders', sub: 'Stat leaders across the league', icon: TrendingUp },
+        ].map((a) => (
+          <Link key={a.href} href={a.href} className="group flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-[color:var(--ch-surface-2)] transition-colors">
+            <span className="w-8 h-8 rounded-lg ch-tile flex items-center justify-center shrink-0">
+              <a.icon className="w-4 h-4 text-[color:var(--ch-text-2)]" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[13.5px] font-medium text-[color:var(--ch-text)]">{a.label}</span>
+              <span className="block text-[11.5px] text-[color:var(--ch-muted)] truncate">{a.sub}</span>
+            </span>
+            <ArrowUpRight className="w-4 h-4 text-[color:var(--ch-muted)] group-hover:text-[color:var(--ch-text)] transition-colors shrink-0" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+
+  const emptyState = (Icon: LucideIcon, title: string, body: string) => (
+    <div className="ch-card p-10 text-center">
+      <div className="w-12 h-12 rounded-xl ch-tile flex items-center justify-center mx-auto mb-4">
+        <Icon className="w-5 h-5 text-[color:var(--ch-muted)]" />
+      </div>
+      <h3 className="text-base font-semibold text-[color:var(--ch-text)] mb-1">{title}</h3>
+      <p className="text-sm text-[color:var(--ch-text-2)]">{body}</p>
+    </div>
+  );
+
+  const tabIntro = (n: string, label: string, sub?: string) => (
+    <div className="mb-4 md:mb-5">
+      <SectionKicker n={n} label={label} color={readableBrand} className="" />
+      {sub && <p className="text-[13px] text-[color:var(--ch-text-2)] mt-1.5">{sub}</p>}
+    </div>
+  );
+
+  return (
+    <div className="coach-hub sa-pro min-h-screen" style={hubStyle}>
+      {/* Header */}
+      <header className="ch-glass sticky top-0 z-50 border-b border-[color:var(--ch-border)]">
+        <div className="max-w-[1440px] mx-auto h-14 md:h-16 px-4 md:px-8 flex items-center gap-3 md:gap-5">
+          <button onClick={() => navigate('/')} className="flex items-center gap-3 shrink-0" aria-label="Swish Assistant home">
+            <img src={SwishLogo} alt="Swish Assistant" className="h-6 md:h-8" />
+            <span className="hidden md:block w-px h-6 bg-[color:var(--ch-border-strong)]" />
+            <span className="hidden md:flex items-center gap-2">
+              <span className="text-[14px] font-semibold tracking-tight text-[color:var(--ch-text)]">Coaches Hub</span>
+              <span className="text-[9.5px] font-bold uppercase tracking-[0.12em] px-1.5 py-0.5 rounded-md text-white bg-gradient-to-br from-neutral-800 to-neutral-950 ring-1 ring-white/10 dark:from-white dark:to-neutral-200 dark:text-neutral-900">
+                Pro
+              </span>
+            </span>
+          </button>
+
+          <div className="relative flex-1 md:max-w-md md:mx-auto">
             <form onSubmit={handleSubmitSearch} className="flex items-center">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 md:h-4 md:w-4 text-gray-400 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[color:var(--ch-muted)] pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Search league, team or player"
+                  placeholder="Search leagues, teams, players"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-8 md:pl-9 pr-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="ch-input w-full pl-9 pr-3 h-9 text-[13px]"
                 />
               </div>
             </form>
 
             {suggestions.length > 0 && (
-              <ul className="absolute z-50 mt-1 w-full bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 rounded-md shadow-lg max-h-72 overflow-y-auto">
+              <ul className="absolute z-50 mt-2 w-full ch-card shadow-[var(--ch-shadow-lg)] p-1.5 max-h-80 overflow-y-auto">
                 {suggestions.map((item: SearchSuggestion, index: number) => (
                   <li
                     key={index}
                     onClick={() => handleSelectSearch(item)}
-                    className="px-4 py-2.5 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
+                    className="px-2.5 py-2 cursor-pointer rounded-lg hover:bg-[color:var(--ch-surface-3)] text-left transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       {item.type === 'league' || item.type === 'competition' ? (
                         item.logo_url ? (
-                          <div className="h-7 w-7 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          <div className="h-8 w-8 rounded-lg bg-white ring-1 ring-black/5 flex items-center justify-center overflow-hidden flex-shrink-0">
                             <img src={item.logo_url} alt={item.name} className="h-6 w-6 object-contain" />
                           </div>
                         ) : (
-                          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
-                            <Trophy className="h-3.5 w-3.5 text-white" />
+                          <div className="h-8 w-8 rounded-lg ch-tile flex items-center justify-center flex-shrink-0">
+                            <Trophy className="h-4 w-4 text-[color:var(--ch-text-2)]" />
                           </div>
                         )
                       ) : item.type === 'team' ? (
-                        <div className="h-7 w-7 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <div className="h-8 w-8 rounded-lg bg-white ring-1 ring-black/5 flex items-center justify-center overflow-hidden flex-shrink-0">
                           <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
                         </div>
                       ) : (
                         <PlayerSearchAvatar name={item.name} photoUrl={item.photo_url} />
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-orange-900 dark:text-orange-300 text-xs md:text-sm truncate">{item.name}</div>
+                        <div className="font-medium text-[color:var(--ch-text)] text-[13px] truncate">{item.name}</div>
                         {item.type === 'player' && (
-                          <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.team}</div>
+                          <div className="text-xs text-[color:var(--ch-muted)] truncate">{item.team}</div>
                         )}
                         {item.type === 'team' && (
-                          <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.league_name}</div>
+                          <div className="text-xs text-[color:var(--ch-muted)] truncate">{item.league_name}</div>
                         )}
                         {(item.type === 'league' || item.type === 'competition') && (
-                          <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
+                          <div className="text-xs text-[color:var(--ch-muted)]">League</div>
                         )}
                       </div>
-                      <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)] bg-[color:var(--ch-surface-3)] px-1.5 py-0.5 rounded flex-shrink-0">
                         {item.type}
                       </div>
                     </div>
@@ -1023,88 +1381,118 @@ export default function CoachesHub() {
             )}
           </div>
 
-          <Link href="/dashboard" className="hidden sm:inline text-xs md:text-sm text-slate-600 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 transition whitespace-nowrap">
-            ← Back to Dashboard
-          </Link>
-
-          <button
-            onClick={() => logoutMutation.mutate()}
-            disabled={logoutMutation.isPending}
-            className="text-xs md:text-sm text-slate-600 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 transition whitespace-nowrap disabled:opacity-50"
-            data-testid="button-logout"
-          >
-            {logoutMutation.isPending ? "Signing out…" : "Log out"}
-          </button>
-
-          <ThemeToggle />
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
+            <Link
+              href="/dashboard"
+              className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-[13px] font-medium text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)] hover:bg-[color:var(--ch-surface-3)] transition-colors"
+            >
+              <LayoutGrid className="w-4 h-4" /> <span className="hidden lg:inline">Dashboard</span>
+            </Link>
+            <ThemeToggle />
+            <button
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
+              className="inline-flex items-center gap-1.5 h-9 px-2.5 md:px-3 rounded-lg text-[13px] font-medium text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)] hover:bg-[color:var(--ch-surface-3)] transition-colors whitespace-nowrap disabled:opacity-50"
+              data-testid="button-logout"
+              aria-label="Log out"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden lg:inline">{logoutMutation.isPending ? "Signing out…" : "Log out"}</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-full mx-auto px-4 md:px-6 py-4 md:py-6">
+      <main className="max-w-[1440px] mx-auto px-4 md:px-8 pt-5 md:pt-8 pb-28">
         {/* A coach's own team, once resolved, gets a persistent branded
             banner instead of the generic title — visible above every tab,
             not just Overview, so it reads as "this is my team's hub" rather
             than a stat card that scrolls away. League owners (no single
-            team) keep the plain title. */}
+            team) keep a league-level hero. */}
         {isCoach && myTeam ? (
           <CoachTeamBanner
             team={myTeam}
             leagueId={selectedLeague?.league_id}
+            leagueName={selectedLeague?.name}
             standing={myStanding}
             standingsCount={standings.length}
             fallbackColor={readableBrand}
             onViewTeam={() => setDetailView({ type: 'team', team: myTeam })}
           />
-        ) : (
-          <div className="flex items-center gap-3 mb-4 md:mb-6">
-            <div className="p-2 bg-orange-100 dark:bg-orange-900/40 rounded-lg">
-              <Target className="w-5 h-5 md:w-6 md:h-6 text-orange-600 dark:text-orange-400" />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">Coaches Hub</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400">Analyze performance, track trends, and build scouting reports.</p>
-            </div>
+        ) : isCoach && statsLoading ? (
+          <div className="ch-card h-[196px] md:h-[236px] mb-5 md:mb-6 overflow-hidden">
+            <div className="ch-skel w-full h-full rounded-none" />
           </div>
+        ) : (
+          <section
+            className="ch-hero text-white mb-5 md:mb-6 ch-rise"
+            style={{ background: `radial-gradient(90% 160% at 0% 0%, ${brandColor} 0%, color-mix(in srgb, ${brandColor} 45%, transparent) 40%, transparent 75%), #0b0e13` }}
+          >
+            <div className="relative px-5 py-6 md:px-8 md:py-8 flex items-center gap-4 md:gap-5">
+              {selectedLeague?.logo_url ? (
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-white ring-1 ring-black/5 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)]">
+                  <img src={selectedLeague.logo_url} alt="" className="w-11 h-11 md:w-12 md:h-12 object-contain" />
+                </div>
+              ) : (
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center shrink-0">
+                  <Target className="w-6 h-6 md:w-7 md:h-7 text-white" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.14em] text-white/65">
+                  Coaches Hub{selectedLeague ? ` · ${selectedLeague.name}` : ''}
+                </div>
+                <h1 className="ch-display uppercase font-bold leading-[0.95] text-[2rem] md:text-[3rem] tracking-tight mt-1">
+                  {selectedLeague ? 'League intelligence' : 'Coaches Hub'}
+                </h1>
+                <p className="text-[13px] md:text-sm text-white/70 mt-1.5">Analyze performance, track trends, and build scouting reports.</p>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Shortcuts — top public leagues, for fast navigation while no
             league is selected yet (whether or not the coach has their own). */}
         {!selectedLeague && (
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6 mb-4 md:mb-6">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-orange-500" />
-              <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Shortcuts</h3>
+          <div className="ch-card p-5 md:p-6 mb-5 md:mb-6">
+            <div className="flex items-end justify-between gap-3 mb-4">
+              <div>
+                <div className="ch-eyebrow flex items-center gap-1.5 mb-1">
+                  <TrendingUp className="w-3.5 h-3.5" /> Shortcuts
+                </div>
+                <p className="text-[13px] text-[color:var(--ch-text-2)]">
+                  Top leagues on Swish Assistant — jump straight in to scout, compare, or explore.
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-              Top leagues on Swish Assistant — jump straight in to scout, compare, or explore.
-            </p>
 
             {topLeaguesLoading ? (
-              <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-neutral-500 py-3">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500" />
-                Finding leagues…
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+                {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="ch-skel h-[108px]" />)}
               </div>
             ) : topLeaguesError ? (
-              <p className="text-sm text-slate-400 dark:text-neutral-500 py-2">League suggestions are temporarily unavailable.</p>
+              <p className="text-sm text-[color:var(--ch-muted)] py-2">League suggestions are temporarily unavailable.</p>
             ) : topLeagues.length === 0 ? (
-              <p className="text-sm text-slate-400 dark:text-neutral-500 py-2">No featured leagues right now.</p>
+              <p className="text-sm text-[color:var(--ch-muted)] py-2">No featured leagues right now.</p>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                 {topLeagues.map((lg) => (
                   <button
                     key={lg.competition.competition_id ?? lg.competition.league_id}
                     type="button"
                     onClick={() => setSelectedLeague(lg.competition)}
-                    className="group flex flex-col items-center gap-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/60 p-3 text-center hover:border-orange-300 dark:hover:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors"
+                    className="group ch-tile ch-hover flex flex-col items-center gap-2.5 p-4 text-center hover:-translate-y-0.5"
                   >
                     {lg.logoUrl ? (
-                      <img src={lg.logoUrl} alt="" className="h-10 w-10 object-contain" />
+                      <div className="h-12 w-12 rounded-xl bg-white ring-1 ring-black/5 flex items-center justify-center overflow-hidden">
+                        <img src={lg.logoUrl} alt="" className="h-9 w-9 object-contain" />
+                      </div>
                     ) : (
-                      <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
-                        <Trophy className="h-5 w-5 text-orange-500" />
+                      <div className="h-12 w-12 rounded-xl bg-[color:var(--ch-surface-3)] flex items-center justify-center">
+                        <Trophy className="h-5 w-5 text-[color:var(--ch-text-2)]" />
                       </div>
                     )}
-                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-2 group-hover:text-orange-700 dark:group-hover:text-orange-400">
+                    <span className="text-[12.5px] font-medium text-[color:var(--ch-text)] line-clamp-2 leading-snug">
                       {lg.name}
                     </span>
                   </button>
@@ -1115,236 +1503,176 @@ export default function CoachesHub() {
         )}
 
         {leagues.length === 0 ? (
-          <div className="text-center py-12">
-            <Users className="w-16 h-16 text-gray-400 dark:text-neutral-600 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-slate-800 dark:text-white mb-2">No Leagues Found</h2>
-            <p className="text-slate-600 dark:text-slate-400 mb-6">
+          <div className="ch-card p-10 md:p-14 text-center">
+            <div className="w-14 h-14 rounded-2xl ch-tile flex items-center justify-center mx-auto mb-5">
+              <Users className="w-6 h-6 text-[color:var(--ch-text-2)]" />
+            </div>
+            <h2 className="text-xl font-semibold tracking-tight text-[color:var(--ch-text)] mb-2">No Leagues Found</h2>
+            <p className="text-sm text-[color:var(--ch-text-2)] mb-6 max-w-sm mx-auto">
               You need to create or manage a league to access coaching insights.
             </p>
-            <Link
-              href="/league-admin"
-              className="inline-flex items-center gap-2 bg-orange-600 text-white px-6 py-3 rounded-lg hover:bg-orange-700 transition"
-            >
+            <Link href="/league-admin" className="ch-btn ch-btn-primary h-10 px-5">
               <Award className="w-4 h-4" />
               Create League
             </Link>
           </div>
-        ) : (
-          <div className="space-y-4 md:space-y-6">
-            {/* League chooser — full search card until one's picked, then it
-                collapses to a small switcher pill so it stops competing with
-                the header's own global search and the tab content below. */}
-            {!selectedLeague ? (
-              <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Select league</h3>
-                  <div className="text-sm text-slate-500 dark:text-slate-400">
-                    {leagues.length} available
-                  </div>
-                </div>
+        ) : !selectedLeague ? (
+          /* League chooser — full search card until one's picked; once
+             picked it collapses to the switcher in the section bar. */
+          <div className="ch-card p-5 md:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Select league</h3>
+              <div className="text-[12px] text-[color:var(--ch-muted)] ch-num">{leagues.length} available</div>
+            </div>
 
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" />
-                  <input
-                    type="text"
-                    placeholder="Search for a league to analyze..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-md text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                  />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--ch-muted)]" />
+              <input
+                type="text"
+                placeholder="Search for a league to analyze…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="ch-input w-full pl-10 pr-4 h-11 text-sm"
+              />
 
-                  {searchQuery && filteredLeagues.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                      {filteredLeagues.map((league) => (
-                        <button
-                          key={league.league_id}
-                          onClick={() => { setSelectedLeague(league); setSearchQuery(''); }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-orange-50 dark:hover:bg-neutral-800 hover:text-orange-800 dark:hover:text-orange-300 focus:outline-none focus:bg-orange-50 dark:focus:bg-neutral-800 focus:text-orange-800 dark:focus:text-orange-300"
-                        >
-                          <div className="font-medium">{league.name}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {searchQuery && filteredLeagues.length === 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-md shadow-lg p-3 text-sm text-gray-500 dark:text-neutral-400">
-                      No leagues found matching "{searchQuery}"
-                    </div>
-                  )}
-                </div>
-
-                {leagues.length <= 5 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <span className="text-xs text-gray-500 dark:text-neutral-400 self-center">Quick select:</span>
-                    {leagues.map((league) => (
-                      <button
-                        key={league.league_id}
-                        onClick={() => setSelectedLeague(league)}
-                        className="px-3 md:px-4 py-1 text-xs md:text-sm text-gray-700 dark:text-neutral-300 bg-gray-100 dark:bg-neutral-800 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-800 dark:hover:text-orange-300 rounded-full transition-colors border border-gray-200 dark:border-neutral-700"
-                      >
-                        {league.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="relative inline-block">
-                <button
-                  onClick={() => setLeaguePickerOpen(o => !o)}
-                  className="flex items-center gap-2 pl-2 pr-3 py-1.5 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-full hover:border-gray-300 dark:hover:border-neutral-700 transition-colors"
-                >
-                  {selectedLeague.logo_url ? (
-                    <img
-                      src={selectedLeague.logo_url}
-                      alt={selectedLeague.name}
-                      className="w-6 h-6 rounded-full object-contain bg-white border border-gray-200 dark:border-neutral-700 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-2 h-2 bg-green-500 rounded-full shrink-0" />
-                  )}
-                  <span className="text-sm font-medium text-slate-800 dark:text-white">{selectedLeague.name}</span>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">
-                    {statsLoading ? 'Loading…' : `${playerSeasonAverages.length} players`}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 dark:text-neutral-500" />
-                </button>
-
-                {leaguePickerOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setLeaguePickerOpen(false)} />
-                    <div className="absolute z-20 mt-2 w-80 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-3">
-                      <div className="relative mb-2">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" />
-                        <input
-                          type="text"
-                          autoFocus
-                          placeholder="Switch league..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-md text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                        />
-                      </div>
-
-                      {searchQuery ? (
-                        filteredLeagues.length > 0 ? (
-                          <div className="max-h-60 overflow-y-auto">
-                            {filteredLeagues.map((league) => (
-                              <button
-                                key={league.league_id}
-                                onClick={() => { setSelectedLeague(league); setSearchQuery(''); setLeaguePickerOpen(false); }}
-                                className="w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-white rounded-md hover:bg-orange-50 dark:hover:bg-neutral-800 hover:text-orange-800 dark:hover:text-orange-300"
-                              >
-                                {league.name}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="px-3 py-2 text-sm text-gray-500 dark:text-neutral-400">No leagues found matching "{searchQuery}"</p>
-                        )
-                      ) : (
-                        <div className="max-h-60 overflow-y-auto">
-                          {leagues.map((league) => (
-                            <button
-                              key={league.league_id}
-                              onClick={() => { setSelectedLeague(league); setLeaguePickerOpen(false); }}
-                              className="w-full flex items-center justify-between text-left px-3 py-2 text-sm rounded-md hover:bg-orange-50 dark:hover:bg-neutral-800"
-                              style={league.league_id === selectedLeague.league_id ? { color: readableBrand, fontWeight: 600 } : {}}
-                            >
-                              <span className={league.league_id === selectedLeague.league_id ? '' : 'text-gray-900 dark:text-white'}>{league.name}</span>
-                              {league.league_id === selectedLeague.league_id && <span className="text-xs">Current</span>}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {selectedLeague && (
-              <>
-                {/* Section tabs, grouped by job — "Stats" to look something up,
-                    "Build" to make something — instead of one flat row. */}
-                <div className="flex flex-wrap items-end gap-x-8 gap-y-3 pb-4 border-b border-gray-200 dark:border-neutral-800">
-                  {tabGroups.map((g) => (
-                    <div key={g.group} className="min-w-0 max-w-full">
-                      <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-neutral-500 mb-1.5">
-                        {g.group}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {g.tabs.map((tab) => (
-                          <button
-                            key={tab.id}
-                            onClick={() => { setActiveTab(tab.id); setDetailView(null); }}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md border whitespace-nowrap transition-colors ${
-                              activeTab === tab.id
-                                ? ''
-                                : 'border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-400 hover:border-gray-300 dark:hover:border-neutral-600'
-                            }`}
-                            style={activeTab === tab.id ? { backgroundColor: readableBrand, color: '#fff', borderColor: readableBrand } : {}}
-                          >
-                            {tab.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+              {searchQuery && filteredLeagues.length > 0 && (
+                <div className="absolute z-10 w-full mt-2 ch-card shadow-[var(--ch-shadow-lg)] p-1.5 max-h-60 overflow-y-auto">
+                  {filteredLeagues.map((league) => (
+                    <button
+                      key={league.league_id}
+                      onClick={() => { setSelectedLeague(league); setSearchQuery(''); }}
+                      className="w-full text-left px-3 py-2 text-sm text-[color:var(--ch-text)] rounded-md hover:bg-[color:var(--ch-surface-3)] focus:outline-none focus:bg-[color:var(--ch-surface-3)]"
+                    >
+                      <div className="font-medium">{league.name}</div>
+                    </button>
                   ))}
                 </div>
+              )}
 
-                {/* Drill-in from a Rankings/roster row takes over the content
-                    area regardless of which tab is active; the tab strip
-                    above still works to back out of it. */}
-                {detailView ? (
-                  detailView.type === 'matchReport' ? (
-                    <MatchReport
-                      gameKey={detailView.gameKey}
-                      leagueId={selectedLeague.league_id}
-                      teamName={myTeam?.team_name || coachTeamName || ''}
-                      brandColor={readableBrand}
-                      onBack={() => setDetailView(null)}
-                    />
-                  ) : detailView.type === 'scoutReport' ? (
-                    <OpponentScoutReport
-                      opponentName={detailView.opponentName}
-                      leagueId={selectedLeague.league_id}
-                      myTeamName={myTeam?.team_name || coachTeamName || ''}
-                      standings={standings}
-                      teamSeasonAverages={teamSeasonAverages}
-                      playerSeasonAverages={playerSeasonAverages}
-                      brandColor={readableBrand}
-                      onBack={() => setDetailView(null)}
-                    />
-                  ) : detailView.type === 'player' ? (
-                    <PlayerDetail
-                      player={detailView.player}
-                      players={playerSeasonAverages}
-                      teams={teamSeasonAverages}
-                      brandColor={brandColor}
-                      onBack={() => setDetailView(null)}
-                      onSelectTeam={(team) => setDetailView({ type: 'team', team })}
-                    />
-                  ) : (
-                    <TeamDetail
-                      team={detailView.team}
-                      teams={teamSeasonAverages}
-                      players={playerSeasonAverages}
-                      brandColor={brandColor}
-                      onBack={() => setDetailView(null)}
-                      onSelectPlayer={(player) => setDetailView({ type: 'player', player })}
-                    />
-                  )
+              {searchQuery && filteredLeagues.length === 0 && (
+                <div className="absolute z-10 w-full mt-2 ch-card p-3 text-sm text-[color:var(--ch-muted)]">
+                  No leagues found matching "{searchQuery}"
+                </div>
+              )}
+            </div>
+
+            {leagues.length <= 5 && (
+              <div className="flex flex-wrap items-center gap-2 mt-4">
+                <span className="text-xs text-[color:var(--ch-muted)] mr-1">Quick select</span>
+                {leagues.map((league) => (
+                  <button
+                    key={league.league_id}
+                    onClick={() => setSelectedLeague(league)}
+                    className="ch-chip px-3 py-1.5 text-[13px]"
+                  >
+                    {league.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Section bar, grouped by job — "Stats" to look something up,
+                "Build" to make something — with the league switcher on the
+                right. Sticks under the header so switching never needs a
+                scroll back up. */}
+            {/* On phones the switcher sits above the bar and scrolls away, so
+                only the tabs stay pinned — keeps the sticky strip to one row. */}
+            <div className="md:hidden mb-2">{leagueSwitcher}</div>
+            <div className="ch-glass sticky top-14 md:top-16 z-40 -mx-4 md:-mx-8 px-4 md:px-8 mb-5 md:mb-6 border-b border-[color:var(--ch-border)]">
+              <div className="flex items-center md:gap-3">
+                <nav className="flex-1 min-w-0 flex items-stretch gap-4 md:gap-6 overflow-x-auto scrollbar-hide" aria-label="Coaches Hub sections">
+                  {tabGroups.map((g, gi) => (
+                    <div key={g.group} className="flex items-stretch gap-1 shrink-0">
+                      {gi > 0 && <span className="self-center w-px h-5 bg-[color:var(--ch-border-strong)] mr-3 md:mr-5" />}
+                      <span className="hidden lg:flex items-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ch-muted)] mr-2">
+                        {g.group}
+                      </span>
+                      {g.tabs.map((tab) => {
+                        const active = activeTab === tab.id && !detailView;
+                        const selected = activeTab === tab.id;
+                        return (
+                          <button
+                            key={tab.id}
+                            onClick={(e) => {
+                              setActiveTab(tab.id);
+                              setDetailView(null);
+                              // Phones: bring the chosen tab fully into the scrolling strip.
+                              e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                            }}
+                            aria-current={selected ? 'page' : undefined}
+                            className={`relative flex items-center gap-2 h-12 md:h-[52px] px-2.5 text-[13.5px] font-medium whitespace-nowrap transition-colors ${
+                              selected ? 'text-[color:var(--ch-text)]' : 'text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]'
+                            }`}
+                          >
+                            <tab.icon className="w-4 h-4" style={selected ? { color: readableBrand } : undefined} />
+                            {tab.label}
+                            <span
+                              className="absolute left-1.5 right-1.5 -bottom-px h-[2px] rounded-full transition-opacity"
+                              style={{ backgroundColor: readableBrand, opacity: active ? 1 : selected ? 0.35 : 0 }}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </nav>
+                <div className="hidden md:block">{leagueSwitcher}</div>
+              </div>
+            </div>
+
+            <div key={detailView ? `detail-${detailView.type}` : activeTab} className="ch-rise">
+              {/* Drill-in from a Rankings/roster row takes over the content
+                  area regardless of which tab is active; the tab strip
+                  above still works to back out of it. */}
+              {detailView ? (
+                detailView.type === 'matchReport' ? (
+                  <MatchReport
+                    gameKey={detailView.gameKey}
+                    leagueId={selectedLeague.league_id}
+                    teamName={myTeam?.team_name || coachTeamName || ''}
+                    brandColor={readableBrand}
+                    onBack={() => setDetailView(null)}
+                  />
+                ) : detailView.type === 'scoutReport' ? (
+                  <OpponentScoutReport
+                    opponentName={detailView.opponentName}
+                    leagueId={selectedLeague.league_id}
+                    myTeamName={myTeam?.team_name || coachTeamName || ''}
+                    standings={standings}
+                    teamSeasonAverages={teamSeasonAverages}
+                    playerSeasonAverages={playerSeasonAverages}
+                    brandColor={readableBrand}
+                    onBack={() => setDetailView(null)}
+                  />
+                ) : detailView.type === 'player' ? (
+                  <PlayerDetail
+                    player={detailView.player}
+                    players={playerSeasonAverages}
+                    teams={teamSeasonAverages}
+                    brandColor={brandColor}
+                    onBack={() => setDetailView(null)}
+                    onSelectTeam={(team) => setDetailView({ type: 'team', team })}
+                  />
                 ) : (
-                  <>
-                {/* Overview */}
-                {activeTab === 'overview' && (
-                  <div className="space-y-4 md:space-y-6">
-                    {/* The persistent CoachTeamBanner above already covers
-                        "here's my team" (logo, record, rank) — Overview
-                        picks up straight from next/last game and trends. */}
-                    {myTeam && (
+                  <TeamDetail
+                    team={detailView.team}
+                    teams={teamSeasonAverages}
+                    players={playerSeasonAverages}
+                    brandColor={brandColor}
+                    onBack={() => setDetailView(null)}
+                    onSelectPlayer={(player) => setDetailView({ type: 'player', player })}
+                  />
+                )
+              ) : (
+                <>
+                  {/* Overview */}
+                  {activeTab === 'overview' && (
+                    myTeam ? (
+                      /* The persistent CoachTeamBanner above already covers
+                         "here's my team" (logo, record, rank) — Overview
+                         picks up straight from next/last game and trends. */
                       <CoachTeamOverview
                         team={myTeam}
                         leagueId={selectedLeague.league_id}
@@ -1358,343 +1686,140 @@ export default function CoachesHub() {
                         fallbackColor={readableBrand}
                         onOpenMatchReport={(gameKey) => setDetailView({ type: 'matchReport', gameKey })}
                         onOpenScoutReport={(opponentName) => setDetailView({ type: 'scoutReport', opponentName })}
+                        aside={quickActions}
+                      >
+                        {seasonPanels}
+                      </CoachTeamOverview>
+                    ) : (
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-5">
+                        <div className="xl:col-span-2 space-y-4 md:space-y-5 min-w-0">{seasonPanels}</div>
+                        <aside className="min-w-0">{quickActions}</aside>
+                      </div>
+                    )
+                  )}
+
+                  {/* Rankings */}
+                  {activeTab === 'rankings' && (
+                    <div>
+                      {tabIntro('01', 'Rankings', `Season averages across ${teamSeasonAverages.length} teams and ${playerSeasonAverages.length} players, updated as new stats are uploaded.`)}
+                      <FullRankings
+                        players={playerSeasonAverages}
+                        teams={teamSeasonAverages}
+                        brandColor={brandColor}
+                        onSelectPlayer={(player) => setDetailView({ type: 'player', player })}
+                        onSelectTeam={(team) => setDetailView({ type: 'team', team })}
                       />
-                    )}
-
-                    {hasStats ? (
-                      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-                        <SectionKicker n="01" label={myTeam ? `${myTeam.team_name} in this competition` : 'Season snapshot'} color={readableBrand} />
-                        {myTeam && teamRanks ? (
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
-                            {([
-                              { label: 'Points', value: Number(myTeam.avg_pts ?? 0).toFixed(1), rank: teamRanks.pts, icon: TrendingUp },
-                              { label: 'Rebounds', value: Number(myTeam.avg_reb ?? 0).toFixed(1), rank: teamRanks.reb, icon: BarChart3 },
-                              { label: 'Assists', value: Number(myTeam.avg_ast ?? 0).toFixed(1), rank: teamRanks.ast, icon: Users },
-                              {
-                                label: 'FG%',
-                                value: myTeam.season_fg_pct != null ? `${Number(myTeam.season_fg_pct).toFixed(1)}%` : '—',
-                                rank: teamRanks.fg,
-                                icon: Target,
-                              },
-                            ] as const).map((stat) => (
-                              <div key={stat.label} className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <stat.icon className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
-                                  <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">{stat.label}</span>
-                                </div>
-                                <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
-                                  {stat.value}
-                                </div>
-                                {stat.rank && (
-                                  <div className="text-[11px] md:text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
-                                    {ordinal(stat.rank.rank)} of {stat.rank.of}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
-                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Users className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
-                                <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Teams</span>
-                              </div>
-                              <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
-                                {standings.length || teamSeasonAverages.length}
-                              </div>
-                            </div>
-                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                              <div className="flex items-center gap-2 mb-2">
-                                <User className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
-                                <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Players</span>
-                              </div>
-                              <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
-                                {playerSeasonAverages.length}
-                              </div>
-                            </div>
-                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Calendar className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
-                                <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Games</span>
-                              </div>
-                              <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
-                                {uniqueGameCount}
-                              </div>
-                            </div>
-                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Award className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
-                                <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Top Scoring Team</span>
-                              </div>
-                              <div className="text-base md:text-lg font-bold" style={{ color: readableBrand }}>
-                                {topTeam ? topTeam.team_name : 'No Data'}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        <SectionKicker n="02" label={myRosterLeaders ? 'Your squad' : 'Team leaders'} color={readableBrand} />
-                        {myRosterLeaders ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                              <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                                <Award className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                                Leading scorers
-                              </h4>
-                              <div className="space-y-2">
-                                {myRosterLeaders.scorers.map((player, index) => (
-                                  <div key={`${player.player_name}-${index}`} className="flex items-center justify-between py-1">
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${
-                                        index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-amber-600'
-                                      }`}>
-                                        {index + 1}
-                                      </div>
-                                      <button
-                                        onClick={() => setDetailView({ type: 'player', player })}
-                                        className="text-sm font-medium text-gray-900 dark:text-white hover:underline text-left"
-                                      >
-                                        {player.player_name}
-                                      </button>
-                                    </div>
-                                    <span className="text-sm font-bold text-gray-700 dark:text-neutral-300">
-                                      {Number(player.avg_pts ?? 0).toFixed(1)} ppg
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                              <h4 className="text-sm md:text-base font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                                <Target className="w-4 h-4 text-green-600 dark:text-green-400" />
-                                Who leads what
-                              </h4>
-                              <div className="space-y-2">
-                                <div className="flex justify-between items-center py-1">
-                                  <span className="text-sm text-gray-600 dark:text-neutral-400">Rebounding</span>
-                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {myRosterLeaders.rebounder
-                                      ? `${myRosterLeaders.rebounder.player_name} (${Number(myRosterLeaders.rebounder.avg_reb ?? 0).toFixed(1)})`
-                                      : 'No Data'}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center py-1">
-                                  <span className="text-sm text-gray-600 dark:text-neutral-400">Playmaking</span>
-                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {myRosterLeaders.passer
-                                      ? `${myRosterLeaders.passer.player_name} (${Number(myRosterLeaders.passer.avg_ast ?? 0).toFixed(1)})`
-                                      : 'No Data'}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center py-1">
-                                  <span className="text-sm text-gray-600 dark:text-neutral-400">Stocks (stl+blk)</span>
-                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {myRosterLeaders.defender
-                                      ? `${myRosterLeaders.defender.player_name} (${(
-                                          Number(myRosterLeaders.defender.avg_stl ?? 0) + Number(myRosterLeaders.defender.avg_blk ?? 0)
-                                        ).toFixed(1)})`
-                                      : 'No Data'}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                              <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                                <Award className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                                Top Scoring Teams
-                              </h4>
-                              <div className="space-y-2">
-                                {teamSeasonAverages.slice(0, 3).map((team, index) => (
-                                  <div key={`${team.team_id ?? 'team'}-${index}`} className="flex items-center justify-between py-1">
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${
-                                        index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-amber-600'
-                                      }`}>
-                                        {index + 1}
-                                      </div>
-                                      <button onClick={() => setDetailView({ type: 'team', team })} className="text-sm font-medium text-gray-900 dark:text-white hover:underline text-left">{team.team_name}</button>
-                                    </div>
-                                    <span className="text-sm font-bold text-gray-700 dark:text-neutral-300">{Number(team.avg_pts ?? 0).toFixed(1)} avg pts</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-8 text-center">
-                        <BarChart3 className="w-16 h-16 text-gray-400 dark:text-neutral-600 mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">No Data Found</h3>
-                        <p className="text-slate-600 dark:text-slate-400">
-                          Upload player statistics for this league to see analytics.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Quick Actions */}
-                    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-                      <SectionKicker n="03" label="Quick actions" color={readableBrand} />
-                      <div className="flex flex-wrap gap-x-6 gap-y-2">
-                        {/* League-owner action -- a coach account has no
-                            access to /league-admin, so offering it here only
-                            leads them to a permission wall. */}
-                        {!isCoach && (
-                          <Link
-                            href="/league-admin"
-                            className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition"
-                          >
-                            <Award className="w-4 h-4" />
-                            Upload Player Stats
-                          </Link>
-                        )}
-                        <Link
-                          href={`/competition/${selectedLeague.slug}`}
-                          className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Public League Page
-                        </Link>
-                        <Link
-                          href={`/league-leaders/${selectedLeague.slug}`}
-                          className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition"
-                        >
-                          <TrendingUp className="w-4 h-4" />
-                          View League Leaders
-                        </Link>
-                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Rankings */}
-                {activeTab === 'rankings' && (
-                  <div>
-                    <SectionKicker n="01" label="Rankings" color={readableBrand} />
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                      Season averages across {teamSeasonAverages.length} teams and {playerSeasonAverages.length} players, updated as new stats are uploaded.
-                    </p>
-                    <FullRankings
-                      players={playerSeasonAverages}
-                      teams={teamSeasonAverages}
-                      brandColor={brandColor}
-                      onSelectPlayer={(player) => setDetailView({ type: 'player', player })}
-                      onSelectTeam={(team) => setDetailView({ type: 'team', team })}
-                    />
-                  </div>
-                )}
-
-                {/* Lineups — five-man unit net rating / plus-minus / minutes,
-                    was labelled "Advanced Insights" which collided with the
-                    "Advanced" category group inside Rankings above. Coach
-                    accounts get their own team only — reading-focused, not a
-                    league-wide leaderboard; to see another team's lineups,
-                    visit that team's own profile (Rankings drill-in), which
-                    shows the same scoped view. League owners still get the
-                    full league here since they're not tied to one team. */}
-                {activeTab === 'lineups' && (
-                  <div>
-                    <SectionKicker n="01" label="Lineups" color={readableBrand} />
-                    <AdvancedInsights leagueId={selectedLeague.league_id} teamId={isCoach ? coachTeamId ?? undefined : undefined} showHeading={false} />
-                  </div>
-                )}
-
-                {/* Compare: your recent form against an opponent's */}
-                {activeTab === 'compare' && myTeam && (
-                  <FormComparison
-                    leagueId={selectedLeague.league_id}
-                    myTeamId={myTeam.team_id}
-                    myTeamName={myTeam.team_name}
-                    standings={standings}
-                    gameResults={leagueGameResults}
-                    nextOpponentName={
-                      nextGame ? (nextGame.home_team_id === myTeam.team_id ? nextGame.awayteam : nextGame.hometeam) : null
-                    }
-                    brandColor={readableBrand}
-                  />
-                )}
-
-                {/* Trends */}
-                {activeTab === 'trends' && (
-                  <div>
-                    <SectionKicker n="01" label="Performance trends" color={readableBrand} />
-                    {teamGameLog.length > 0 ? (
-                      <TeamPerformanceTrends teamGameLog={teamGameLog} leagueId={selectedLeague.league_id} />
-                    ) : (
-                      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-8 text-center">
-                        <BarChart3 className="w-16 h-16 text-gray-400 dark:text-neutral-600 mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">No Player Data Found</h3>
-                        <p className="text-slate-600 dark:text-slate-400">
-                          Upload player statistics for this league to see performance trends.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Scouting Reports */}
-                {activeTab === 'scouting' && (
-                  <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 overflow-hidden">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 border-b border-gray-200 dark:border-neutral-800 gap-2 md:gap-0">
-                      <SectionKicker n="01" label="Scouting reports" color={readableBrand} className="" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400">Mobile-optimized A4 editor</span>
+                  {/* Lineups — five-man unit net rating / plus-minus / minutes,
+                      was labelled "Advanced Insights" which collided with the
+                      "Advanced" category group inside Rankings above. Coach
+                      accounts get their own team only — reading-focused, not a
+                      league-wide leaderboard; to see another team's lineups,
+                      visit that team's own profile (Rankings drill-in), which
+                      shows the same scoped view. League owners still get the
+                      full league here since they're not tied to one team. */}
+                  {activeTab === 'lineups' && (
+                    <div>
+                      {tabIntro('01', 'Lineups', 'Five-man units by net rating, plus-minus and minutes together.')}
+                      <AdvancedInsights leagueId={selectedLeague.league_id} teamId={isCoach ? coachTeamId ?? undefined : undefined} showHeading={false} />
                     </div>
+                  )}
 
-                    <UnifiedScoutingEditor
-                      leagueContext={{
-                        leagueId: selectedLeague.league_id,
-                        leagueName: selectedLeague.name,
-                      }}
-                      onChatInsert={(content: string) => {
-                        setChatbotResponse(content);
-                      }}
-                      reportData={reportData}
-                      onReportDataChange={setReportData}
-                      selectedTemplateId={selectedTemplateId}
-                      onTemplateChange={setSelectedTemplateId}
-                      parseError={parseError}
+                  {/* Compare: your recent form against an opponent's */}
+                  {activeTab === 'compare' && myTeam && (
+                    <FormComparison
+                      leagueId={selectedLeague.league_id}
+                      myTeamId={myTeam.team_id}
+                      myTeamName={myTeam.team_name}
+                      standings={standings}
+                      gameResults={leagueGameResults}
+                      nextOpponentName={
+                        nextGame ? (nextGame.home_team_id === myTeam.team_id ? nextGame.awayteam : nextGame.hometeam) : null
+                      }
+                      brandColor={readableBrand}
                     />
-                  </div>
-                )}
-                  </>
-                )}
-              </>
-            )}
-          </div>
+                  )}
+
+                  {/* Trends */}
+                  {activeTab === 'trends' && (
+                    <div>
+                      {tabIntro('01', 'Performance trends', 'How every team’s output has moved game to game this season.')}
+                      {teamGameLog.length > 0 ? (
+                        <TeamPerformanceTrends teamGameLog={teamGameLog} leagueId={selectedLeague.league_id} showHeading={false} />
+                      ) : (
+                        emptyState(BarChart3, 'No Player Data Found', 'Upload player statistics for this league to see performance trends.')
+                      )}
+                    </div>
+                  )}
+
+                  {/* Scouting Reports */}
+                  {activeTab === 'scouting' && (
+                    <div className="ch-card overflow-hidden">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-4 md:px-6 border-b border-[color:var(--ch-border)] gap-2 md:gap-0">
+                        <SectionKicker n="01" label="Scouting reports" color={readableBrand} className="" />
+                        <span className="text-[11px] font-medium text-[color:var(--ch-muted)] ch-tile px-2 py-1 rounded-md self-start md:self-auto">Mobile-optimized A4 editor</span>
+                      </div>
+
+                      <UnifiedScoutingEditor
+                        leagueContext={{
+                          leagueId: selectedLeague.league_id,
+                          leagueName: selectedLeague.name,
+                        }}
+                        onChatInsert={(content: string) => {
+                          setChatbotResponse(content);
+                        }}
+                        reportData={reportData}
+                        onReportDataChange={setReportData}
+                        selectedTemplateId={selectedTemplateId}
+                        onTemplateChange={setSelectedTemplateId}
+                        parseError={parseError}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </>
         )}
-      </div>
+      </main>
 
-      {/* League Assistant — docked right-edge tab that slides a panel open, always reachable regardless of which section tab is active */}
+      {/* League Assistant — floating launcher that slides a panel open, always reachable regardless of which section tab is active */}
       {selectedLeague && (
         <>
           <button
             onClick={() => setIsAssistantOpen(true)}
-            className="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-2 py-4 rounded-l-lg shadow-lg transition-colors"
+            className={`fixed right-4 md:right-6 z-40 flex items-center gap-2 h-12 pl-3.5 pr-4 md:pr-5 rounded-full bg-[color:var(--ch-text)] text-[color:var(--ch-surface)] shadow-[0_12px_32px_-8px_rgba(0,0,0,0.45)] ring-1 ring-white/10 hover:scale-[1.03] active:scale-[0.99] transition-transform ${
+              activeTab === 'scouting' && !detailView ? 'bottom-24 md:bottom-6' : 'bottom-5 md:bottom-6'
+            }`}
             aria-label="Open League Assistant"
           >
-            <MessageCircle className="w-5 h-5" />
-            <span className="text-xs font-medium [writing-mode:vertical-rl] rotate-180">League Assistant</span>
+            <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: readableBrand }}>
+              <Sparkles className="w-4 h-4 text-white" />
+            </span>
+            <span className="text-[13px] font-semibold hidden sm:inline">League Assistant</span>
           </button>
 
           {isAssistantOpen && (
             <div className="fixed inset-0 z-50">
-              <div className="absolute inset-0 bg-black/40" onClick={() => setIsAssistantOpen(false)} />
-              <div className="absolute right-0 top-0 bottom-0 w-full sm:w-[460px] flex flex-col">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] animate-[ch-fade_.2s_ease-out]" onClick={() => setIsAssistantOpen(false)} />
+              <div className="absolute right-0 top-0 bottom-0 w-full sm:w-[460px] flex flex-col bg-[color:var(--ch-bg)] border-l border-[color:var(--ch-border)] shadow-2xl animate-[ch-slide_.28s_cubic-bezier(.2,.7,.2,1)]">
                 {/* LeagueChatbot's own panel-mode header already shows the icon/title,
                     so this just adds a close button above it rather than a second header. */}
-                <button
-                  onClick={() => setIsAssistantOpen(false)}
-                  className="self-end m-2 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-200 bg-white dark:bg-neutral-900 rounded-full p-1 shadow-sm shrink-0"
-                  aria-label="Close League Assistant"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-                <div className="flex-1 overflow-hidden px-2 pb-2">
+                <div className="flex items-center justify-between px-4 h-12 border-b border-[color:var(--ch-border)] shrink-0">
+                  <span className="ch-eyebrow flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" style={{ color: readableBrand }} /> {selectedLeague.name}
+                  </span>
+                  <button
+                    onClick={() => setIsAssistantOpen(false)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)] hover:bg-[color:var(--ch-surface-3)] transition-colors"
+                    aria-label="Close League Assistant"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-hidden p-2">
                   <LeagueChatbot
                     leagueId={selectedLeague.league_id}
                     leagueName={selectedLeague.name}

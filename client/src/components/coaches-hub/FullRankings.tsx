@@ -71,41 +71,43 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
     return value.toFixed(1);
   }
 
-  return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-      {/* The section title lives one level up (CoachesHub's numbered kicker) —
-          this row is just the entity/mode toggles, right-aligned. */}
-      <div className="flex items-center justify-end gap-2 mb-4">
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-md border border-gray-200 dark:border-neutral-700 overflow-hidden">
-            {(['players', 'teams'] as Entity[]).map(e => (
-              <button
-                key={e}
-                onClick={() => setEntity(e)}
-                className="px-3 py-1.5 text-sm capitalize transition-colors"
-                style={entity === e ? { backgroundColor: readableBrand.onWhite, color: '#fff' } : {}}
-              >
-                <span className={entity === e ? '' : 'text-gray-600 dark:text-neutral-400'}>{e}</span>
-              </button>
-            ))}
-          </div>
+  const maxAbs = rows.reduce((m, r) => Math.max(m, Math.abs(r.value)), 0) || 1;
 
+  return (
+    <div className="ch-card overflow-hidden">
+      {/* The section title lives one level up (CoachesHub's numbered kicker) —
+          this row is the entity/mode toggles. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 md:px-6 pt-4 md:pt-5">
+        <div className="ch-seg">
+          {(['players', 'teams'] as Entity[]).map(e => (
+            <button
+              key={e}
+              onClick={() => setEntity(e)}
+              data-active={entity === e}
+              className="px-3.5 h-8 text-[13px] capitalize"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
           {entity === 'players' && category.group === 'Traditional' && !category.isPercent && (
-            <div className="inline-flex rounded-md border border-gray-200 dark:border-neutral-700 overflow-hidden">
+            <div className="ch-seg">
               {(['averages', 'totals'] as ValueMode[]).map(m => (
                 <button
                   key={m}
                   onClick={() => setValueMode(m)}
-                  className="px-3 py-1.5 text-sm capitalize transition-colors"
-                  style={valueMode === m ? { backgroundColor: readableBrand.onWhite, color: '#fff' } : {}}
+                  data-active={valueMode === m}
+                  className="px-3 h-8 text-[13px] capitalize"
                 >
-                  <span className={valueMode === m ? '' : 'text-gray-600 dark:text-neutral-400'}>{m}</span>
+                  {m}
                 </button>
               ))}
             </div>
           )}
 
-          <div className="inline-flex rounded-md border border-gray-200 dark:border-neutral-700 overflow-hidden">
+          <div className="ch-seg">
             {([
               { key: 'desc' as const, label: 'Descending', Icon: ArrowDown },
               { key: 'asc' as const, label: 'Ascending', Icon: ArrowUp },
@@ -113,12 +115,12 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
               <button
                 key={key}
                 onClick={() => setSortDirection(key)}
+                data-active={sortDirection === key}
                 title={`Sort ${label.toLowerCase()} by ${category.label}`}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm transition-colors"
-                style={sortDirection === key ? { backgroundColor: readableBrand.onWhite, color: '#fff' } : {}}
+                className="flex items-center gap-1 px-2.5 h-8 text-[13px]"
               >
                 <Icon className="w-3.5 h-3.5" />
-                <span className={`hidden sm:inline ${sortDirection === key ? '' : 'text-gray-600 dark:text-neutral-400'}`}>{label}</span>
+                <span className="hidden sm:inline">{label}</span>
               </button>
             ))}
           </div>
@@ -127,49 +129,44 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
 
       {/* Category strips, grouped so the long advanced list doesn't swamp the
           everyday box-score categories most people want first. */}
-      {(['Traditional', 'Advanced'] as CategoryGroup[]).map(group => (
-        <div key={group} className="mb-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-neutral-500 mb-1.5">
-            {group}
+      <div className="px-4 md:px-6 pt-4 space-y-3">
+        {(['Traditional', 'Advanced'] as CategoryGroup[]).map(group => (
+          <div key={group} className="flex items-center gap-3 min-w-0">
+            <div className="ch-eyebrow w-[84px] shrink-0 hidden md:block">{group}</div>
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5 min-w-0">
+              <span className="ch-eyebrow self-center mr-1 md:hidden shrink-0">{group}</span>
+              {CATEGORIES.filter(c => c.group === group).map(c => (
+                <button
+                  key={c.key}
+                  onClick={() => setCategoryKey(c.key)}
+                  data-active={categoryKey === c.key}
+                  className="ch-chip px-3 py-1.5 text-[12.5px] whitespace-nowrap shrink-0"
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-1.5 overflow-x-auto pb-2 border-b border-gray-200 dark:border-neutral-800">
-            {CATEGORIES.filter(c => c.group === group).map(c => (
-              <button
-                key={c.key}
-                onClick={() => setCategoryKey(c.key)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md whitespace-nowrap transition-colors border ${
-                  categoryKey === c.key
-                    ? ''
-                    : 'border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-400 hover:border-gray-300 dark:hover:border-neutral-600'
-                }`}
-                style={
-                  categoryKey === c.key
-                    ? { backgroundColor: readableBrand.onWhite, color: '#fff', borderColor: readableBrand.onWhite }
-                    : {}
-                }
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
 
-      {category.playerMinLabel && entity === 'players' && (
-        <p className="text-xs text-slate-400 dark:text-neutral-500 mb-3">{category.playerMinLabel} to qualify.</p>
-      )}
+      <div className="px-4 md:px-6 pt-3 pb-1 min-h-[1.5rem]">
+        {category.playerMinLabel && entity === 'players' && (
+          <p className="text-[11.5px] text-[color:var(--ch-muted)]">{category.playerMinLabel} to qualify.</p>
+        )}
+      </div>
 
       {rows.length === 0 ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400 py-6 text-center">No qualifying data for this category yet.</p>
+        <p className="text-sm text-[color:var(--ch-muted)] py-12 text-center border-t border-[color:var(--ch-border)]">No qualifying data for this category yet.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto border-t border-[color:var(--ch-border)]">
+          <table className="w-full text-[13.5px] ch-table">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500 border-b border-gray-200 dark:border-neutral-800">
-                <th className="py-2 pr-3 font-medium w-10">#</th>
-                <th className="py-2 pr-3 font-medium">{entity === 'players' ? 'Player' : 'Team'}</th>
-                <th className="py-2 pr-3 font-medium hidden sm:table-cell">{entity === 'players' ? 'Team' : 'Games'}</th>
-                <th className="py-2 pl-3 font-medium text-right">{category.unit}</th>
+              <tr className="text-left border-b border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]">
+                <th className="py-2.5 pl-4 md:pl-6 pr-3 w-12">#</th>
+                <th className="py-2.5 pr-3">{entity === 'players' ? 'Player' : 'Team'}</th>
+                <th className="py-2.5 pr-3 hidden sm:table-cell">{entity === 'players' ? 'Team' : 'Games'}</th>
+                <th className="py-2.5 pl-3 pr-4 md:pr-6 text-right">{category.unit}</th>
               </tr>
             </thead>
             <tbody>
@@ -179,18 +176,48 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
                   if (entity === 'players') onSelectPlayer?.(row.ref as PlayerSeasonAverage);
                   else onSelectTeam?.(row.ref as TeamSeasonAverage);
                 };
+                const podium = i < 3;
                 return (
-                  <tr key={row.id} className="border-b border-gray-100 dark:border-neutral-800/60 last:border-0">
-                    <td className="py-2 pr-3 text-gray-500 dark:text-neutral-500">{i + 1}</td>
-                    <td className="py-2 pr-3 font-medium text-gray-900 dark:text-white">
+                  <tr
+                    key={row.id}
+                    className={`border-b border-[color:var(--ch-border)] last:border-0 ${canDrillIn ? 'cursor-pointer' : ''}`}
+                    onClick={canDrillIn ? openDetail : undefined}
+                  >
+                    <td className="py-2.5 pl-4 md:pl-6 pr-3">
+                      <span
+                        className="inline-flex w-6 h-6 rounded-md items-center justify-center text-[11px] font-bold tabular-nums"
+                        style={i === 0
+                          ? { backgroundColor: readableBrand.onWhite, color: '#fff' }
+                          : podium
+                            ? { backgroundColor: 'var(--ch-surface-3)', color: 'var(--ch-text)' }
+                            : { color: 'var(--ch-muted)' }}
+                      >
+                        {i + 1}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3 font-medium text-[color:var(--ch-text)]">
                       {canDrillIn ? (
-                        <button onClick={openDetail} className="hover:underline text-left" style={{ color: readableBrand.body }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openDetail(); }}
+                          className="hover:underline underline-offset-2 text-left"
+                          style={podium ? { color: readableBrand.body } : undefined}
+                        >
                           {row.name}
                         </button>
                       ) : row.name}
                     </td>
-                    <td className="py-2 pr-3 text-gray-500 dark:text-neutral-400 hidden sm:table-cell">{row.sub}</td>
-                    <td className="py-2 pl-3 text-right font-bold" style={{ color: readableBrand.body }}>{formatValue(row.value)}</td>
+                    <td className="py-2.5 pr-3 text-[color:var(--ch-text-2)] hidden sm:table-cell">{row.sub}</td>
+                    <td className="py-2.5 pl-3 pr-4 md:pr-6">
+                      <div className="flex items-center justify-end gap-3">
+                        <div className="hidden md:block w-24 lg:w-32 h-1.5 rounded-full bg-[color:var(--ch-surface-3)] overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${Math.max((Math.abs(row.value) / maxAbs) * 100, 2)}%`, backgroundColor: podium ? readableBrand.accent : 'var(--ch-muted)', opacity: podium ? 1 : 0.5 }}
+                          />
+                        </div>
+                        <span className="font-semibold tabular-nums min-w-[3.5rem] text-right text-[color:var(--ch-text)]">{formatValue(row.value)}</span>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}

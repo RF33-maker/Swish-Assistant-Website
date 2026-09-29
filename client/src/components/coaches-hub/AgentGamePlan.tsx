@@ -77,7 +77,7 @@ function timeAgo(iso: string | null): string {
 
 function Card({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-4 md:p-5">
+    <div className="ch-card p-4 md:p-5">
       <div className="flex items-center gap-2 mb-3">
         <span style={{ color }}>{icon}</span>
         <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-neutral-200">{title}</h4>
@@ -173,7 +173,7 @@ export default function AgentGamePlan({
     <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
       <div className="flex items-center gap-2">
         <Sparkles className="w-4 h-4" style={{ color }} />
-        <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Game plan</h3>
+        <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Game plan</h3>
         {plan && (
           <span className="text-[11px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300">
             {plan.confidence} confidence
@@ -221,7 +221,7 @@ export default function AgentGamePlan({
   if (!full) {
     const ready = report?.status === 'ready' && plan;
     return (
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6 space-y-4">
+      <div className="ch-card p-4 md:p-6 space-y-4">
         {header}
         {ready ? (
           <>
@@ -279,7 +279,7 @@ export default function AgentGamePlan({
     const failed = report?.status === 'failed';
     const noData = report?.status === 'no_data';
     return (
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+      <div className="ch-card p-4 md:p-6">
         {header}
         {building ? (
           <p className="text-sm text-gray-600 dark:text-neutral-300 flex items-center gap-2">
@@ -307,7 +307,7 @@ export default function AgentGamePlan({
   // ----- full plan -----
   return (
     <div className="space-y-4">
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+      <div className="ch-card p-4 md:p-6">
         {header}
         <p className="text-lg md:text-xl font-semibold text-slate-800 dark:text-white">{plan.headline}</p>
         <p className="text-sm text-gray-700 dark:text-neutral-300 mt-2">{plan.summary}</p>
