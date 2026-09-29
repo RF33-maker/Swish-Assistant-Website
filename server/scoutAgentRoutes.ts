@@ -27,14 +27,26 @@ const PREVIEW_FRESH_HOURS = 72;
 
 type Access = { userId: string | null; full: boolean };
 
-async function resolveAccess(req: Request, leagueId: string): Promise<Access> {
+/**
+ * Who gets the full plan. Admins everywhere; a competition's owner in their
+ * own competition; a coach account only for plans written for their own club
+ * — otherwise any coach could read (and pay for builds of) every other
+ * club's game plans.
+ */
+async function resolveAccess(req: Request, leagueId: string, forTeam: string | null = null): Promise<Access> {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return { userId: null, full: false };
   const { data, error } = await supabaseAdmin.auth.getUser(header.slice(7));
   if (error || !data.user) return { userId: null, full: false };
   const user = data.user;
   const role = user.app_metadata?.role;
-  if (role === "admin" || role === "coach") return { userId: user.id, full: true };
+  if (role === "admin") return { userId: user.id, full: true };
+  if (role === "coach") {
+    const teamId = user.app_metadata?.team_id;
+    if (!teamId || !forTeam) return { userId: user.id, full: false };
+    const { data: team } = await supabaseAdmin.from("teams").select("name").eq("team_id", teamId).maybeSingle();
+    return { userId: user.id, full: !!team?.name && isSameTeam(team.name, forTeam) };
+  }
   const { data: comp } = await supabaseAdmin
     .from("competitions").select("user_id, created_by").eq("league_id", leagueId).maybeSingle();
   const owner = !!comp && (comp.user_id === user.id || comp.created_by === user.id);
@@ -107,7 +119,7 @@ export function registerScoutAgentRoutes(app: Express) {
       const forTeam = String(req.query.forTeam || "");
       if (!leagueId || !opponent) return res.status(400).json({ error: "leagueId and opponent are required" });
 
-      const access = await resolveAccess(req, leagueId);
+      const access = await resolveAccess(req, leagueId, forTeam || null);
       const { exact, preview } = await findReport(leagueId, opponent, forTeam);
       return res.json({
         access: access.full ? "full" : "teaser",
@@ -161,7 +173,7 @@ export function registerScoutAgentRoutes(app: Express) {
     try {
       const { leagueId, opponent, forTeam, gameKey, matchTime, force } = req.body || {};
       if (!leagueId || !opponent) return res.status(400).json({ error: "leagueId and opponent are required" });
-      const access = await resolveAccess(req, leagueId);
+      const access = await resolveAccess(req, leagueId, forTeam || null);
       if (!access.userId) return res.status(401).json({ error: "Sign in to build a scouting report" });
       if (!access.full) return res.status(403).json({ error: "Full scouting reports are part of the coach plan" });
 

@@ -134,9 +134,14 @@ export async function generateGamePlan(facts: unknown, opts: { apiKey: string; m
       "content-type": "application/json",
       "x-api-key": opts.apiKey,
       "anthropic-version": "2023-06-01",
+      // Server-side fallback: if a safety classifier declines, the API re-runs
+      // the request on Anthropic's recommended model for that refusal
+      // category inside the same call, instead of the build failing.
+      "anthropic-beta": "server-side-fallback-2026-07-01",
     },
     body: JSON.stringify({
       model: opts.model,
+      fallbacks: "default",
       max_tokens: preview ? 4000 : 12000,
       thinking: { type: "adaptive" },
       output_config: { effort: preview ? "medium" : "high", format: { type: "json_schema", schema: preview ? PREVIEW_SCHEMA : PLAN_SCHEMA } },
@@ -146,7 +151,8 @@ export async function generateGamePlan(facts: unknown, opts: { apiKey: string; m
   });
   const json = await res.json();
   if (!res.ok) throw new Error(`anthropic ${res.status}: ${JSON.stringify(json).slice(0, 400)}`);
-  if (json.stop_reason === "refusal") throw new Error("model declined");
+  // Still possible if the fallback model declines too.
+  if (json.stop_reason === "refusal") throw new Error(`model declined${json.stop_details?.category ? ` (${json.stop_details.category})` : ""}`);
   const text = (json.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
   // A preview carries only the headline fields and two priorities.
   const plan = JSON.parse(text) as GamePlan;
