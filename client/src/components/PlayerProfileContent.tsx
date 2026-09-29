@@ -228,7 +228,7 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
 
 export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds }: PlayerProfileContentProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [, setLocation] = useLocation();
 
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
@@ -2141,7 +2141,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             handlePhotoUpload={handlePhotoUpload}
             photoUploading={photoUploading}
             fileInputRef={fileInputRef}
-            isAuthenticated={!!user}
+            canEditPhoto={isAdmin}
             brandColorOverride={primaryColor || undefined}
             leagueChip={bannerLeagueChip}
             teamChip={bannerTeamChip}

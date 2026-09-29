@@ -33,7 +33,8 @@ interface PlayerBannerProps {
   handlePhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   photoUploading: boolean;
   fileInputRef: React.RefObject<HTMLInputElement>;
-  isAuthenticated: boolean;
+  /** Admins only: storage and the players table reject everyone else's photo writes. */
+  canEditPhoto: boolean;
   brandColorOverride?: string;
   className?: string;
   leagueChip?: { label: string; onClick: () => void };
@@ -76,7 +77,7 @@ export function PlayerBanner({
   handlePhotoUpload,
   photoUploading,
   fileInputRef,
-  isAuthenticated,
+  canEditPhoto,
   brandColorOverride,
   className,
   leagueChip,
@@ -219,7 +220,7 @@ export function PlayerBanner({
           </div>
         )}
 
-        {isAuthenticated && playerInfo.playerId && !showFocusAdjuster && (
+        {canEditPhoto && playerInfo.playerId && !showFocusAdjuster && (
           <div className="absolute bottom-3 right-3 z-10 flex gap-2">
             <input
               ref={fileInputRef}
