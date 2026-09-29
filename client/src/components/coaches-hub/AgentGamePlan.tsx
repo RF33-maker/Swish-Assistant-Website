@@ -37,6 +37,7 @@ interface Teaser {
   confidence: string | null;
 }
 interface Report {
+  tier?: 'full' | 'preview';
   status: 'pending' | 'building' | 'ready' | 'failed' | 'no_data';
   generatedAt: string | null;
   updatedAt: string | null;
@@ -49,8 +50,11 @@ interface Report {
 interface ApiResponse {
   access: 'full' | 'teaser';
   canBuild: boolean;
+  canPreview: boolean;
+  /** The paid plan for the caller's own team (coach accounts only). */
   report: Report | null;
-  perspectiveMismatch: boolean;
+  /** The shared free look: headline, summary and two priorities (Sonnet). */
+  preview: Report | null;
 }
 
 const KEY_LABELS: Record<string, string> = {
@@ -121,7 +125,7 @@ export default function AgentGamePlan({
   useEffect(() => { setLoading(true); polls.current = 0; load(); }, [load]);
 
   // Poll while a build is running (a build takes a minute or two).
-  const building = data?.report?.status === 'building' || requesting;
+  const building = data?.report?.status === 'building' || data?.preview?.status === 'building' || requesting;
   useEffect(() => {
     if (!building) return;
     const t = setInterval(() => {
@@ -131,13 +135,16 @@ export default function AgentGamePlan({
     }, 8000);
     return () => clearInterval(t);
   }, [building, load]);
-  useEffect(() => { if (data?.report?.status && data.report.status !== 'building') setRequesting(false); }, [data?.report?.status]);
+  useEffect(() => {
+    const s = data?.access === 'full' ? data?.report?.status : data?.preview?.status;
+    if (s && s !== 'building') setRequesting(false);
+  }, [data?.access, data?.report?.status, data?.preview?.status]);
 
-  const build = async (force = false) => {
+  const build = async (force = false, kind: 'build' | 'preview' = 'build') => {
     setRequesting(true);
     setRequestError(null);
     try {
-      const res = await fetch('/api/scout-agent/build', {
+      const res = await fetch(`/api/scout-agent/${kind}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({ leagueId, opponent: opponentName, forTeam: myTeamName || null, force }),
@@ -157,10 +164,10 @@ export default function AgentGamePlan({
   }
   if (!data) return null;
 
-  const report = data.report;
+  const full = data.access === 'full';
+  const report = full ? data.report : data.preview;
   const plan = report?.plan ?? null;
   const teaser = report?.teaser ?? null;
-  const full = data.access === 'full';
 
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -190,7 +197,84 @@ export default function AgentGamePlan({
     </div>
   );
 
-  // ----- nothing built yet -----
+  const locked = (
+    <div className="relative rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 p-4">
+      <div className="space-y-2 blur-sm select-none pointer-events-none" aria-hidden>
+        <div className="h-3 w-3/4 bg-gray-200 dark:bg-neutral-700 rounded" />
+        <div className="h-3 w-2/3 bg-gray-200 dark:bg-neutral-700 rounded" />
+        <div className="h-3 w-5/6 bg-gray-200 dark:bg-neutral-700 rounded" />
+        <div className="h-3 w-1/2 bg-gray-200 dark:bg-neutral-700 rounded" />
+      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center gap-2 px-4">
+        <Lock className="w-5 h-5 text-gray-500" />
+        <p className="text-sm font-medium text-slate-800 dark:text-white">
+          The full game plan (defensive and offensive keys, players to stop, lineup triggers and late-game calls, written for your team) is part of the coach plan.
+        </p>
+        <Link href="/contact-sales" className="text-sm font-semibold text-white px-4 py-2 rounded-md" style={{ backgroundColor: color }}>
+          Unlock full scouting reports
+        </Link>
+      </div>
+    </div>
+  );
+
+  // ----- free look (non-paying visitors) -----
+  if (!full) {
+    const ready = report?.status === 'ready' && plan;
+    return (
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6 space-y-4">
+        {header}
+        {ready ? (
+          <>
+            <p className="text-lg font-semibold text-slate-800 dark:text-white">{plan!.headline}</p>
+            <p className="text-sm text-gray-700 dark:text-neutral-300">{plan!.summary}</p>
+            <ol className="space-y-3">
+              {plan!.gamePlan.slice(0, 2).map((g, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="flex-none w-7 h-7 rounded-full text-white text-sm font-bold flex items-center justify-center" style={{ backgroundColor: color }}>{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-white">{g.call}</p>
+                    <p className="text-sm text-gray-600 dark:text-neutral-400">{g.why}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </>
+        ) : building ? (
+          <p className="text-sm text-gray-600 dark:text-neutral-300 flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Reading {opponentName}'s recent games. This takes under a minute.
+          </p>
+        ) : report?.status === 'no_data' ? (
+          <p className="text-sm text-gray-600 dark:text-neutral-300">There aren't enough recorded games for {opponentName} yet.</p>
+        ) : data.canPreview ? (
+          <div className="space-y-2">
+            <p className="text-sm text-gray-600 dark:text-neutral-300">Get a free AI read on {opponentName}: how they play and the two things that decide the game.</p>
+            <button onClick={() => build(false, 'preview')} className="text-sm font-semibold text-white px-4 py-2 rounded-md" style={{ backgroundColor: color }}>
+              Get a free look
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-600 dark:text-neutral-300">
+            <Link href="/auth" className="font-semibold underline">Sign in</Link> to get a free AI read on {opponentName}.
+          </p>
+        )}
+        {!!teaser?.keyNumbers?.length && (
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {teaser.keyNumbers.map((k) => (
+              <div key={k.key} className="rounded-md bg-gray-50 dark:bg-neutral-800 p-2">
+                <div className="text-[11px] text-gray-500 dark:text-neutral-400">{KEY_LABELS[k.key] ?? k.key}</div>
+                <div className="text-base font-semibold text-slate-800 dark:text-white tabular-nums">{k.value}</div>
+                {k.rank != null && k.of != null && <div className="text-[11px] text-gray-500 dark:text-neutral-400">{k.rank} of {k.of}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+        {requestError && <p className="text-sm text-red-600">{requestError}</p>}
+        {locked}
+      </div>
+    );
+  }
+
+  // ----- coach: nothing built yet -----
   if (!report || (report.status !== 'ready' && !plan)) {
     const failed = report?.status === 'failed';
     const noData = report?.status === 'no_data';
@@ -203,69 +287,22 @@ export default function AgentGamePlan({
           </p>
         ) : noData ? (
           <p className="text-sm text-gray-600 dark:text-neutral-300">There aren't enough recorded games for {opponentName} to build a game plan yet.</p>
-        ) : data.canBuild ? (
+        ) : (
           <div className="space-y-2">
             <p className="text-sm text-gray-600 dark:text-neutral-300">
-              {failed ? 'The last build did not finish.' : 'No game plan for this matchup yet.'} The scouting agent reads their play-by-play, lineups and shot charts and turns them into calls for your staff.
+              {failed ? 'The last build did not finish.' : 'No game plan for this matchup yet.'} Plans for your fixtures are built automatically a few days out; you can also build one now.
             </p>
             <button onClick={() => build(failed)} className="text-sm font-semibold text-white px-4 py-2 rounded-md" style={{ backgroundColor: color }}>
               Build game plan
             </button>
           </div>
-        ) : (
-          <p className="text-sm text-gray-600 dark:text-neutral-300">Game plans are built automatically before each fixture.</p>
         )}
         {requestError && <p className="text-sm text-red-600 mt-2">{requestError}</p>}
       </div>
     );
   }
 
-  // ----- teaser (free) -----
-  if (!full || !plan) {
-    return (
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6 space-y-4">
-        {header}
-        {teaser?.headline && <p className="text-lg font-semibold text-slate-800 dark:text-white">{teaser.headline}</p>}
-        {teaser?.freeInsight && <p className="text-sm text-gray-700 dark:text-neutral-300">{teaser.freeInsight}</p>}
-        {!!teaser?.keyNumbers?.length && (
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-            {teaser.keyNumbers.map((k) => (
-              <div key={k.key} className="rounded-md bg-gray-50 dark:bg-neutral-800 p-2">
-                <div className="text-[11px] text-gray-500 dark:text-neutral-400">{KEY_LABELS[k.key] ?? k.key}</div>
-                <div className="text-base font-semibold text-slate-800 dark:text-white tabular-nums">{k.value}</div>
-                {k.rank != null && k.of != null && <div className="text-[11px] text-gray-500 dark:text-neutral-400">{k.rank} of {k.of}</div>}
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="relative rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 p-4">
-          <div className="space-y-2 blur-sm select-none pointer-events-none" aria-hidden>
-            <div className="h-3 w-3/4 bg-gray-200 dark:bg-neutral-700 rounded" />
-            <div className="h-3 w-2/3 bg-gray-200 dark:bg-neutral-700 rounded" />
-            <div className="h-3 w-5/6 bg-gray-200 dark:bg-neutral-700 rounded" />
-            <div className="h-3 w-1/2 bg-gray-200 dark:bg-neutral-700 rounded" />
-          </div>
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center gap-2 px-4">
-            <Lock className="w-5 h-5 text-gray-500" />
-            <p className="text-sm font-medium text-slate-800 dark:text-white">
-              {data.perspectiveMismatch && full
-                ? `This plan was written for another team. Build one for ${myTeamName}.`
-                : 'The full game plan, defensive and offensive keys, players to stop and lineup triggers are part of the coach plan.'}
-            </p>
-            {data.perspectiveMismatch && full ? (
-              <button onClick={() => build(false)} className="text-sm font-semibold text-white px-4 py-2 rounded-md" style={{ backgroundColor: color }}>
-                Build game plan
-              </button>
-            ) : (
-              <Link href="/contact-sales" className="text-sm font-semibold text-white px-4 py-2 rounded-md" style={{ backgroundColor: color }}>
-                Unlock full scouting reports
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (!plan) return null;
 
   // ----- full plan -----
   return (

@@ -66,6 +66,28 @@ export const PLAN_SCHEMA = {
   },
 } as const;
 
+/**
+ * The free look: a short read written by a cheaper model, shared by every
+ * non-paying visitor who opens this opponent. Enough to show the product is
+ * real; the full plan (defensive/offensive keys, players to stop, lineup
+ * triggers, late game) stays behind the coach plan.
+ */
+export const PREVIEW_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["headline", "summary", "freeInsight", "gamePlan", "confidence", "confidenceReason"],
+  properties: {
+    headline: PLAN_SCHEMA.properties.headline,
+    summary: PLAN_SCHEMA.properties.summary,
+    freeInsight: PLAN_SCHEMA.properties.freeInsight,
+    gamePlan: { ...PLAN_SCHEMA.properties.gamePlan, description: "Exactly 2 of the most important things that win this game." },
+    confidence: PLAN_SCHEMA.properties.confidence,
+    confidenceReason: PLAN_SCHEMA.properties.confidenceReason,
+  },
+} as const;
+
+export type Tier = "full" | "preview";
+
 export interface GamePlan {
   headline: string;
   summary: string;
@@ -104,7 +126,8 @@ Hard rules:
 - With a small or cross-competition sample, say so in confidenceReason and soften claims. Set confidence to low with fewer than 3 games or no play-by-play.
 - British English, plain and direct. Address the coach's team as "you". No hype, no cliché, no exclamation marks.`;
 
-export async function generateGamePlan(facts: unknown, opts: { apiKey: string; model: string }): Promise<GamePlan> {
+export async function generateGamePlan(facts: unknown, opts: { apiKey: string; model: string; tier?: Tier }): Promise<GamePlan> {
+  const preview = opts.tier === "preview";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -114,9 +137,9 @@ export async function generateGamePlan(facts: unknown, opts: { apiKey: string; m
     },
     body: JSON.stringify({
       model: opts.model,
-      max_tokens: 12000,
+      max_tokens: preview ? 4000 : 12000,
       thinking: { type: "adaptive" },
-      output_config: { effort: "high", format: { type: "json_schema", schema: PLAN_SCHEMA } },
+      output_config: { effort: preview ? "medium" : "high", format: { type: "json_schema", schema: preview ? PREVIEW_SCHEMA : PLAN_SCHEMA } },
       system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: `Scouting fact pack (JSON):\n${JSON.stringify(facts)}` }],
     }),
@@ -125,6 +148,7 @@ export async function generateGamePlan(facts: unknown, opts: { apiKey: string; m
   if (!res.ok) throw new Error(`anthropic ${res.status}: ${JSON.stringify(json).slice(0, 400)}`);
   if (json.stop_reason === "refusal") throw new Error("model declined");
   const text = (json.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
+  // A preview carries only the headline fields and two priorities.
   const plan = JSON.parse(text) as GamePlan;
   if (!plan.headline || !Array.isArray(plan.gamePlan)) throw new Error("plan missing required fields");
   return plan;

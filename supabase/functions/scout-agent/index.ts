@@ -3,17 +3,22 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { computeScoutingFacts, type ScoutingFacts } from "./facts.ts";
 import { loadScoutingBundle } from "./load.ts";
 import { isSameTeam } from "./teamIdentity.ts";
-import { generateGamePlan, type GamePlan } from "./agent.ts";
+import { generateGamePlan, type GamePlan, type Tier } from "./agent.ts";
 
 /**
  * scout-agent — builds opponent scouting reports and game plans.
  *
  * Actions (POST JSON, header x-scout-secret required):
- *   { action: "build", leagueId, opponentName, forTeamName?, gameKey?, matchTime?, requestedBy?, force? }
+ *   { action: "build", leagueId, opponentName, forTeamName?, tier?, gameKey?, matchTime?, requestedBy?, force? }
  *       Queue one report and build it in the background. Returns 202 at once.
+ *       tier "full" (default): the paid game plan, written by MODEL_FULL for
+ *       the coach's own team (forTeamName). tier "preview": the free look,
+ *       written by MODEL_PREVIEW, not tied to any team and shared by every
+ *       visitor (stored with for_team_name '').
  *   { action: "sweep", days?, limit? }
- *       Called by pg_cron. Finds fixtures in the next few days, makes sure both
- *       sides have a fresh report, and starts up to `limit` builds.
+ *       Called by pg_cron. Finds fixtures in the next few days that involve a
+ *       team with a coach (paying) account and pre-builds that coach's full
+ *       plan. Nobody else's fixtures cost anything until someone asks.
  *   { action: "facts", leagueId, opponentName, forTeamName? }
  *       Returns the computed fact pack only (no model call). For checking numbers.
  *
@@ -26,7 +31,8 @@ const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
   auth: { persistSession: false },
 });
 
-const MODEL = Deno.env.get("SCOUT_MODEL") || "claude-opus-5-5";
+const MODEL_FULL = Deno.env.get("SCOUT_MODEL_FULL") || "claude-opus-5-5";
+const MODEL_PREVIEW = Deno.env.get("SCOUT_MODEL_PREVIEW") || "claude-sonnet-5-5";
 const STALE_HOURS = 72;
 const BUILD_TIMEOUT_MIN = 15; // a "building" row older than this is presumed dead
 
@@ -71,6 +77,7 @@ interface BuildRequest {
   gameKey?: string | null;
   matchTime?: string | null;
   requestedBy?: string | null;
+  tier?: Tier;
 }
 
 async function computeFactsFor(r: BuildRequest) {
@@ -79,7 +86,7 @@ async function computeFactsFor(r: BuildRequest) {
     isSameTeam,
     opponentName: r.opponentName,
     leagueId: r.leagueId,
-    myTeamName: r.forTeamName || null,
+    myTeamName: r.tier === "preview" ? null : r.forTeamName || null,
     maxGames: 10,
   });
   return computeScoutingFacts(bundle, { isSameTeam });
@@ -87,6 +94,8 @@ async function computeFactsFor(r: BuildRequest) {
 
 async function build(r: BuildRequest) {
   const key = { league_id: r.leagueId, opponent_name: r.opponentName, for_team_name: r.forTeamName || "" };
+  const tier: Tier = r.tier === "preview" ? "preview" : "full";
+  const model = tier === "preview" ? MODEL_PREVIEW : MODEL_FULL;
   const started = Date.now();
   try {
     const facts = await computeFactsFor(r);
@@ -99,13 +108,13 @@ async function build(r: BuildRequest) {
     }
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY") || (await secret("anthropic_api_key"));
     if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-    const plan = await generateGamePlan(facts, { apiKey, model: MODEL });
+    const plan = await generateGamePlan(facts, { apiKey, model, tier });
     await db.from("scout_agent_reports").update({
-      status: "ready", facts, plan, teaser: buildTeaser(facts, plan), model: MODEL, error: null,
+      status: "ready", facts, plan, teaser: buildTeaser(facts, plan), model, tier, error: null,
       games_analysed: facts.opponent.gamesAnalysed, data_through: facts.opponent.dataThrough,
       updated_at: new Date().toISOString(), generated_at: new Date().toISOString(),
     }).match(key);
-    console.log(`built ${r.opponentName} for ${r.forTeamName || "-"} in ${Math.round((Date.now() - started) / 1000)}s`);
+    console.log(`built ${tier} ${r.opponentName} for ${r.forTeamName || "-"} in ${Math.round((Date.now() - started) / 1000)}s`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("build failed", r.opponentName, message);
@@ -128,6 +137,7 @@ async function claim(r: BuildRequest, force: boolean): Promise<boolean> {
     game_key: r.gameKey ?? null,
     match_time: r.matchTime ?? null,
     requested_by: r.requestedBy ?? null,
+    tier: r.tier === "preview" ? "preview" : "full",
     attempts: (existing?.attempts ?? 0) + 1,
     updated_at: now.toISOString(),
   };
@@ -143,6 +153,22 @@ async function claim(r: BuildRequest, force: boolean): Promise<boolean> {
 
 // ---------- sweep ----------
 
+/** Team names behind every coach (paying) account: auth app_metadata role "coach" + team_id. */
+async function coachTeamNames(): Promise<string[]> {
+  const teamIds = new Set<string>();
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(`listUsers: ${error.message}`);
+    for (const u of data.users) {
+      if (u.app_metadata?.role === "coach" && u.app_metadata?.team_id) teamIds.add(String(u.app_metadata.team_id));
+    }
+    if (data.users.length < 1000) break;
+  }
+  if (!teamIds.size) return [];
+  const { data: teams } = await db.from("teams").select("name").in("team_id", Array.from(teamIds));
+  return Array.from(new Set((teams || []).map((t: any) => t.name).filter(Boolean)));
+}
+
 async function sweep(days: number, limit: number, selfUrl: string, scoutSecret: string) {
   const now = new Date();
   const until = new Date(now.getTime() + days * 86_400_000);
@@ -152,14 +178,17 @@ async function sweep(days: number, limit: number, selfUrl: string, scoutSecret: 
     .not("league_id", "is", null).order("matchtime").limit(500);
   if (error) throw new Error(error.message);
 
-  // Both perspectives for every fixture: home scouting away, away scouting home.
+  // Only the paying side of each fixture: a coach account's team scouting its opponent.
+  const coachTeams = await coachTeamNames();
+  const isCoachTeam = (name: string) => coachTeams.some((c) => isSameTeam(c, name));
   const wanted: BuildRequest[] = [];
   for (const f of fixtures || []) {
     if (!f.hometeam || !f.awayteam) continue;
-    wanted.push({ leagueId: f.league_id, opponentName: f.awayteam, forTeamName: f.hometeam, gameKey: f.game_key, matchTime: f.matchtime });
-    wanted.push({ leagueId: f.league_id, opponentName: f.hometeam, forTeamName: f.awayteam, gameKey: f.game_key, matchTime: f.matchtime });
+    const base = { leagueId: f.league_id, gameKey: f.game_key, matchTime: f.matchtime, tier: "full" as Tier };
+    if (isCoachTeam(f.hometeam)) wanted.push({ ...base, opponentName: f.awayteam, forTeamName: f.hometeam });
+    if (isCoachTeam(f.awayteam)) wanted.push({ ...base, opponentName: f.hometeam, forTeamName: f.awayteam });
   }
-  if (!wanted.length) return { fixtures: 0, queued: 0 };
+  if (!wanted.length) return { fixtures: fixtures?.length ?? 0, coachTeams: coachTeams.length, queued: 0 };
 
   const leagueIds = Array.from(new Set(wanted.map((w) => w.leagueId)));
   const { data: rows } = await db.from("scout_agent_reports")
@@ -209,7 +238,10 @@ Deno.serve(async (req) => {
     const r: BuildRequest = {
       leagueId: body.leagueId, opponentName: body.opponentName, forTeamName: body.forTeamName || null,
       gameKey: body.gameKey || null, matchTime: body.matchTime || null, requestedBy: body.requestedBy || null,
+      tier: body.tier === "preview" ? "preview" : "full",
     };
+    // A preview describes the opponent only, so every visitor shares one row.
+    if (r.tier === "preview") r.forTeamName = null;
     const claimed = await claim(r, Boolean(body.force));
     if (!claimed) return json({ status: "building" }, 202);
     EdgeRuntime.waitUntil(build(r));
