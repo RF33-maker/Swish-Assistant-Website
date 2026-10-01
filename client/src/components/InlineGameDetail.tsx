@@ -1,17 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Calendar, Clock, MapPin, Link as LinkIcon, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, Trophy, Link as LinkIcon, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import SharedBoxScore from "@/components/BoxScoreTable";
-import { getTeamAbbreviation } from "@/lib/teamUtils";
-import { TeamLogo } from "./TeamLogo";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
 import type { ShotData } from "./ShotChart";
 import TeamSplitShotChart from "./TeamSplitShotChart";
-import GameFlowSummary from "./GameFlowSummary";
 import PlayByPlay from "./PlayByPlay";
-import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import UpcomingGamePreview, { type PreviewGame } from "./UpcomingGamePreview";
+import GameScoreHero, { useMatchupColors } from "./game/GameScoreHero";
+import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "./game/GameOverview";
 
 export interface GameInfo {
   date: string;
@@ -26,7 +24,8 @@ export interface GameInfo {
 
 interface InlineGameDetailProps {
   gameKey: string;
-  brandColor: string;
+  /** No longer used: the game view takes its colours from the two teams. */
+  brandColor?: string;
   leagueName?: string;
   leagueSlug?: string;
   onBack: () => void;
@@ -97,14 +96,6 @@ interface LiveClock {
   clock: string | null;
 }
 
-const LEADER_CATEGORIES: { key: string; label: string }[] = [
-  { key: "spoints", label: "PTS" },
-  { key: "sreboundstotal", label: "REB" },
-  { key: "sassists", label: "AST" },
-  { key: "ssteals", label: "STL" },
-  { key: "sblocks", label: "BLK" },
-];
-
 function parseMinutes(s: string | null | undefined): string {
   if (!s) return "0:00";
   if (s.includes(":")) return s;
@@ -114,14 +105,14 @@ function parseMinutes(s: string | null | undefined): string {
   return `${w}:${sec.toString().padStart(2, "0")}`;
 }
 
-function getStatusBadge(status: string | null | undefined) {
-  const s = (status || "").toLowerCase();
-  if (s === "final" || s === "finished" || s === "completed")
-    return <span className="px-3 py-1 bg-green-600 text-white text-sm font-semibold rounded-full">FINAL</span>;
-  if (s === "live" || s === "in_progress" || s.includes("live"))
-    return <span className="px-3 py-1 bg-red-500 text-white text-sm font-semibold rounded-full animate-pulse">LIVE</span>;
-  return <span className="px-3 py-1 bg-slate-500 text-white text-sm font-semibold rounded-full">UPCOMING</span>;
-}
+const toLeader = (p: PlayerStat): GameLeaderPlayer => ({
+  name: `${p.firstname} ${p.familyname}`.trim(),
+  spoints: p.spoints,
+  sreboundstotal: p.sreboundstotal,
+  sassists: p.sassists,
+  ssteals: p.ssteals,
+  sblocks: p.sblocks,
+});
 
 function formatLiveClock(clock: string | null | undefined): string | null {
   if (!clock) return null;
@@ -143,7 +134,7 @@ function formatTime(s: string): string {
 }
 
 export function InlineGameDetail({
-  gameKey, brandColor, leagueName, leagueSlug, onBack, onGameInfoLoaded, onSelectPlayer,
+  gameKey, leagueSlug, onBack, onGameInfoLoaded, onSelectPlayer,
 }: InlineGameDetailProps) {
   const [loading, setLoading] = useState(true);
   const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
@@ -162,7 +153,7 @@ export function InlineGameDetail({
   const [shotLoading, setShotLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("game");
   const [copied, setCopied] = useState(false);
-  const readable = useReadableTeamColor(brandColor);
+  const colors = useMatchupColors(gameInfo?.hometeam ?? "", gameInfo?.awayteam ?? "", leagueId);
 
   useEffect(() => {
     if (!gameKey) return;
@@ -527,8 +518,11 @@ export function InlineGameDetail({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-500" style={{ color: brandColor }} />
+      <div className="space-y-4" aria-busy="true">
+        <div className="ch-skel h-9 w-24" />
+        <div className="ch-skel h-[240px] md:h-[300px] !rounded-[14px]" />
+        <div className="ch-skel h-11" />
+        <div className="ch-skel h-48 !rounded-[14px]" />
       </div>
     );
   }
@@ -536,7 +530,7 @@ export function InlineGameDetail({
   if (!gameInfo && scheduledGame) {
     return (
       <div className="space-y-3">
-        <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-medium text-orange-500">
+        <button onClick={onBack} className="ch-btn ch-btn-ghost h-9 px-3 text-sm">
           <ArrowLeft className="w-4 h-4" /> Back to league
         </button>
         <UpcomingGamePreview game={scheduledGame} embedded leagueSlug={leagueSlug} onSelectPlayer={onSelectPlayer} />
@@ -546,9 +540,9 @@ export function InlineGameDetail({
 
   if (!gameInfo) {
     return (
-      <div className="py-16 text-center">
-        <p className="text-slate-500 dark:text-slate-400">Game not found.</p>
-        <button onClick={onBack} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-orange-500">
+      <div className="ch-card py-16 text-center">
+        <p className="text-[color:var(--ch-text-2)]">Game not found.</p>
+        <button onClick={onBack} className="mt-4 ch-btn ch-btn-ghost h-9 px-3 text-sm">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
       </div>
@@ -556,399 +550,137 @@ export function InlineGameDetail({
   }
 
   const { hometeam, awayteam, homeScore, awayScore, date, status } = gameInfo;
-  const hasTeamStats = homeTeamStats !== null && awayTeamStats !== null;
 
-  const tabActiveStyle = { backgroundColor: brandColor, color: "#fff" };
-
-  const BoxScoreTable = ({ players, teamName, score }: { players: PlayerStat[]; teamName: string; score: number }) => (
+  const teamHref = (team: string) =>
+    leagueSlug ? `/competition/${leagueSlug}/team/${encodeURIComponent(team)}` : undefined;
+  const liveLabel = isLive && liveClock
+    ? [liveClock.period ? (liveClock.period <= 4 ? `Q${liveClock.period}` : `OT${liveClock.period - 4}`) : null, formatLiveClock(liveClock.clock)]
+        .filter(Boolean).join(" · ")
+    : null;
+  const BoxScoreTable = ({ players, teamName, score, color }: { players: PlayerStat[]; teamName: string; score: number; color: string }) => (
     <SharedBoxScore
       players={players}
       teamName={teamName}
       score={score}
       leagueId={leagueId ?? undefined}
-      headerColor={brandColor}
+      headerColor={color}
       formatMinutes={parseMinutes}
     />
   );
 
+  const TABS = [
+    ["game", "Game"],
+    ["boxscore", "Box Score"],
+    ["teamstats", "Team Stats"],
+    ["shots", "Shots"],
+    ["feed", "Play by Play"],
+  ] as const;
+
   return (
     <div className="space-y-0 animate-fade-in-up">
       {/* Back + Copy link bar */}
-      <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
-        >
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={onBack} className="ch-btn ch-btn-ghost h-9 px-3 text-sm">
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
-        <button
-          onClick={handleCopyLink}
-          className="inline-flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 dark:border-neutral-700 text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors"
-          title="Copy shareable link"
-        >
-          {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <LinkIcon className="h-3.5 w-3.5" />}
+        <button onClick={handleCopyLink} className="ch-btn ch-btn-ghost h-9 px-3 text-xs" title="Copy shareable link">
+          {copied ? <Check className="h-3.5 w-3.5 text-[color:var(--ch-win)]" /> : <LinkIcon className="h-3.5 w-3.5" />}
           {copied ? "Copied!" : "Copy link"}
         </button>
       </div>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-xl overflow-hidden shadow-lg border border-orange-100 dark:border-neutral-800">
-        {/* Hero header — matches GamePage */}
-        <div className="bg-gradient-to-r from-orange-100 via-orange-50 to-orange-100 dark:from-neutral-800 dark:via-neutral-850 dark:to-neutral-800 p-6 md:p-8 border-b border-orange-200 dark:border-neutral-700">
-          <div className="flex flex-col items-center justify-center gap-1 mb-4">
-            {getStatusBadge(status)}
-            {isLive && liveClock && (
-              <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">
-                {liveClock.period ? `Q${liveClock.period} · ` : ""}
-                {formatLiveClock(liveClock.clock)}
-              </span>
-            )}
-          </div>
+      <GameScoreHero
+        leagueId={leagueId}
+        homeTeam={hometeam}
+        awayTeam={awayteam}
+        homeScore={isGamePlayed ? homeScore : null}
+        awayScore={isGamePlayed ? awayScore : null}
+        state={isLive ? "live" : isFinalStatus || hasStats ? "final" : "upcoming"}
+        liveLabel={liveLabel}
+        homeHref={teamHref(hometeam)}
+        awayHref={teamHref(awayteam)}
+        colors={colors}
+        meta={[
+          { icon: <Calendar />, label: formatDate(date) },
+          { icon: <Clock />, label: formatTime(date) },
+          ...(competitionName ? [{ icon: <Trophy />, label: competitionName }] : []),
+        ]}
+      />
 
-          <div className="flex items-center justify-between gap-2 md:gap-8">
-            {/* Home team */}
-            <div className="flex-1 text-center min-w-0">
-              <div className="flex justify-center mb-2 md:mb-3">
-                {leagueId
-                  ? <TeamLogo teamName={hometeam} leagueId={leagueId} size="md" className="md:w-20 md:h-20" />
-                  : <div className="w-16 h-16 rounded-full bg-orange-100 dark:bg-neutral-700 flex items-center justify-center text-lg font-bold text-orange-500">{getTeamAbbreviation(hometeam)}</div>
+      <div className="mt-4 md:mt-5">
+        {isGamePlayed ? (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            {/* Scrolls on a phone, where five labels don't fit; a fixed grid from md up. */}
+            <TabsList className={GAME_TAB_LIST_CLASS}>
+              {TABS.map(([v, label]) => (
+                <TabsTrigger key={v} value={v} className={GAME_TAB_TRIGGER_CLASS}>
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {/* GAME TAB */}
+            <TabsContent value="game" className="mt-0">
+              <GameOverviewSections
+                homeTeam={hometeam}
+                awayTeam={awayteam}
+                leagueId={leagueId}
+                home={homeTeamStats}
+                away={awayTeamStats}
+                homePlayers={homePlayerStats.map(toLeader)}
+                awayPlayers={awayPlayerStats.map(toLeader)}
+                events={eventsLoading ? null : liveEvents}
+                colors={colors}
+              />
+            </TabsContent>
+
+            {/* BOX SCORE TAB */}
+            <TabsContent value="boxscore" className="mt-0 space-y-5">
+              <BoxScoreTable players={homePlayerStats} teamName={hometeam} score={homeScore} color={colors.homeFill} />
+              <BoxScoreTable players={awayPlayerStats} teamName={awayteam} score={awayScore} color={colors.awayFill} />
+            </TabsContent>
+
+            {/* TEAM STATS TAB */}
+            <TabsContent value="teamstats" className="mt-0">
+              <TeamStatsComparison homeTeam={hometeam} awayTeam={awayteam} home={homeTeamStats} away={awayTeamStats} colors={colors} />
+            </TabsContent>
+
+            {/* SHOTS TAB */}
+            <TabsContent value="shots" className="mt-0">
+              <TeamSplitShotChart
+                shots={shotData}
+                loading={shotLoading}
+                emptyMessage="No shot data available for this game yet."
+                homeTeam={hometeam}
+                awayTeam={awayteam}
+                showPlayerFilter
+                showQuarterFilter
+                showResultFilter
+              />
+            </TabsContent>
+
+            {/* FEED TAB */}
+            <TabsContent value="feed" className="mt-0">
+              <PlayByPlay
+                events={liveEvents}
+                homeTeam={hometeam}
+                awayTeam={awayteam}
+                loading={eventsLoading}
+                emptyMessage="Play-by-play data coming soon."
+                describeEvent={(event, previousScoredEvent) =>
+                  generatePlayCaption(event as any, previousScoredEvent as any) || event.description || `${event.action_type} ${event.sub_type || ""}`.trim()
                 }
-              </div>
-              <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white truncate hidden md:block">{hometeam}</h2>
-              <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbreviation(hometeam)}</h2>
-              <span className="text-xs mt-0.5 block" style={{ color: brandColor }}>HOME</span>
-            </div>
-
-            {/* Score */}
-            <div className="flex flex-col items-center flex-shrink-0">
-              {isGamePlayed ? (
-                <div className="flex items-center gap-2 md:gap-4">
-                  <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{homeScore}</span>
-                  <span className="text-xl md:text-2xl text-slate-400">-</span>
-                  <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{awayScore}</span>
-                </div>
-              ) : (
-                <div className="text-xl md:text-3xl font-bold" style={{ color: brandColor }}>VS</div>
-              )}
-            </div>
-
-            {/* Away team */}
-            <div className="flex-1 text-center min-w-0">
-              <div className="flex justify-center mb-2 md:mb-3">
-                {leagueId
-                  ? <TeamLogo teamName={awayteam} leagueId={leagueId} size="md" className="md:w-20 md:h-20" />
-                  : <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-neutral-700 flex items-center justify-center text-lg font-bold text-blue-500">{getTeamAbbreviation(awayteam)}</div>
-                }
-              </div>
-              <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white truncate hidden md:block">{awayteam}</h2>
-              <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbreviation(awayteam)}</h2>
-              <span className="text-xs mt-0.5 block" style={{ color: brandColor }}>AWAY</span>
-            </div>
+              />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <div className="ch-card p-5 text-center">
+            <p className="text-sm text-[color:var(--ch-text-2)]">
+              Live stats and play-by-play data will appear when the game starts.
+            </p>
           </div>
-
-          {/* Meta row */}
-          <div className="flex flex-wrap justify-center gap-4 mt-6 text-sm text-slate-600 dark:text-slate-400">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              <span>{formatDate(date)}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              <span>{formatTime(date)}</span>
-            </div>
-            {competitionName && (
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
-                <span>{competitionName}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="p-4 md:p-6">
-          {isGamePlayed ? (
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              {/* Five equal grid columns leave ~75px each on a phone, which is
-                  narrower than "Box Score" or "Play by Play" — the labels
-                  overflowed their cells and ran into each other. Scroll the
-                  strip on small screens and keep the grid from md up. */}
-              <TabsList className="flex w-full justify-start overflow-x-auto gap-1 bg-orange-100 dark:bg-neutral-800 mb-4 md:grid md:grid-cols-5 md:gap-0">
-                {(["game", "boxscore", "teamstats", "shots", "feed"] as const).map((v) => (
-                  <TabsTrigger
-                    key={v}
-                    value={v}
-                    className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:text-white text-xs md:text-sm"
-                    style={activeTab === v ? tabActiveStyle : {}}
-                  >
-                    {v === "game" ? "Game" : v === "boxscore" ? "Box Score" : v === "teamstats" ? "Team Stats" : v === "shots" ? "Shots" : "Play by Play"}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              {/* GAME TAB */}
-              <TabsContent value="game" className="space-y-4">
-                {/* Quarter scores */}
-                {quarterScores.length > 0 && (
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                    <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Quarter Scores</h3>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-slate-500 dark:text-slate-400 border-b border-orange-100 dark:border-neutral-700">
-                          <th className="text-left py-2 px-2 font-medium">Team</th>
-                          {quarterScores.map((q) => (
-                            <th key={q.p} className="text-center py-2 px-2 font-medium">{q.p <= 4 ? `Q${q.p}` : `OT${q.p - 4}`}</th>
-                          ))}
-                          <th className="text-center py-2 px-2 font-semibold">T</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-slate-800 dark:text-slate-200">
-                        {([{ team: hometeam, side: "home" as const }, { team: awayteam, side: "away" as const }]).map(({ team, side }) => {
-                          const tot = quarterScores.reduce((s, q) => s + (side === "home" ? q.home : q.away), 0);
-                          const oppTot = quarterScores.reduce((s, q) => s + (side === "home" ? q.away : q.home), 0);
-                          return (
-                            <tr key={side} className={side === "home" ? "border-b border-orange-50 dark:border-neutral-700" : ""}>
-                              <td className="py-2 px-2 font-medium flex items-center gap-2">
-                                {leagueId && <TeamLogo teamName={team} leagueId={leagueId} size="sm" />}
-                                <span className="hidden sm:inline">{team}</span>
-                              </td>
-                              {quarterScores.map((q) => {
-                                const val = side === "home" ? q.home : q.away;
-                                const opp = side === "home" ? q.away : q.home;
-                                return (
-                                  <td key={q.p} className={`text-center py-2 px-2 ${val > opp ? "font-bold" : ""}`}
-                                    style={val > opp ? { color: brandColor } : {}}>
-                                    {val}
-                                  </td>
-                                );
-                              })}
-                              <td className={`text-center py-2 px-2 font-bold ${tot > oppTot ? "" : ""}`}
-                                style={tot > oppTot ? { color: brandColor } : {}}>
-                                {tot}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {/* Team comparison bars */}
-                {hasTeamStats && (
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                    <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Team Comparison</h3>
-                    <div className="space-y-3">
-                      {[
-                        { label: "Points", home: homeTeamStats!.tot_spoints, away: awayTeamStats!.tot_spoints },
-                        { label: "Rebounds", home: homeTeamStats!.tot_sreboundstotal, away: awayTeamStats!.tot_sreboundstotal },
-                        { label: "Assists", home: homeTeamStats!.tot_sassists, away: awayTeamStats!.tot_sassists },
-                        { label: "Steals", home: homeTeamStats!.tot_ssteals, away: awayTeamStats!.tot_ssteals },
-                        { label: "Turnovers", home: homeTeamStats!.tot_sturnovers, away: awayTeamStats!.tot_sturnovers },
-                      ].map((s) => {
-                        const total = s.home + s.away;
-                        const homePct = total > 0 ? (s.home / total) * 100 : 50;
-                        return (
-                          <div key={s.label}>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="font-semibold text-slate-800 dark:text-white">{s.home}</span>
-                              <span className="text-slate-500 dark:text-slate-400 text-xs">{s.label}</span>
-                              <span className="font-semibold text-slate-800 dark:text-white">{s.away}</span>
-                            </div>
-                            <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 dark:bg-neutral-700">
-                              <div className="transition-all duration-500" style={{ width: `${homePct}%`, backgroundColor: brandColor }} />
-                              <div className="bg-blue-500 transition-all duration-500" style={{ width: `${100 - homePct}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Shooting */}
-                {hasTeamStats && (
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                    <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Shooting</h3>
-                    <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                      <div className="font-semibold truncate" style={{ color: brandColor }}>{hometeam}</div>
-                      <div />
-                      <div className="font-semibold truncate" style={{ color: brandColor }}>{awayteam}</div>
-
-                      <div className="text-slate-800 dark:text-white font-medium">{homeTeamStats!.tot_sfieldgoalsmade}/{homeTeamStats!.tot_sfieldgoalsattempted}</div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs">FG</div>
-                      <div className="text-slate-800 dark:text-white font-medium">{awayTeamStats!.tot_sfieldgoalsmade}/{awayTeamStats!.tot_sfieldgoalsattempted}</div>
-
-                      <div className="text-slate-800 dark:text-white font-medium">{homeTeamStats!.tot_sthreepointersmade}/{homeTeamStats!.tot_sthreepointersattempted}</div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs">3PT</div>
-                      <div className="text-slate-800 dark:text-white font-medium">{awayTeamStats!.tot_sthreepointersmade}/{awayTeamStats!.tot_sthreepointersattempted}</div>
-
-                      <div className="text-slate-800 dark:text-white font-medium">{homeTeamStats!.tot_sfreethrowsmade}/{homeTeamStats!.tot_sfreethrowsattempted}</div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs">FT</div>
-                      <div className="text-slate-800 dark:text-white font-medium">{awayTeamStats!.tot_sfreethrowsmade}/{awayTeamStats!.tot_sfreethrowsattempted}</div>
-
-                      <div className="text-slate-800 dark:text-white font-medium">
-                        {homeTeamStats!.tot_sfieldgoalsattempted > 0 ? ((homeTeamStats!.tot_sfieldgoalsmade / homeTeamStats!.tot_sfieldgoalsattempted) * 100).toFixed(1) : "0.0"}%
-                      </div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs">FG%</div>
-                      <div className="text-slate-800 dark:text-white font-medium">
-                        {awayTeamStats!.tot_sfieldgoalsattempted > 0 ? ((awayTeamStats!.tot_sfieldgoalsmade / awayTeamStats!.tot_sfieldgoalsattempted) * 100).toFixed(1) : "0.0"}%
-                      </div>
-
-                      <div className="text-slate-800 dark:text-white font-medium">
-                        {homeTeamStats!.tot_sthreepointersattempted > 0 ? ((homeTeamStats!.tot_sthreepointersmade / homeTeamStats!.tot_sthreepointersattempted) * 100).toFixed(1) : "0.0"}%
-                      </div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs">3PT%</div>
-                      <div className="text-slate-800 dark:text-white font-medium">
-                        {awayTeamStats!.tot_sthreepointersattempted > 0 ? ((awayTeamStats!.tot_sthreepointersmade / awayTeamStats!.tot_sthreepointersattempted) * 100).toFixed(1) : "0.0"}%
-                      </div>
-
-                      <div className="text-slate-800 dark:text-white font-medium">
-                        {homeTeamStats!.tot_sfreethrowsattempted > 0 ? ((homeTeamStats!.tot_sfreethrowsmade / homeTeamStats!.tot_sfreethrowsattempted) * 100).toFixed(1) : "0.0"}%
-                      </div>
-                      <div className="text-slate-500 dark:text-slate-400 text-xs">FT%</div>
-                      <div className="text-slate-800 dark:text-white font-medium">
-                        {awayTeamStats!.tot_sfreethrowsattempted > 0 ? ((awayTeamStats!.tot_sfreethrowsmade / awayTeamStats!.tot_sfreethrowsattempted) * 100).toFixed(1) : "0.0"}%
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Team leaders */}
-                {(homePlayerStats.length > 0 || awayPlayerStats.length > 0) && (
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                    <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Team Leaders</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[{ team: hometeam, players: homePlayerStats }, { team: awayteam, players: awayPlayerStats }].map(({ team, players }) => (
-                        <div key={team} className="space-y-2">
-                          <div className="flex items-center gap-2 mb-2">
-                            {leagueId && <TeamLogo teamName={team} leagueId={leagueId} size="sm" />}
-                            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{team}</span>
-                          </div>
-                          {LEADER_CATEGORIES.map(({ key, label }) => {
-                            const leader = [...players].sort((a, b) => ((b as any)[key] || 0) - ((a as any)[key] || 0))[0];
-                            if (!leader) return null;
-                            return (
-                              <div key={key} className="flex justify-between items-center text-sm">
-                                <span className="text-slate-700 dark:text-slate-300">{leader.firstname} {leader.familyname}</span>
-                                <span className="font-bold" style={{ color: readable.body }}>{(leader as any)[key] || 0} {label}</span>
-                              </div>
-                            );
-                          })}
-                          {players.length === 0 && <p className="text-xs text-slate-400 italic">No data</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {!hasTeamStats && !hasStats && (
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-8 border border-orange-100 dark:border-neutral-700 text-center">
-                    <p className="text-slate-500 dark:text-slate-400 italic">Game statistics will appear here once the game starts.</p>
-                  </div>
-                )}
-
-                {!eventsLoading && liveEvents.length > 0 && (
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                    <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Game Flow</h3>
-                    <GameFlowSummary events={liveEvents as any} homeTeam={hometeam} awayTeam={awayteam} />
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* BOX SCORE TAB */}
-              <TabsContent value="boxscore" className="space-y-6">
-                <BoxScoreTable players={homePlayerStats} teamName={hometeam} score={homeScore} />
-                <BoxScoreTable players={awayPlayerStats} teamName={awayteam} score={awayScore} />
-              </TabsContent>
-
-              {/* TEAM STATS TAB */}
-              <TabsContent value="teamstats">
-                <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                  {hasTeamStats ? (
-                    <div className="grid grid-cols-3 gap-4 text-center text-slate-800 dark:text-slate-200">
-                      <div className="font-semibold truncate" style={{ color: brandColor }}>{hometeam}</div>
-                      <div className="text-slate-500">Stat</div>
-                      <div className="font-semibold truncate" style={{ color: brandColor }}>{awayteam}</div>
-
-                      <div className="text-2xl font-bold" style={{ color: readable.body }}>{homeTeamStats!.tot_spoints}</div>
-                      <div className="text-slate-500">Points</div>
-                      <div className="text-2xl font-bold" style={{ color: readable.body }}>{awayTeamStats!.tot_spoints}</div>
-
-                      <div>{homeTeamStats!.tot_sreboundstotal}</div>
-                      <div className="text-slate-500">Rebounds</div>
-                      <div>{awayTeamStats!.tot_sreboundstotal}</div>
-
-                      <div>{homeTeamStats!.tot_sassists}</div>
-                      <div className="text-slate-500">Assists</div>
-                      <div>{awayTeamStats!.tot_sassists}</div>
-
-                      <div>{homeTeamStats!.tot_ssteals}</div>
-                      <div className="text-slate-500">Steals</div>
-                      <div>{awayTeamStats!.tot_ssteals}</div>
-
-                      <div>{homeTeamStats!.tot_sblocks}</div>
-                      <div className="text-slate-500">Blocks</div>
-                      <div>{awayTeamStats!.tot_sblocks}</div>
-
-                      <div>{homeTeamStats!.tot_sturnovers}</div>
-                      <div className="text-slate-500">Turnovers</div>
-                      <div>{awayTeamStats!.tot_sturnovers}</div>
-
-                      <div className="whitespace-nowrap">{homeTeamStats!.tot_sfieldgoalsmade}/{homeTeamStats!.tot_sfieldgoalsattempted}</div>
-                      <div className="text-slate-500">FG</div>
-                      <div className="whitespace-nowrap">{awayTeamStats!.tot_sfieldgoalsmade}/{awayTeamStats!.tot_sfieldgoalsattempted}</div>
-
-                      <div className="whitespace-nowrap">{homeTeamStats!.tot_sthreepointersmade}/{homeTeamStats!.tot_sthreepointersattempted}</div>
-                      <div className="text-slate-500">3PT</div>
-                      <div className="whitespace-nowrap">{awayTeamStats!.tot_sthreepointersmade}/{awayTeamStats!.tot_sthreepointersattempted}</div>
-
-                      <div className="whitespace-nowrap">{homeTeamStats!.tot_sfreethrowsmade}/{homeTeamStats!.tot_sfreethrowsattempted}</div>
-                      <div className="text-slate-500">FT</div>
-                      <div className="whitespace-nowrap">{awayTeamStats!.tot_sfreethrowsmade}/{awayTeamStats!.tot_sfreethrowsattempted}</div>
-                    </div>
-                  ) : (
-                    <p className="text-slate-500 text-center italic">Team stats will appear when available</p>
-                  )}
-                </div>
-              </TabsContent>
-
-              {/* SHOTS TAB */}
-              <TabsContent value="shots">
-                <TeamSplitShotChart
-                  shots={shotData}
-                  loading={shotLoading}
-                  emptyMessage="No shot data available for this game yet."
-                  homeTeam={hometeam}
-                  awayTeam={awayteam}
-                  showPlayerFilter
-                  showQuarterFilter
-                  showResultFilter
-                />
-              </TabsContent>
-
-              {/* FEED TAB */}
-              <TabsContent value="feed">
-                <PlayByPlay
-                  events={liveEvents}
-                  homeTeam={hometeam}
-                  awayTeam={awayteam}
-                  loading={eventsLoading}
-                  emptyMessage="Play-by-play data coming soon."
-                  describeEvent={(event, previousScoredEvent) =>
-                    generatePlayCaption(event as any, previousScoredEvent as any) || event.description || `${event.action_type} ${event.sub_type || ""}`.trim()
-                  }
-                />
-              </TabsContent>
-            </Tabs>
-          ) : (
-            <div className="bg-orange-50 dark:bg-neutral-800/50 rounded-lg p-4 text-center border border-orange-100 dark:border-neutral-700">
-              <p className="text-slate-600 dark:text-slate-400 text-sm">
-                Live stats and play-by-play data will appear when the game starts.
-              </p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

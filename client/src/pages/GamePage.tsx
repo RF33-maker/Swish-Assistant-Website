@@ -3,22 +3,20 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import BoxScoreTable from "@/components/BoxScoreTable";
-import { getTeamAbbreviation } from "@/lib/teamUtils";
 import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
-import { useReadableTeamColor } from "@/hooks/useReadableColor";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LeagueChatbot from "@/components/LeagueChatbot";
 import type { ShotData } from "@/components/ShotChart";
 import TeamSplitShotChart from "@/components/TeamSplitShotChart";
-import GameFlowSummary from "@/components/GameFlowSummary";
 import PlayByPlay from "@/components/PlayByPlay";
 import UpcomingGamePreview from "@/components/UpcomingGamePreview";
+import GameScoreHero, { useMatchupColors, type GameHeroState } from "@/components/game/GameScoreHero";
+import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "@/components/game/GameOverview";
 
 interface GameSchedule {
   game_key: string;
@@ -197,23 +195,6 @@ function formatTime(matchtime: string): string {
   });
 }
 
-function getStatusBadge(status: string | null, matchtime: string) {
-  const normalizedStatus = normalizeGameStatus(status);
-  const now = new Date();
-  const gameTime = new Date(matchtime);
-  
-  if (isFinalGameStatus(normalizedStatus)) {
-    return <span className="px-3 py-1 bg-green-600 text-white text-sm font-semibold rounded-full">FINAL</span>;
-  }
-  if (isLiveGameStatus(normalizedStatus)) {
-    return <span className="px-3 py-1 bg-red-500 text-white text-sm font-semibold rounded-full animate-pulse">LIVE</span>;
-  }
-  if (gameTime > now) {
-    return <span className="px-3 py-1 bg-orange-500 text-white text-sm font-semibold rounded-full">SCHEDULED</span>;
-  }
-  return <span className="px-3 py-1 bg-slate-500 text-white text-sm font-semibold rounded-full">PENDING</span>;
-}
-
 function parseMinutes(minutesStr: string | null | undefined): string {
   if (!minutesStr) return '0:00';
   if (minutesStr.includes(':')) return minutesStr;
@@ -223,18 +204,14 @@ function parseMinutes(minutesStr: string | null | undefined): string {
   return `${wholeMins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function getTeamShortName(teamName: string): string {
-  const words = teamName.trim().split(/\s+/);
-  return words.length > 2 ? words.slice(0, 2).join(' ') : teamName;
-}
-
-const LEADER_CATEGORIES: { key: string; label: string }[] = [
-  { key: 'spoints', label: 'PTS' },
-  { key: 'sreboundstotal', label: 'REB' },
-  { key: 'sassists', label: 'AST' },
-  { key: 'ssteals', label: 'STL' },
-  { key: 'sblocks', label: 'BLK' },
-];
+const toLeader = (p: PlayerStat): GameLeaderPlayer => ({
+  name: p.full_name || p.player_name || `${p.firstname || ''} ${p.familyname || ''}`.trim(),
+  spoints: p.spoints,
+  sreboundstotal: p.sreboundstotal,
+  sassists: p.sassists,
+  ssteals: p.ssteals,
+  sblocks: p.sblocks,
+});
 
 function buildEventDescription(actionType: string, subType: string | null, success: boolean, points: number | null): string {
   const action = actionType?.toLowerCase() || '';
@@ -360,19 +337,13 @@ export default function GamePage() {
     enabled: !!gameData?.league_id
   });
 
-  const { colors: leagueBrandColors, brandingData: publicBrandingData } = usePublicLeagueBrandingById({
+  const { brandingData: publicBrandingData } = usePublicLeagueBrandingById({
     leagueId: gameData?.league_id,
     fallbackLeague: leagueData,
     enabled: !!gameData?.league_id,
   });
 
   const leagueSlug = leagueData?.slug || publicBrandingData?.slug;
-
-  const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
-  // Contrast-safe hover colour — a manually-darkened shade of the raw brand
-  // colour would only get harder to see in dark mode when the brand colour
-  // is already dark (e.g. navy), so this needs to stay theme-aware instead.
-  const brandColorHover = useReadableTeamColor(brandColor).body;
 
   const { data: playerStats, isLoading: statsLoading } = useQuery({
     queryKey: ['game-player-stats', gameKey, isTestMode],
@@ -867,20 +838,18 @@ export default function GamePage() {
     return [...playerQs, ...base].slice(0, 5);
   }, [gameData?.hometeam, gameData?.awayteam, homePlayerStats, awayPlayerStats]);
 
+  // Called before the early returns below so the hook order never changes.
+  const colors = useMatchupColors(gameData?.hometeam ?? "", gameData?.awayteam ?? "", gameData?.league_id);
+
   if (gameLoading) {
     return (
-      <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-[#fffaf1] dark:bg-neutral-950`}>
+      <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
         <SiteHeader />
-        <div className="max-w-6xl mx-auto px-4 py-8">
-          <Skeleton className="h-8 w-32 mb-6 bg-orange-100 dark:bg-neutral-700" />
-          <div className="bg-white dark:bg-neutral-900 rounded-xl p-6 border border-orange-100 dark:border-neutral-800">
-            <div className="flex justify-between items-center mb-8">
-              <Skeleton className="h-24 w-24 rounded-full bg-orange-100 dark:bg-neutral-700" />
-              <Skeleton className="h-12 w-24 bg-orange-100 dark:bg-neutral-700" />
-              <Skeleton className="h-24 w-24 rounded-full bg-orange-100 dark:bg-neutral-700" />
-            </div>
-            <Skeleton className="h-64 w-full bg-orange-100 dark:bg-neutral-700" />
-          </div>
+        <div className="max-w-6xl mx-auto px-4 py-6 space-y-4" aria-busy="true">
+          <div className="ch-skel h-9 w-28" />
+          <div className="ch-skel h-[240px] md:h-[300px] !rounded-[14px]" />
+          <div className="ch-skel h-11" />
+          <div className="ch-skel h-64 !rounded-[14px]" />
         </div>
       </div>
     );
@@ -888,16 +857,13 @@ export default function GamePage() {
 
   if (gameError || !gameData) {
     return (
-      <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white flex flex-col`}>
+      <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen flex flex-col`}>
         <SiteHeader />
         <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Game Not Found</h1>
-          <p className="text-slate-500 mb-6">The game you're looking for doesn't exist or has been removed.</p>
-          <button 
-            onClick={() => navigate('/')} 
-            className="text-orange-500 hover:text-orange-600 flex items-center justify-center gap-2 cursor-pointer"
-          >
+          <h1 className="ch-display uppercase text-3xl font-bold mb-3">Game not found</h1>
+          <p className="text-[color:var(--ch-text-2)] mb-6">The game you're looking for doesn't exist or has been removed.</p>
+          <button onClick={() => navigate('/')} className="ch-btn ch-btn-ghost h-10 px-4 mx-auto">
             <ArrowLeft className="w-4 h-4" />
             Back to Home
           </button>
@@ -973,198 +939,147 @@ export default function GamePage() {
   const homeScore = homeTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[0] : null);
   const awayScore = awayTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[1] : null);
 
+  const heroState: GameHeroState = isLive
+    ? 'live'
+    : isFinal || hasStatsData
+      ? 'final'
+      : new Date(gameData.matchtime) > new Date() ? 'upcoming' : 'pending';
+
   return (
-    <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white transition-colors`}>
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
       <SiteHeader />
       {gameData?.league_id && (
         <GameSwitcherBar leagueId={gameData.league_id} currentGameKey={gameKey} isTestMode={isTestMode} />
       )}
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <button 
+        <button
           onClick={() => navigate(leagueSlug ? `/competition/${leagueSlug}` : '/')}
-          className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 mb-6 transition-colors cursor-pointer"
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = brandColorHover; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = ''; }}
+          className="ch-btn ch-btn-ghost h-9 px-3 text-sm mb-3"
         >
           <ArrowLeft className="w-4 h-4" />
           {leagueSlug ? 'Back to League' : 'Back to Home'}
         </button>
 
-        <div className="bg-white dark:bg-neutral-900 rounded-xl overflow-hidden shadow-lg border border-orange-100 dark:border-neutral-800">
-          <div className="bg-gradient-to-r from-orange-100 via-orange-50 to-orange-100 dark:from-neutral-800 dark:via-neutral-850 dark:to-neutral-800 p-6 md:p-8 border-b border-orange-200 dark:border-neutral-700">
-            <div className="flex justify-center items-center gap-2 mb-4">
-              {getStatusBadge(gameData.status, gameData.matchtime)}
-              {isTestMode && (
-                <span className="px-2 py-0.5 bg-purple-600 text-white text-xs font-medium rounded-full">
-                  TEST MODE
-                </span>
-              )}
-            </div>
+        <div>
+          <GameScoreHero
+            leagueId={gameData.league_id}
+            homeTeam={gameData.hometeam}
+            awayTeam={gameData.awayteam}
+            homeScore={isGamePlayed ? homeScore : null}
+            awayScore={isGamePlayed ? awayScore : null}
+            state={heroState}
+            liveLabel={isLive && currentPeriod
+              ? `${currentPeriod <= 4 ? `Q${currentPeriod}` : `OT${currentPeriod - 4}`}${currentClock ? ` · ${currentClock.split(':').slice(0, 2).join(':')}` : ''}`
+              : null}
+            homeSub={homeTeamRecord ? `${homeTeamRecord.wins}-${homeTeamRecord.losses}` : undefined}
+            awaySub={awayTeamRecord ? `${awayTeamRecord.wins}-${awayTeamRecord.losses}` : undefined}
+            homeHref={leagueSlug ? `/competition/${leagueSlug}/team/${encodeURIComponent(gameData.hometeam)}` : undefined}
+            awayHref={leagueSlug ? `/competition/${leagueSlug}/team/${encodeURIComponent(gameData.awayteam)}` : undefined}
+            colors={colors}
+            badges={isTestMode ? (
+              <span className="rounded-full bg-purple-600 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-white">Test mode</span>
+            ) : null}
+            meta={[
+              { icon: <Calendar />, label: formatDate(gameData.matchtime) },
+              { icon: <Clock />, label: formatTime(gameData.matchtime) },
+              ...(gameData.competitionname ? [{ icon: <MapPin />, label: gameData.competitionname }] : []),
+            ]}
+            footer={lastUpdatedText ? (
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
+                Updated {lastUpdatedText}
+              </span>
+            ) : null}
+          />
 
-            <div className="flex items-center justify-between gap-2 md:gap-8">
-              <div className="flex-1 text-center min-w-0">
-                <div className="flex justify-center mb-2 md:mb-3">
-                  <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
-                </div>
-                <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.hometeam}</h2>
-                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamShortName(gameData.hometeam)}</h2>
-                {homeTeamRecord && (
-                  <span className="text-xs text-slate-500 dark:text-slate-400">({homeTeamRecord.wins}-{homeTeamRecord.losses})</span>
-                )}
-                <span className="text-xs text-orange-600 dark:text-orange-400">HOME</span>
-              </div>
-
-              <div className="flex flex-col items-center flex-shrink-0">
-                {isGamePlayed && homeScore !== null && awayScore !== null ? (
-                  <>
-                    <div className="flex items-center gap-2 md:gap-4">
-                      <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{homeScore}</span>
-                      <span className="text-xl md:text-2xl text-orange-400">-</span>
-                      <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{awayScore}</span>
-                    </div>
-                    {isLive && currentPeriod && (
-                      <div className="flex flex-col items-center mt-1">
-                        <span className="text-xs md:text-sm font-semibold text-red-500">
-                          {currentPeriod <= 4 ? `Q${currentPeriod}` : `OT${currentPeriod - 4}`}
-                          {currentClock ? ` · ${currentClock.split(':').slice(0, 2).join(':')}` : ''}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="text-center">
-                    <div className="text-xl md:text-3xl font-bold text-orange-500">VS</div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex-1 text-center min-w-0">
-                <div className="flex justify-center mb-2 md:mb-3">
-                  <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
-                </div>
-                <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.awayteam}</h2>
-                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamShortName(gameData.awayteam)}</h2>
-                {awayTeamRecord && (
-                  <span className="text-xs text-slate-500 dark:text-slate-400">({awayTeamRecord.wins}-{awayTeamRecord.losses})</span>
-                )}
-                <span className="text-xs text-orange-600 dark:text-orange-400">AWAY</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-4 mt-6 text-sm text-slate-600 dark:text-slate-400">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                <span>{formatDate(gameData.matchtime)}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                <span>{formatTime(gameData.matchtime)}</span>
-              </div>
-              {gameData.competitionname && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  <span>{gameData.competitionname}</span>
-                </div>
-              )}
-            </div>
-            {lastUpdatedText && (
-              <div className="flex justify-center mt-3">
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block"></span>
-                  Updated {lastUpdatedText}
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 md:p-6">
+          <div className="mt-4 md:mt-5">
             {!isGamePlayed ? (
               <div className="space-y-4 md:space-y-6">
                 {/* Countdown Timer */}
                 {timeLeft && (
-                  <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-4 md:p-6 shadow-md">
-                    <h3 className="text-base md:text-lg font-semibold text-white text-center mb-3 md:mb-4">
-                      <Clock className="w-4 h-4 md:w-5 md:h-5 inline mr-2" />
+                  <div className="ch-card p-4 md:p-6">
+                    <h3 className="ch-eyebrow text-center mb-3 md:mb-4">
+                      <Clock className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
                       Countdown to Tip-Off
                     </h3>
                     <div className="grid grid-cols-4 gap-2 md:gap-4 max-w-md mx-auto">
-                      <div className="bg-white/20 rounded-lg p-2 md:p-3 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.days}</div>
-                        <div className="text-xs md:text-sm text-orange-100">Days</div>
+                      <div className="ch-tile p-2 md:p-3 text-center">
+                        <div className="ch-display ch-num text-3xl md:text-5xl font-bold text-[color:var(--ch-text)]">{timeLeft.days}</div>
+                        <div className="text-[10.5px] uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">Days</div>
                       </div>
-                      <div className="bg-white/20 rounded-lg p-2 md:p-3 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.hours.toString().padStart(2, '0')}</div>
-                        <div className="text-xs md:text-sm text-orange-100">Hours</div>
+                      <div className="ch-tile p-2 md:p-3 text-center">
+                        <div className="ch-display ch-num text-3xl md:text-5xl font-bold text-[color:var(--ch-text)]">{timeLeft.hours.toString().padStart(2, '0')}</div>
+                        <div className="text-[10.5px] uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">Hours</div>
                       </div>
-                      <div className="bg-white/20 rounded-lg p-2 md:p-3 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.minutes.toString().padStart(2, '0')}</div>
-                        <div className="text-xs md:text-sm text-orange-100">Mins</div>
+                      <div className="ch-tile p-2 md:p-3 text-center">
+                        <div className="ch-display ch-num text-3xl md:text-5xl font-bold text-[color:var(--ch-text)]">{timeLeft.minutes.toString().padStart(2, '0')}</div>
+                        <div className="text-[10.5px] uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">Mins</div>
                       </div>
-                      <div className="bg-white/20 rounded-lg p-2 md:p-3 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.seconds.toString().padStart(2, '0')}</div>
-                        <div className="text-xs md:text-sm text-orange-100">Secs</div>
+                      <div className="ch-tile p-2 md:p-3 text-center">
+                        <div className="ch-display ch-num text-3xl md:text-5xl font-bold text-[color:var(--ch-text)]">{timeLeft.seconds.toString().padStart(2, '0')}</div>
+                        <div className="text-[10.5px] uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">Secs</div>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Team Form - Last 5 Games */}
-                <div className="bg-orange-50 dark:bg-neutral-800 rounded-xl p-4 md:p-6 border border-orange-100 dark:border-neutral-700">
-                  <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-orange-500" />
+                <div className="ch-card p-4 md:p-5">
+                  <h3 className="ch-eyebrow mb-3.5 flex items-center gap-2">
+                    <TrendingUp className="w-3.5 h-3.5" />
                     Recent Form
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     {/* Home Team Form */}
-                    <div className="bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-orange-100 dark:border-neutral-700">
+                    <div className="ch-tile p-3 md:p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.hometeam}</span>
+                        <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{gameData.hometeam}</span>
                       </div>
                       <div className="flex items-center gap-1.5 md:gap-2">
-                        <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 md:mr-2">Last 5:</span>
+                        <span className="text-xs text-[color:var(--ch-muted)] mr-1 md:mr-2">Last 5:</span>
                         {homeTeamForm && homeTeamForm.length > 0 ? (
                           homeTeamForm.map((result, idx) => (
                             <div
                               key={idx}
                               className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center font-bold text-xs md:text-sm ${
                                 result.won
-                                  ? 'bg-green-500 text-white'
-                                  : 'bg-red-500 text-white'
+                                  ? 'bg-[color:var(--ch-win)] text-white'
+                                  : 'bg-[color:var(--ch-loss)] text-white'
                               }`}
                             >
                               {result.won ? 'W' : 'L'}
                             </div>
                           ))
                         ) : (
-                          <span className="text-xs text-slate-400 italic">No games yet</span>
+                          <span className="text-xs text-[color:var(--ch-muted)]">No games yet</span>
                         )}
                       </div>
                     </div>
 
                     {/* Away Team Form */}
-                    <div className="bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-orange-100 dark:border-neutral-700">
+                    <div className="ch-tile p-3 md:p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.awayteam}</span>
+                        <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{gameData.awayteam}</span>
                       </div>
                       <div className="flex items-center gap-1.5 md:gap-2">
-                        <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 md:mr-2">Last 5:</span>
+                        <span className="text-xs text-[color:var(--ch-muted)] mr-1 md:mr-2">Last 5:</span>
                         {awayTeamForm && awayTeamForm.length > 0 ? (
                           awayTeamForm.map((result, idx) => (
                             <div
                               key={idx}
                               className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center font-bold text-xs md:text-sm ${
                                 result.won
-                                  ? 'bg-green-500 text-white'
-                                  : 'bg-red-500 text-white'
+                                  ? 'bg-[color:var(--ch-win)] text-white'
+                                  : 'bg-[color:var(--ch-loss)] text-white'
                               }`}
                             >
                               {result.won ? 'W' : 'L'}
                             </div>
                           ))
                         ) : (
-                          <span className="text-xs text-slate-400 italic">No games yet</span>
+                          <span className="text-xs text-[color:var(--ch-muted)]">No games yet</span>
                         )}
                       </div>
                     </div>
@@ -1172,24 +1087,24 @@ export default function GamePage() {
                 </div>
 
                 {/* Players to Watch */}
-                <div className="bg-orange-50 dark:bg-neutral-800 rounded-xl p-4 md:p-6 border border-orange-100 dark:border-neutral-700">
-                  <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-                    <Users className="w-4 h-4 md:w-5 md:h-5 text-orange-500" />
+                <div className="ch-card p-4 md:p-5">
+                  <h3 className="ch-eyebrow mb-3.5 flex items-center gap-2">
+                    <Users className="w-3.5 h-3.5" />
                     Players to Watch
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     {/* Home Team Top Players */}
                     <div className="space-y-2 md:space-y-3">
-                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-orange-200 dark:border-neutral-600">
+                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[color:var(--ch-border)]">
                         <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.hometeam}</span>
+                        <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{gameData.hometeam}</span>
                       </div>
                       {homeTeamRoster && homeTeamRoster.length > 0 ? (
                         homeTeamRoster.map((player, idx) => (
-                          <div key={idx} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 md:p-3 flex items-center justify-between border border-orange-100 dark:border-neutral-700">
+                          <div key={idx} className="ch-tile p-2.5 md:p-3 flex items-center justify-between">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
-                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-orange-500">
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)]">
                                   <img 
                                     src={player.photoUrl} 
                                     alt={player.name}
@@ -1198,45 +1113,45 @@ export default function GamePage() {
                                   />
                                 </div>
                               ) : (
-                                <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0">
+                                <div className="w-8 h-8 md:w-10 md:h-10 bg-[color:var(--ch-surface-3)] rounded-full flex items-center justify-center text-[color:var(--ch-text-2)] font-bold text-xs md:text-sm flex-shrink-0">
                                   {idx + 1}
                                 </div>
                               )}
-                              <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{player.name}</span>
+                              <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{player.name}</span>
                             </div>
                             <div className="flex gap-2 md:gap-3 text-xs md:text-sm flex-shrink-0">
                               <div className="text-center">
-                                <div className="font-bold text-orange-500">{player.ppg}</div>
-                                <div className="text-slate-500">PPG</div>
+                                <div className="font-bold text-[color:var(--ch-text)]">{player.ppg}</div>
+                                <div className="text-[color:var(--ch-muted)]">PPG</div>
                               </div>
                               <div className="text-center hidden sm:block">
-                                <div className="font-bold text-slate-700 dark:text-slate-300">{player.rpg}</div>
-                                <div className="text-slate-500">RPG</div>
+                                <div className="font-bold text-[color:var(--ch-text-2)]">{player.rpg}</div>
+                                <div className="text-[color:var(--ch-muted)]">RPG</div>
                               </div>
                               <div className="text-center hidden sm:block">
-                                <div className="font-bold text-slate-700 dark:text-slate-300">{player.apg}</div>
-                                <div className="text-slate-500">APG</div>
+                                <div className="font-bold text-[color:var(--ch-text-2)]">{player.apg}</div>
+                                <div className="text-[color:var(--ch-muted)]">APG</div>
                               </div>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <p className="text-slate-500 text-sm italic">No player data available</p>
+                        <p className="text-[color:var(--ch-muted)] text-sm">No player data available</p>
                       )}
                     </div>
 
                     {/* Away Team Top Players */}
                     <div className="space-y-2 md:space-y-3">
-                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-orange-200 dark:border-neutral-600">
+                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[color:var(--ch-border)]">
                         <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.awayteam}</span>
+                        <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{gameData.awayteam}</span>
                       </div>
                       {awayTeamRoster && awayTeamRoster.length > 0 ? (
                         awayTeamRoster.map((player, idx) => (
-                          <div key={idx} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 md:p-3 flex items-center justify-between border border-orange-100 dark:border-neutral-700">
+                          <div key={idx} className="ch-tile p-2.5 md:p-3 flex items-center justify-between">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
-                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-orange-500">
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)]">
                                   <img 
                                     src={player.photoUrl} 
                                     alt={player.name}
@@ -1245,261 +1160,71 @@ export default function GamePage() {
                                   />
                                 </div>
                               ) : (
-                                <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0">
+                                <div className="w-8 h-8 md:w-10 md:h-10 bg-[color:var(--ch-surface-3)] rounded-full flex items-center justify-center text-[color:var(--ch-text-2)] font-bold text-xs md:text-sm flex-shrink-0">
                                   {idx + 1}
                                 </div>
                               )}
-                              <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{player.name}</span>
+                              <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{player.name}</span>
                             </div>
                             <div className="flex gap-2 md:gap-3 text-xs md:text-sm flex-shrink-0">
                               <div className="text-center">
-                                <div className="font-bold text-orange-500">{player.ppg}</div>
-                                <div className="text-slate-500">PPG</div>
+                                <div className="font-bold text-[color:var(--ch-text)]">{player.ppg}</div>
+                                <div className="text-[color:var(--ch-muted)]">PPG</div>
                               </div>
                               <div className="text-center hidden sm:block">
-                                <div className="font-bold text-slate-700 dark:text-slate-300">{player.rpg}</div>
-                                <div className="text-slate-500">RPG</div>
+                                <div className="font-bold text-[color:var(--ch-text-2)]">{player.rpg}</div>
+                                <div className="text-[color:var(--ch-muted)]">RPG</div>
                               </div>
                               <div className="text-center hidden sm:block">
-                                <div className="font-bold text-slate-700 dark:text-slate-300">{player.apg}</div>
-                                <div className="text-slate-500">APG</div>
+                                <div className="font-bold text-[color:var(--ch-text-2)]">{player.apg}</div>
+                                <div className="text-[color:var(--ch-muted)]">APG</div>
                               </div>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <p className="text-slate-500 text-sm italic">No player data available</p>
+                        <p className="text-[color:var(--ch-muted)] text-sm">No player data available</p>
                       )}
                     </div>
                   </div>
                 </div>
 
                 {/* Coming Soon Notice */}
-                <div className="bg-orange-50 dark:bg-neutral-800/50 rounded-lg p-4 text-center border border-orange-100 dark:border-neutral-700">
-                  <p className="text-slate-600 dark:text-slate-400 text-sm">
+                <div className="ch-card p-4 text-center">
+                  <p className="text-[color:var(--ch-text-2)] text-sm">
                     Live stats and play-by-play data will appear when the game starts.
                   </p>
                 </div>
               </div>
             ) : (
               <Tabs defaultValue={initialTab} className="w-full">
-                <TabsList className="flex w-full justify-start overflow-x-auto gap-1 bg-orange-100 dark:bg-neutral-800 mb-4 md:grid md:grid-cols-5 md:gap-0">
-                  <TabsTrigger value="game" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Game</TabsTrigger>
-                  <TabsTrigger value="boxscore" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Box Score</TabsTrigger>
-                  <TabsTrigger value="teamstats" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Team Stats</TabsTrigger>
-                  <TabsTrigger value="shotchart" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Shots</TabsTrigger>
-                  <TabsTrigger value="feed" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Play by Play</TabsTrigger>
+                <TabsList className={GAME_TAB_LIST_CLASS}>
+                  <TabsTrigger value="game" className={GAME_TAB_TRIGGER_CLASS}>Game</TabsTrigger>
+                  <TabsTrigger value="boxscore" className={GAME_TAB_TRIGGER_CLASS}>Box Score</TabsTrigger>
+                  <TabsTrigger value="teamstats" className={GAME_TAB_TRIGGER_CLASS}>Team Stats</TabsTrigger>
+                  <TabsTrigger value="shotchart" className={GAME_TAB_TRIGGER_CLASS}>Shots</TabsTrigger>
+                  <TabsTrigger value="feed" className={GAME_TAB_TRIGGER_CLASS}>Play by Play</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="game">
-                  <div className="space-y-4">
-                    {(() => {
-                      const quarterScores: { period: number; home: number; away: number }[] = [];
-                      if (homeTeamStats && awayTeamStats) {
-                        const periods = [
-                          { period: 1, home: homeTeamStats.p1_score || 0, away: awayTeamStats.p1_score || 0 },
-                          { period: 2, home: homeTeamStats.p2_score || 0, away: awayTeamStats.p2_score || 0 },
-                          { period: 3, home: homeTeamStats.p3_score || 0, away: awayTeamStats.p3_score || 0 },
-                          { period: 4, home: homeTeamStats.p4_score || 0, away: awayTeamStats.p4_score || 0 },
-                        ];
-                        for (const p of periods) {
-                          if (p.home > 0 || p.away > 0) quarterScores.push(p);
-                        }
-                      }
-                      const homeTotal = quarterScores.reduce((s, q) => s + q.home, 0);
-                      const awayTotal = quarterScores.reduce((s, q) => s + q.away, 0);
-
-                      return (
-                        <>
-                          {quarterScores.length > 0 && (
-                            <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                              <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Quarter Scores</h3>
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="text-slate-500 dark:text-slate-400 border-b border-orange-100 dark:border-neutral-700">
-                                    <th className="text-left py-2 px-2 font-medium">Team</th>
-                                    {quarterScores.map(q => (
-                                      <th key={q.period} className="text-center py-2 px-2 font-medium">
-                                        {q.period <= 4 ? `Q${q.period}` : `OT${q.period - 4}`}
-                                      </th>
-                                    ))}
-                                    <th className="text-center py-2 px-2 font-semibold">T</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="text-slate-800 dark:text-slate-200">
-                                  <tr className="border-b border-orange-50 dark:border-neutral-700">
-                                    <td className="py-2 px-2 font-medium flex items-center gap-2">
-                                      <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
-                                      <span className="hidden sm:inline">{getTeamAbbreviation(gameData.hometeam)}</span>
-                                    </td>
-                                    {quarterScores.map(q => (
-                                      <td key={q.period} className={`text-center py-2 px-2 ${q.home > q.away ? 'font-bold text-orange-600 dark:text-orange-400' : ''}`}>
-                                        {q.home}
-                                      </td>
-                                    ))}
-                                    <td className={`text-center py-2 px-2 font-bold ${homeTotal > awayTotal ? 'text-orange-600 dark:text-orange-400' : ''}`}>
-                                      {homeTotal}
-                                    </td>
-                                  </tr>
-                                  <tr>
-                                    <td className="py-2 px-2 font-medium flex items-center gap-2">
-                                      <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                                      <span className="hidden sm:inline">{getTeamAbbreviation(gameData.awayteam)}</span>
-                                    </td>
-                                    {quarterScores.map(q => (
-                                      <td key={q.period} className={`text-center py-2 px-2 ${q.away > q.home ? 'font-bold text-orange-600 dark:text-orange-400' : ''}`}>
-                                        {q.away}
-                                      </td>
-                                    ))}
-                                    <td className={`text-center py-2 px-2 font-bold ${awayTotal > homeTotal ? 'text-orange-600 dark:text-orange-400' : ''}`}>
-                                      {awayTotal}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-
-                    {teamStats && teamStats.length >= 2 ? (
-                      <>
-                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Team Comparison</h3>
-                          <div className="space-y-3">
-                            {[
-                              { label: 'Points', home: homeTeamStats?.tot_spoints || 0, away: awayTeamStats?.tot_spoints || 0 },
-                              { label: 'Rebounds', home: homeTeamStats?.tot_sreboundstotal || 0, away: awayTeamStats?.tot_sreboundstotal || 0 },
-                              { label: 'Assists', home: homeTeamStats?.tot_sassists || 0, away: awayTeamStats?.tot_sassists || 0 },
-                              { label: 'Steals', home: homeTeamStats?.tot_ssteals || 0, away: awayTeamStats?.tot_ssteals || 0 },
-                              { label: 'Turnovers', home: homeTeamStats?.tot_sturnovers || 0, away: awayTeamStats?.tot_sturnovers || 0 },
-                            ].map((stat) => {
-                              const total = (stat.home as number) + (stat.away as number);
-                              const homePct = total > 0 ? ((stat.home as number) / total) * 100 : 50;
-                              return (
-                                <div key={stat.label}>
-                                  <div className="flex justify-between text-sm mb-1">
-                                    <span className="font-semibold text-slate-800 dark:text-white">{stat.home}</span>
-                                    <span className="text-slate-500 dark:text-slate-400 text-xs">{stat.label}</span>
-                                    <span className="font-semibold text-slate-800 dark:text-white">{stat.away}</span>
-                                  </div>
-                                  <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 dark:bg-neutral-700">
-                                    <div className="bg-orange-500 transition-all duration-500" style={{ width: `${homePct}%` }} />
-                                    <div className="bg-blue-500 transition-all duration-500" style={{ width: `${100 - homePct}%` }} />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Shooting</h3>
-                          <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                            <div className="font-semibold text-orange-600 dark:text-orange-400">{getTeamAbbreviation(gameData.hometeam)}</div>
-                            <div></div>
-                            <div className="font-semibold text-orange-600 dark:text-orange-400">{getTeamAbbreviation(gameData.awayteam)}</div>
-
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {homeTeamStats?.tot_sfieldgoalsmade || 0}/{homeTeamStats?.tot_sfieldgoalsattempted || 0}
-                            </div>
-                            <div className="text-slate-500 dark:text-slate-400 text-xs">FG</div>
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {awayTeamStats?.tot_sfieldgoalsmade || 0}/{awayTeamStats?.tot_sfieldgoalsattempted || 0}
-                            </div>
-
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {homeTeamStats?.tot_sthreepointersmade || 0}/{homeTeamStats?.tot_sthreepointersattempted || 0}
-                            </div>
-                            <div className="text-slate-500 dark:text-slate-400 text-xs">3PT</div>
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {awayTeamStats?.tot_sthreepointersmade || 0}/{awayTeamStats?.tot_sthreepointersattempted || 0}
-                            </div>
-
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {homeTeamStats?.tot_sfreethrowsmade || 0}/{homeTeamStats?.tot_sfreethrowsattempted || 0}
-                            </div>
-                            <div className="text-slate-500 dark:text-slate-400 text-xs">FT</div>
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {awayTeamStats?.tot_sfreethrowsmade || 0}/{awayTeamStats?.tot_sfreethrowsattempted || 0}
-                            </div>
-
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {homeTeamStats?.tot_sfieldgoalsattempted ? ((homeTeamStats.tot_sfieldgoalsmade / homeTeamStats.tot_sfieldgoalsattempted) * 100).toFixed(1) : '0.0'}%
-                            </div>
-                            <div className="text-slate-500 dark:text-slate-400 text-xs">FG%</div>
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {awayTeamStats?.tot_sfieldgoalsattempted ? ((awayTeamStats.tot_sfieldgoalsmade / awayTeamStats.tot_sfieldgoalsattempted) * 100).toFixed(1) : '0.0'}%
-                            </div>
-
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {homeTeamStats?.tot_sthreepointersattempted ? ((homeTeamStats.tot_sthreepointersmade / homeTeamStats.tot_sthreepointersattempted) * 100).toFixed(1) : '0.0'}%
-                            </div>
-                            <div className="text-slate-500 dark:text-slate-400 text-xs">3PT%</div>
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {awayTeamStats?.tot_sthreepointersattempted ? ((awayTeamStats.tot_sthreepointersmade / awayTeamStats.tot_sthreepointersattempted) * 100).toFixed(1) : '0.0'}%
-                            </div>
-
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {homeTeamStats?.tot_sfreethrowsattempted ? ((homeTeamStats.tot_sfreethrowsmade / homeTeamStats.tot_sfreethrowsattempted) * 100).toFixed(1) : '0.0'}%
-                            </div>
-                            <div className="text-slate-500 dark:text-slate-400 text-xs">FT%</div>
-                            <div className="text-slate-800 dark:text-white font-medium">
-                              {awayTeamStats?.tot_sfreethrowsattempted ? ((awayTeamStats.tot_sfreethrowsmade / awayTeamStats.tot_sfreethrowsattempted) * 100).toFixed(1) : '0.0'}%
-                            </div>
-                          </div>
-                        </div>
-
-                        {homePlayerStats.length > 0 && awayPlayerStats.length > 0 && (
-                          <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Team Leaders</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {[
-                                { team: gameData.hometeam, players: homePlayerStats },
-                                { team: gameData.awayteam, players: awayPlayerStats },
-                              ].map(({ team, players }) => (
-                                <div key={team} className="space-y-2">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <TeamLogo teamName={team} leagueId={gameData.league_id} size="sm" />
-                                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getTeamAbbreviation(team)}</span>
-                                  </div>
-                                  {LEADER_CATEGORIES.map(({ key, label }) => {
-                                    const leader = [...players].sort((a, b) => ((b as any)[key] || 0) - ((a as any)[key] || 0))[0];
-                                    if (!leader) return null;
-                                    return (
-                                      <div key={key} className="flex justify-between items-center text-sm">
-                                        <span className="text-slate-700 dark:text-slate-300">{leader.full_name || leader.player_name || `${leader.firstname || ''} ${leader.familyname || ''}`.trim()}</span>
-                                        <span className="font-bold text-orange-500">{(leader as any)[key] || 0} {label}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {liveEvents && liveEvents.length > 0 && (
-                          <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Game Flow</h3>
-                            <GameFlowSummary events={liveEvents as any} homeTeam={gameData.hometeam} awayTeam={gameData.awayteam} />
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="bg-white dark:bg-neutral-800 rounded-lg p-8 border border-orange-100 dark:border-neutral-700 text-center">
-                        <p className="text-slate-500 dark:text-slate-400 italic">Game statistics will appear here once the game starts.</p>
-                      </div>
-                    )}
-                  </div>
+                <TabsContent value="game" className="mt-0">
+                  <GameOverviewSections
+                    homeTeam={gameData.hometeam}
+                    awayTeam={gameData.awayteam}
+                    leagueId={gameData.league_id}
+                    home={teamStats && teamStats.length >= 2 ? homeTeamStats ?? null : null}
+                    away={teamStats && teamStats.length >= 2 ? awayTeamStats ?? null : null}
+                    homePlayers={homePlayerStats.map(toLeader)}
+                    awayPlayers={awayPlayerStats.map(toLeader)}
+                    events={liveEvents}
+                    colors={colors}
+                  />
                 </TabsContent>
 
-                <TabsContent value="boxscore" className="space-y-6">
+                <TabsContent value="boxscore" className="mt-0 space-y-5">
                   {statsLoading ? (
                     <div className="space-y-4">
-                      <Skeleton className="h-48 w-full bg-orange-100 dark:bg-neutral-700" />
-                      <Skeleton className="h-48 w-full bg-orange-100 dark:bg-neutral-700" />
+                      <div className="ch-skel h-48 !rounded-[14px]" />
+                      <div className="ch-skel h-48 !rounded-[14px]" />
                     </div>
                   ) : (
                     <>
@@ -1508,6 +1233,7 @@ export default function GamePage() {
                         teamName={gameData.hometeam}
                         score={homeScore}
                         leagueId={gameData.league_id}
+                        headerColor={colors.homeFill}
                         formatMinutes={parseMinutes}
                       />
                       <BoxScoreTable
@@ -1515,79 +1241,24 @@ export default function GamePage() {
                         teamName={gameData.awayteam}
                         score={awayScore}
                         leagueId={gameData.league_id}
+                        headerColor={colors.awayFill}
                         formatMinutes={parseMinutes}
                       />
                     </>
                   )}
                 </TabsContent>
 
-                <TabsContent value="teamstats">
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                    {teamStats && teamStats.length >= 2 ? (
-                      <div className="grid grid-cols-3 gap-4 text-center text-slate-800 dark:text-slate-200">
-                        <div className="font-semibold text-orange-600 dark:text-orange-400">
-                          {getTeamAbbreviation(gameData.hometeam)}
-                        </div>
-                        <div className="text-slate-500">Stat</div>
-                        <div className="font-semibold text-orange-600 dark:text-orange-400">
-                          {getTeamAbbreviation(gameData.awayteam)}
-                        </div>
-
-                        <div className="text-2xl font-bold">{homeTeamStats?.tot_spoints || 0}</div>
-                        <div className="text-slate-500">Points</div>
-                        <div className="text-2xl font-bold">{awayTeamStats?.tot_spoints || 0}</div>
-
-                        <div>{homeTeamStats?.tot_sreboundstotal || 0}</div>
-                        <div className="text-slate-500">Rebounds</div>
-                        <div>{awayTeamStats?.tot_sreboundstotal || 0}</div>
-
-                        <div>{homeTeamStats?.tot_sassists || 0}</div>
-                        <div className="text-slate-500">Assists</div>
-                        <div>{awayTeamStats?.tot_sassists || 0}</div>
-
-                        <div>{homeTeamStats?.tot_ssteals || 0}</div>
-                        <div className="text-slate-500">Steals</div>
-                        <div>{awayTeamStats?.tot_ssteals || 0}</div>
-
-                        <div>{homeTeamStats?.tot_sblocks || 0}</div>
-                        <div className="text-slate-500">Blocks</div>
-                        <div>{awayTeamStats?.tot_sblocks || 0}</div>
-
-                        <div>{homeTeamStats?.tot_sturnovers || 0}</div>
-                        <div className="text-slate-500">Turnovers</div>
-                        <div>{awayTeamStats?.tot_sturnovers || 0}</div>
-
-                        <div className="whitespace-nowrap">
-                          {homeTeamStats?.tot_sfieldgoalsmade || 0}/{homeTeamStats?.tot_sfieldgoalsattempted || 0}
-                        </div>
-                        <div className="text-slate-500">FG</div>
-                        <div className="whitespace-nowrap">
-                          {awayTeamStats?.tot_sfieldgoalsmade || 0}/{awayTeamStats?.tot_sfieldgoalsattempted || 0}
-                        </div>
-
-                        <div className="whitespace-nowrap">
-                          {homeTeamStats?.tot_sthreepointersmade || 0}/{homeTeamStats?.tot_sthreepointersattempted || 0}
-                        </div>
-                        <div className="text-slate-500">3PT</div>
-                        <div className="whitespace-nowrap">
-                          {awayTeamStats?.tot_sthreepointersmade || 0}/{awayTeamStats?.tot_sthreepointersattempted || 0}
-                        </div>
-
-                        <div className="whitespace-nowrap">
-                          {homeTeamStats?.tot_sfreethrowsmade || 0}/{homeTeamStats?.tot_sfreethrowsattempted || 0}
-                        </div>
-                        <div className="text-slate-500">FT</div>
-                        <div className="whitespace-nowrap">
-                          {awayTeamStats?.tot_sfreethrowsmade || 0}/{awayTeamStats?.tot_sfreethrowsattempted || 0}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-slate-500 text-center italic">Team stats will appear when available</p>
-                    )}
-                  </div>
+                <TabsContent value="teamstats" className="mt-0">
+                  <TeamStatsComparison
+                    homeTeam={gameData.hometeam}
+                    awayTeam={gameData.awayteam}
+                    home={teamStats && teamStats.length >= 2 ? homeTeamStats ?? null : null}
+                    away={teamStats && teamStats.length >= 2 ? awayTeamStats ?? null : null}
+                    colors={colors}
+                  />
                 </TabsContent>
 
-                <TabsContent value="shotchart">
+                <TabsContent value="shotchart" className="mt-0">
                   <TeamSplitShotChart
                     shots={shotChartData || []}
                     loading={shotChartLoading}
@@ -1600,7 +1271,7 @@ export default function GamePage() {
                   />
                 </TabsContent>
 
-                <TabsContent value="feed">
+                <TabsContent value="feed" className="mt-0">
                   <PlayByPlay
                     events={liveEvents || []}
                     homeTeam={gameData.hometeam}
