@@ -113,6 +113,7 @@ export default function LandingPage() {
           name="description"
           content="Swish Assistant revolutionizes basketball stats for players, coaches, and leagues. Access AI-powered scouting tools, live data, and player insights from NBL, WNBL, BCB, SLB Championship and more."
         />
+        <link rel="canonical" href="https://swishassistant.com/" />
       </Helmet>
 
       {/* Welcome popup — shown once per session to guests */}

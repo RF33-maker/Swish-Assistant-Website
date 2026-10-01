@@ -5,6 +5,7 @@ import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { normalizeInstagramHandle } from "@/lib/instagram";
 import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
+import { competitionSeoDescription, competitionSeoTitle } from "@shared/seo";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
@@ -3922,23 +3923,21 @@ export default function LeaguePage() {
         </>
       ) : (
         <>
-          <title>{`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}</title>
+          <title>{competitionSeoTitle(league?.name || formatTitle(slug))}</title>
           <meta
             name="description"
             content={
-              league?.description ||
-              `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+              competitionSeoDescription(league?.name || formatTitle(slug), league?.description)
             }
           />
           <meta
             property="og:title"
-            content={`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}
+            content={competitionSeoTitle(league?.name || formatTitle(slug))}
           />
           <meta
             property="og:description"
             content={
-              league?.description ||
-              `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+              competitionSeoDescription(league?.name || formatTitle(slug), league?.description)
             }
           />
           <meta property="og:type" content="website" />

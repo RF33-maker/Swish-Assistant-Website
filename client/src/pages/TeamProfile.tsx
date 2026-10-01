@@ -8,6 +8,7 @@ import React from "react";
 import { EditableDescription } from "@/components/EditableDescription";
 import { useAuth } from "@/hooks/use-auth";
 import { Helmet } from "react-helmet-async";
+import { teamSeoDescription, teamSeoTitle } from "@shared/seo";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
@@ -367,6 +368,15 @@ function PlayerAvatarThumb({ photoUrl, name, size = "w-6 h-6 md:w-7 md:h-7", fal
       </div>
     </>
   );
+}
+
+/** decodeURIComponent that leaves a literal "%" (e.g. "100% Hoops") alone. */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 export default function TeamProfile() {
@@ -1264,23 +1274,21 @@ export default function TeamProfile() {
   return (
     <>
       <Helmet>
-        <title>{`${team.name} | Team Profile | Swish Assistant`}</title>
+        <title>{teamSeoTitle(team.name, team.league?.name)}</title>
         <meta
           name="description"
           content={
-            teamDescription ||
-            `View ${team.name} team profile, roster, stats, and recent games${team.league ? ` in ${team.league.name}` : ''} on Swish Assistant.`
+            teamDescription || teamSeoDescription(team.name, team.league?.name)
           }
         />
         <meta
           property="og:title"
-          content={`${team.name} | Team Profile | Swish Assistant`}
+          content={teamSeoTitle(team.name, team.league?.name)}
         />
         <meta
           property="og:description"
           content={
-            teamDescription ||
-            `View ${team.name} team profile, roster, stats, and recent games${team.league ? ` in ${team.league.name}` : ''} on Swish Assistant.`
+            teamDescription || teamSeoDescription(team.name, team.league?.name)
           }
         />
         <meta property="og:type" content="website" />
@@ -1295,17 +1303,19 @@ export default function TeamProfile() {
           content="https://swishassistant.com/og-image.png"
         />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${team.name} | Team Profile | Swish Assistant`} />
+        <meta name="twitter:title" content={teamSeoTitle(team.name, team.league?.name)} />
         <meta
           name="twitter:description"
           content={
-            teamDescription ||
-            `View ${team.name} team profile, roster, stats, and recent games${team.league ? ` in ${team.league.name}` : ''} on Swish Assistant.`
+            teamDescription || teamSeoDescription(team.name, team.league?.name)
           }
         />
-        <link rel="canonical" href={leagueSlug 
-          ? `https://swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
-          : `https://swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`} />
+        {/* The URL's own team segment: the server 301s other spellings of a
+            team URL to its canonical one, so this matches the canonical in
+            the page's HTML (a lowercased slug here pointed Google elsewhere). */}
+        <link rel="canonical" href={leagueSlug
+          ? `https://swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(safeDecode(teamName || team.name))}`
+          : `https://swishassistant.com/team/${encodeURIComponent(safeDecode(teamName || team.name))}`} />
       </Helmet>
       
       <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`} style={{ '--ch-accent': readablePrimary.body } as React.CSSProperties}>

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Helmet } from "react-helmet-async";
+import { playerSeoDescription, playerSeoTitle } from "@shared/seo";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { getTeamAbbreviation } from "@/lib/teamUtils";
@@ -134,6 +136,9 @@ interface PlayerProfileContentProps {
   brandColorOverride?: string;
   onBack?: () => void;
   linkedPlayerIds?: string[];
+  /** Set the page title/description once the profile has loaded (the
+   *  standalone /player page; not when shown inside a league page). */
+  manageHead?: boolean;
 }
 
 interface LeagueDropdownProps {
@@ -235,7 +240,7 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
   );
 }
 
-export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds }: PlayerProfileContentProps) {
+export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds, manageHead = false }: PlayerProfileContentProps) {
   const { toast } = useToast();
   const { user, isAdmin } = useAuth();
   const [, setLocation] = useLocation();
@@ -2340,8 +2345,28 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     teamColor: primaryColor || '#f97316',
   };
 
+  // Same strings the server renders (shared/seo.ts): Google indexes the page
+  // after this runs, so it needs the team and real averages too.
+  const seoInput = playerInfo ? {
+    name: playerInfo.name,
+    team: playerInfo.team,
+    competition: playerLeagues[0]?.name ?? null,
+    games: seasonAverages?.games_played ?? 0,
+    ppg: seasonAverages?.avg_points ?? 0,
+    rpg: seasonAverages?.avg_rebounds ?? 0,
+    apg: seasonAverages?.avg_assists ?? 0,
+  } : null;
+
   return (
     <div className="ch-rise" style={{ '--ch-accent': readablePrimary.body } as CSSProperties}>
+      {manageHead && seoInput && (
+        <Helmet>
+          <title>{playerSeoTitle(seoInput)}</title>
+          <meta name="description" content={playerSeoDescription(seoInput)} />
+          <meta property="og:title" content={playerSeoTitle(seoInput)} />
+          <meta property="og:description" content={playerSeoDescription(seoInput)} />
+        </Helmet>
+      )}
       {onBack && (
         <div className="mb-4">
           <button type="button" onClick={onBack} className="ch-btn ch-btn-ghost">
