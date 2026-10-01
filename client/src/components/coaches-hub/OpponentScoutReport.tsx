@@ -5,6 +5,7 @@ import { useTeamBranding } from '@/hooks/useTeamBranding';
 import ShotChart, { type ShotData } from '@/components/ShotChart';
 import { ComparisonBarRow, NarrativeSummary, RankTrack, SectionNarrative } from './reportVisuals';
 import { useReportNarrative } from '@/hooks/useReportNarrative';
+import AgentGamePlan from './AgentGamePlan';
 import { num, ordinal, toPlayerLine, type PlayerGameRow, type PlayerLine } from '@/lib/gameReport';
 import type { PlayerSeasonAverage, StandingRow, TeamSeasonAverage } from '@/pages/CoachesHub';
 
@@ -34,10 +35,10 @@ function Section({ n, title, subtitle, color, children, narrative }: {
   n: string; title: string; subtitle?: string; color: string; children: React.ReactNode; narrative?: string;
 }) {
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-      <div className="flex items-baseline gap-2 mb-1">
-        <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color }}>{n}</span>
-        <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">{title}</h3>
+    <div className="ch-card p-4 md:p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <span className="ch-kicker-n" style={{ color }}>{n}</span>
+        <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h3>
       </div>
       {subtitle && <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">{subtitle}</p>}
       <div className={subtitle ? '' : 'mt-3'}>{children}</div>
@@ -271,10 +272,10 @@ export default function OpponentScoutReport({
   if (!opponent) {
     return (
       <div className="space-y-4">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white">
+        <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           No season data for {opponentName} in this competition yet.
         </div>
       </div>
@@ -283,21 +284,23 @@ export default function OpponentScoutReport({
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white">
+      <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
         <ArrowLeft className="w-4 h-4" /> Back to overview
       </button>
 
-      <div className="rounded-lg p-4 md:p-6 text-white" /* Solid rather than a gradient: useTeamBranding resolves some teams to
+      <div className="ch-hero p-5 md:p-7 text-white" /* Solid rather than a gradient: useTeamBranding resolves some teams to
              an rgb() string, and appending an alpha suffix to that produces
              invalid CSS, which silently drops the whole background. */
           style={{ backgroundColor: brand }}>
         <div className="text-[11px] md:text-xs font-semibold uppercase tracking-wide text-white/70 mb-1">Pre-game scout report</div>
-        <h2 className="text-xl md:text-3xl font-bold">{opponentName}</h2>
+        <h2 className="ch-display uppercase text-3xl md:text-5xl font-bold tracking-tight">{opponentName}</h2>
         <p className="text-sm text-white/80 mt-1">
           {oppStanding ? `${oppStanding.wins}-${oppStanding.losses}, ${ordinal(oppStanding.rank)} of ${standings.length}` : 'Record unavailable'}
           {opponent.games_played ? ` · ${opponent.games_played} games played` : ''}
         </p>
       </div>
+
+      <AgentGamePlan leagueId={leagueId} opponentName={opponentName} myTeamName={myTeamName} color={brand} />
 
       <NarrativeSummary
         headline={narrative?.headline}
@@ -322,7 +325,7 @@ export default function OpponentScoutReport({
         ) : (
           <div className="space-y-2">
             {keys.map((k, i) => (
-              <div key={i} className="flex items-start gap-2.5 bg-gray-50 dark:bg-neutral-800/60 rounded-lg border border-gray-200 dark:border-neutral-700 p-3">
+              <div key={i} className="flex items-start gap-2.5 ch-tile p-3">
                 <k.icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color: brand }} />
                 <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed">{k.text}</p>
               </div>
@@ -380,7 +383,7 @@ export default function OpponentScoutReport({
             {recent.map((g) => {
               const won = g.score != null && g.oppScore != null && g.score > g.oppScore;
               return (
-                <div key={g.gameKey} className="flex items-center justify-between gap-3 bg-gray-50 dark:bg-neutral-800/60 rounded-lg border border-gray-200 dark:border-neutral-700 p-3">
+                <div key={g.gameKey} className="flex items-center justify-between gap-3 ch-tile p-3">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${won ? 'bg-green-500' : 'bg-red-500'}`}>
                       {won ? 'W' : 'L'}

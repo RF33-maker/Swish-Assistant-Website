@@ -363,3 +363,242 @@
 .dark [data-share-body="true"] .dark\:to-slate-600 {
   --tw-gradient-to: #ffffff !important;
 }
+
+/* ==========================================================================
+   "Pro" design system — Coaches Hub and the league pages
+   Scoped to .sa-pro so the rest of the site keeps its own look. The
+   accent (--ch-accent) is set inline from the league/team brand colour.
+   ========================================================================== */
+.sa-pro {
+  --ch-bg: #f5f6f8;
+  --ch-surface: #ffffff;
+  --ch-surface-2: #f8f9fb;
+  --ch-surface-3: #f1f3f6;
+  --ch-border: rgba(15, 23, 42, 0.08);
+  --ch-border-strong: rgba(15, 23, 42, 0.14);
+  --ch-text: #0b1220;
+  --ch-text-2: #475467;
+  --ch-muted: #8a94a6;
+  --ch-accent: #f97316;
+  --ch-accent-soft: color-mix(in srgb, var(--ch-accent) 10%, transparent);
+  --ch-win: #16a34a;
+  --ch-loss: #e11d48;
+  --ch-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --ch-shadow-lg: 0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 32px -12px rgba(16, 24, 40, 0.18);
+  --ch-radius: 14px;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  letter-spacing: -0.006em;
+  background: var(--ch-bg);
+  color: var(--ch-text);
+}
+.dark .sa-pro {
+  --ch-bg: #08090b;
+  --ch-surface: #111317;
+  --ch-surface-2: #16191e;
+  --ch-surface-3: #1c2026;
+  --ch-border: rgba(255, 255, 255, 0.07);
+  --ch-border-strong: rgba(255, 255, 255, 0.12);
+  --ch-text: #f3f4f6;
+  --ch-text-2: #a3abb8;
+  --ch-muted: #6b7280;
+  --ch-accent-soft: color-mix(in srgb, var(--ch-accent) 16%, transparent);
+  --ch-win: #22c55e;
+  --ch-loss: #fb7185;
+  --ch-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --ch-shadow-lg: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+}
+
+.sa-pro .ch-display {
+  font-family: 'Barlow Condensed', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.005em;
+}
+.sa-pro .ch-num { font-variant-numeric: tabular-nums; }
+
+/* Surfaces */
+.sa-pro .ch-card {
+  background: var(--ch-surface);
+  border: 1px solid var(--ch-border);
+  border-radius: var(--ch-radius);
+  box-shadow: var(--ch-shadow);
+}
+.sa-pro .ch-tile {
+  background: var(--ch-surface-2);
+  border: 1px solid var(--ch-border);
+  border-radius: 10px;
+}
+.sa-pro .ch-hover { transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.sa-pro .ch-hover:hover { border-color: var(--ch-border-strong); box-shadow: var(--ch-shadow-lg); }
+
+/* Hero surfaces — solid team colour banners get depth + a soft sheen */
+.sa-pro .ch-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--ch-radius);
+  box-shadow: var(--ch-shadow-lg);
+  isolation: isolate;
+}
+.sa-pro .ch-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.16) 0%, transparent 55%),
+    linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.22) 100%);
+  pointer-events: none;
+}
+
+/* Section eyebrow number — replaces the old monospace "01" */
+.sa-pro .ch-kicker-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.375rem;
+  padding: 0 0.35rem;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent);
+  transform: translateY(-1px);
+}
+.sa-pro .ch-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ch-muted);
+}
+
+/* Controls */
+.sa-pro .ch-seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--ch-surface-3);
+  border: 1px solid var(--ch-border);
+}
+.sa-pro .ch-seg > button {
+  border-radius: 7px;
+  font-weight: 500;
+  color: var(--ch-text-2);
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.sa-pro .ch-seg > button:hover { color: var(--ch-text); }
+.sa-pro .ch-seg > button[data-active='true'] {
+  background: var(--ch-surface);
+  color: var(--ch-text);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px var(--ch-border);
+}
+.sa-pro .ch-chip {
+  border-radius: 999px;
+  border: 1px solid var(--ch-border);
+  background: var(--ch-surface);
+  color: var(--ch-text-2);
+  font-weight: 500;
+  transition: all .15s ease;
+}
+.sa-pro .ch-chip:hover { border-color: var(--ch-border-strong); color: var(--ch-text); }
+.sa-pro .ch-chip[data-active='true'] {
+  background: var(--ch-text);
+  border-color: var(--ch-text);
+  color: var(--ch-surface);
+}
+.sa-pro .ch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.125rem;
+  padding: 0 0.85rem;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all .15s ease;
+  white-space: nowrap;
+}
+.sa-pro .ch-btn-primary { background: var(--ch-accent); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.14); }
+.sa-pro .ch-btn-primary:hover { filter: brightness(1.08); }
+.sa-pro .ch-btn-ghost { border: 1px solid var(--ch-border-strong); color: var(--ch-text); background: var(--ch-surface); }
+.sa-pro .ch-btn-ghost:hover { background: var(--ch-surface-3); }
+.sa-pro .ch-input {
+  background: var(--ch-surface-3);
+  border: 1px solid transparent;
+  color: var(--ch-text);
+  border-radius: 10px;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.sa-pro .ch-input::placeholder { color: var(--ch-muted); }
+.sa-pro .ch-input:focus {
+  outline: none;
+  background: var(--ch-surface);
+  border-color: var(--ch-border-strong);
+  box-shadow: 0 0 0 4px var(--ch-accent-soft);
+}
+
+/* Tables */
+.sa-pro .ch-table thead th {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ch-muted);
+}
+.sa-pro .ch-table tbody tr { transition: background .12s ease; }
+.sa-pro .ch-table tbody tr:hover { background: var(--ch-surface-2); }
+
+/* Motion */
+@keyframes ch-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.sa-pro .ch-rise { animation: ch-rise .38s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes ch-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.sa-pro .ch-skel {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--ch-surface-3) 0%, var(--ch-surface-2) 50%, var(--ch-surface-3) 100%);
+  background-size: 800px 100%;
+  animation: ch-shimmer 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sa-pro .ch-rise, .sa-pro .ch-skel { animation: none; }
+}
+
+/* Harmonise shared (non-hub) components rendered inside the hub — they keep
+   their markup, but drop the orange-tinted borders and flat corners. */
+.sa-pro .rounded-lg.shadow-sm,
+.sa-pro .rounded-xl.shadow-sm {
+  border-radius: var(--ch-radius);
+  box-shadow: var(--ch-shadow);
+}
+.sa-pro .border-orange-200,
+.sa-pro .border-orange-100 { border-color: var(--ch-border); }
+.sa-pro .bg-white.dark\:bg-neutral-900 { background-color: var(--ch-surface); }
+.sa-pro .dark\:border-neutral-800 { border-color: var(--ch-border); }
+.sa-pro .dark\:border-neutral-700 { border-color: var(--ch-border); }
+.sa-pro .ch-glass {
+  background: color-mix(in srgb, var(--ch-bg) 82%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  backdrop-filter: saturate(180%) blur(16px);
+}
+@keyframes ch-load { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@keyframes ch-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ch-slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Shared components drawn in the site's orange — inside the hub they take
+   the hub accent instead, so every view carries the league/team brand. */
+.sa-pro .text-orange-600,
+.sa-pro .dark\:text-orange-400 { color: var(--ch-accent); }
+.sa-pro .bg-orange-50 { background-color: var(--ch-accent-soft); }
+.dark .sa-pro .dark\:bg-orange-900\/20 { background-color: var(--ch-accent-soft); }
+.sa-pro .border-orange-300,
+.dark .sa-pro .dark\:border-orange-700,
+.dark .sa-pro .dark\:border-orange-900\/40 { border-color: color-mix(in srgb, var(--ch-accent) 40%, transparent); }
+
+/* Phones: comfortable tap targets for segmented toggles, and rows of
+   filters that span the card instead of leaving ragged gaps. */
+@media (max-width: 639px) {
+  .sa-pro .ch-seg > button { min-height: 36px; }
+  .sa-pro .ch-seg.ch-seg-fill { display: flex; width: 100%; }
+  .sa-pro .ch-seg.ch-seg-fill > button { flex: 1 1 0; justify-content: center; }
+}

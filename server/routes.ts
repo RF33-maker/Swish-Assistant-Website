@@ -10,6 +10,7 @@ import { computeLineups } from "./lineupsService";
 import type { LineupMetric } from "./lineups";
 import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague } from "./teamIdentityService";
 import { getTeamCompetitions } from "./teamCompetitions";
+import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import multer from 'multer';
 import OpenAI from 'openai';
 import { XMLParser } from 'fast-xml-parser';
@@ -395,6 +396,8 @@ async function fetchLatestPodcast(): Promise<PodcastResponse> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerScoutAgentRoutes(app);
+
   // Test endpoint to verify routes are working
   app.get("/api/test", (req, res) => {
     res.json({ message: "API routes are working!", timestamp: new Date().toISOString() });

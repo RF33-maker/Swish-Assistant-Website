@@ -51,7 +51,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex flex-col items-center min-w-[36px]">
       <span className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">{value}</span>
-      <span className="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
+      <span className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
     </div>
   );
 }

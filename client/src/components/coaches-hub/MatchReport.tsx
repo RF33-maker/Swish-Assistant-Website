@@ -45,10 +45,10 @@ function Section({ n, title, subtitle, color, children, narrative }: {
   n: string; title: string; subtitle?: string; color: string; children: React.ReactNode; narrative?: string;
 }) {
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-      <div className="flex items-baseline gap-2 mb-1">
-        <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color }}>{n}</span>
-        <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">{title}</h3>
+    <div className="ch-card p-4 md:p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <span className="ch-kicker-n" style={{ color }}>{n}</span>
+        <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h3>
       </div>
       {subtitle && <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">{subtitle}</p>}
       <div className={subtitle ? '' : 'mt-3'}>{children}</div>
@@ -208,10 +208,10 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
   if (loading) {
     return (
       <div className="space-y-4">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white">
+        <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           Building match report…
         </div>
       </div>
@@ -221,10 +221,10 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
   if (!mine || !theirs) {
     return (
       <div className="space-y-4">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white">
+        <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-8 text-center">
+        <div className="ch-card p-8 text-center">
           <FileText className="w-12 h-12 text-gray-300 dark:text-neutral-700 mx-auto mb-3" />
           <p className="text-sm text-gray-500 dark:text-neutral-400">
             This game doesn't have a full box score yet, so there's nothing to report on.
@@ -245,19 +245,19 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white">
+      <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
         <ArrowLeft className="w-4 h-4" /> Back to overview
       </button>
 
       {/* Headline */}
-      <div className="rounded-lg p-4 md:p-6 text-white" /* Solid rather than a gradient: useTeamBranding resolves some teams to
+      <div className="ch-hero p-5 md:p-7 text-white" /* Solid rather than a gradient: useTeamBranding resolves some teams to
              an rgb() string, and appending an alpha suffix to that produces
              invalid CSS, which silently drops the whole background. */
           style={{ backgroundColor: brand }}>
         <div className="text-[11px] md:text-xs font-semibold uppercase tracking-wide text-white/70 mb-1">Match report</div>
         <div className="flex items-baseline gap-3 flex-wrap">
           <span className="px-2 py-0.5 rounded text-xs font-bold bg-white/20">{won ? 'WIN' : 'LOSS'}</span>
-          <h2 className="text-xl md:text-3xl font-bold tabular-nums">{myScore ?? '—'}–{theirScore ?? '—'}</h2>
+          <h2 className="ch-display uppercase text-3xl md:text-5xl font-bold tracking-tight tabular-nums">{myScore ?? '—'}–{theirScore ?? '—'}</h2>
           <span className="text-sm md:text-base text-white/90">
             {teamName} vs {theirs.name}
           </span>
@@ -304,7 +304,7 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
                     ? 'text-red-600 dark:text-red-400'
                     : 'text-gray-500 dark:text-neutral-400';
               return (
-                <div key={s.title} className="bg-gray-50 dark:bg-neutral-800/60 rounded-lg border border-gray-200 dark:border-neutral-700 p-3">
+                <div key={s.title} className="ch-tile p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Icon className={`w-4 h-4 ${tone}`} />
                     <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{s.title}</h4>
