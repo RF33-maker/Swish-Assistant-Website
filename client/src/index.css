@@ -706,6 +706,17 @@
   .sa-pro.ch-story-page .ch-podcast-band { background: rgba(7, 8, 10, 0.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
+/* The story's fixed layer is sized to the large viewport (toolbars hidden),
+   so a phone's toolbar sliding in and out mid-scroll doesn't resize it. */
+.ch-story-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100lvh;
+}
+
 /* ── Homepage search: entrance + travelling glow ──────────────────────────
    The homepage's main search sweeps in, then carries the orange glow that
    circles the header search on other pages (same --border-angle spin). The
@@ -743,6 +754,9 @@
   pointer-events: none;
   z-index: -1;
 }
+/* Once the scroll story has faded the bar into the hoop, the glow stops
+   rather than repainting every frame unseen. */
+.sa-pro .ch-search-glow.is-story-hidden::before { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
   .sa-pro .ch-search-in { animation: none; }
   .sa-pro .ch-search-glow::before { animation: none; }
