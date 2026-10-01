@@ -16,6 +16,14 @@ import PlayerStatCard from './league-chatbot/PlayerStatCard';
 import TeamComparisonCard from './league-chatbot/TeamComparisonCard';
 import GameLogTable from './league-chatbot/GameLogTable';
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
+import { teamPath } from "@shared/seo";
+
+/** A team button's permanent team page (the id is the encoded team name). */
+function chatTeamHref(id: string, leagueSlug?: string | null): string {
+  let name = id;
+  try { name = decodeURIComponent(id); } catch { /* a literal % in the name */ }
+  return teamPath(name, leagueSlug) || `/team/${id}`;
+}
 
 function renderStructuredContent(data: StructuredContent, brandColor: string) {
   switch (data.kind) {
@@ -2350,7 +2358,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                               if (button.type === 'player') {
                                 setLocation(`/player/${button.id}`);
                               } else if (button.type === 'team') {
-                                setLocation(leagueSlug ? `/competition/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
+                                setLocation(chatTeamHref(button.id, leagueSlug));
                               }
                             }}
                             className="px-2.5 py-1 text-xs rounded-full transition-colors border border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 flex items-center gap-1"
@@ -2505,7 +2513,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                                 key={i}
                                 onClick={() => {
                                   if (button.type === 'player') setLocation(`/player/${button.id}`);
-                                  else if (button.type === 'team') setLocation(leagueSlug ? `/competition/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
+                                  else if (button.type === 'team') setLocation(chatTeamHref(button.id, leagueSlug));
                                 }}
                                 variant="outline"
                                 size="sm"
@@ -2766,7 +2774,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                                   if (button.type === 'player') {
                                     setLocation(`/player/${button.id}`);
                                   } else if (button.type === 'team') {
-                                    setLocation(leagueSlug ? `/competition/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
+                                    setLocation(chatTeamHref(button.id, leagueSlug));
                                   }
                                 }}
                                 variant="outline"

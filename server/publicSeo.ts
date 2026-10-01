@@ -3,7 +3,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { isSameTeam } from "./teamIdentityService";
-import { getSeoIndex, isIndexableGame, pickTeamSpelling, playerSegment, slugifyName, type SeoIndex } from "./seoIndex";
+import { getSeoIndex, isIndexableGame, playerSegment, resolveClub, slugifyName, type IndexClub, type SeoIndex } from "./seoIndex";
+import { gameRecap, playerBio, teamSeasonSummary } from "@shared/recaps";
+import { clubSlug, teamClubKey } from "@shared/teamIdentity";
+import { isUnder18, isYouthCompetition } from "@shared/youth";
 import {
   SITE_BASE,
   SITE_NAME,
@@ -12,6 +15,7 @@ import {
   isPlaceholderTeamName,
   playerSeoDescription,
   playerSeoTitle,
+  teamPath as sharedTeamPath,
   teamSeoDescription,
   teamSeoTitle,
 } from "@shared/seo";
@@ -79,9 +83,15 @@ function formatDate(value: unknown): string {
 
 const one = (v: number) => v.toFixed(1);
 const competitionPath = (slug: string) => `/competition/${encodeURIComponent(slug)}`;
-const teamPathFor = (slug: string, team: string) => `/competition/${encodeURIComponent(slug)}/team/${encodeURIComponent(team)}`;
 const gamePathFor = (slug: string, gameKey: string) => `/competition/${encodeURIComponent(slug)}/game/${encodeURIComponent(gameKey)}`;
 const link = (href: string, text: string) => `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`;
+
+/** A team side's permanent page (/team/<slug>), via the index when it's available. */
+function clubHref(index: SeoIndex | null, name: string | null | undefined): string | null {
+  if (!name || isPlaceholderTeamName(name)) return null;
+  const club = index ? resolveClub(index, name) : null;
+  return club ? `/team/${club.slug}` : sharedTeamPath(name);
+}
 
 function statLine(stat: any): string {
   return `${number(stat.spoints)} points, ${number(stat.sreboundstotal)} rebounds, ${number(stat.sassists)} assists`;
@@ -248,7 +258,7 @@ async function renderPlayer(slugOrId: string, pageNumber: number): Promise<{ pag
   const lookupId = playerIdFromSegment(slugOrId);
   let query = supabaseAdmin
     .from("players")
-    .select("id, slug, full_name, team_name, position, league_id, photo_path, photo_path_bg_removed");
+    .select("id, slug, full_name, team_name, position, league_id, photo_path, photo_path_bg_removed, date_of_birth");
   query = lookupId ? query.eq("id", lookupId) : query.eq("slug", slugOrId);
   const { data: resolvedPlayers } = await query.limit(20);
   const player = resolvedPlayers?.[0];
@@ -282,11 +292,11 @@ async function renderPlayer(slugOrId: string, pageNumber: number): Promise<{ pag
     .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   const leagueIds = Array.from(new Set([player.league_id, ...allStats.map((row: any) => row.league_id)].filter(Boolean))) as string[];
   const { data: leagues } = leagueIds.length
-    ? await supabaseAdmin.from("competitions").select("league_id, name, slug, season, is_public, parent_league_id").in("league_id", leagueIds)
+    ? await supabaseAdmin.from("competitions").select("league_id, name, slug, season, is_public, parent_league_id, age_group").in("league_id", leagueIds)
     : { data: [] as any[] };
-  const parentIds = Array.from(new Set((leagues || []).filter((row: any) => !row.is_public && row.parent_league_id).map((row: any) => row.parent_league_id))) as string[];
+  const parentIds = Array.from(new Set((leagues || []).filter((row: any) => row.parent_league_id).map((row: any) => row.parent_league_id))) as string[];
   const { data: parentLeagues } = parentIds.length
-    ? await supabaseAdmin.from("competitions").select("league_id, name, slug, season, is_public").in("league_id", parentIds)
+    ? await supabaseAdmin.from("competitions").select("league_id, name, slug, season, is_public, age_group").in("league_id", parentIds)
     : { data: [] as any[] };
   const parentMap = new Map((parentLeagues || []).map((row: any) => [row.league_id, row]));
   const leagueMap = new Map((leagues || []).flatMap((row: any) => {
@@ -310,6 +320,15 @@ async function renderPlayer(slugOrId: string, pageNumber: number): Promise<{ pag
 
   const currentLeague: any = leagueMap.get(publicStats[0]?.league_id || player.league_id);
   if (!currentLeague?.is_public) return {};
+  // Youth players stay out of search: any game in a competition that can
+  // include under-18s, or a date of birth under 18 (shared/youth.ts).
+  const youthLeague = (leagueId: string) => {
+    const row = (leagues || []).find((l: any) => l.league_id === leagueId);
+    const parent = row?.parent_league_id ? parentMap.get(row.parent_league_id) : null;
+    return !!row && (isYouthCompetition(row) || (!!parent && isYouthCompetition(parent)));
+  };
+  const youth = isUnder18(player.date_of_birth) || allStats.some((row: any) => youthLeague(row.league_id));
+  const index = await tryIndex();
   const displayName = player.full_name || "Basketball player";
   const teamName: string = publicStats[0]?.team_name || player.team_name || "";
   const realTeam = teamName && !isPlaceholderTeamName(teamName) ? teamName : "";
@@ -354,7 +373,7 @@ async function renderPlayer(slugOrId: string, pageNumber: number): Promise<{ pag
     seasons.set(comp.league_id, season);
   }
 
-  const teamPath = currentLeague?.slug && realTeam ? teamPathFor(currentLeague.slug, realTeam) : "";
+  const teamPath = realTeam ? clubHref(index, realTeam) || "" : "";
   const playerPath = `/player/${encodeURIComponent(canonicalSlug)}`;
   const canonicalPath = pageNumber > 1 ? `${playerPath}/games/page/${pageNumber}` : playerPath;
   const crumbs: Crumb[] = [
@@ -364,20 +383,16 @@ async function renderPlayer(slugOrId: string, pageNumber: number): Promise<{ pag
     { name: displayName, path: playerPath },
   ];
 
-  const where = [
-    realTeam && `plays for ${teamPath ? link(teamPath, realTeam) : escapeHtml(realTeam)}`,
-    competitionName && `in ${currentLeague?.slug ? link(competitionPath(currentLeague.slug), competitionName) : escapeHtml(competitionName)}`,
-  ].filter(Boolean).join(" ");
   // Earlier clubs, so "<name> <old club>" searches match this page too.
   const formerTeams = Array.from(new Set(Array.from(seasons.values()).map((s) => s.team)))
     .filter((t) => t && t !== realTeam && !isPlaceholderTeamName(t));
-  const summary = games
-    ? `${escapeHtml(displayName)}${where ? ` ${where}` : ""}. Across ${games} public game${games === 1 ? "" : "s"} on ${SITE_NAME}, ${escapeHtml(displayName)} has averaged ${one(avg(totals.pts))} points, ${one(avg(totals.reb))} rebounds and ${one(avg(totals.ast))} assists per game${highs[0]?.key === "spoints" ? `, with a career high of ${number(highs[0].row.spoints)} points` : ""}.${formerTeams.length ? ` Also played for ${escapeHtml(formerTeams.join(", "))}.` : ""}`
-    : `${escapeHtml(displayName)}${where ? ` ${where}` : ""}. No public game statistics are available yet.`;
+  // The same opening sentence the React page shows (shared/recaps.ts).
+  const bio = playerBio({ name: displayName, position: player.position, team: realTeam || null, competition: competitionName || null, games, ppg: avg(totals.pts), rpg: avg(totals.reb), apg: avg(totals.ast) });
+  const summary = `${escapeHtml(bio)}${games && highs[0]?.key === "spoints" ? ` Career high: ${number(highs[0].row.spoints)} points.` : ""}${formerTeams.length ? ` Also played for ${formerTeams.map((t) => { const href = clubHref(index, t); return href ? link(href, t) : escapeHtml(t); }).join(", ")}.` : ""}${realTeam && teamPath ? ` See the ${link(teamPath, `${realTeam} team page`)}.` : ""}`;
 
   const seasonRows = Array.from(seasons.values()).map((s) => `<tr>
       <td>${s.comp.slug ? link(competitionPath(s.comp.slug), s.comp.name) : escapeHtml(s.comp.name)}</td>
-      <td>${s.team && !isPlaceholderTeamName(s.team) && s.comp.slug ? link(teamPathFor(s.comp.slug, s.team), s.team) : escapeHtml(s.team)}</td>
+      <td>${(() => { const href = clubHref(index, s.team); return href ? link(href, s.team) : escapeHtml(s.team); })()}</td>
       <td>${s.gp}</td><td>${one(s.pts / s.gp)}</td><td>${one(s.reb / s.gp)}</td><td>${one(s.ast / s.gp)}</td><td>${one(s.stl / s.gp)}</td><td>${one(s.blk / s.gp)}</td><td>${s.high}</td>
     </tr>`).join("");
 
@@ -425,7 +440,7 @@ async function renderPlayer(slugOrId: string, pageNumber: number): Promise<{ pag
         : playerSeoDescription(seoInput),
       canonicalPath,
       image: photo,
-      robots: games ? undefined : NOINDEX,
+      robots: games && !youth ? undefined : NOINDEX,
       breadcrumbs: crumbs,
       ogType: "profile",
       body,
@@ -475,6 +490,7 @@ async function renderCompetition(slug: string): Promise<SeoPage | undefined> {
   const games = (index?.games || []).filter((g) => g.competitionSlug === slug)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
   const empty = !!index && !teams.length && !players.length && !games.length;
+  const youth = !!index?.competitions.find((c) => c.slug === slug)?.youth;
 
   const crumbs: Crumb[] = [
     { name: SITE_NAME, path: "/" },
@@ -488,10 +504,10 @@ async function renderCompetition(slug: string): Promise<SeoPage | undefined> {
     description,
     canonicalPath: competitionPath(slug),
     image: competition.logo_url,
-    robots: empty ? NOINDEX : undefined,
+    robots: empty || youth ? NOINDEX : undefined,
     breadcrumbs: crumbs,
     body: `${breadcrumbNav(crumbs)}<article><h1>${escapeHtml(competition.name)}</h1><p>${escapeHtml(description)}</p>
-      <section><h2>${escapeHtml(competition.name)} teams</h2><ul>${teams.map((t) => `<li>${link(teamPathFor(slug, t.name), t.name)}</li>`).join("") || "<li>No public teams available yet.</li>"}</ul></section>
+      <section><h2>${escapeHtml(competition.name)} teams</h2><ul>${teams.map((t) => `<li>${link(`/team/${t.clubSlug}`, t.name)}</li>`).join("") || "<li>No public teams available yet.</li>"}</ul></section>
       <section><h2>${escapeHtml(competition.name)} players</h2><ul>${players.map((p) => `<li>${link(`/player/${encodeURIComponent(p.segment)}`, p.name)}${p.team && !isPlaceholderTeamName(p.team) ? ` — ${escapeHtml(p.team)}` : ""}</li>`).join("") || "<li>No public players available yet.</li>"}</ul></section>
       <section><h2>Games and results</h2><ul>${shownGames.map((g) => `<li>${link(gamePathFor(slug, g.gameKey), `${g.home} vs ${g.away}`)} — ${escapeHtml(formatDate(g.date))}</li>`).join("") || "<li>No public games available yet.</li>"}</ul>
       ${games.length > shownGames.length ? `<p>${games.length - shownGames.length} earlier games are linked from each team's page.</p>` : ""}</section></article>`,
@@ -509,7 +525,7 @@ async function renderCompetition(slug: string): Promise<SeoPage | undefined> {
 
 async function renderHome(): Promise<SeoPage> {
   const index = await tryIndex();
-  const top = (index?.competitions || []).filter((c) => !c.parentLeagueId);
+  const top = (index?.competitions || []).filter((c) => !c.parentLeagueId && !c.youth);
   const description = "Swish Assistant is a basketball stats and scouting platform for players, coaches, and leagues, covering NBL, WNBL, BCB, SLB Championship and more.";
   return {
     title: "Swish Assistant | The Home of Basketball Stats, Advanced Metrics & League Insights",
@@ -536,10 +552,17 @@ async function renderHome(): Promise<SeoPage> {
 
 async function renderTeamsHub(): Promise<SeoPage> {
   const index = await tryIndex();
-  const sections = (index?.competitions || []).map((c) => {
-    const teams = (index?.teams || []).filter((t) => t.competitionSlug === c.slug);
-    return teams.length
-      ? `<section><h2>${link(competitionPath(c.slug), c.name)}</h2><ul>${teams.map((t) => `<li>${link(teamPathFor(c.slug, t.name), t.name)}</li>`).join("")}</ul></section>`
+  // Every adult team side once, under the competition it played in most recently.
+  const clubs = (index?.clubs || []).filter((c) => !c.youth);
+  const byCompetition = new Map<string, IndexClub[]>();
+  for (const club of clubs) {
+    const latest = club.competitions.find((c) => !c.youth);
+    if (latest) byCompetition.set(latest.competitionSlug, [...(byCompetition.get(latest.competitionSlug) || []), club]);
+  }
+  const sections = (index?.competitions || []).filter((c) => !c.youth).map((c) => {
+    const sides = byCompetition.get(c.slug) || [];
+    return sides.length
+      ? `<section><h2>${link(competitionPath(c.slug), c.name)}</h2><ul>${sides.map((club) => `<li>${link(`/team/${club.slug}`, club.name)}</li>`).join("")}</ul></section>`
       : "";
   }).join("");
   const crumbs = [{ name: SITE_NAME, path: "/" }, { name: "Teams", path: "/teams" }];
@@ -555,8 +578,8 @@ async function renderTeamsHub(): Promise<SeoPage> {
 
 async function renderPlayersHub(): Promise<SeoPage> {
   const index = await tryIndex();
-  const players = index?.players || [];
-  const competitions = (index?.competitions || []).map((c) => ({ c, count: players.filter((p) => p.competitionSlugs.includes(c.slug)).length })).filter((x) => x.count);
+  const players = (index?.players || []).filter((p) => !p.youth);
+  const competitions = (index?.competitions || []).filter((c) => !c.youth).map((c) => ({ c, count: players.filter((p) => p.competitionSlugs.includes(c.slug)).length })).filter((x) => x.count);
   const mostGames = [...players].sort((a, b) => b.games - a.games).slice(0, 150);
   const crumbs = [{ name: SITE_NAME, path: "/" }, { name: "Players", path: "/players" }];
   return {
@@ -576,7 +599,7 @@ async function renderScores(): Promise<SeoPage> {
   const index = await tryIndex();
   const now = Date.now();
   const slugToName = new Map((index?.competitions || []).map((c) => [c.slug, c.name]));
-  const dated = (index?.games || []).filter((g) => g.date);
+  const dated = (index?.games || []).filter((g) => g.date && !g.youth);
   const results = dated.filter((g) => new Date(g.date!).getTime() <= now).sort((a, b) => b.date!.localeCompare(a.date!)).slice(0, 40);
   const fixtures = dated.filter((g) => new Date(g.date!).getTime() > now).sort((a, b) => a.date!.localeCompare(b.date!)).slice(0, 40);
   const item = (g: (typeof dated)[number]) =>
@@ -689,67 +712,71 @@ async function renderNewsArticle(segment: string): Promise<{ page?: SeoPage; red
 
 // ── Teams ────────────────────────────────────────────────────────────────
 
-async function renderTeam(teamSegment: string, competitionSlug?: string): Promise<SeoPage | undefined> {
-  const decoded = decodeURIComponent(teamSegment).replace(/-/g, " ").trim();
-  let leagueIds: string[] = [];
-  let competition: any = null;
-  if (competitionSlug) {
-    const { data } = await supabaseAdmin
-      .from("competitions")
-      .select("league_id, name, slug")
-      .eq("slug", competitionSlug)
-      .eq("is_public", true)
-      .maybeSingle();
-    competition = data;
-    if (!competition) return undefined;
-    const { data: children } = await supabaseAdmin.from("competitions").select("league_id").eq("parent_league_id", competition.league_id);
-    leagueIds = [competition.league_id, ...(children || []).map((row: any) => row.league_id)];
-  } else {
-    const { data: candidates } = await supabaseAdmin
-      .from("teams")
-      .select("name, league_id")
-      .ilike("name", `%${decoded}%`)
-      .limit(50);
-    for (const candidate of (candidates || []).filter((row: any) => slugifyName(row.name || "") === slugifyName(decoded) || isSameTeam(row.name || "", decoded))) {
-      const resolved = await resolvePublicCompetition(candidate.league_id);
-      if (resolved) {
-        competition = resolved;
-        const { data: children } = await supabaseAdmin.from("competitions").select("league_id").eq("parent_league_id", resolved.league_id);
-        leagueIds = [resolved.league_id, ...(children || []).map((row: any) => row.league_id)];
-        break;
-      }
-    }
-    if (!competition || !leagueIds.length) return undefined;
-  }
-  let statQuery = supabaseAdmin
-    .from("player_stats")
-    .select("player_id, league_id, team_name, full_name, spoints, sreboundstotal, sassists, game_key, created_at")
-    .ilike("team_name", `%${decoded}%`)
-    .order("created_at", { ascending: false })
-    .limit(500);
-  if (leagueIds.length) statQuery = statQuery.in("league_id", leagueIds);
-  const { data: rawStats } = await statQuery;
-  // Same club identity as the team profile, so "Gloucester City Kings" finds
-  // NBL's "Gloucester City Kings Senior Men I" rows instead of 404ing.
-  const stats = (rawStats || []).filter((row: any) =>
-    slugifyName(row.team_name || "") === slugifyName(decoded) || isSameTeam(row.team_name || "", decoded)
-  );
-  if (!stats.length) return undefined;
-  // Same spelling the sitemap uses when the box scores disagree, chosen among
-  // this exact name's rows (not a fuzzy-matched sibling club's).
-  const exactRows = stats.filter((row: any) => slugifyName(row.team_name || "") === slugifyName(decoded));
-  const teamName = pickTeamSpelling(exactRows.length ? exactRows : stats) || stats[0].team_name;
-  const placeholder = isPlaceholderTeamName(teamName);
-  const playerIds = Array.from(new Set(stats.map((row: any) => row.player_id).filter(Boolean))) as string[];
-  const gameKeys = Array.from(new Set(stats.map((row: any) => row.game_key).filter(Boolean))) as string[];
-  const [{ data: playerRows }, { data: schedules }] = await Promise.all([
-    playerIds.length ? supabaseAdmin.from("players").select("id, slug, full_name, position").in("id", playerIds) : Promise.resolve({ data: [] as any[] }),
-    gameKeys.length ? supabaseAdmin.from("game_schedule").select("game_key, matchtime, hometeam, awayteam").in("game_key", gameKeys) : Promise.resolve({ data: [] as any[] }),
-  ]);
-  const playerMap = new Map((playerRows || []).map((row: any) => [row.id, row]));
-  const scheduleMap = new Map((schedules || []).map((row: any) => [row.game_key, row]));
+/** The part of a team name every competition's spelling shares, for an ilike pre-filter. */
+function searchCore(name: string): string {
+  return name.replace(/\s+Senior\s+(Men|Women)\b.*$/i, "").replace(/\s+I$/i, "").replace(/[%_]/g, "").trim();
+}
 
-  // Per-player averages for the roster, best scorers first.
+/**
+ * A team side's permanent page: /team/<slug>, covering every competition it
+ * has played in. It opens on the most recent (or ?competition=<slug>), but
+ * its canonical is always the bare URL, so links and authority build up on
+ * one page across seasons instead of a new URL each season.
+ */
+async function renderClubTeam(club: IndexClub, competitionParam: string | null, index: SeoIndex): Promise<SeoPage> {
+  const comps = club.youth ? club.competitions : club.competitions.filter((c) => !c.youth);
+  const selected = comps.find((c) => c.competitionSlug === competitionParam) || comps[0];
+
+  // Each competition's league ids: itself, plus private children that display
+  // under it (the same scoping the index uses).
+  const { data: allCompetitions } = await supabaseAdmin.from("competitions").select("league_id, slug, is_public, parent_league_id");
+  const slugByLeague = new Map((allCompetitions || []).filter((c: any) => c.is_public && c.slug).map((c: any) => [c.league_id, c.slug]));
+  const leagueIdsFor = (slug: string) => (allCompetitions || [])
+    .filter((c: any) => c.slug === slug || (!c.is_public && slugByLeague.get(c.parent_league_id) === slug))
+    .map((c: any) => c.league_id as string);
+  const leagueIds = leagueIdsFor(selected.competitionSlug);
+  const compSlugOfLeague = new Map<string, string>();
+  for (const c of comps) for (const id of leagueIdsFor(c.competitionSlug)) compSlugOfLeague.set(id, c.competitionSlug);
+
+  const [{ data: rawStats }, { data: teamRows }] = await Promise.all([
+    leagueIds.length
+      ? supabaseAdmin
+          .from("player_stats")
+          .select("player_id, league_id, team_name, full_name, spoints, sreboundstotal, sassists, game_key, created_at")
+          .in("league_id", leagueIds)
+          .ilike("team_name", `%${searchCore(selected.teamName)}%`)
+          .order("created_at", { ascending: false })
+          .limit(1500)
+      : Promise.resolve({ data: [] as any[] }),
+    // Every competition's team rows, for records and results (both sides of each game).
+    compSlugOfLeague.size
+      ? supabaseAdmin.from("team_stats").select("league_id, name, game_key, tot_spoints").in("league_id", Array.from(compSlugOfLeague.keys())).limit(10000)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const stats = (rawStats || []).filter((row: any) => teamClubKey(row.team_name || "") === club.clubKey);
+
+  // Results per competition: this side's row and the other side's in each game.
+  const byGame = new Map<string, any[]>();
+  for (const row of teamRows || []) if (row.game_key) byGame.set(row.game_key, [...(byGame.get(row.game_key) || []), row]);
+  const ownGames = Array.from(byGame.entries()).flatMap(([gameKey, rows]) => {
+    const own = rows.find((r) => teamClubKey(r.name || "") === club.clubKey);
+    const opp = rows.find((r) => r !== own);
+    if (!own || !opp) return [];
+    const pts = number(own.tot_spoints), oppPts = number(opp.tot_spoints);
+    return [{ gameKey, competitionSlug: compSlugOfLeague.get(own.league_id) || "", opponent: opp.name as string, pts, oppPts, win: pts > oppPts }];
+  });
+  const gameKeys = ownGames.filter((g) => g.competitionSlug === selected.competitionSlug).map((g) => g.gameKey);
+  const { data: schedules } = gameKeys.length
+    ? await supabaseAdmin.from("game_schedule").select("game_key, matchtime, hometeam").in("game_key", gameKeys)
+    : { data: [] as any[] };
+  const scheduleMap = new Map((schedules || []).map((row: any) => [row.game_key, row]));
+  const recordFor = (slug: string) => {
+    const list = ownGames.filter((g) => g.competitionSlug === slug);
+    return list.length ? { wins: list.filter((g) => g.win).length, losses: list.filter((g) => !g.win).length } : null;
+  };
+  const record = recordFor(selected.competitionSlug);
+
+  // Roster for the selected competition, best scorers first.
   const roster = Array.from(stats.reduce((acc: Map<string, any>, row: any) => {
     const key = row.player_id || row.full_name;
     const entry = acc.get(key) || { id: row.player_id, name: row.full_name, gp: 0, pts: 0, reb: 0, ast: 0 };
@@ -757,6 +784,11 @@ async function renderTeam(teamSegment: string, competitionSlug?: string): Promis
     acc.set(key, entry);
     return acc;
   }, new Map<string, any>()).values()).sort((a: any, b: any) => b.pts / b.gp - a.pts / a.gp);
+  const playerIds = roster.map((r: any) => r.id).filter(Boolean);
+  const { data: playerRows } = playerIds.length
+    ? await supabaseAdmin.from("players").select("id, slug, full_name, position").in("id", playerIds)
+    : { data: [] as any[] };
+  const playerMap = new Map((playerRows || []).map((row: any) => [row.id, row]));
   const rosterRows = roster.map((r: any) => {
     const canonical: any = playerMap.get(r.id);
     const name = canonical?.full_name || r.name || "Player";
@@ -764,38 +796,73 @@ async function renderTeam(teamSegment: string, competitionSlug?: string): Promis
     return `<tr><td>${cell}</td><td>${escapeHtml(canonical?.position || "")}</td><td>${r.gp}</td><td>${one(r.pts / r.gp)}</td><td>${one(r.reb / r.gp)}</td><td>${one(r.ast / r.gp)}</td></tr>`;
   }).join("");
 
-  const games = gameKeys
-    .map((key) => ({ key, schedule: scheduleMap.get(key) as any }))
-    .sort((a, b) => String(b.schedule?.matchtime || "").localeCompare(String(a.schedule?.matchtime || "")))
-    .slice(0, 30);
-  const gameLinks = games.map(({ key, schedule }) => {
-    const href = competition?.slug ? gamePathFor(competition.slug, key) : `/game/${encodeURIComponent(key)}`;
-    return `<li>${link(href, `${teamName} vs ${opponentOf(teamName, schedule)}`)} — ${escapeHtml(formatDate(schedule?.matchtime))}</li>`;
+  const games = ownGames
+    .filter((g) => g.competitionSlug === selected.competitionSlug)
+    .map((g) => ({ ...g, date: (scheduleMap.get(g.gameKey) as any)?.matchtime || null, home: teamClubKey((scheduleMap.get(g.gameKey) as any)?.hometeam || "") === club.clubKey }))
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  const ppg = games.length ? games.reduce((n, g) => n + g.pts, 0) / games.length : null;
+  const oppPpg = games.length ? games.reduce((n, g) => n + g.oppPts, 0) / games.length : null;
+  const top = roster[0] as any;
+  const summary = teamSeasonSummary({
+    team: club.name,
+    competition: selected.competitionName,
+    wins: record?.wins || 0,
+    losses: record?.losses || 0,
+    ppg,
+    oppPpg,
+    topScorer: top && top.gp ? { name: playerMap.get(top.id)?.full_name || top.name, ppg: top.pts / top.gp } : null,
+  });
+
+  const resultItems = games.slice(0, 20).map((g) => {
+    const opp = clubHref(index, g.opponent);
+    return `<li>${g.win ? "W" : "L"} ${g.pts}–${g.oppPts} ${g.home ? "vs" : "at"} ${opp ? link(opp, g.opponent) : escapeHtml(g.opponent)} — ${link(gamePathFor(selected.competitionSlug, g.gameKey), formatDate(g.date))}</li>`;
+  }).join("");
+  const now = Date.now();
+  const fixtures = index.games
+    .filter((g) => g.competitionSlug === selected.competitionSlug && g.date && new Date(g.date).getTime() > now)
+    .filter((g) => teamClubKey(g.home) === club.clubKey || teamClubKey(g.away) === club.clubKey)
+    .sort((a, b) => a.date!.localeCompare(b.date!))
+    .slice(0, 6)
+    .map((g) => {
+      const home = teamClubKey(g.home) === club.clubKey;
+      const opponent = home ? g.away : g.home;
+      const opp = clubHref(index, opponent);
+      return `<li>${home ? "vs" : "at"} ${opp ? link(opp, opponent) : escapeHtml(opponent)} — ${link(gamePathFor(g.competitionSlug, g.gameKey), formatDate(g.date))}</li>`;
+    }).join("");
+
+  const seasonRows = comps.map((c) => {
+    const r = recordFor(c.competitionSlug);
+    return `<tr><td>${link(competitionPath(c.competitionSlug), c.competitionName)}</td><td>${r ? `${r.wins}-${r.losses}` : "—"}</td><td>${escapeHtml(c.teamName)}</td></tr>`;
   }).join("");
 
-  const canonicalPath = competition?.slug ? teamPathFor(competition.slug, teamName) : `/team/${encodeURIComponent(teamName)}`;
+  const canonicalPath = `/team/${club.slug}`;
   const crumbs: Crumb[] = [
     { name: SITE_NAME, path: "/" },
-    ...(competition?.slug ? [{ name: competition.name, path: competitionPath(competition.slug) }] : []),
-    { name: teamName, path: canonicalPath },
+    { name: "Teams", path: "/teams" },
+    { name: club.name, path: canonicalPath },
   ];
-  const description = teamSeoDescription(teamName, competition?.name);
+  const alternateNames = club.variants.filter((v) => v !== club.name);
   return {
-    title: teamSeoTitle(teamName, competition?.name),
-    description,
+    title: teamSeoTitle(club.name),
+    description: summary ? `${summary} Roster, results and box scores.` : teamSeoDescription(club.name, selected.competitionName),
     canonicalPath,
-    robots: placeholder ? NOINDEX : undefined,
+    robots: club.youth ? NOINDEX : undefined,
     breadcrumbs: crumbs,
     body: `${breadcrumbNav(crumbs)}
-      <article><h1>${escapeHtml(teamName)} Roster &amp; Stats</h1><p>${escapeHtml(description)}</p>
-      <section><h2>${escapeHtml(teamName)} roster</h2><table><thead><tr><th>Player</th><th>Position</th><th>GP</th><th>PPG</th><th>RPG</th><th>APG</th></tr></thead><tbody>${rosterRows}</tbody></table></section>
-      <section><h2>${escapeHtml(teamName)} games</h2><ul>${gameLinks || "<li>No public games available yet.</li>"}</ul></section></article>`,
+      <article><h1>${escapeHtml(club.name)} Roster &amp; Stats</h1>
+      <p>${escapeHtml(summary)}</p>
+      ${alternateNames.length ? `<p>Also listed as ${escapeHtml(alternateNames.join(", "))}.</p>` : ""}
+      <section><h2>${escapeHtml(club.name)} roster — ${escapeHtml(selected.competitionName)}</h2><table><thead><tr><th>Player</th><th>Position</th><th>GP</th><th>PPG</th><th>RPG</th><th>APG</th></tr></thead><tbody>${rosterRows}</tbody></table></section>
+      <section><h2>${escapeHtml(club.name)} results</h2><ul>${resultItems || "<li>No results yet.</li>"}</ul></section>
+      ${fixtures ? `<section><h2>Upcoming games</h2><ul>${fixtures}</ul></section>` : ""}
+      <section><h2>Seasons and competitions</h2><table><thead><tr><th>Competition</th><th>Record</th><th>Listed as</th></tr></thead><tbody>${seasonRows}</tbody></table></section></article>`,
     jsonLd: {
       "@type": "SportsTeam",
-      name: teamName,
+      name: club.name,
+      alternateName: alternateNames.length ? alternateNames : undefined,
       url: canonicalUrl(canonicalPath),
       sport: "Basketball",
-      memberOf: competition?.name ? { "@type": "SportsOrganization", name: competition.name, url: competition.slug ? canonicalUrl(competitionPath(competition.slug)) : undefined } : undefined,
+      memberOf: { "@type": "SportsOrganization", name: selected.competitionName, url: canonicalUrl(competitionPath(selected.competitionSlug)) },
       athlete: (playerRows || []).slice(0, 50).map((row: any) => ({
         "@type": "Person",
         name: row.full_name,
@@ -811,7 +878,9 @@ async function renderGame(gameKey: string, competitionSlug?: string): Promise<Se
   const [{ data: schedule }, { data: playerStats }, { data: teamStats }] = await Promise.all([
     supabaseAdmin.from("game_schedule").select("game_key, matchtime, hometeam, awayteam, league_id").eq("game_key", gameKey).maybeSingle(),
     supabaseAdmin.from("player_stats").select("player_id, league_id, full_name, team_name, spoints, sreboundstotal, sassists").eq("game_key", gameKey).order("spoints", { ascending: false }),
-    supabaseAdmin.from("team_stats").select("name, tot_sPoints, side").eq("game_key", gameKey),
+    // tot_spoints: this used to ask for "tot_sPoints", which doesn't exist, so
+    // every server-rendered game page went out without its score.
+    supabaseAdmin.from("team_stats").select("name, tot_spoints, side, p1_score, p2_score, p3_score, p4_score").eq("game_key", gameKey),
   ]);
   if (!schedule && !(playerStats || []).length) return undefined;
   const publicCompetition = await resolvePublicCompetition(schedule?.league_id || playerStats?.[0]?.league_id);
@@ -829,10 +898,18 @@ async function renderGame(gameKey: string, competitionSlug?: string): Promise<Se
   const playerMap = new Map((players || []).map((row: any) => [row.id, row]));
   const home = schedule?.hometeam || teamStats?.find((row: any) => String(row.side) === "1")?.name || "Home team";
   const away = schedule?.awayteam || teamStats?.find((row: any) => String(row.side) === "2")?.name || "Away team";
-  const scoreByTeam = new Map((teamStats || []).map((row: any) => [row.name, number(row.tot_sPoints)]));
+  const scoreByTeam = new Map((teamStats || []).map((row: any) => [row.name, number(row.tot_spoints)]));
   const hasStats = (playerStats || []).length > 0;
-  const indexable = isIndexableGame({ home: schedule?.hometeam, away: schedule?.awayteam, date: schedule?.matchtime, hasStats });
-  const teamLink = (name: string) => competition?.slug && !isPlaceholderTeamName(name) ? link(teamPathFor(competition.slug, name), name) : escapeHtml(name);
+  const { data: leagueRow } = schedule?.league_id
+    ? await supabaseAdmin.from("competitions").select("name, age_group, parent_league_id").eq("league_id", schedule.league_id).maybeSingle()
+    : { data: null as any };
+  const youth = !!leagueRow && (isYouthCompetition(leagueRow) || isYouthCompetition(publicCompetition));
+  const indexable = !youth && isIndexableGame({ home: schedule?.hometeam, away: schedule?.awayteam, date: schedule?.matchtime, hasStats });
+  const index = await tryIndex();
+  const teamLink = (name: string) => {
+    const href = clubHref(index, name);
+    return href ? link(href, name) : escapeHtml(name);
+  };
   const boxScore = (playerStats || []).map((row: any) => {
     const player: any = playerMap.get(row.player_id);
     const name = player?.full_name || row.full_name || "Player";
@@ -851,11 +928,22 @@ async function renderGame(gameKey: string, competitionSlug?: string): Promise<Se
     ...(competition?.slug ? [{ name: competition.name, path: competitionPath(competition.slug) }] : []),
     { name: titleText, path: canonicalPath },
   ];
-  const teamNode = (name: string) => ({
-    "@type": "SportsTeam",
-    name,
-    url: competition?.slug && !isPlaceholderTeamName(name) ? canonicalUrl(teamPathFor(competition.slug, name)) : undefined,
-  });
+  const teamNode = (name: string) => {
+    const href = clubHref(index, name);
+    return { "@type": "SportsTeam", name, url: href ? canonicalUrl(href) : undefined };
+  };
+  // A written recap from the box score (shared/recaps.ts), like the React page shows.
+  const rowFor = (name: string) => (teamStats || []).find((row: any) => row.name === name);
+  const quarters = ([1, 2, 3, 4] as const).map((q) => ({ home: number(rowFor(home)?.[`p${q}_score`]), away: number(rowFor(away)?.[`p${q}_score`]) }));
+  const topFor = (team: string) => {
+    const row: any = (playerStats || []).find((r: any) => r.team_name === team);
+    if (!row) return null;
+    const name = (playerMap.get(row.player_id) as any)?.full_name || row.full_name;
+    return name ? { name, pts: number(row.spoints), reb: number(row.sreboundstotal), ast: number(row.sassists) } : null;
+  };
+  const recap = hasStats && homeScore != null && awayScore != null
+    ? gameRecap({ home, away, homeScore, awayScore, competition: competition?.name, date: schedule?.matchtime, quarters, topHome: topFor(home), topAway: topFor(away) })
+    : [];
   return {
     title: `${titleText}${scoreline} ${hasStats ? "Box Score" : "Preview"}${competition?.name ? ` | ${competition.name}` : ""} | ${SITE_NAME}`,
     description,
@@ -865,6 +953,7 @@ async function renderGame(gameKey: string, competitionSlug?: string): Promise<Se
     body: `${breadcrumbNav(crumbs)}
       <article><h1>${escapeHtml(titleText)}</h1><p>${escapeHtml(formatDate(schedule?.matchtime))}</p>
       ${hasStats ? `<p><strong>${teamLink(home)} ${homeScore ?? ""} – ${awayScore ?? ""} ${teamLink(away)}</strong></p>` : `<p>${teamLink(home)} vs ${teamLink(away)}</p>`}
+      ${recap.length ? `<section><h2>Game recap</h2><p>${escapeHtml(recap.join(" "))}</p></section>` : ""}
       ${boxScore ? `<section><h2>Player box score</h2><table><thead><tr><th>Player</th><th>Team</th><th>PTS</th><th>REB</th><th>AST</th></tr></thead><tbody>${boxScore}</tbody></table></section>` : ""}</article>`,
     jsonLd: {
       "@type": "SportsEvent",
@@ -946,20 +1035,50 @@ export async function servePublicSeo(req: Request, res: Response, next: NextFunc
       if (result.notFound) return sendNotFound(res);
       page = result.page;
     } else if (competitionGameMatch) {
-      page = await renderGame(decodeURIComponent(competitionGameMatch[2]), decodeURIComponent(competitionGameMatch[1]));
+      const gameKey = decodeURIComponent(competitionGameMatch[2]);
+      page = await renderGame(gameKey, decodeURIComponent(competitionGameMatch[1]));
+      if (!page) {
+        // Under another slug (e.g. a private child competition whose games
+        // display under its public parent): send it to the canonical URL.
+        const canonical = await renderGame(gameKey);
+        if (canonical) return res.redirect(301, canonical.canonicalPath);
+      }
     } else if (directGameMatch) {
       page = await renderGame(decodeURIComponent(directGameMatch[1]));
       if (page && page.canonicalPath !== pathname) return res.redirect(301, page.canonicalPath);
     } else if (competitionTeamMatch) {
-      page = await renderTeam(decodeURIComponent(competitionTeamMatch[2]), decodeURIComponent(competitionTeamMatch[1]));
-      // Other spellings ("cheshire-phoenix", "…KIngs") send people and crawlers
-      // to the one canonical URL, so links, sitemap and page always agree.
-      if (page && decodeURIComponent(page.canonicalPath) !== decodeURIComponent(pathname)) return res.redirect(301, page.canonicalPath);
+      // Season-specific team URLs now open the team's permanent page on that
+      // competition, so every season's links count towards one page.
+      const competitionSlug = decodeURIComponent(competitionTeamMatch[1]);
+      const name = decodeURIComponent(competitionTeamMatch[2]);
+      const index = await tryIndex();
+      if (!index) throw new Error("SEO index unavailable");
+      const team = index.teams.find((t) => t.competitionSlug === competitionSlug
+        && (slugifyName(t.name) === slugifyName(name.replace(/-/g, " ")) || clubSlug(t.name) === clubSlug(name)));
+      const club = team ? index.clubBySlug.get(team.clubSlug) : resolveClub(index, name);
+      if (!club) return sendNotFound(res);
+      return res.redirect(301, `/team/${club.slug}${team ? `?competition=${encodeURIComponent(competitionSlug)}` : ""}`);
     } else if (teamMatch) {
-      page = await renderTeam(decodeURIComponent(teamMatch[1]));
-      if (page && page.canonicalPath !== pathname) return res.redirect(301, page.canonicalPath);
+      const key = decodeURIComponent(teamMatch[1]);
+      const index = await tryIndex();
+      if (!index) throw new Error("SEO index unavailable");
+      const club = resolveClub(index, key);
+      if (!club) return sendNotFound(res);
+      const competitionParam = typeof req.query.competition === "string" ? req.query.competition : null;
+      // One URL per team: other spellings and old name-based URLs redirect to it.
+      if (club.slug !== key) {
+        return res.redirect(301, `/team/${club.slug}${competitionParam ? `?competition=${encodeURIComponent(competitionParam)}` : ""}`);
+      }
+      page = await renderClubTeam(club, competitionParam, index);
     } else if (competitionMatch) {
-      page = await renderCompetition(decodeURIComponent(competitionMatch[1]));
+      const slug = decodeURIComponent(competitionMatch[1]);
+      page = await renderCompetition(slug);
+      if (!page) {
+        // A private child competition shows under its public parent.
+        const { data: child } = await supabaseAdmin.from("competitions").select("league_id, is_public").eq("slug", slug).maybeSingle();
+        const parent = child && !child.is_public ? await resolvePublicCompetition(child.league_id) : null;
+        if (parent?.slug && parent.slug !== slug) return res.redirect(301, competitionPath(parent.slug));
+      }
     }
     if (!page) return sendNotFound(res);
     const html = injectSeo(await loadShell(), page);

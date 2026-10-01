@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link } from "wouter";
+import EntityLink from "@/components/EntityLink";
 import {
   Crown, Medal, Swords, Shield, Target, Flame, TrendingDown, Trophy, History, Zap, Crosshair, Layers, Activity,
   type LucideIcon,
@@ -143,10 +143,9 @@ export default function GameStorylines({
   );
 }
 
-/** Wraps a name in an in-app link or button, styled for storyline headlines. */
+/** Wraps a name in a real link (with an optional in-page click handler), styled for storyline headlines. */
 export function StorylinePlayerLink({ href, onClick, children }: { href?: string; onClick?: () => void; children: ReactNode }) {
   const cls = "underline decoration-[color:var(--ch-border-strong)] decoration-2 underline-offset-[3px] hover:decoration-current";
-  if (onClick) return <button type="button" onClick={onClick} className={`${cls} text-left`}>{children}</button>;
-  if (href) return <Link href={href} className={cls}>{children}</Link>;
-  return <>{children}</>;
+  if (!href) return <>{children}</>;
+  return <EntityLink href={href} onNavigate={onClick} className={cls}>{children}</EntityLink>;
 }

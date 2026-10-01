@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation, useParams } from "wouter";
+import { Link, useLocation, useParams, useSearch } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -8,7 +8,10 @@ import React from "react";
 import { EditableDescription } from "@/components/EditableDescription";
 import { useAuth } from "@/hooks/use-auth";
 import { Helmet } from "react-helmet-async";
-import { teamSeoDescription, teamSeoTitle } from "@shared/seo";
+import { gamePath, teamPath, teamSeoDescription, teamSeoTitle } from "@shared/seo";
+import { clubSlug } from "@shared/teamIdentity";
+import { teamSeasonSummary } from "@shared/recaps";
+import EntityLink from "@/components/EntityLink";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
@@ -379,13 +382,49 @@ function safeDecode(value: string): string {
   }
 }
 
+/** /api/public/team-page/:key — a team side's permanent page and its competitions. */
+interface TeamPageInfo {
+  slug: string;
+  name: string;
+  youth: boolean;
+  competitions: Array<{ slug: string; name: string; teamName: string; lastPlayed: string | null; youth: boolean; leagueIds: string[] }>;
+}
+
 export default function TeamProfile() {
   const {
-    teamName,
+    teamName: routeTeamName,
     leagueSlug: legacyLeagueSlug,
     competitionSlug,
   } = useParams();
-  const leagueSlug = competitionSlug || legacyLeagueSlug;
+  const search = useSearch();
+  const competitionQuery = new URLSearchParams(search).get("competition");
+  // /team/<slug> is the team's permanent page across seasons: the server
+  // resolves the slug to every competition the side has played in, and the
+  // page opens on ?competition=… or the most recent adult one. Everything
+  // below stays scoped to one competition at a time, as before. The older
+  // season-specific routes still work.
+  const isPermanentRoute = !competitionSlug && !legacyLeagueSlug;
+  const { data: teamPage, isLoading: teamPageLoading } = useQuery({
+    queryKey: ["team-page", routeTeamName],
+    queryFn: async (): Promise<TeamPageInfo | null> => {
+      const res = await fetch(`/api/public/team-page/${encodeURIComponent(routeTeamName || "")}`);
+      return res.ok ? res.json() : null;
+    },
+    enabled: isPermanentRoute && !!routeTeamName,
+    staleTime: 5 * 60_000,
+  });
+  const pageCompetition = teamPage
+    ? teamPage.competitions.find((c) => c.slug === competitionQuery)
+      || teamPage.competitions.find((c) => !c.youth)
+      || teamPage.competitions[0]
+      || null
+    : null;
+  const teamName = isPermanentRoute
+    ? teamPage && pageCompetition
+      ? encodeURIComponent(pageCompetition.teamName)
+      : teamPageLoading ? undefined : routeTeamName
+    : routeTeamName;
+  const leagueSlug = competitionSlug || legacyLeagueSlug || pageCompetition?.slug;
   const [location, navigate] = useLocation();
   const [team, setTeam] = useState<Team | null>(null);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
@@ -410,12 +449,24 @@ export default function TeamProfile() {
   // National Cup game must not count towards the NBL league record, even
   // though both competitions share a brand and a season.
   const currentCompetition = seasonCompetitions.find(c => c.slug === leagueSlug);
-  const selectedLeagueIds = currentCompetition ? [currentCompetition.league_id] : [];
+  // On the permanent page the server says where the competition's data lives:
+  // itself plus any private child competition that displays under it (e.g.
+  // the BCB Trophy's games are stored in a child) — the parent alone is empty.
+  const selectedLeagueIds = isPermanentRoute && pageCompetition?.leagueIds?.length
+    ? pageCompetition.leagueIds
+    : currentCompetition ? [currentCompetition.league_id] : [];
   const lineupsSlug = leagueSlug || "";
   // Every competition this club has played in (league, cup, trophy, past
   // seasons) — drives the competition switcher and the club-wide accolades.
-  const decodedTeamName = teamName ? decodeURIComponent(teamName) : "";
+  const decodedTeamName = teamName ? safeDecode(teamName) : "";
   const { data: clubCompetitions = [] } = useTeamCompetitions(decodedTeamName);
+  const permanentSlug = teamPage?.slug || clubSlug(decodedTeamName);
+  // An old slug or a team name in the URL: show the canonical one.
+  useEffect(() => {
+    if (isPermanentRoute && teamPage && routeTeamName && teamPage.slug !== routeTeamName) {
+      navigate(`/team/${teamPage.slug}${search ? `?${search}` : ""}`, { replace: true });
+    }
+  }, [isPermanentRoute, teamPage, routeTeamName, search, navigate]);
   // Other competitions of this same club — used as a branding/logo fallback
   // when the current competition's own `teams` row hasn't been populated yet
   // (common for newly-created seasons before data import catches up).
@@ -1271,24 +1322,39 @@ export default function TeamProfile() {
     );
   }
 
+  // The name people search for ("Gloucester City Kings", not "…Senior Men I")
+  // and a plain-English line about the season — the same text the server
+  // renders for this page (shared/recaps.ts).
+  const teamDisplayName = teamPage?.name || team.name;
+  const scoredGames = team.games.filter((g) => g.opponentScore != null);
+  const seasonSummary = teamSeasonSummary({
+    team: teamDisplayName,
+    competition: team.league?.name || pageCompetition?.name,
+    wins: team.wins,
+    losses: team.losses,
+    ppg: scoredGames.length ? scoredGames.reduce((n, g) => n + g.totalPoints, 0) / scoredGames.length : null,
+    oppPpg: scoredGames.length ? scoredGames.reduce((n, g) => n + (g.opponentScore || 0), 0) / scoredGames.length : null,
+    topScorer: team.topPlayer ? { name: team.topPlayer.name, ppg: team.topPlayer.avgPoints } : null,
+  });
+
   return (
     <>
       <Helmet>
-        <title>{teamSeoTitle(team.name, team.league?.name)}</title>
+        <title>{teamSeoTitle(teamDisplayName)}</title>
         <meta
           name="description"
           content={
-            teamDescription || teamSeoDescription(team.name, team.league?.name)
+            teamDescription || seasonSummary || teamSeoDescription(teamDisplayName, team.league?.name)
           }
         />
         <meta
           property="og:title"
-          content={teamSeoTitle(team.name, team.league?.name)}
+          content={teamSeoTitle(teamDisplayName)}
         />
         <meta
           property="og:description"
           content={
-            teamDescription || teamSeoDescription(team.name, team.league?.name)
+            teamDescription || seasonSummary || teamSeoDescription(teamDisplayName, team.league?.name)
           }
         />
         <meta property="og:type" content="website" />
@@ -1303,19 +1369,16 @@ export default function TeamProfile() {
           content="https://swishassistant.com/og-image.png"
         />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={teamSeoTitle(team.name, team.league?.name)} />
+        <meta name="twitter:title" content={teamSeoTitle(teamDisplayName)} />
         <meta
           name="twitter:description"
           content={
-            teamDescription || teamSeoDescription(team.name, team.league?.name)
+            teamDescription || seasonSummary || teamSeoDescription(teamDisplayName, team.league?.name)
           }
         />
-        {/* The URL's own team segment: the server 301s other spellings of a
-            team URL to its canonical one, so this matches the canonical in
-            the page's HTML (a lowercased slug here pointed Google elsewhere). */}
-        <link rel="canonical" href={leagueSlug
-          ? `https://swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(safeDecode(teamName || team.name))}`
-          : `https://swishassistant.com/team/${encodeURIComponent(safeDecode(teamName || team.name))}`} />
+        {/* One permanent page per team side, whichever season is open — the
+            same canonical the server renders (server/publicSeo.ts). */}
+        <link rel="canonical" href={`https://swishassistant.com/team/${permanentSlug}`} />
       </Helmet>
       
       <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`} style={{ '--ch-accent': readablePrimary.body } as React.CSSProperties}>
@@ -1369,8 +1432,13 @@ export default function TeamProfile() {
                     </div>
                   )}
                   <h1 className="ch-display uppercase font-bold leading-[0.92] tracking-tight break-words text-[2rem] sm:text-[2.6rem] md:text-[3.4rem] mt-1">
-                    {team.name}
+                    {teamDisplayName}
                   </h1>
+                  {seasonSummary && (
+                    <p className="mt-2 max-w-2xl text-sm leading-relaxed" style={{ opacity: 0.85 }} data-testid="team-season-summary">
+                      {seasonSummary}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2 mt-4">
                     {[
                       { label: "Players", value: team.roster.length },
@@ -1403,7 +1471,8 @@ export default function TeamProfile() {
                     <Select
                       value={leagueSlug}
                       onValueChange={(slug) => {
-                        if (slug !== leagueSlug) navigate(`/competition/${slug}/team/${encodeURIComponent(decodedTeamName)}`);
+                        // Stay on the permanent page; the competition is a query parameter.
+                        if (slug !== leagueSlug) navigate(`/team/${permanentSlug}?competition=${encodeURIComponent(slug)}`);
                       }}
                     >
                       <SelectTrigger className="h-10 rounded-lg bg-white/95 border-white/40 text-slate-900" data-testid="select-team-competition">
@@ -1722,7 +1791,16 @@ export default function TeamProfile() {
                   >
                     <div className="flex-1">
                       <div className="font-medium text-[color:var(--ch-text)] text-sm md:text-base">
-                        {game.isHome ? 'vs' : '@'} {game.opponent}
+                        {game.isHome ? 'vs' : '@'}{' '}
+                        {game.game_key ? (
+                          <EntityLink
+                            href={gamePath(leagueSlug, game.game_key)}
+                            onNavigate={() => { setSelectedGameId(game.game_key!); setIsGameModalOpen(true); }}
+                            className="hover:underline underline-offset-2"
+                          >
+                            {game.opponent}
+                          </EntityLink>
+                        ) : game.opponent}
                       </div>
                       <div className="text-xs md:text-sm text-[color:var(--ch-muted)] mt-1">
                         Final: <span className="font-semibold text-[color:var(--ch-text)]">{game.totalPoints} - {game.opponentScore}</span>
@@ -1759,7 +1837,10 @@ export default function TeamProfile() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <div className="font-medium text-[color:var(--ch-text)] text-sm md:text-base">
-                            {game.isHome ? 'vs' : '@'} {game.opponent}
+                            {game.isHome ? 'vs' : '@'}{' '}
+                            <EntityLink href={teamPath(game.opponent, leagueSlug)} className="hover:underline underline-offset-2">
+                              {game.opponent}
+                            </EntityLink>
                           </div>
                           <span className={`text-[10px] font-semibold uppercase tracking-[0.1em] px-2 py-1 rounded ${game.isHome ? 'bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]' : 'bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)]'}`}>
                             {game.isHome ? 'HOME' : 'AWAY'}

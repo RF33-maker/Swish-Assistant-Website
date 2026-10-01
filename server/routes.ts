@@ -11,7 +11,7 @@ import type { LineupMetric } from "./lineups";
 import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "./teamIdentityService";
 import { getTeamCompetitions } from "./teamCompetitions";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
-import { registerSitemapRoutes } from "./seoIndex";
+import { registerSeoRoutes } from "./seoIndex";
 import { SITE_BASE } from "@shared/seo";
 import multer from 'multer';
 import OpenAI from 'openai';
@@ -5106,9 +5106,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // /sitemap.xml and /sitemap/N.xml — built from the shared SEO index so it
-  // only lists pages that answer 200 with real content (see seoIndex.ts).
-  registerSitemapRoutes(app);
+  // /sitemap.xml, /sitemap/N.xml and /api/public/team-page/:key — built from
+  // the shared SEO index (see seoIndex.ts).
+  registerSeoRoutes(app);
 
   // ─── Admin owner provisioning ────────────────────────────────────────────────
   // POST /api/admin/provision-owner

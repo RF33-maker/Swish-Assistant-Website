@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo, useRef, type CSSProperties } from "react"
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
-import { playerSeoDescription, playerSeoTitle } from "@shared/seo";
+import { gamePath, playerSeoDescription, playerSeoTitle, teamPath } from "@shared/seo";
+import { playerBio } from "@shared/recaps";
+import EntityLink from "@/components/EntityLink";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { getTeamAbbreviation } from "@/lib/teamUtils";
@@ -435,17 +437,15 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     const slug = leagueSlugs.get(teamBrandingLeagueId);
     const name = leagueNames.get(teamBrandingLeagueId);
     if (!slug || !name) return undefined;
-    return { label: name, onClick: () => setLocation(`/competition/${slug}`) };
+    return { label: name, href: `/competition/${slug}`, onClick: () => setLocation(`/competition/${slug}`) };
   }, [teamBrandingLeagueId, leagueSlugs, leagueNames, setLocation]);
 
   const bannerTeamChip = useMemo(() => {
     if (!teamBrandingLeagueId || !teamNameForBranding) return undefined;
     const slug = leagueSlugs.get(teamBrandingLeagueId);
     if (!slug) return undefined;
-    return {
-      label: teamNameForBranding,
-      onClick: () => setLocation(`/competition/${slug}/team/${encodeURIComponent(teamNameForBranding)}`),
-    };
+    const href = teamPath(teamNameForBranding, slug) || `/team/${encodeURIComponent(teamNameForBranding)}`;
+    return { label: teamNameForBranding, href, onClick: () => setLocation(href) };
   }, [teamBrandingLeagueId, teamNameForBranding, leagueSlugs, setLocation]);
 
   // Always try the displayed team's logo, including inline profiles that pass
@@ -2298,7 +2298,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   const profileTabs: { key: ProfileTab; label: string; icon: typeof LayoutDashboard; locked?: boolean }[] = [
     { key: 'overview', label: 'Overview', icon: LayoutDashboard },
     { key: 'stats', label: 'Stats', icon: BarChart3 },
-    { key: 'games', label: 'Games', icon: CalendarDays, locked: !user },
+    { key: 'games', label: 'Games', icon: CalendarDays },
     { key: 'splits', label: 'Splits', icon: Crosshair },
     { key: 'accolades', label: 'Accolades', icon: Award },
   ];
@@ -2395,6 +2395,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           brandColorOverride={primaryColor || undefined}
           leagueChip={bannerLeagueChip}
           teamChip={bannerTeamChip}
+          bio={seoInput ? playerBio({ ...seoInput, position: playerInfo?.position, team: playerInfo?.team || null }) : null}
         />
       )}
 
@@ -2933,7 +2934,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                           <TeamLogo teamName={row.team} leagueId={row.leagueId} size="xs" className="flex-shrink-0" />
                           {leagueSlugs.get(row.leagueId) ? (
                             <Link
-                              href={`/competition/${leagueSlugs.get(row.leagueId)}/team/${encodeURIComponent(row.team)}`}
+                              href={teamPath(row.team, leagueSlugs.get(row.leagueId)) || `/team/${encodeURIComponent(row.team)}`}
                               className="truncate max-w-[50px] font-medium hover:underline underline-offset-2"
                             >
                               {getTeamAbbreviation(row.team)}
@@ -3078,52 +3079,21 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         </div>
         </ShareableCard>}
 
+        {/* The game log is public (search engines index it too); making cards
+            from games is what an account adds. */}
         {activeTab === 'games' && !user && (
-          // The full game log is for signed-in visitors. The rows behind the
-          // prompt are placeholders, not the player's games.
-          <div className="ch-card overflow-hidden relative" data-testid="games-signin-gate">
-            <div aria-hidden="true" className="p-4 md:p-5 space-y-3 blur-[2px] opacity-70 select-none">
-              {Array.from({ length: 7 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="ch-skel h-3 w-14" />
-                  <div className="ch-skel h-3 flex-1" />
-                  <div className="ch-skel h-3 w-10" />
-                  <div className="ch-skel h-3 w-10 hidden sm:block" />
-                  <div className="ch-skel h-3 w-10 hidden sm:block" />
-                  <div className="ch-skel h-3 w-8" />
-                </div>
-              ))}
-            </div>
-            <div
-              className="absolute inset-0 flex items-center justify-center p-5"
-              style={{ background: "linear-gradient(180deg, color-mix(in srgb, var(--ch-surface) 45%, transparent) 0%, var(--ch-surface) 62%)" }}
-            >
-              <div className="text-center max-w-sm">
-                <span className="mx-auto h-11 w-11 rounded-xl flex items-center justify-center" style={pillStyle}>
-                  <Lock className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <h3 className="ch-display uppercase font-bold tracking-tight leading-[0.95] text-[1.6rem] mt-3 text-[color:var(--ch-text)]">
-                  Every game, every stat
-                </h3>
-                <p className="text-sm text-[color:var(--ch-text-2)] mt-2">
-                  Sign in to see {playerInfo?.name ? `${playerInfo.name.split(" ")[0]}'s` : "the"} full game log
-                  {filteredStats.length > 0 ? ` — ${filteredStats.length} game${filteredStats.length === 1 ? "" : "s"}` : ""} — and
-                  make a card from any of them. It's free.
-                </p>
-                <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
-                  <Link href={authHref(true)} className="ch-btn ch-btn-primary h-10 px-5 w-full sm:w-auto justify-center" data-testid="games-gate-register">
-                    Create free account
-                  </Link>
-                  <Link href={authHref(false)} className="ch-btn ch-btn-ghost h-10 px-5 w-full sm:w-auto justify-center" data-testid="games-gate-signin">
-                    Sign in
-                  </Link>
-                </div>
-              </div>
+          <div className="ch-card mb-3 flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="games-signup-prompt">
+            <p className="text-sm text-[color:var(--ch-text-2)]">
+              Make a shareable card from any of {playerInfo?.name ? `${playerInfo.name.split(" ")[0]}'s` : "these"} games. It's free.
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link href={authHref(true)} className="ch-btn ch-btn-primary h-9 px-4" data-testid="games-gate-register">Create free account</Link>
+              <Link href={authHref(false)} className="ch-btn ch-btn-ghost h-9 px-4" data-testid="games-gate-signin">Sign in</Link>
             </div>
           </div>
         )}
 
-        {activeTab === 'games' && user && <div className="ch-card overflow-hidden">
+        {activeTab === 'games' && <div className="ch-card overflow-hidden">
           <div className="px-4 md:px-5 py-3.5 border-b border-[color:var(--ch-border)] flex flex-wrap items-center justify-between gap-2">
             <h3 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] text-[color:var(--ch-text)]">Game log</h3>
             <div className="flex items-center gap-3 text-xs text-[color:var(--ch-muted)]">
@@ -3178,16 +3148,19 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                       >
                         <td className="px-2 py-2 text-xs text-[color:var(--ch-text-2)] whitespace-nowrap">
                           {game.game_key ? (
-                            <a
-                              href={`/game/${encodeURIComponent(game.game_key)}`}
+                            <EntityLink
+                              href={gamePath(leagueSlugs.get(game.league_id || ""), game.game_key)}
                               className="hover:underline underline-offset-2"
-                              onClick={(e) => e.stopPropagation()}
                             >
                               {formatDate(game.game_date || game.created_at || '')}
-                            </a>
+                            </EntityLink>
                           ) : formatDate(game.game_date || game.created_at || '')}
                         </td>
-                        <td className="px-2 py-2 text-xs font-medium whitespace-nowrap">{opponentName}</td>
+                        <td className="px-2 py-2 text-xs font-medium whitespace-nowrap">
+                          <EntityLink href={opponentName !== 'TBD' ? teamPath(opponentName, leagueSlugs.get(game.league_id || "")) : null} className="hover:underline underline-offset-2">
+                            {opponentName}
+                          </EntityLink>
+                        </td>
                         <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sminutes || '—'}</td>
                         <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sfieldgoalsmade || 0}-{game.sfieldgoalsattempted || 0}</td>
                         <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sthreepointersmade || 0}-{game.sthreepointersattempted || 0}</td>

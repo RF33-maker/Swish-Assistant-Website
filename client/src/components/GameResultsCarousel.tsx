@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { TeamLogo } from "./TeamLogo";
+import EntityLink from "./EntityLink";
+import { gamePath } from "@shared/seo";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface GameItem {
@@ -451,8 +453,11 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                   {showDivider && (
                     <div className="w-px bg-gray-200 dark:bg-white/20 my-2 flex-shrink-0" />
                   )}
-                  <div
-                    className={`flex-shrink-0 cursor-pointer transition-all px-3 py-2 border-r border-gray-100 dark:border-white/5 relative ${
+                  {/* A real link to the game page (crawlers and new-tab clicks);
+                      a plain click still opens the game in the league page. */}
+                  <EntityLink
+                    href={gamePath(slug, game.game_key)}
+                    className={`block flex-shrink-0 cursor-pointer transition-all px-3 py-2 border-r border-gray-100 dark:border-white/5 relative ${
                       isSelected
                         ? ''
                         : game.status === 'LIVE'
@@ -463,7 +468,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                       backgroundColor: brandColor ? `${brandColor}1a` : 'rgba(100,100,100,0.10)',
                       boxShadow: `inset 0 0 0 2px ${brandColor || 'rgba(100,100,100,0.4)'}`,
                     } : undefined}
-                    onClick={() => onGameClick({
+                    onNavigate={() => onGameClick({
                       gameKey: game.game_key,
                       status: game.status,
                       homeTeam: game.home_team,
@@ -540,7 +545,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </EntityLink>
                 </div>
               );
             })}

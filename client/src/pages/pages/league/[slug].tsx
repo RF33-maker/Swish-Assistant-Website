@@ -5,7 +5,8 @@ import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { normalizeInstagramHandle } from "@/lib/instagram";
 import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
-import { competitionSeoDescription, competitionSeoTitle } from "@shared/seo";
+import { competitionSeoDescription, competitionSeoTitle, gamePath, playerPath, teamPath } from "@shared/seo";
+import EntityLink from "@/components/EntityLink";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
@@ -4505,7 +4506,7 @@ export default function LeaguePage() {
                                     </div>
                                   </td>
                                   <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
-                                    <span className="truncate">{team.team}</span>
+                                    <EntityLink href={teamPath(team.originalName || team.team, slug)} className="truncate hover:underline underline-offset-2">{team.team}</EntityLink>
                                   </td>
                                   <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
                                   <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
@@ -4604,7 +4605,7 @@ export default function LeaguePage() {
                                 </div>
                               </td>
                               <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
-                                <span className="truncate">{team.team}</span>
+                                <EntityLink href={teamPath(team.originalName || team.team, slug)} className="truncate hover:underline underline-offset-2">{team.team}</EntityLink>
                               </td>
                               <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
                               <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
@@ -4934,15 +4935,16 @@ export default function LeaguePage() {
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-[color:var(--ch-surface-2)] z-10">
                               <div className="min-w-0">
                                 {player.slug ? (
-                                  <Link
-                                    href={`/competition/${slug}/player/${encodeURIComponent(player.slug)}`}
+                                  <EntityLink
+                                    href={playerPath({ slug: player.slug })}
+                                    onNavigate={() => handleSelectPlayer(player.slug, activeSection, player.playerIds ? Array.from(player.playerIds as Set<string>) : [])}
                                     className="font-medium text-xs md:text-sm truncate hover:underline cursor-pointer"
                                     style={{ color: playerLinkColor }}
                                     onMouseEnter={(e) => { (e.target as HTMLElement).style.color = playerLinkColorHover; }}
                                     onMouseLeave={(e) => { (e.target as HTMLElement).style.color = playerLinkColor; }}
                                   >
                                     {player.name}
-                                  </Link>
+                                  </EntityLink>
                                 ) : (
                                   <div className="font-medium text-xs md:text-sm truncate text-slate-900 dark:text-white">{player.name}</div>
                                 )}
@@ -5260,7 +5262,7 @@ export default function LeaguePage() {
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 text-xs md:text-sm truncate">
                               <Link
-                                href={`/competition/${slug}/team/${encodeURIComponent(team.teamName)}`}
+                                href={teamPath(team.teamName, slug) || `/team/${encodeURIComponent(team.teamName)}`}
                                 className="hover:underline"
                               >
                                 {team.teamName}
@@ -5340,7 +5342,7 @@ export default function LeaguePage() {
                             <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(teamData.team)} />
                           </span>
                           <Link
-                            href={`/competition/${slug}/team/${encodeURIComponent(teamData.team)}`}
+                            href={teamPath(teamData.team, slug) || "/teams"}
                             className="font-semibold text-[color:var(--ch-text)] text-sm md:text-[15px] leading-snug hover:underline underline-offset-2 line-clamp-2"
                           >
                             {teamData.team}
@@ -5966,20 +5968,21 @@ export default function LeaguePage() {
                                       <div className="min-w-0 flex-1">
                                         {isTeam && entity.teamName ? (
                                           <Link
-                                            href={`/competition/${slug}/team/${encodeURIComponent(entity.teamName)}`}
+                                            href={teamPath(entity.teamName, slug) || `/team/${encodeURIComponent(entity.teamName)}`}
                                             className="block text-sm font-medium truncate hover:underline"
                                             style={{ color: playerLinkColor }}
                                           >
                                             {displayName}
                                           </Link>
                                         ) : !isTeam && entity.slug ? (
-                                          <Link
-                                            href={`/competition/${slug}/player/${encodeURIComponent(entity.slug)}`}
+                                          <EntityLink
+                                            href={playerPath({ slug: entity.slug })}
+                                            onNavigate={() => handleSelectPlayer(entity.slug, activeSection)}
                                             className="block text-sm font-medium truncate hover:underline"
                                             style={{ color: playerLinkColor }}
                                           >
                                             {displayName}
-                                          </Link>
+                                          </EntityLink>
                                         ) : (
                                           <p className="text-sm font-medium truncate" style={{ color: playerLinkColor }}>{displayName}</p>
                                         )}
@@ -6438,15 +6441,16 @@ export default function LeaguePage() {
                                       <div className="flex items-center gap-2 min-w-0">
                                         <span className="text-xs font-bold tabular-nums text-slate-400 dark:text-slate-500 w-4 shrink-0">{i + 1}</span>
                                         {p.slug ? (
-                                          <Link
-                                            href={`/competition/${slug}/player/${encodeURIComponent(p.slug)}`}
+                                          <EntityLink
+                                            href={playerPath({ slug: p.slug })}
+                                            onNavigate={() => handleSelectPlayer(p.slug, activeSection)}
                                             className="text-sm font-medium truncate hover:underline"
                                             style={{ color: playerLinkColor }}
                                             onMouseEnter={(e) => { (e.target as HTMLElement).style.color = playerLinkColorHover; }}
                                             onMouseLeave={(e) => { (e.target as HTMLElement).style.color = playerLinkColor; }}
                                           >
                                             {p.name}
-                                          </Link>
+                                          </EntityLink>
                                         ) : (
                                           <span className="text-sm font-medium text-slate-800 dark:text-white truncate">{p.name}</span>
                                         )}
@@ -6663,7 +6667,7 @@ export default function LeaguePage() {
                           <td className={`py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[180px] sticky left-12 md:static z-10 ${stickyBg}`}>
                             <div className="flex items-center gap-2">
                               <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" logoUrl={getTeamLogoUrl(team.team)} />
-                              <span className="truncate">{team.team}</span>
+                              <EntityLink href={teamPath((team as { team: string }).team, slug)} className="truncate hover:underline underline-offset-2">{team.team}</EntityLink>
                             </div>
                           </td>
                           <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>

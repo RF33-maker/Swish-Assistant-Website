@@ -17,6 +17,8 @@ import PlayByPlay from "@/components/PlayByPlay";
 import UpcomingGamePreview from "@/components/UpcomingGamePreview";
 import GameScoreHero, { useMatchupColors, type GameHeroState } from "@/components/game/GameScoreHero";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "@/components/game/GameOverview";
+import { gameRecap } from "@shared/recaps";
+import { playerPath, teamPath } from "@shared/seo";
 
 interface GameSchedule {
   game_key: string;
@@ -53,6 +55,8 @@ interface PlayerStat {
   sfreethrowsmade: number;
   sfreethrowsattempted: number;
   sminutes: string;
+  player_id?: string | null;
+  players?: { slug?: string | null } | null;
 }
 
 interface TeamStat {
@@ -204,8 +208,13 @@ function parseMinutes(minutesStr: string | null | undefined): string {
   return `${wholeMins}:${secs.toString().padStart(2, '0')}`;
 }
 
+const leaderName = (p: PlayerStat) => p.full_name || p.player_name || `${p.firstname || ''} ${p.familyname || ''}`.trim();
+// The player's page, so box-score and leader names are real links.
+const playerHref = (p: PlayerStat) => playerPath({ slug: p.players?.slug, full_name: leaderName(p), id: p.player_id });
+
 const toLeader = (p: PlayerStat): GameLeaderPlayer => ({
-  name: p.full_name || p.player_name || `${p.firstname || ''} ${p.familyname || ''}`.trim(),
+  href: playerHref(p),
+  name: leaderName(p),
   spoints: p.spoints,
   sreboundstotal: p.sreboundstotal,
   sassists: p.sassists,
@@ -350,7 +359,8 @@ export default function GamePage() {
     queryFn: async () => {
       const { data, error } = await db
         .from('player_stats')
-        .select('*')
+        // The player's slug too, so names link straight to their page.
+        .select('*, players:player_id(slug)')
         .eq('game_key', gameKey);
       
       if (error) throw error;
@@ -973,8 +983,8 @@ export default function GamePage() {
               : null}
             homeSub={homeTeamRecord ? `${homeTeamRecord.wins}-${homeTeamRecord.losses}` : undefined}
             awaySub={awayTeamRecord ? `${awayTeamRecord.wins}-${awayTeamRecord.losses}` : undefined}
-            homeHref={leagueSlug ? `/competition/${leagueSlug}/team/${encodeURIComponent(gameData.hometeam)}` : undefined}
-            awayHref={leagueSlug ? `/competition/${leagueSlug}/team/${encodeURIComponent(gameData.awayteam)}` : undefined}
+            homeHref={teamPath(gameData.hometeam, leagueSlug) || undefined}
+            awayHref={teamPath(gameData.awayteam, leagueSlug) || undefined}
             colors={colors}
             badges={isTestMode ? (
               <span className="rounded-full bg-purple-600 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-white">Test mode</span>
@@ -1217,6 +1227,20 @@ export default function GamePage() {
                     awayPlayers={awayPlayerStats.map(toLeader)}
                     events={liveEvents}
                     colors={colors}
+                    recap={isFinal && homeScore != null && awayScore != null ? gameRecap({
+                      home: gameData.hometeam,
+                      away: gameData.awayteam,
+                      homeScore,
+                      awayScore,
+                      competition: gameData.competitionname,
+                      date: gameData.matchtime,
+                      quarters: ([1, 2, 3, 4] as const).map((q) => ({
+                        home: homeTeamStats?.[`p${q}_score`] || 0,
+                        away: awayTeamStats?.[`p${q}_score`] || 0,
+                      })),
+                      topHome: homePlayerStats[0] ? { name: leaderName(homePlayerStats[0]), pts: homePlayerStats[0].spoints, reb: homePlayerStats[0].sreboundstotal, ast: homePlayerStats[0].sassists } : null,
+                      topAway: awayPlayerStats[0] ? { name: leaderName(awayPlayerStats[0]), pts: awayPlayerStats[0].spoints, reb: awayPlayerStats[0].sreboundstotal, ast: awayPlayerStats[0].sassists } : null,
+                    }) : []}
                   />
                 </TabsContent>
 
@@ -1229,16 +1253,18 @@ export default function GamePage() {
                   ) : (
                     <>
                       <BoxScoreTable
-                        players={homePlayerStats}
+                        players={homePlayerStats.map((p) => ({ ...p, href: playerHref(p) }))}
                         teamName={gameData.hometeam}
+                        teamHref={teamPath(gameData.hometeam, leagueSlug)}
                         score={homeScore}
                         leagueId={gameData.league_id}
                         headerColor={colors.homeFill}
                         formatMinutes={parseMinutes}
                       />
                       <BoxScoreTable
-                        players={awayPlayerStats}
+                        players={awayPlayerStats.map((p) => ({ ...p, href: playerHref(p) }))}
                         teamName={gameData.awayteam}
+                        teamHref={teamPath(gameData.awayteam, leagueSlug)}
                         score={awayScore}
                         leagueId={gameData.league_id}
                         headerColor={colors.awayFill}

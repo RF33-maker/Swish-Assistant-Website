@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { TeamLogo } from "@/components/TeamLogo";
 import GameFlowSummary from "@/components/GameFlowSummary";
 import { StatCompareRow, type MatchupColors } from "./GameScoreHero";
+import EntityLink from "@/components/EntityLink";
 
 /**
  * The body of a played game's Game and Team Stats tabs, shared by the league
@@ -34,6 +35,9 @@ export interface GameLeaderPlayer {
   sassists: number;
   ssteals?: number | null;
   sblocks?: number | null;
+  /** The player's page, so leader names are real links. */
+  href?: string | null;
+  onSelect?: (() => void) | null;
 }
 
 type Colors = Pick<MatchupColors, "home" | "away">;
@@ -204,7 +208,11 @@ function LeadersCard({ homeTeam, awayTeam, homePlayers, awayPlayers, leagueId, c
                   return (
                     <div key={key} className="flex items-center gap-3 py-1.5 text-sm">
                       <span className="w-8 shrink-0 text-[10.5px] font-semibold tracking-[0.07em] text-[color:var(--ch-muted)]">{label}</span>
-                      <span className="min-w-0 flex-1 truncate text-[color:var(--ch-text)]">{leader.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-[color:var(--ch-text)]">
+                        {leader.href ? (
+                          <EntityLink href={leader.href} onNavigate={leader.onSelect || undefined} className="hover:underline underline-offset-2">{leader.name}</EntityLink>
+                        ) : leader.name}
+                      </span>
                       <span className="ch-display ch-num text-lg font-bold" style={{ color }}>{n(leader[key])}</span>
                     </div>
                   );
@@ -220,7 +228,7 @@ function LeadersCard({ homeTeam, awayTeam, homePlayers, awayPlayers, leagueId, c
 
 /** Everything on the Game tab once a game has stats. */
 export function GameOverviewSections({
-  homeTeam, awayTeam, leagueId, home, away, homePlayers, awayPlayers, events, colors,
+  homeTeam, awayTeam, leagueId, home, away, homePlayers, awayPlayers, events, colors, recap,
 }: {
   homeTeam: string;
   awayTeam: string;
@@ -231,6 +239,8 @@ export function GameOverviewSections({
   awayPlayers: GameLeaderPlayer[];
   events?: unknown[] | null;
   colors: Colors;
+  /** A written recap of the result (shared/recaps.ts gameRecap). */
+  recap?: string[];
 }) {
   const hasTeamStats = !!home && !!away;
   const hasPlayers = homePlayers.length > 0 || awayPlayers.length > 0;
@@ -241,6 +251,11 @@ export function GameOverviewSections({
 
   return (
     <div className="space-y-4">
+      {recap && recap.length > 0 && (
+        <GameSection title="Game recap">
+          <p className="text-[15px] leading-relaxed text-[color:var(--ch-text)]" data-testid="game-recap">{recap.join(" ")}</p>
+        </GameSection>
+      )}
       {hasTeamStats && (
         <div className="grid gap-4 lg:grid-cols-2">
           <QuarterTable homeTeam={homeTeam} awayTeam={awayTeam} home={home!} away={away!} leagueId={leagueId} colors={colors} />

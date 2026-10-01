@@ -6,6 +6,7 @@ import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { getContrastColor } from "@/lib/colorExtractor";
 import { relativeLuminance, shadeHex } from "@/lib/colorContrast";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
+import EntityLink from "@/components/EntityLink";
 
 interface PlayerBannerProps {
   playerInfo: {
@@ -36,8 +37,11 @@ interface PlayerBannerProps {
   canEditPhoto: boolean;
   brandColorOverride?: string;
   className?: string;
-  leagueChip?: { label: string; onClick: () => void };
-  teamChip?: { label: string; onClick: () => void };
+  /** With an href the chip is a real link (search engines follow these). */
+  leagueChip?: { label: string; onClick: () => void; href?: string | null };
+  teamChip?: { label: string; onClick: () => void; href?: string | null };
+  /** One plain-English line about the player, under their name. */
+  bio?: string | null;
   extraLeagueIds?: string[];
 }
 
@@ -81,6 +85,7 @@ export function PlayerBanner({
   className,
   leagueChip,
   teamChip,
+  bio,
   extraLeagueIds,
 }: PlayerBannerProps) {
   const { primaryColor, colors } = useTeamBranding({
@@ -159,7 +164,16 @@ export function PlayerBanner({
       <div className="relative p-5 md:p-8" style={{ minHeight: 'clamp(200px, 26vw, 320px)' }}>
         {(leagueChip || teamChip) && (
           <div className="flex flex-wrap items-center gap-2 mb-4 max-w-[70%] md:max-w-[60%]">
-            {[leagueChip, teamChip].filter((c): c is NonNullable<typeof c> => !!c).map((chip) => (
+            {[leagueChip, teamChip].filter((c): c is NonNullable<typeof c> => !!c).map((chip) => chip.href ? (
+              <EntityLink
+                key={chip.label}
+                href={chip.href}
+                onNavigate={chip.onClick}
+                className={`inline-flex items-center h-7 px-3 rounded-full border text-xs font-semibold backdrop-blur transition-colors max-w-full ${glass}`}
+              >
+                <span className="truncate">{chip.label}</span>
+              </EntityLink>
+            ) : (
               <button
                 key={chip.label}
                 type="button"
@@ -186,6 +200,11 @@ export function PlayerBanner({
           >
             {playerInfo.name}
           </h1>
+          {bio && (
+            <p className="text-sm mt-2 leading-relaxed" style={{ opacity: 0.88 }} data-testid="text-player-bio">
+              {bio}
+            </p>
+          )}
           {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
             <p className="text-xs mt-2" style={{ opacity: 0.72 }}>
               Previously: {playerInfo.previousTeams.join(", ")}

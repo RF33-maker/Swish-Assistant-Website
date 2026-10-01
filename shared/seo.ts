@@ -1,3 +1,5 @@
+import { clubSlug } from "./teamIdentity";
+
 /**
  * Titles, descriptions and indexing rules for public pages, shared by the
  * server-rendered HTML (server/publicSeo.ts) and the React app (Helmet).
@@ -72,4 +74,34 @@ export function competitionSeoTitle(name: string): string {
 
 export function competitionSeoDescription(name: string, description?: string | null): string {
   return description?.trim() || `${name} standings, results, team stats, player stats and league leaders on ${SITE_NAME}.`;
+}
+
+// ── Canonical URLs ─────────────────────────────────────────────────────────
+// Links built with these point straight at a page's canonical URL (no
+// redirect hop), which is what search engines credit.
+
+const slugifyName = (value: string) =>
+  value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+/** A player's permanent page: their slug, or "name--<id>" when they have none. */
+export function playerPath(player: { slug?: string | null; full_name?: string | null; name?: string | null; id?: string | null }): string | null {
+  if (player.slug) return `/player/${encodeURIComponent(player.slug)}`;
+  if (!player.id) return null;
+  return `/player/${encodeURIComponent(`${slugifyName(player.full_name || player.name || "player") || "player"}--${player.id}`)}`;
+}
+
+/**
+ * A team side's permanent page ("/team/bristol-flyers-ii"); pass the
+ * competition to open it on that season. The canonical is always the bare URL.
+ */
+export function teamPath(teamName: string, competitionSlug?: string | null): string | null {
+  const slug = clubSlug(teamName || "");
+  if (!slug || isPlaceholderTeamName(teamName)) return null;
+  return `/team/${slug}${competitionSlug ? `?competition=${encodeURIComponent(competitionSlug)}` : ""}`;
+}
+
+export function gamePath(competitionSlug: string | null | undefined, gameKey: string): string {
+  return competitionSlug
+    ? `/competition/${encodeURIComponent(competitionSlug)}/game/${encodeURIComponent(gameKey)}`
+    : `/game/${encodeURIComponent(gameKey)}`;
 }

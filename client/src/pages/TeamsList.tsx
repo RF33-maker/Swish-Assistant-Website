@@ -5,6 +5,7 @@ import { Helmet } from "react-helmet-async";
 import { ChevronRight, Search, Shield, Trophy, X } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { teamPath } from "@shared/seo";
 
 const SITE_URL = "https://swishassistant.com";
 const ALL = "all";
@@ -36,7 +37,8 @@ type TeamsDirectory = { clubs: DirectoryClub[]; competitions: CompetitionOption[
 
 const fold = (value: string) => value.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-const teamHref = (c: DirectoryCompetition) => `/competition/${c.slug}/team/${encodeURIComponent(c.teamName)}`;
+// Each team side's permanent page, opened on this competition.
+const teamHref = (c: DirectoryCompetition) => teamPath(c.teamName, c.slug) || `/team/${encodeURIComponent(c.teamName)}`;
 
 type Activity = { lastPlayed: string | null; nextGame: string | null; games: number };
 

@@ -1,17 +1,22 @@
 import type { Express, Request, Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { SITE_BASE, isPlaceholderTeamName } from "@shared/seo";
+import { clubDisplayName, clubSlug, teamClubKey } from "@shared/teamIdentity";
+import { isUnder18, isYouthCompetition } from "@shared/youth";
 
 /**
  * Everything on the site worth a search result, built once from the database
- * and cached: public competitions, the teams and players that actually have
- * games in them, and the games themselves.
+ * and cached: public competitions, the team sides and players that actually
+ * have games, and the games themselves.
  *
- * The sitemap, the server-rendered competition and hub pages, and the noindex
- * rules in publicSeo.ts all read from (or mirror) these rules, so the sitemap
- * only lists URLs that answer 200 with real content. Before, it listed ~2,200
- * players with no games, placeholder teams that 404 ("Team 3", "Coach:") and
- * team URLs spelt differently from the page's own canonical.
+ * The sitemap, the server-rendered pages and the noindex rules in
+ * publicSeo.ts all read from (or mirror) these rules, so the sitemap only
+ * lists URLs that answer 200 with real, indexable content:
+ * - players and teams come from box scores (no empty pages, no placeholder
+ *   teams like "Team 3"), using the spelling the page canonicalises to;
+ * - each team side gets one permanent page (/team/<slug>) across seasons;
+ * - youth competitions, and their players, teams and games, are flagged so
+ *   they stay out of search (shared/youth.ts).
  */
 
 const INDEX_TTL_MS = 60 * 60 * 1000;
@@ -26,12 +31,40 @@ export interface IndexCompetition {
   parentLeagueId: string | null;
   lastmod: string | null;
   games: number;
+  youth: boolean;
 }
+/** A team as it appears in one competition. */
 export interface IndexTeam {
   competitionSlug: string;
-  /** The spelling the team page uses as its canonical (most recent in the stats). */
+  /** The spelling the box scores use most (what this competition calls the side). */
   name: string;
   lastmod: string | null;
+  rows: number;
+  youth: boolean;
+  /** The permanent /team/<slug> page this belongs to. */
+  clubSlug: string;
+}
+export interface IndexClubCompetition {
+  competitionSlug: string;
+  competitionName: string;
+  teamName: string;
+  lastmod: string | null;
+  youth: boolean;
+  /** Where its data lives: the competition itself, then private children that display under it. */
+  leagueIds: string[];
+}
+/** One team side across every competition it has played in. */
+export interface IndexClub {
+  slug: string;
+  name: string;
+  clubKey: string;
+  variants: string[];
+  /** Most recent first. */
+  competitions: IndexClubCompetition[];
+  lastmod: string | null;
+  /** Only ever played in youth competitions. */
+  youth: boolean;
+  rows: number;
 }
 export interface IndexPlayer {
   segment: string;
@@ -43,6 +76,8 @@ export interface IndexPlayer {
   competitionSlugs: string[];
   games: number;
   lastmod: string | null;
+  /** Has played in a youth competition, or is under 18 by date of birth. */
+  youth: boolean;
 }
 export interface IndexGame {
   gameKey: string;
@@ -50,6 +85,7 @@ export interface IndexGame {
   home: string;
   away: string;
   date: string | null;
+  youth: boolean;
 }
 export interface IndexArticle {
   segment: string;
@@ -60,6 +96,10 @@ export interface SeoIndex {
   builtAt: number;
   competitions: IndexCompetition[];
   teams: IndexTeam[];
+  clubs: IndexClub[];
+  clubBySlug: Map<string, IndexClub>;
+  /** Other slugs a club has been reached by ("mk-breakers") → its canonical slug. */
+  clubAlias: Map<string, string>;
   players: IndexPlayer[];
   games: IndexGame[];
   articles: IndexArticle[];
@@ -135,18 +175,27 @@ async function fetchAll<T>(table: string, columns: string, orderBy: string): Pro
   return out;
 }
 
+/** League ids whose competitions can include under-18s (their own age, or a youth parent's). */
+export function youthLeagueIds(competitions: Array<{ league_id: string; name?: string | null; age_group?: string | null; parent_league_id?: string | null }>): Set<string> {
+  const youth = new Set(competitions.filter((c) => isYouthCompetition(c)).map((c) => c.league_id));
+  for (const c of competitions) {
+    if (c.parent_league_id && youth.has(c.parent_league_id)) youth.add(c.league_id);
+  }
+  return youth;
+}
+
 async function buildSeoIndex(): Promise<SeoIndex> {
   const now = Date.now();
   const today = day(now)!;
 
   const [competitionRows, gameRows, statRows, playerRows, articleRows] = await Promise.all([
-    supabaseAdmin.from("competitions").select("league_id, name, slug, is_public, parent_league_id").then(({ data, error }) => {
+    supabaseAdmin.from("competitions").select("league_id, name, slug, is_public, parent_league_id, age_group").then(({ data, error }) => {
       if (error) throw error;
       return data || [];
     }),
     fetchAll<any>("game_schedule", "game_key, league_id, matchtime, hometeam, awayteam", "game_key"),
     fetchAll<any>("player_stats", "id, player_id, league_id, team_name, game_key, created_at", "id"),
-    fetchAll<any>("players", "id, slug, full_name, league_id", "id"),
+    fetchAll<any>("players", "id, slug, full_name, league_id, date_of_birth", "id"),
     supabaseAdmin.from("news_articles").select("id, slug, title, published_at").eq("is_published", true).then(({ data }) => data || []),
   ]);
 
@@ -161,49 +210,119 @@ async function buildSeoIndex(): Promise<SeoIndex> {
     const parentSlug = publicSlugOf.get(c.parent_league_id);
     if (parentSlug) publicSlugOf.set(c.league_id, parentSlug);
   }
+  const youthLeagues = youthLeagueIds(competitionRows as any[]);
+  const leagueIdsBySlug = new Map<string, string[]>();
+  publicSlugOf.forEach((slug, leagueId) => {
+    const own = byLeague.get(leagueId)?.slug === slug;
+    const list = leagueIdsBySlug.get(slug) || [];
+    leagueIdsBySlug.set(slug, own ? [leagueId, ...list] : [...list, leagueId]);
+  });
+  const competitionNameBySlug = new Map<string, string>();
+  for (const c of competitionRows as any[]) if (c.is_public && c.slug) competitionNameBySlug.set(c.slug, c.name || c.slug);
 
   const gameDate = new Map<string, string | null>();
   for (const g of gameRows) gameDate.set(g.game_key, g.matchtime || null);
   const gamesWithStats = new Set<string>();
 
-  // Teams and players come from the box scores, so every URL has games behind it
-  // and uses the same team spelling the team page canonicalises to.
-  const teams = new Map<string, IndexTeam & { rows: Array<{ team_name: string; created_at: string }> }>();
-  const playerStats = new Map<string, { games: Set<string>; lastmod: string | null; team: string | null; latestCreated: string; slug: string; slugs: Set<string> }>();
+  // Teams and players come from the box scores, so every URL has games behind it.
+  const teams = new Map<string, Omit<IndexTeam, "clubSlug"> & { spellings: Array<{ team_name: string; created_at: string }> }>();
+  const playerStats = new Map<string, { games: Set<string>; lastmod: string | null; team: string | null; latestCreated: string; slug: string; slugs: Set<string>; youth: boolean }>();
   for (const s of statRows) {
     const slug = publicSlugOf.get(s.league_id);
     if (!slug) continue;
+    const youth = youthLeagues.has(s.league_id);
     if (s.game_key) gamesWithStats.add(s.game_key);
     const date = day(gameDate.get(s.game_key) || s.created_at);
     const created = String(s.created_at || "");
     const teamName = String(s.team_name || "").trim();
     if (teamName && !isPlaceholderTeamName(teamName)) {
       const key = `${slug}|${slugifyName(teamName)}`;
-      const t = teams.get(key) || { competitionSlug: slug, name: teamName, lastmod: null, rows: [] };
+      const t = teams.get(key) || { competitionSlug: slug, name: teamName, lastmod: null, rows: 0, youth: false, spellings: [] };
       t.lastmod = later(t.lastmod, date);
-      t.rows.push({ team_name: teamName, created_at: created });
+      t.rows += 1;
+      t.youth = t.youth || youth;
+      t.spellings.push({ team_name: teamName, created_at: created });
       teams.set(key, t);
     }
     if (s.player_id) {
-      const p = playerStats.get(s.player_id) || { games: new Set<string>(), lastmod: null, team: null, latestCreated: "", slug, slugs: new Set<string>() };
+      const p = playerStats.get(s.player_id) || { games: new Set<string>(), lastmod: null, team: null, latestCreated: "", slug, slugs: new Set<string>(), youth: false };
       p.games.add(s.game_key || s.id);
       p.slugs.add(slug);
+      p.youth = p.youth || youth;
       p.lastmod = later(p.lastmod, date);
       if (created >= p.latestCreated) { p.latestCreated = created; p.team = teamName || p.team; p.slug = slug; }
       playerStats.set(s.player_id, p);
     }
   }
 
+  const teamList = Array.from(teams.values()).map(({ spellings, ...t }) => ({ ...t, name: pickTeamSpelling(spellings) || t.name }));
+
+  // ── One permanent page per team side ──────────────────────────────────
+  const groups = new Map<string, typeof teamList>();
+  for (const t of teamList) {
+    const key = teamClubKey(t.name);
+    groups.set(key, [...(groups.get(key) || []), t]);
+  }
+  const draftClubs = Array.from(groups.entries()).map(([clubKey, members]) => {
+    const adult = members.filter((m) => !m.youth);
+    const pool = adult.length ? adult : members;
+    // The most-used name across the side's competitions, without NBL's suffixes.
+    const best = [...pool].sort((a, b) => b.rows - a.rows || a.name.localeCompare(b.name))[0];
+    return {
+      clubKey,
+      name: clubDisplayName(best.name),
+      variants: Array.from(new Set(members.map((m) => m.name))),
+      competitions: members
+        .map((m) => ({
+          competitionSlug: m.competitionSlug,
+          competitionName: competitionNameBySlug.get(m.competitionSlug) || m.competitionSlug,
+          teamName: m.name,
+          lastmod: m.lastmod,
+          youth: m.youth,
+          leagueIds: leagueIdsBySlug.get(m.competitionSlug) || [],
+        }))
+        .sort((a, b) => String(b.lastmod || "").localeCompare(String(a.lastmod || ""))),
+      lastmod: pool.reduce<string | null>((acc, m) => later(acc, m.lastmod), null),
+      youth: adult.length === 0,
+      rows: members.reduce((n, m) => n + m.rows, 0),
+    };
+  });
+  // Bigger, adult sides claim a contested slug first; later ones get "-2", "-3".
+  draftClubs.sort((a, b) => Number(a.youth) - Number(b.youth) || b.rows - a.rows || a.name.localeCompare(b.name));
+  const clubBySlug = new Map<string, IndexClub>();
+  const clubByKey = new Map<string, IndexClub>();
+  for (const d of draftClubs) {
+    const base = clubSlug(d.name) || "team";
+    let slug = base;
+    for (let n = 2; clubBySlug.has(slug); n++) slug = `${base}-${n}`;
+    const club: IndexClub = { slug, ...d };
+    clubBySlug.set(slug, club);
+    clubByKey.set(d.clubKey, club);
+  }
+  const clubAlias = new Map<string, string>();
+  clubBySlug.forEach((club) => {
+    for (const variant of club.variants) {
+      const alias = clubSlug(variant);
+      if (alias && alias !== club.slug && !clubBySlug.has(alias) && !clubAlias.has(alias)) clubAlias.set(alias, club.slug);
+    }
+  });
+  const indexTeams: IndexTeam[] = teamList
+    .map((t) => ({ ...t, clubSlug: clubByKey.get(teamClubKey(t.name))!.slug }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // ── Players ────────────────────────────────────────────────────────────
   const players = new Map<string, IndexPlayer>();
   for (const row of playerRows) {
     const stats = playerStats.get(row.id);
     if (!stats || !row.id) continue;
     const segment = playerSegment(row);
+    const youth = stats.youth || isUnder18(row.date_of_birth);
     const existing = players.get(segment);
     if (existing) {
       // Several rows can share one slug; the page merges them, so does the index.
       existing.games += stats.games.size;
       existing.lastmod = later(existing.lastmod, stats.lastmod);
+      existing.youth = existing.youth || youth;
       stats.slugs.forEach((slug) => { if (!existing.competitionSlugs.includes(slug)) existing.competitionSlugs.push(slug); });
       continue;
     }
@@ -215,9 +334,11 @@ async function buildSeoIndex(): Promise<SeoIndex> {
       competitionSlugs: Array.from(stats.slugs),
       games: stats.games.size,
       lastmod: stats.lastmod,
+      youth,
     });
   }
 
+  // ── Games and competitions ─────────────────────────────────────────────
   const games: IndexGame[] = [];
   const compLastmod = new Map<string, string | null>();
   const compGames = new Map<string, number>();
@@ -229,12 +350,12 @@ async function buildSeoIndex(): Promise<SeoIndex> {
     if (hasStats || (date && date <= today)) compLastmod.set(slug, later(compLastmod.get(slug) ?? null, date && date <= today ? date : null));
     if (!isIndexableGame({ home: g.hometeam, away: g.awayteam, date: g.matchtime, hasStats }, now)) continue;
     compGames.set(slug, (compGames.get(slug) || 0) + 1);
-    games.push({ gameKey: g.game_key, competitionSlug: slug, home: g.hometeam, away: g.awayteam, date: g.matchtime || null });
+    games.push({ gameKey: g.game_key, competitionSlug: slug, home: g.hometeam, away: g.awayteam, date: g.matchtime || null, youth: youthLeagues.has(g.league_id) });
   }
 
   const competitions: IndexCompetition[] = [];
-  const hasTeams = new Set(Array.from(teams.values()).map((t) => t.competitionSlug));
-  const hasPlayers = new Set(Array.from(players.values()).map((p) => p.competitionSlug));
+  const hasTeams = new Set(indexTeams.map((t) => t.competitionSlug));
+  const hasPlayers = new Set(Array.from(players.values()).flatMap((p) => p.competitionSlugs));
   for (const c of competitionRows as any[]) {
     if (!c.is_public || !c.slug) continue;
     const slug = c.slug;
@@ -246,6 +367,7 @@ async function buildSeoIndex(): Promise<SeoIndex> {
       parentLeagueId: c.parent_league_id && byLeague.get(c.parent_league_id)?.is_public ? c.parent_league_id : null,
       lastmod: compLastmod.get(slug) ?? null,
       games: compGames.get(slug) || 0,
+      youth: youthLeagues.has(c.league_id),
     });
   }
 
@@ -256,9 +378,10 @@ async function buildSeoIndex(): Promise<SeoIndex> {
   return {
     builtAt: now,
     competitions: competitions.sort((a, b) => a.name.localeCompare(b.name)),
-    teams: Array.from(teams.values())
-      .map(({ rows, ...t }) => ({ ...t, name: pickTeamSpelling(rows) || t.name }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
+    teams: indexTeams,
+    clubs: Array.from(clubBySlug.values()).sort((a, b) => a.name.localeCompare(b.name)),
+    clubBySlug,
+    clubAlias,
     players: Array.from(players.values()).sort((a, b) => a.name.localeCompare(b.name)),
     games,
     articles,
@@ -284,7 +407,21 @@ export async function getSeoIndex(forceRefresh = false): Promise<SeoIndex> {
   }
 }
 
-// ── Sitemap ────────────────────────────────────────────────────────────────
+/** A team page key — its slug, an old slug, or a team name — to its permanent page. */
+export function resolveClub(index: SeoIndex, key: string): IndexClub | null {
+  const raw = (key || "").trim();
+  const candidates = [raw.toLowerCase(), clubSlug(raw), slugifyName(raw)];
+  for (const c of candidates) {
+    if (!c) continue;
+    const direct = index.clubBySlug.get(c);
+    if (direct) return direct;
+    const alias = index.clubAlias.get(c);
+    if (alias) return index.clubBySlug.get(alias) || null;
+  }
+  return null;
+}
+
+// ── Sitemap and the team-page lookup ───────────────────────────────────────
 
 const SITEMAP_URL_LIMIT = 40_000; // Below the protocol's 50,000.
 
@@ -300,7 +437,8 @@ export function sitemapEntries(index: SeoIndex): Array<{ path: string; lastmod: 
     seen.add(path);
     entries.push({ path, lastmod });
   };
-  const latest = index.competitions.reduce<string | null>((acc, c) => later(acc, c.lastmod), null);
+  const adultComps = index.competitions.filter((c) => !c.youth);
+  const latest = adultComps.reduce<string | null>((acc, c) => later(acc, c.lastmod), null);
   const latestNews = index.articles.reduce<string | null>((acc, a) => later(acc, a.lastmod), null);
 
   add("/", latest);
@@ -309,10 +447,11 @@ export function sitemapEntries(index: SeoIndex): Array<{ path: string; lastmod: 
   add("/players", latest);
   add("/scores", latest);
   for (const a of index.articles) add(`/news/${encodeURIComponent(a.segment)}`, a.lastmod);
-  for (const c of index.competitions) add(`/competition/${encodeURIComponent(c.slug)}`, c.lastmod);
-  for (const t of index.teams) add(`/competition/${encodeURIComponent(t.competitionSlug)}/team/${encodeURIComponent(t.name)}`, t.lastmod);
-  for (const p of index.players) add(`/player/${encodeURIComponent(p.segment)}`, p.lastmod);
-  for (const g of index.games) add(`/competition/${encodeURIComponent(g.competitionSlug)}/game/${encodeURIComponent(g.gameKey)}`, g.date ? g.date.split("T")[0] : null);
+  for (const c of adultComps) add(`/competition/${encodeURIComponent(c.slug)}`, c.lastmod);
+  // One permanent page per team side (not one per season).
+  for (const club of index.clubs) if (!club.youth) add(`/team/${club.slug}`, club.lastmod);
+  for (const p of index.players) if (!p.youth) add(`/player/${encodeURIComponent(p.segment)}`, p.lastmod);
+  for (const g of index.games) if (!g.youth) add(`/competition/${encodeURIComponent(g.competitionSlug)}/game/${encodeURIComponent(g.gameKey)}`, g.date ? g.date.split("T")[0] : null);
   // Legal pages: indexable, but no meaningful last-modified date to give.
   for (const p of ["/privacy", "/terms", "/cookies"]) add(p, null);
   return entries;
@@ -330,8 +469,8 @@ function sitemapDocuments(index: SeoIndex): string[] {
   return docs;
 }
 
-export function registerSitemapRoutes(app: Express) {
-  const send = (res: Response, xml: string) => {
+export function registerSeoRoutes(app: Express) {
+  const sendXml = (res: Response, xml: string) => {
     res.setHeader("Content-Type", "application/xml; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400");
     res.send(xml);
@@ -341,9 +480,9 @@ export function registerSitemapRoutes(app: Express) {
     try {
       const index = await getSeoIndex(req.query.refresh === "1");
       const docs = sitemapDocuments(index);
-      if (docs.length === 1) return send(res, docs[0]);
+      if (docs.length === 1) return sendXml(res, docs[0]);
       const lastmod = new Date(index.builtAt).toISOString().split("T")[0];
-      send(res, `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${docs
+      sendXml(res, `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${docs
         .map((_, i) => `  <sitemap>\n    <loc>${SITE_BASE}/sitemap/${i + 1}.xml</loc>\n    <lastmod>${lastmod}</lastmod>\n  </sitemap>\n`)
         .join("")}</sitemapindex>`);
     } catch (err: any) {
@@ -357,10 +496,37 @@ export function registerSitemapRoutes(app: Express) {
       const docs = sitemapDocuments(await getSeoIndex());
       const doc = docs[Number(req.params[0]) - 1];
       if (!doc) return res.status(404).send("Sitemap not found");
-      send(res, doc);
+      sendXml(res, doc);
     } catch (err: any) {
       console.error("Sitemap page generation error:", err?.message || err);
       res.status(500).send("Failed to generate sitemap");
+    }
+  });
+
+  // Resolves /team/<slug> (or an old slug or team name) for the team page:
+  // the side's canonical slug, display name and every competition it has
+  // played in, most recent first.
+  app.get("/api/public/team-page/:key", async (req: Request, res: Response) => {
+    try {
+      const club = resolveClub(await getSeoIndex(), decodeURIComponent(req.params.key));
+      if (!club) return res.status(404).json({ error: "Team not found" });
+      res.setHeader("Cache-Control", "public, max-age=300, s-maxage=600, stale-while-revalidate=86400");
+      res.json({
+        slug: club.slug,
+        name: club.name,
+        youth: club.youth,
+        competitions: club.competitions.map((c) => ({
+          slug: c.competitionSlug,
+          name: c.competitionName,
+          teamName: c.teamName,
+          lastPlayed: c.lastmod,
+          youth: c.youth,
+          leagueIds: c.leagueIds,
+        })),
+      });
+    } catch (err: any) {
+      console.error("Team page lookup failed:", err?.message || err);
+      res.status(500).json({ error: "Team lookup failed" });
     }
   });
 }
