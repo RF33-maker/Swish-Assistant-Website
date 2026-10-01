@@ -335,14 +335,16 @@ export const documentAssets = pgTable("document_assets", {
 });
 
 // Scouting reports table for the new template system
+// Written from the Coaches Hub scouting editor. RLS limits each user to their
+// own rows; created_by defaults to auth.uid() (FK to auth.users) in the database.
 export const scoutingReports = pgTable("scouting_reports", {
   id: uuid("id").primaryKey().defaultRandom(),
-  leagueId: uuid("league_id").notNull(),
-  playerName: text("player_name").notNull(),
+  leagueId: uuid("league_id"), // FK → competitions.league_id
+  name: text("name").notNull(),
   templateId: text("template_id").notNull(), // e.g. "clean-pro"
-  data: jsonb("data").notNull(), // ScoutingReport payload
+  data: jsonb("data").notNull(), // { html, report: ScoutingReport | null }
   createdBy: uuid("created_by"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 export const newsArticles = pgTable("news_articles", {
@@ -395,10 +397,9 @@ export const insertDocumentAssetSchema = createInsertSchema(documentAssets).pick
 
 export const insertScoutingReportSchema = createInsertSchema(scoutingReports).pick({
   leagueId: true,
-  playerName: true,
+  name: true,
   templateId: true,
   data: true,
-  createdBy: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
