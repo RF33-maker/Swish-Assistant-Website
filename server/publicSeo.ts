@@ -569,11 +569,12 @@ export async function servePublicSeo(req: Request, res: Response, next: NextFunc
   const competitionGameMatch = pathname.match(/^\/competition\/([^/]+)\/game\/([^/]+)$/i);
   const competitionPlayerMatch = pathname.match(/^\/competition\/([^/]+)\/player\/([^/]+)$/i);
   const competitionLeadersMatch = pathname.match(/^\/competition-leaders\/([^/]+)$/i);
+  const competitionTeamsMatch = pathname.match(/^\/(?:competition|league)\/([^/]+)\/teams$/i);
   const directGameMatch = pathname.match(/^\/game\/([^/]+)$/i);
   const competitionTeamMatch = pathname.match(/^\/competition\/([^/]+)\/team\/([^/]+)$/i);
   const teamMatch = pathname.match(/^\/team\/([^/]+)$/i);
   const competitionMatch = pathname.match(/^\/competition\/([^/]+)$/i);
-  if (!homeMatch && !playerMatch && !competitionGameMatch && !competitionPlayerMatch && !competitionLeadersMatch && !directGameMatch && !competitionTeamMatch && !teamMatch && !competitionMatch) return next();
+  if (!homeMatch && !playerMatch && !competitionGameMatch && !competitionPlayerMatch && !competitionLeadersMatch && !competitionTeamsMatch && !directGameMatch && !competitionTeamMatch && !teamMatch && !competitionMatch) return next();
 
   try {
     if (req.path.length > 1 && req.path.endsWith("/")) {
@@ -582,7 +583,12 @@ export async function servePublicSeo(req: Request, res: Response, next: NextFunc
     if (competitionPlayerMatch) return res.redirect(301, `/player/${encodeURIComponent(decodeURIComponent(competitionPlayerMatch[2]))}`);
     if (competitionLeadersMatch) {
       const slug = decodeURIComponent(competitionLeadersMatch[1]);
-      return res.redirect(301, `/competition/${encodeURIComponent(slug)}`);
+      return res.redirect(301, `/competition/${encodeURIComponent(slug)}?section=leaders`);
+    }
+    // The old per-competition teams page is now the league page's Teams tab.
+    if (competitionTeamsMatch) {
+      const slug = decodeURIComponent(competitionTeamsMatch[1]);
+      return res.redirect(301, `/competition/${encodeURIComponent(slug)}?section=teams`);
     }
     let page: SeoPage | undefined;
     if (homeMatch) {

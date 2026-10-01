@@ -36,7 +36,7 @@ export function PlayerPhotoUploader() {
       while (hasMore) {
         const { data, error } = await supabase
           .from("players")
-          .select("*")
+          .select("id, full_name, team_name, photo_path, created_at")
           .order("full_name", { ascending: true })
           .range(page * pageSize, (page + 1) * pageSize - 1);
         

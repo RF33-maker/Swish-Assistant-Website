@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { TeamLogo } from "@/components/TeamLogo";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
-import ShareableCard from "@/components/ShareableCard";
-import { useTeamBranding } from "@/hooks/useTeamBranding";
-import { getTeamLogoCached } from "@/utils/teamLogoCache";
-import { generateTrendingCardBlob } from "@/lib/generateTrendingCard";
+import CardFanCarousel from "@/components/ui/card-fan-carousel";
+import SectionHeader from "@/components/home/SectionHeader";
+import TradingCard, { type TradingCardPerformance } from "@/components/cards/TradingCard";
+import { Flame, Loader2, Trophy } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 
 interface PerfRow {
   league_id: string;
@@ -26,6 +26,8 @@ interface PerfRow {
   fga: number | null;
   ftm?: number | null;
   fta: number | null;
+  tpm?: number | null;
+  tpa?: number | null;
   ts_pct: number | null;
   game_score: number | null;
   opponent_name?: string | null;
@@ -43,326 +45,293 @@ interface LeagueMetaRow {
   name: string | null;
 }
 
+interface TrendingCompetition {
+  league_id: string;
+  name: string;
+  logo_url: string | null;
+}
+
 interface TrendingData {
   perfs: PerfRow[];
   leagueNames: Record<string, string>;
-  playerMeta: Record<string, { slug: string | null; photoUrl: string | null; profileAvailable: boolean }>;
+  leagueLogos: Record<string, string | null>;
+  /** The picker's competitions, and the one shown (null for "latest"). */
+  competitions: TrendingCompetition[];
+  competitionId: string | null;
+  /** `photoUrl` is the cut-out; `profilePhotoUrl` the ordinary profile photo. */
+  playerMeta: Record<string, { slug: string | null; photoUrl: string | null; profilePhotoUrl: string | null; profileAvailable: boolean }>;
 }
 
 const ROTATE_MS = 6000;
+/** The picker's default: the newest games, whichever competition they're in. */
+const LATEST = "latest";
 
-function formatDate(s: string | null) {
-  if (!s) return "";
-  try {
-    return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  } catch {
-    return "";
-  }
-}
-
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="flex flex-col items-center min-w-[44px]">
-      <span className="text-base md:text-lg font-bold text-slate-900 dark:text-white tabular-nums">
-        {value}
-      </span>
-      <span className="text-[10px] md:text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function StatBlock({ perf, tsPct }: { perf: PerfRow; tsPct: string }) {
-  return (
-    <div className="grid grid-cols-5 gap-y-3 gap-x-2">
-      <Stat label="GmSc" value={perf.game_score ?? 0} />
-      <Stat label="PTS" value={perf.pts ?? 0} />
-      <Stat label="REB" value={perf.reb ?? 0} />
-      <Stat label="AST" value={perf.ast ?? 0} />
-      <Stat label="STL" value={perf.stl ?? 0} />
-      <Stat label="BLK" value={perf.blk ?? 0} />
-      <Stat label="TOV" value={perf.tov ?? 0} />
-      <Stat label="FGA" value={perf.fga ?? 0} />
-      <Stat label="FTA" value={perf.fta ?? 0} />
-      <Stat label="TS%" value={tsPct} />
-    </div>
-  );
-}
-
-
-export default function TrendingPerformanceSection() {
-  const [, setLocation] = useLocation();
-  const [index, setIndex] = useState(0);
-  const [tabHidden, setTabHidden] = useState(
-    typeof document !== "undefined" ? document.hidden : false
-  );
-  const [isDark, setIsDark] = useState(
-    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
-  );
-
-  const { data, isLoading } = useQuery<TrendingData>({
-    queryKey: ["home", "trending-performance", "v15-current-competition"],
-    staleTime: 15 * 1000,
-    refetchInterval: 30 * 1000,
-    refetchOnWindowFocus: true,
-    queryFn: async () => {
-      const empty: TrendingData = { perfs: [], leagueNames: {}, playerMeta: {} };
-      try {
-        const res = await fetch("/api/home/trending-performances");
-        if (!res.ok) return empty;
-        const json = await res.json() as {
-          perfs: PerfRow[];
-          leagueNames: Record<string, string>;
-          playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null; profileAvailable: boolean }>;
-        };
-        const playerMeta: TrendingData["playerMeta"] = {};
-        for (const [id, meta] of Object.entries(json.playerMeta || {})) {
-          playerMeta[id] = {
-            slug: meta.slug,
-            photoUrl: getPlayerPhotoUrlCached(meta.photo_path_bg_removed),
-            profileAvailable: meta.profileAvailable,
-          };
-        }
-        return { perfs: json.perfs || [], leagueNames: json.leagueNames || {}, playerMeta };
-      } catch (err) {
-        console.error("[TrendingPerf] fetch error", err);
-        return empty;
-      }
-    },
-  });
-
-  const perfs = data?.perfs ?? [];
-  const leagueNames = data?.leagueNames ?? {};
-  const playerMeta = data?.playerMeta ?? {};
-
-  useEffect(() => {
-    if (index >= perfs.length && perfs.length > 0) setIndex(0);
-  }, [perfs.length, index]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const onChange = () => setTabHidden(document.hidden);
-    document.addEventListener("visibilitychange", onChange);
-    return () => document.removeEventListener("visibilitychange", onChange);
-  }, []);
-
-  // Track dark-mode class changes so the compact card re-renders with the right colours.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (perfs.length <= 1 || tabHidden) return;
-    const id = setInterval(() => {
-      setIndex((i) => (i + 1) % perfs.length);
-    }, ROTATE_MS);
-    return () => clearInterval(id);
-  }, [perfs.length, tabHidden]);
-
-  const perf = perfs[index] || null;
-  const meta = perf ? playerMeta[perf.player_id] : undefined;
-  const photoUrl = meta?.photoUrl || null;
-  const playerSlug = meta?.slug || null;
-  const leagueName = perf ? leagueNames[perf.league_id] : undefined;
-
-  const { primaryColor } = useTeamBranding({
-    teamName: perf?.team_name || "",
-    leagueId: perf?.league_id || "",
-    enabled: !!(perf?.team_name && perf?.league_id),
-  });
-
-  const [shareTeamLogoUrl, setShareTeamLogoUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    setShareTeamLogoUrl(null);
-    if (!perf?.team_name || !perf?.league_id) return;
-    void getTeamLogoCached({ leagueId: perf.league_id, teamName: perf.team_name }).then((url) => {
-      if (!cancelled) setShareTeamLogoUrl(url);
-    });
-    return () => { cancelled = true; };
-  }, [perf?.team_name, perf?.league_id]);
-
-  const tsPct = useMemo(() => {
-    if (!perf) return "—";
-    return perf.ts_pct !== null && perf.ts_pct !== undefined
-      ? `${(Number(perf.ts_pct) * 100).toFixed(1)}`
-      : "—";
-  }, [perf]);
-
+/** Where a performance's card opens: the player's profile, when it's public. */
+function profileHref(perf: PerfRow, meta: TrendingData["playerMeta"][string] | undefined): string | null {
   // Fall back to the raw player_id only when we know the player's own league is
   // public — RLS hides the row (and the profile page 404s) otherwise.
-  const canViewProfile = !!perf && (!!playerSlug || (!!perf.player_id && !!meta?.profileAvailable));
+  if (meta?.slug) return `/player/${meta.slug}`;
+  if (perf.player_id && meta?.profileAvailable) return `/player/${perf.player_id}`;
+  return null;
+}
 
-  const goToPerformance = () => {
-    if (!perf || !canViewProfile) return;
-    if (playerSlug) setLocation(`/player/${playerSlug}`);
-    else if (perf.player_id) setLocation(`/player/${perf.player_id}`);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="w-full max-w-xl mb-6 md:mb-8">
-        <div className="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm p-4 md:p-5 animate-pulse">
-          <div className="flex items-center justify-between mb-4">
-            <div className="h-4 w-40 bg-slate-200 dark:bg-neutral-800 rounded" />
-            <div className="h-4 w-4 bg-slate-200 dark:bg-neutral-800 rounded" />
-          </div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-12 w-12 rounded-full bg-slate-200 dark:bg-neutral-800" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-32 bg-slate-200 dark:bg-neutral-800 rounded" />
-              <div className="h-3 w-24 bg-slate-200 dark:bg-neutral-800 rounded" />
-            </div>
-          </div>
-          <div className="grid grid-cols-5 gap-2">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-10 bg-slate-200 dark:bg-neutral-800 rounded" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!perf) return null;
-
-  const generateCardBlob = () => generateTrendingCardBlob({
+/** A trending row in the shared trading card's shape. */
+function toCardPerformance(
+  perf: PerfRow,
+  leagueName: string | undefined,
+  leagueLogo: string | null | undefined,
+  meta: TrendingData["playerMeta"][string] | undefined,
+): TradingCardPerformance {
+  return {
+    playerId: perf.player_id,
     playerName: perf.full_name,
     teamName: perf.team_name,
+    leagueId: perf.league_id,
+    leagueName,
+    leagueLogo,
     gameDate: perf.game_date,
     opponentName: perf.opponent_name,
     gameResult: perf.game_result,
-    tsPct,
-    gmSc: perf.game_score,
+    gameScore: perf.game_score,
     pts: perf.pts,
     reb: perf.reb,
     ast: perf.ast,
     stl: perf.stl,
     blk: perf.blk,
     tov: perf.tov,
-    fgm: perf.fgm ?? null,
+    fgm: perf.fgm,
     fga: perf.fga,
-    ftm: perf.ftm ?? null,
+    tpm: perf.tpm,
+    tpa: perf.tpa,
+    ftm: perf.ftm,
     fta: perf.fta,
-    photoUrl,
-    teamLogoUrl: shareTeamLogoUrl,
-    leagueName,
-    isDark,
-    cardWidth: 560,
+    tsPct: perf.ts_pct,
+    cutoutUrl: meta?.photoUrl,
+    profilePhotoUrl: meta?.profilePhotoUrl,
+  };
+}
+
+/** Fetches one pick of trending performances: the latest, or one competition's. */
+async function fetchTrending(competition: string): Promise<TrendingData> {
+  const empty: TrendingData = { perfs: [], leagueNames: {}, leagueLogos: {}, playerMeta: {}, competitions: [], competitionId: null };
+  try {
+    const query = competition === LATEST ? "" : `?competition=${encodeURIComponent(competition)}`;
+    const res = await fetch(`/api/home/trending-performances${query}`);
+    if (!res.ok) return empty;
+    const json = await res.json() as {
+      perfs: PerfRow[];
+      leagueNames: Record<string, string>;
+      leagueLogos?: Record<string, string | null>;
+      playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null; photo_path?: string | null; profileAvailable: boolean }>;
+      competitions?: TrendingCompetition[];
+      competitionId?: string | null;
+    };
+    const playerMeta: TrendingData["playerMeta"] = {};
+    for (const [id, meta] of Object.entries(json.playerMeta || {})) {
+      playerMeta[id] = {
+        slug: meta.slug,
+        photoUrl: getPlayerPhotoUrlCached(meta.photo_path_bg_removed),
+        profilePhotoUrl: getPlayerPhotoUrlCached(meta.photo_path),
+        profileAvailable: meta.profileAvailable,
+      };
+    }
+    return {
+      perfs: json.perfs || [],
+      leagueNames: json.leagueNames || {},
+      leagueLogos: json.leagueLogos || {},
+      playerMeta,
+      competitions: json.competitions || [],
+      competitionId: json.competitionId ?? null,
+    };
+  } catch (err) {
+    console.error("[TrendingPerf] fetch error", err);
+    return empty;
+  }
+}
+
+const trendingKey = (competition: string) => ["home", "trending-performance", "v17-competitions", competition];
+
+/** A competition's logo in a small tile; a flame for "latest games". */
+function CompetitionMark({ competition }: { competition?: TrendingCompetition }) {
+  if (!competition) {
+    return (
+      <span className="h-6 w-6 shrink-0 rounded-md bg-orange-500/10 text-orange-500 flex items-center justify-center">
+        <Flame className="h-3.5 w-3.5" aria-hidden="true" />
+      </span>
+    );
+  }
+  return (
+    <span className="h-6 w-6 shrink-0 rounded-md bg-white ring-1 ring-black/5 flex items-center justify-center overflow-hidden">
+      {competition.logo_url ? (
+        <img src={competition.logo_url} alt="" className="h-5 w-5 object-contain" />
+      ) : (
+        <Trophy className="h-3.5 w-3.5 text-orange-500" aria-hidden="true" />
+      )}
+    </span>
+  );
+}
+
+/**
+ * The homepage's trending performances: the best recent stat lines across
+ * our leagues, dealt out as a fanned hand of trading cards. The centre card
+ * opens the player; side cards come to the centre; it advances on its own
+ * every few seconds while it's on screen. A picker switches from the latest
+ * games to any competition that's played recently.
+ */
+export default function TrendingPerformanceSection({
+  headerClassName = "max-w-7xl mx-auto px-5 md:px-8",
+}: {
+  /** Where the heading sits, so it can line up with the page around it. */
+  headerClassName?: string;
+} = {}) {
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const [competition, setCompetition] = useState(LATEST);
+
+  const { data, isLoading, isPlaceholderData } = useQuery<TrendingData>({
+    queryKey: trendingKey(competition),
+    queryFn: () => fetchTrending(competition),
+    staleTime: 15 * 1000,
+    refetchInterval: competition === LATEST ? 30 * 1000 : 60 * 1000,
+    refetchOnWindowFocus: true,
+    // Keep the current hand on the table while another competition loads.
+    placeholderData: keepPreviousData,
   });
 
-  return (
-    <div className="w-full max-w-xl mb-6 md:mb-8 text-left">
-      <ShareableCard
-        title="Top Performance"
-        fileSlug={`trending-${perf.player_id}-${perf.game_date}`}
-        player={{
-          name: perf.full_name,
-          team: perf.team_name || leagueName || "",
-          photoUrl,
-          primaryColor,
-          teamLogoUrl: shareTeamLogoUrl,
-        }}
-        shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.game_date)}` : formatDate(perf.game_date)}
-        generateCardBlob={generateCardBlob}
+  // The picker keeps its list even if one competition's request fails.
+  const [options, setOptions] = useState<TrendingCompetition[]>([]);
+  useEffect(() => {
+    if (data?.competitions.length) setOptions(data.competitions);
+  }, [data?.competitions]);
+
+  // Opening the picker warms every competition, so a choice lands quickly.
+  const prefetchCompetitions = () => {
+    for (const c of options) {
+      void queryClient.prefetchQuery({
+        queryKey: trendingKey(c.league_id),
+        queryFn: () => fetchTrending(c.league_id),
+        staleTime: 60 * 1000,
+      });
+    }
+  };
+
+  const perfs = data?.perfs ?? [];
+  const leagueNames = data?.leagueNames ?? {};
+  const leagueLogos = data?.leagueLogos ?? {};
+  const playerMeta = data?.playerMeta ?? {};
+  const selected = options.find((c) => c.league_id === competition);
+  const switching = isPlaceholderData;
+
+  const open = (perf: PerfRow) => {
+    const href = profileHref(perf, playerMeta[perf.player_id]);
+    if (href) setLocation(href);
+  };
+
+  if (competition === LATEST && !isLoading && perfs.length === 0) return null;
+
+  const picker = options.length > 0 ? (
+    <Select
+      value={competition}
+      onValueChange={setCompetition}
+      onOpenChange={(isOpen) => { if (isOpen) prefetchCompetitions(); }}
+    >
+      <SelectTrigger
+        aria-label="Show performances from"
+        className="h-11 w-full sm:w-[290px] rounded-xl border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] px-3.5 text-left text-sm font-semibold text-[color:var(--ch-text)] shadow-[var(--ch-shadow)] focus:ring-2 focus:ring-orange-400/50 focus:ring-offset-0"
+        data-testid="trending-competition-picker"
       >
-        <div
-          role={canViewProfile ? "button" : undefined}
-          tabIndex={canViewProfile ? 0 : undefined}
-          onClick={canViewProfile ? goToPerformance : undefined}
-          onKeyDown={canViewProfile ? (e) => {
-            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToPerformance(); }
-          } : undefined}
-          className={`group block w-full text-left rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm transition-all p-4 md:p-5 focus:outline-none focus:ring-2 focus:ring-orange-400 ${canViewProfile ? "hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 cursor-pointer" : ""}`}
-          data-testid="trending-performance-card"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-3 pr-10">
-            <div className="flex items-center gap-2 min-w-0">
-              <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white whitespace-nowrap flex-shrink-0">
-                Trending Performance
-              </h3>
-              {leagueName && (
-                <span className="text-[10px] md:text-xs uppercase tracking-wide text-orange-600 dark:text-orange-400 font-semibold truncate min-w-0">
-                  {leagueName}
-                </span>
-              )}
-            </div>
+        {/* The trigger line-clamps its direct span, so the row sits inside one. */}
+        <span>
+          <span className="flex items-center gap-2.5 min-w-0">
+            {switching ? (
+              <span className="h-6 w-6 shrink-0 flex items-center justify-center">
+                <Loader2 className="h-4 w-4 animate-spin text-orange-500" aria-hidden="true" />
+              </span>
+            ) : (
+              <CompetitionMark competition={selected} />
+            )}
+            <span className="truncate">{selected?.name ?? "Latest games"}</span>
+          </span>
+        </span>
+      </SelectTrigger>
+      <SelectContent className="rounded-xl p-1 shadow-xl" style={{ fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" }}>
+        <SelectItem value={LATEST} className="rounded-lg py-2 pr-3 text-sm font-medium">
+          <span className="flex items-center gap-2.5">
+            <CompetitionMark />
+            Latest games
+          </span>
+        </SelectItem>
+        {options.map((c) => (
+          <SelectItem key={c.league_id} value={c.league_id} className="rounded-lg py-2 pr-3 text-sm font-medium">
+            <span className="flex items-center gap-2.5 min-w-0">
+              <CompetitionMark competition={c} />
+              <span className="truncate">{c.name}</span>
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  ) : undefined;
+
+  return (
+    <section className="py-10 md:py-14" aria-labelledby="trending-heading">
+      <div className={headerClassName}>
+        <SectionHeader
+          id="trending-heading"
+          eyebrow="Trending"
+          title="Top performances"
+          description={
+            selected
+              ? `The standout stat lines from the latest round in ${selected.name}. Tap a card to see the player.`
+              : "The standout stat lines from across our leagues. Tap a card to see the player."
+          }
+          action={picker}
+        />
+      </div>
+      {/* overflow-x-clip: the outer cards fan past the edges on small screens
+          without causing a sideways scroll. The top padding is headroom for
+          a hovered card's lift, so it never covers the heading. */}
+      <div className="max-w-7xl mx-auto px-3 md:px-8 pt-6 md:pt-10 overflow-x-clip">
+        {isLoading ? (
+          <div className="fan-layout flex items-start justify-center gap-4" style={{ height: "calc(var(--fan-card-h) + 4rem)" }} aria-busy="true">
+            {[-1, 0, 1].map((i) => (
+              <div
+                key={i}
+                className="ch-skel rounded-[18px] shrink-0"
+                style={{
+                  width: "var(--fan-card-w)",
+                  height: "var(--fan-card-h)",
+                  transform: `translateY(${Math.abs(i) * 24}px) rotate(${i * 7}deg) scale(${i === 0 ? 1 : 0.93})`,
+                  opacity: i === 0 ? 1 : 0.6,
+                }}
+              />
+            ))}
           </div>
-
-          {/* Player + meta */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-12 w-12 md:h-14 md:w-14 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-amber-100 dark:from-neutral-800 dark:to-neutral-800 flex items-center justify-center flex-shrink-0">
-              {photoUrl ? (
-                <img src={photoUrl} alt={perf.full_name} className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-orange-600 dark:text-orange-300 font-bold text-sm">
-                  {perf.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
-                </span>
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-slate-900 dark:text-white truncate">{perf.full_name}</div>
-              <div className="flex items-center gap-1.5 text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">
-                {perf.team_name && (
-                  <>
-                    <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-5 !h-5" />
-                    <span className="sr-only">{perf.team_name}</span>
-                  </>
-                )}
-                {perf.opponent_name ? (
-                  <>
-                    <span aria-hidden="true">vs</span>
-                    <span className="truncate">{perf.opponent_name}</span>
-                    {perf.game_result && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span className={`font-semibold shrink-0 ${perf.game_result.startsWith("W") ? "text-green-600 dark:text-green-400" : perf.game_result.startsWith("L") ? "text-red-500 dark:text-red-400" : ""}`}>
-                          {perf.game_result}
-                        </span>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <span>{formatDate(perf.game_date)}</span>
-                )}
-              </div>
-            </div>
+        ) : perfs.length === 0 ? (
+          <div className="ch-card mx-auto max-w-md px-6 py-10 text-center text-sm text-[color:var(--ch-text-2)]">
+            No standout performances in this competition yet.
           </div>
-
-          {/* Divider */}
-          <div className="border-t border-slate-200 dark:border-neutral-800 mb-3" />
-
-          {/* Stats grid */}
-          <StatBlock perf={perf} tsPct={tsPct} />
-        </div>
-      </ShareableCard>
-
-      {/* Carousel dots */}
-      {perfs.length > 1 && (
-        <div className="flex items-center justify-center gap-1.5 mt-3">
-          {perfs.map((p, i) => (
-            <button
-              key={`${p.league_id}-${p.player_id}-${p.game_date}`}
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setIndex(i); }}
-              aria-label={`Show performance ${i + 1} of ${perfs.length}`}
-              className={`h-1.5 rounded-full transition-all ${
-                i === index
-                  ? "w-6 bg-orange-500"
-                  : "w-1.5 bg-slate-300 dark:bg-neutral-700 hover:bg-slate-400 dark:hover:bg-neutral-600"
-              }`}
-              data-testid={`trending-perf-dot-${i}`}
+        ) : (
+          <div className={`transition-opacity duration-300 ${switching ? "opacity-40" : ""}`} aria-busy={switching || undefined}>
+            <CardFanCarousel
+              // A new competition deals a fresh hand.
+              key={data?.competitionId ?? LATEST}
+              items={perfs}
+              getKey={(p) => `${p.league_id}-${p.player_id}-${p.game_date}`}
+              getLabel={(p) => `${p.full_name}, ${p.pts ?? 0} points`}
+              autoAdvanceMs={ROTATE_MS}
+              ariaLabel="Trending performances"
+              onCenterClick={(i) => open(perfs[i])}
+              renderCard={(p, { isCenter }) => (
+                <TradingCard
+                  perf={toCardPerformance(p, leagueNames[p.league_id], leagueLogos[p.league_id], playerMeta[p.player_id])}
+                  onOpen={isCenter && profileHref(p, playerMeta[p.player_id]) ? () => open(p) : undefined}
+                />
+              )}
             />
-          ))}
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

@@ -1,11 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { getTeamAbbreviation } from "@/lib/teamUtils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, Filter, Instagram } from "lucide-react";
+import { ArrowLeft, Trophy, Filter, Instagram, LayoutDashboard, BarChart3, CalendarDays, Crosshair, Award, Lock, Clock, Star, X as XIcon, BadgeCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
@@ -24,10 +24,11 @@ import { withAlpha } from "@/lib/colorContrast";
 import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
-import { PerformanceCardDownload } from "@/components/social/PerformanceCardDownload";
+import TradingCard, { type TradingCardPerformance } from "@/components/cards/TradingCard";
 import { computeGmSc } from "@/lib/performanceCardUtils";
-import { AccoladeBadges } from "@/components/AccoladeBadges";
-import { computePlayerAccolades, topAccolades } from "@/lib/accolades";
+import { computePastSeasonAccolades, computePlayerAccolades } from "@/lib/accolades";
+import { AccoladeChips, AccoladeCollection } from "@/components/cards/AccoladeCollection";
+import type { AccoladeCardPlayer } from "@/components/cards/AccoladeCard";
 import { fetchPlayerRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
 
 const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
@@ -43,7 +44,9 @@ const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0
 // `team_name`, `shirtNumber`, and `height_cm` when alias fields are
 // absent.
 const PLAYER_PROFILE_COLUMNS =
-  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, date_of_birth, current_team, social_instagram";
+  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, current_team";
+// date_of_birth / social_instagram aren't publicly readable on `players`; they
+// come from get_player_public_details, which only returns them for verified adults.
 
 interface PlayerStat {
   id: string;
@@ -122,6 +125,9 @@ interface PlayerRankings {
 }
 
 
+type ProfileTab = 'overview' | 'stats' | 'games' | 'splits' | 'accolades';
+const PROFILE_TABS: ProfileTab[] = ['overview', 'stats', 'games', 'splits', 'accolades'];
+
 interface PlayerProfileContentProps {
   playerSlug: string;
   brandColorOverride?: string;
@@ -154,64 +160,66 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
   const isFiltered = selectedLeagueIds.size > 0;
 
   return (
-    <div ref={ref} className="relative inline-block mt-3 mb-1">
+    <div ref={ref} className="relative inline-block">
       <button
+        type="button"
         onClick={() => setOpen(v => !v)}
-        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-          isFiltered
-            ? 'text-white'
-            : 'bg-white dark:bg-neutral-800 border-gray-200 dark:border-neutral-700 text-slate-600 dark:text-slate-300 hover:border-gray-300 dark:hover:border-neutral-600'
-        }`}
-        style={isFiltered ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={`ch-btn ${isFiltered ? 'text-white' : 'ch-btn-ghost'}`}
+        style={isFiltered ? { backgroundColor: accentColor } : undefined}
+        data-testid="player-league-filter"
       >
-        <Filter className="w-3 h-3" />
-        {label}
-        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <Filter className="w-3.5 h-3.5" />
+        <span className="max-w-[12rem] truncate">{label}</span>
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-[200px] bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-lg py-1 overflow-hidden">
+        <div role="menu" className="ch-card absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 z-50 min-w-[220px] py-1 overflow-hidden shadow-[var(--ch-shadow-lg)]">
           <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={!isFiltered}
             onClick={() => { onClear(); setOpen(false); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-left transition-colors ${
-              !isFiltered
-                ? 'bg-gray-50 dark:bg-neutral-800 text-slate-700 dark:text-white'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-neutral-800'
+            className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-semibold text-left transition-colors hover:bg-[color:var(--ch-surface-2)] ${
+              !isFiltered ? 'text-[color:var(--ch-text)]' : 'text-[color:var(--ch-text-2)]'
             }`}
           >
             <span
-              className="w-3.5 h-3.5 rounded flex items-center justify-center border flex-shrink-0"
-              style={!isFiltered ? { backgroundColor: accentColor, borderColor: accentColor } : { borderColor: '#d1d5db' }}
+              className="w-3.5 h-3.5 rounded flex items-center justify-center border flex-shrink-0 border-[color:var(--ch-border-strong)]"
+              style={!isFiltered ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
             >
               {!isFiltered && (
-                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                 </svg>
               )}
             </span>
             All Leagues
           </button>
-          <div className="my-0.5 border-t border-gray-100 dark:border-neutral-800" />
+          <div className="my-1 border-t border-[color:var(--ch-border)]" />
           {leagues.map(league => {
             const checked = selectedLeagueIds.has(league.id);
             return (
               <button
                 key={league.id}
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={checked}
                 onClick={() => onToggle(league.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-left transition-colors ${
-                  checked
-                    ? 'bg-gray-50 dark:bg-neutral-800 text-slate-700 dark:text-white'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-neutral-800'
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-left transition-colors hover:bg-[color:var(--ch-surface-2)] ${
+                  checked ? 'text-[color:var(--ch-text)]' : 'text-[color:var(--ch-text-2)]'
                 }`}
               >
                 <span
-                  className="w-3.5 h-3.5 rounded flex items-center justify-center border flex-shrink-0"
-                  style={checked ? { backgroundColor: accentColor, borderColor: accentColor } : { borderColor: '#d1d5db' }}
+                  className="w-3.5 h-3.5 rounded flex items-center justify-center border flex-shrink-0 border-[color:var(--ch-border-strong)]"
+                  style={checked ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
                 >
                   {checked && (
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>
                   )}
@@ -228,7 +236,7 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
 
 export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds }: PlayerProfileContentProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [, setLocation] = useLocation();
 
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
@@ -248,7 +256,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   const [competitionParentMap, setCompetitionParentMap] = useState<Map<string, string>>(new Map());
   const [playerShotChartRange, setPlayerShotChartRange] = useState<string>("season");
   const [careerStatsTab, setCareerStatsTab] = useState<string>("averages");
-  const [activeTab, setActiveTab] = useState<'overview' | 'stats' | 'games' | 'splits' | 'accolades'>('overview');
+  // ?tab= opens a section directly (e.g. back to the games after signing in).
+  const [activeTab, setActiveTab] = useState<ProfileTab>(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab') as ProfileTab | null;
+    return tab && PROFILE_TABS.includes(tab) ? tab : 'overview';
+  });
   const [photoUploading, setPhotoUploading] = useState(false);
   // Cache-buster appended to photo URLs so the browser/CDN doesn't serve a
   // stale (cached) version of the same storage path. Initialized to 0 so a
@@ -333,6 +345,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       : window.location.pathname;
     window.history.replaceState(null, '', newUrl);
   }, [selectedLeagueIds, leagueSlugs]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (activeTab === 'overview') params.delete('tab');
+    else params.set('tab', activeTab);
+    const search = params.toString();
+    window.history.replaceState(null, '', search ? `${window.location.pathname}?${search}` : window.location.pathname);
+  }, [activeTab]);
 
   // ── Brand color for single-league selection ───────────────────────────────
   // Uses brand_primary_colour when set; falls back to color extraction from
@@ -1123,8 +1143,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           photoFocusY: bestPhotoFocusY,
           height: initialPlayer.height || null,
           heightCm: initialPlayer.height_cm || null,
-          dateOfBirth: initialPlayer.date_of_birth || null,
-          instagramHandle: initialPlayer.social_instagram || null,
+          dateOfBirth: null,
+          instagramHandle: null,
           dbCurrentTeam: initialPlayer.current_team || null,
           dbPreviousTeams: null,
         };
@@ -1649,10 +1669,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     });
     const mostRecent = sorted[0];
     const bestGame = [...filteredStats].sort((a, b) => computeGmSc(b) - computeGmSc(a))[0];
-    if (mostRecent.id === bestGame.id) return [{ stat: mostRecent, label: 'Best / Most Recent' }];
+    if (mostRecent.id === bestGame.id) return [{ stat: mostRecent, label: 'Latest · Best' }];
     return [
-      { stat: mostRecent, label: 'Most Recent' },
-      { stat: bestGame, label: 'Best Game' },
+      { stat: mostRecent, label: 'Latest' },
+      { stat: bestGame, label: 'Best' },
     ];
   }, [filteredStats]);
 
@@ -1802,24 +1822,29 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     };
   }, [playerInfo?.team, playerInfo?.leagueId]);
 
-  // Secondary graceful fetch for instagram_url — kept separate from the main
-  // profile query so that a missing column (pre-migration) fails silently here
-  // rather than breaking the entire player profile load.
+  // DOB and Instagram are tier-gated server-side: get_player_public_details only
+  // returns them for players with a verified DOB who are 18+. Fetched separately
+  // so a failure here never breaks the main profile load.
   useEffect(() => {
     const playerId = playerInfo?.playerId;
     if (!playerId) return;
     let cancelled = false;
     supabase
-      .from('players')
-      .select('social_instagram')
-      .eq('id', playerId)
+      .rpc('get_player_public_details', { p_player_id: playerId })
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled || error || !data) return;
-        const url = (data as any).social_instagram as string | null | undefined;
-        if (url) {
-          setPlayerInfo(prev => prev ? { ...prev, instagramUrl: url } : null);
-        }
+        const details = data as { date_of_birth: string | null; instagram_handle: string | null };
+        if (!details.date_of_birth && !details.instagram_handle) return;
+        setPlayerInfo(prev => prev ? {
+          ...prev,
+          dateOfBirth: details.date_of_birth,
+          instagramHandle: details.instagram_handle,
+          // Owner-set values are bare handles; legacy roster values are full URLs.
+          instagramUrl: details.instagram_handle
+            ? `https://www.instagram.com/${normalizeInstagramHandle(details.instagram_handle)}`
+            : null,
+        } : null);
       });
     return () => { cancelled = true; };
   }, [playerInfo?.playerId]);
@@ -1927,7 +1952,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     };
   }, [careerStats]);
 
-  type StatHigh = { label: string; value: number; opponent: string; date: string; gameKey: string | null };
+  type StatHigh = { label: string; value: number; opponent: string; date: string; gameKey: string | null; leagueId?: string };
   const computeHighs = (games: any[]): StatHigh[] => {
     if (games.length === 0) return [];
     const pick = (label: string, getter: (g: any) => number): StatHigh => {
@@ -1938,6 +1963,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         opponent: (best.opponent && best.opponent.trim()) || 'TBD',
         date: best.game_date || best.created_at || '',
         gameKey: best.game_key || null,
+        leagueId: best.league_id || undefined,
       };
     };
     return [
@@ -2032,6 +2058,151 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     allTimeRecordMaxes,
   ), [seasonHighs, competitionHighs, careerStats, currentSeason, playerRankings, seasonRecordMaxes, allTimeRecordMaxes]);
 
+  // ── The accolade collection ───────────────────────────────────────────────
+  // Every season the player has played (the same groups as the career table),
+  // newest first — the first is the current season.
+  const playedSeasons = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; leagueIds: Set<string>; games: any[]; last: number }>();
+    for (const g of playedCareerGames) {
+      const key = g._groupKey || g.league_id || 'unknown';
+      let group = groups.get(key);
+      if (!group) {
+        group = { key, label: g._groupLabel || leagueNames.get(g.league_id) || 'Season', leagueIds: new Set(), games: [], last: 0 };
+        groups.set(key, group);
+      }
+      if (g.league_id) group.leagueIds.add(g.league_id);
+      group.games.push(g);
+      const played = new Date(g.game_date || g.created_at || '').getTime();
+      if (played > group.last) group.last = played;
+    }
+    return Array.from(groups.values()).sort((a, b) => b.last - a.last);
+  }, [playedCareerGames, leagueNames]);
+
+  // Past seasons keep the season records the player set in them.
+  const pastSeasons = useMemo(() => playedSeasons.slice(1), [playedSeasons]);
+  const { data: pastSeasonMaxes } = useQuery({
+    queryKey: ['past-season-record-maxes', pastSeasons.map((s) => `${s.key}:${Array.from(s.leagueIds).sort().join('+')}`).join('|')],
+    enabled: pastSeasons.length > 0,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        pastSeasons.map(async (s) => [s.key, await fetchPlayerRecordMaxes(Array.from(s.leagueIds))] as const),
+      );
+      return Object.fromEntries(entries) as Record<string, RecordMaxes>;
+    },
+  });
+  const accoladeCollection = useMemo(() => {
+    const past = pastSeasonMaxes
+      ? computePastSeasonAccolades(pastSeasons.map((s) => ({
+          label: s.label,
+          leagueId: Array.from(s.leagueIds)[0],
+          highs: computeHighs(s.games),
+          maxes: pastSeasonMaxes[s.key] ?? EMPTY_RECORD_MAXES,
+        })))
+      : [];
+    return [...playerAccolades, ...past];
+    // computeHighs is a plain helper of this component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerAccolades, pastSeasons, pastSeasonMaxes]);
+
+  // ── Trading cards (Latest, Best, and any game picked from the log) ────────
+  // Each card needs its game's result and its league's logo on top of the
+  // player's own stat row.
+  const cardStats = useMemo(
+    () => [...pinnedGames.map((p) => p.stat), ...(selectedGameForCard ? [selectedGameForCard] : [])],
+    [pinnedGames, selectedGameForCard],
+  );
+  const cardGameKeys = useMemo(
+    () => Array.from(new Set(cardStats.map((s) => s.game_key).filter((k): k is string => !!k))).sort(),
+    [cardStats],
+  );
+  const cardLeagueIds = useMemo(
+    () => Array.from(new Set([
+      ...cardStats.map((s) => s.league_id || s.players?.league_id),
+      ...accoladeCollection.map((a) => a.leagueId),
+    ].filter((id): id is string => !!id))).sort(),
+    [cardStats, accoladeCollection],
+  );
+  const { data: cardResults } = useQuery({
+    queryKey: ["player-card-results", cardGameKeys.join(",")],
+    enabled: cardGameKeys.length > 0,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("v_game_results")
+        .select("game_key,home_team,away_team,home_score,away_score")
+        .in("game_key", cardGameKeys);
+      return (data || []) as { game_key: string; home_team: string | null; away_team: string | null; home_score: number | null; away_score: number | null }[];
+    },
+  });
+  const { data: cardLeagues } = useQuery({
+    queryKey: ["competition-display", cardLeagueIds.join(",")],
+    enabled: cardLeagueIds.length > 0,
+    staleTime: 10 * 60 * 1000,
+    queryFn: async () => {
+      const res = await fetch(`/api/competition-display?ids=${cardLeagueIds.map(encodeURIComponent).join(",")}`);
+      return res.ok ? ((await res.json()) as Record<string, { name: string | null; logo: string | null }>) : {};
+    },
+  });
+
+  useEffect(() => {
+    if (!selectedGameForCard) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || document.querySelector('[role="dialog"][data-state="open"]')) return;
+      setSelectedGameForCard(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedGameForCard]);
+
+  /** "W 89-66" from the player's side of the game, when the score is known. */
+  const gameResultFor = (stat: PlayerStat): string | null => {
+    const game = cardResults?.find((g) => g.game_key === stat.game_key);
+    if (!game || game.home_score == null || game.away_score == null) return null;
+    const team = (stat.team_name || stat.team || "").toLowerCase();
+    const isHome = stat.is_home_player ?? (!!team && (game.home_team || "").toLowerCase() === team);
+    const mine = isHome ? game.home_score : game.away_score;
+    const theirs = isHome ? game.away_score : game.home_score;
+    return `${mine > theirs ? "W" : mine < theirs ? "L" : "T"} ${mine}-${theirs}`;
+  };
+
+  const toCardPerformance = (stat: PlayerStat): TradingCardPerformance => {
+    const leagueId = stat.league_id || stat.players?.league_id || null;
+    const pts = stat.spoints ?? stat.points ?? 0;
+    const fga = stat.sfieldgoalsattempted ?? stat.field_goals_attempted ?? 0;
+    const fta = stat.sfreethrowsattempted ?? stat.free_throws_attempted ?? 0;
+    const shots = fga + 0.44 * fta;
+    const parentId = leagueId ? competitionParentMap.get(leagueId) : undefined;
+    return {
+      playerId: playerInfo?.playerId || stat.player_id,
+      playerName: playerInfo?.name || stat.full_name || "",
+      teamName: stat.team_name || stat.team || null,
+      leagueId,
+      // The public competition name, as the homepage cards show it.
+      leagueName: (leagueId && cardLeagues?.[leagueId]?.name) || (leagueId && leagueNames.get(leagueId)) || (parentId && leagueNames.get(parentId)) || null,
+      leagueLogo: leagueId ? cardLeagues?.[leagueId]?.logo ?? null : null,
+      gameDate: stat.game_date || stat.created_at || null,
+      opponentName: stat.opponent?.trim() || null,
+      gameResult: gameResultFor(stat),
+      gameScore: Math.round(computeGmSc(stat) * 10) / 10,
+      pts,
+      reb: stat.sreboundstotal ?? stat.rebounds_total ?? 0,
+      ast: stat.sassists ?? stat.assists ?? 0,
+      stl: stat.ssteals ?? stat.steals ?? 0,
+      blk: stat.sblocks ?? stat.blocks ?? 0,
+      tov: stat.sturnovers ?? stat.turnovers ?? 0,
+      fgm: stat.sfieldgoalsmade ?? stat.field_goals_made ?? null,
+      fga,
+      tpm: stat.sthreepointersmade ?? stat.three_pointers_made ?? null,
+      tpa: stat.sthreepointersattempted ?? stat.three_pointers_attempted ?? null,
+      ftm: stat.sfreethrowsmade ?? stat.free_throws_made ?? null,
+      fta,
+      tsPct: shots > 0 ? pts / (2 * shots) : null,
+      cutoutUrl: playerPhotoUrl,
+      profilePhotoUrl: playerSharePhotoUrl,
+    };
+  };
+
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const formatMinutes = (min: number) => min.toFixed(1);
   const formatPercentage = (value: number) => `${value.toFixed(1)}%`;
@@ -2041,7 +2212,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-4" style={{ borderColor: readablePrimary.accent }}></div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">Loading player profile...</p>
+          <p className="text-sm text-[color:var(--ch-muted)]">Loading player profile...</p>
         </div>
       </div>
     );
@@ -2109,138 +2280,190 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     );
   };
 
+  // Sections of the profile. The full game log is for signed-in visitors.
+  const profileTabs: { key: ProfileTab; label: string; icon: typeof LayoutDashboard; locked?: boolean }[] = [
+    { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+    { key: 'stats', label: 'Stats', icon: BarChart3 },
+    { key: 'games', label: 'Games', icon: CalendarDays, locked: !user },
+    { key: 'splits', label: 'Splits', icon: Crosshair },
+    { key: 'accolades', label: 'Accolades', icon: Award },
+  ];
+
+  // Sign-in links from the games gate come back to this profile's games.
+  const authHref = (register: boolean) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', 'games');
+    const next = encodeURIComponent(`${window.location.pathname}?${params.toString()}`);
+    return register ? `/auth?tab=register&next=${next}` : `/auth?next=${next}`;
+  };
+
+  const leagueFilter = filterableLeagues.length > 1 ? (() => {
+    const label = selectedLeagueIds.size === 0
+      ? 'All Leagues'
+      : selectedLeagueIds.size === 1
+        ? filterableLeagues.find(l => selectedLeagueIds.has(l.id))?.name ?? 'All Leagues'
+        : `${selectedLeagueIds.size} Leagues`;
+    return (
+      <LeagueDropdown
+        leagues={filterableLeagues}
+        selectedLeagueIds={selectedLeagueIds}
+        onToggle={(id) => {
+          setSelectedLeagueIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+          });
+        }}
+        onClear={() => setSelectedLeagueIds(new Set())}
+        label={label}
+        accentColor={readablePrimary.onWhite}
+      />
+    );
+  })() : null;
+
+  const pillStyle = { backgroundColor: withAlpha(readablePrimary.accent, 0.14), color: readablePrimary.body };
+
+  const collectionPlayer: AccoladeCardPlayer = {
+    id: playerInfo?.playerId || playerSlug,
+    name: playerInfo?.name || '',
+    cutoutUrl: playerPhotoUrl,
+    profilePhotoUrl: playerSharePhotoUrl,
+    teamColor: primaryColor || '#f97316',
+  };
+
   return (
-    <div className="animate-fade-in-up">
+    <div className="ch-rise" style={{ '--ch-accent': readablePrimary.body } as CSSProperties}>
       {onBack && (
         <div className="mb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onBack}
-            className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-          >
+          <button type="button" onClick={onBack} className="ch-btn ch-btn-ghost">
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Button>
+          </button>
         </div>
       )}
 
       {playerInfo && (
-        <div className="relative mt-2">
-          <PlayerBanner
-            playerInfo={hasLeagueFilter && teamNameForBranding && teamBrandingLeagueId
-              ? { ...playerInfo, team: teamNameForBranding, leagueId: teamBrandingLeagueId }
-              : playerInfo}
-            playerPhotoUrl={playerPhotoUrl}
-            showFocusAdjuster={showFocusAdjuster}
-            setShowFocusAdjuster={setShowFocusAdjuster}
-            tempFocusY={tempFocusY}
-            setTempFocusY={setTempFocusY}
-            handleSaveFocus={handleSaveFocus}
-            savingFocus={savingFocus}
-            handlePhotoUpload={handlePhotoUpload}
-            photoUploading={photoUploading}
-            fileInputRef={fileInputRef}
-            isAuthenticated={!!user}
-            brandColorOverride={primaryColor || undefined}
-            leagueChip={bannerLeagueChip}
-            teamChip={bannerTeamChip}
-          />
-        </div>
+        <PlayerBanner
+          playerInfo={hasLeagueFilter && teamNameForBranding && teamBrandingLeagueId
+            ? { ...playerInfo, team: teamNameForBranding, leagueId: teamBrandingLeagueId }
+            : playerInfo}
+          playerPhotoUrl={playerPhotoUrl}
+          showFocusAdjuster={showFocusAdjuster}
+          setShowFocusAdjuster={setShowFocusAdjuster}
+          tempFocusY={tempFocusY}
+          setTempFocusY={setTempFocusY}
+          handleSaveFocus={handleSaveFocus}
+          savingFocus={savingFocus}
+          handlePhotoUpload={handlePhotoUpload}
+          photoUploading={photoUploading}
+          fileInputRef={fileInputRef}
+          canEditPhoto={isAdmin}
+          brandColorOverride={primaryColor || undefined}
+          leagueChip={bannerLeagueChip}
+          teamChip={bannerTeamChip}
+        />
       )}
 
-      {filterableLeagues.length > 1 && (() => {
-        const label = selectedLeagueIds.size === 0
-          ? 'All Leagues'
-          : selectedLeagueIds.size === 1
-            ? filterableLeagues.find(l => selectedLeagueIds.has(l.id))?.name ?? 'All Leagues'
-            : `${selectedLeagueIds.size} Leagues`;
-        const accentColor = readablePrimary.onWhite;
-        return (
-          <LeagueDropdown
-            leagues={filterableLeagues}
-            selectedLeagueIds={selectedLeagueIds}
-            onToggle={(id) => {
-              setSelectedLeagueIds(prev => {
-                const next = new Set(prev);
-                if (next.has(id)) next.delete(id); else next.add(id);
-                return next;
-              });
-            }}
-            onClear={() => setSelectedLeagueIds(new Set())}
-            label={label}
-            accentColor={accentColor}
-          />
-        );
-      })()}
-
-      <div className="mt-4 md:mt-5">
-        <PillTabBar
-          tabs={[
-            { key: 'overview', label: 'Overview' },
-            { key: 'stats', label: 'Stats' },
-            { key: 'games', label: 'Games' },
-            { key: 'splits', label: 'Splits' },
-            { key: 'accolades', label: 'Accolades' },
-          ]}
-          active={activeTab}
-          onChange={(key) => setActiveTab(key as typeof activeTab)}
-          accentColor={readablePrimary.onWhite}
-        />
+      {/* Section tabs, with the league filter alongside on wide screens */}
+      <div className="mt-4 md:mt-5 flex flex-col-reverse sm:flex-row sm:items-end sm:justify-between gap-2 border-b border-[color:var(--ch-border)]">
+        <nav className="flex items-stretch gap-1 overflow-x-auto scrollbar-hide -mx-1" aria-label="Player sections">
+          {profileTabs.map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={(e) => {
+                  setActiveTab(tab.key);
+                  e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                }}
+                aria-current={active ? 'page' : undefined}
+                className={`relative flex items-center gap-2 h-12 px-3 text-[13.5px] font-medium whitespace-nowrap transition-colors ${
+                  active ? 'text-[color:var(--ch-text)]' : 'text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]'
+                }`}
+                data-testid={`player-tab-${tab.key}`}
+              >
+                <tab.icon className="w-4 h-4" style={active ? { color: readablePrimary.body } : undefined} />
+                {tab.label}
+                {tab.locked && <Lock className="w-3 h-3 text-[color:var(--ch-muted)]" aria-label="Sign in required" />}
+                <span
+                  className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full transition-opacity"
+                  style={{ backgroundColor: readablePrimary.accent, opacity: active ? 1 : 0 }}
+                />
+              </button>
+            );
+          })}
+        </nav>
+        {leagueFilter && <div className="pb-2 sm:pb-2.5 shrink-0">{leagueFilter}</div>}
       </div>
 
-      {activeTab === 'overview' && playerInfo && (playerInfo.instagramHandle || playerInfo.dbCurrentTeam || (playerInfo.dbPreviousTeams && playerInfo.dbPreviousTeams.length > 0)) && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-2 mt-1">
-          {playerInfo.dbCurrentTeam && (
-            <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-              <span className="font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">Current Team</span>
-              <span className="font-medium">{playerInfo.dbCurrentTeam}</span>
-            </span>
-          )}
-          {playerInfo.dbPreviousTeams && playerInfo.dbPreviousTeams.length > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
-              <span className="font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">Also played for</span>
-              <span>{playerInfo.dbPreviousTeams.join(", ")}</span>
-            </span>
-          )}
-          {playerInfo.instagramHandle && (
-            <a
-              href={`https://www.instagram.com/${normalizeInstagramHandle(playerInfo.instagramHandle)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"
-            >
-              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
-                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
-              </svg>
-              @{playerInfo.instagramHandle.replace(/^@/, "")}
-            </a>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'overview' && pinnedGames.length > 0 && playerInfo && (
-        <div className="mt-4 md:mt-5 bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Performances</span>
-          </div>
-          <div className={`grid gap-4 ${pinnedGames.length === 1 ? 'grid-cols-1 max-w-[260px]' : 'grid-cols-1 sm:grid-cols-2'}`}>
-            {pinnedGames.map(({ stat, label }) => (
-              <PerformanceCardDownload
-                key={stat.id}
-                stat={stat}
-                playerName={playerInfo.name}
-                playerPhotoPath={playerInfo.photoPath}
-                photoFocusY={playerInfo.photoFocusY}
-                label={label}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-4 md:space-y-5 mt-4 md:mt-5">
+      <div className="mt-5 md:mt-6 space-y-5">
         {activeTab === 'overview' && <>
+        {playerInfo && (
+          <div className="flex flex-wrap items-center gap-2">
+            {playerInfo.dbCurrentTeam && (
+              <span className="ch-chip inline-flex items-center gap-2 h-8 px-3 text-[13px]">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">Current team</span>
+                <span className="font-medium text-[color:var(--ch-text)]">{playerInfo.dbCurrentTeam}</span>
+              </span>
+            )}
+            {playerInfo.dbPreviousTeams && playerInfo.dbPreviousTeams.length > 0 && (
+              <span className="ch-chip inline-flex items-center gap-2 h-8 px-3 text-[13px] max-w-full">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)] shrink-0">Also played for</span>
+                <span className="truncate text-[color:var(--ch-text)]">{playerInfo.dbPreviousTeams.join(", ")}</span>
+              </span>
+            )}
+            {playerInfo.instagramHandle && (
+              <a
+                href={`https://www.instagram.com/${normalizeInstagramHandle(playerInfo.instagramHandle)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ch-chip inline-flex items-center gap-1.5 h-8 px-3 text-[13px] font-medium text-pink-600 dark:text-pink-400"
+              >
+                <Instagram className="w-3.5 h-3.5" aria-hidden="true" />
+                @{playerInfo.instagramHandle.replace(/^@/, "")}
+              </a>
+            )}
+            {/* Players can request to own their page (see "Own your page" on the homepage) */}
+            <Link
+              href={`/contact-sales?topic=player-page&player=${encodeURIComponent(playerInfo.name)}&url=${encodeURIComponent(window.location.origin + window.location.pathname)}`}
+              className="ch-chip inline-flex items-center gap-1.5 h-8 px-3 text-[13px] font-medium sm:ml-auto"
+              data-testid="claim-player-page"
+            >
+              <BadgeCheck className="w-3.5 h-3.5" style={{ color: readablePrimary.body }} aria-hidden="true" />
+              Is this you? Claim this page
+            </Link>
+          </div>
+        )}
+
+        <div className="pp-overview">
+        <div className="pp-overview-grid">
+          {pinnedGames.length > 0 && playerInfo && (
+            <section className="min-w-0" aria-labelledby="player-performances-heading">
+              <h2
+                id="player-performances-heading"
+                className="ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]"
+              >
+                Performances
+              </h2>
+              {/* Room above and below for the cards' shadow inside the scroller */}
+              <div className="tc-sizes -mx-4 px-4 scroll-px-4 sm:mx-0 sm:px-0 sm:scroll-px-0 flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory scrollbar-hide pt-3 pb-8">
+                {pinnedGames.map(({ stat, label }) => (
+                  <div key={stat.id} className="snap-start shrink-0" style={{ width: "var(--fan-card-w)" }}>
+                    <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ch-text)]">
+                      {label.includes('Best')
+                        ? <Star className="h-3.5 w-3.5" style={{ color: readablePrimary.body }} aria-hidden="true" />
+                        : <Clock className="h-3.5 w-3.5" style={{ color: readablePrimary.body }} aria-hidden="true" />}
+                      {label}
+                    </div>
+                    <TradingCard perf={toCardPerformance(stat)} shareTitle={`${label} performance`} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <div className="min-w-0 space-y-5">
         {filteredSeasonAverages && (() => {
           type StatTile = { value: number; label: string; rank?: number };
           const seasonStats: StatTile[] = [
@@ -2345,57 +2568,35 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               shareContent={shareBlock}
               wide
             >
-              {(() => {
-                const pageAccent = readablePrimary.body;
-                const pageTileBorder = withAlpha(readablePrimary.accent, 0.22);
-                const pagePillBg = withAlpha(readablePrimary.accent, 0.14);
-                return (
-                  <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                        Season Averages
-                      </span>
-                      {filterLabel && (
-                        <span
-                          className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: pagePillBg, color: pageAccent }}
-                        >
-                          {filterLabel}
-                        </span>
-                      )}
+              <div className="ch-card p-4 md:p-5">
+                <div className="flex items-center justify-between gap-3 mb-3 pr-10">
+                  <h3 className="ch-eyebrow">Season averages</h3>
+                  {filterLabel && (
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full truncate" style={pillStyle}>
+                      {filterLabel}
+                    </span>
+                  )}
+                </div>
+                <div className="pp-tiles-6 grid grid-cols-3 gap-2">
+                  {seasonStats.map((stat, i) => (
+                    <div key={i} className="ch-tile px-2 py-3 flex flex-col items-center text-center">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">
+                        {stat.label}
+                      </div>
+                      <div className="ch-display font-bold tabular-nums leading-none text-[1.9rem] mt-1.5" style={{ color: readablePrimary.body }}>
+                        {stat.value.toFixed(1)}
+                      </div>
+                      <div className="mt-2 h-[18px] flex items-center">
+                        {stat.rank ? (
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums" style={pillStyle}>
+                            {getOrdinalSuffix(stat.rank)}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-2.5">
-                      {seasonStats.map((stat, i) => (
-                        <div
-                          key={i}
-                          className="rounded-xl px-2 py-3 flex flex-col items-center text-center bg-white dark:bg-neutral-800/40"
-                          style={{ border: `1px solid ${pageTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
-                        >
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                            {stat.label}
-                          </div>
-                          <div
-                            className="text-2xl md:text-3xl font-black tabular-nums leading-none"
-                            style={{ color: pageAccent }}
-                          >
-                            {stat.value.toFixed(1)}
-                          </div>
-                          <div className="mt-2 h-[18px] flex items-center">
-                            {stat.rank ? (
-                              <span
-                                className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums"
-                                style={{ backgroundColor: pagePillBg, color: pageAccent }}
-                              >
-                                {getOrdinalSuffix(stat.rank)}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
+                  ))}
+                </div>
+              </div>
             </ShareableCard>
           );
         })()}
@@ -2478,67 +2679,62 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               shareContent={shareBlock}
               wide
             >
-              {(() => {
-                const pageAccent = readablePrimary.body;
-                const pageTileBorder = withAlpha(readablePrimary.accent, 0.22);
-                const pagePillBg = withAlpha(readablePrimary.accent, 0.14);
-                const pageTrackBg = withAlpha(readablePrimary.accent, 0.18);
-                return (
-                  <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 mb-3 block">
-                      Shooting
-                    </span>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {shootingStats.map((stat, i) => (
+              <div className="ch-card p-4 md:p-5">
+                <h3 className="ch-eyebrow mb-3 pr-10">Shooting</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {shootingStats.map((stat, i) => (
+                    <div key={i} className="ch-tile px-2 py-3 flex flex-col items-center text-center">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">
+                        {stat.label}
+                      </div>
+                      <div className="ch-display font-bold tabular-nums leading-none text-[1.9rem] mt-1.5" style={{ color: readablePrimary.body }}>
+                        {formatPercentage(stat.value)}
+                      </div>
+                      <div className="mt-2 h-[18px] flex items-center">
+                        {stat.rank ? (
+                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums" style={pillStyle}>
+                            {getOrdinalSuffix(stat.rank)}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="w-full mt-2 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: withAlpha(readablePrimary.accent, 0.18) }}>
                         <div
-                          key={i}
-                          className="rounded-xl px-2 py-3 flex flex-col items-center text-center bg-white dark:bg-neutral-800/40"
-                          style={{ border: `1px solid ${pageTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
-                        >
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-                            {stat.label}
-                          </div>
-                          <div
-                            className="text-2xl md:text-3xl font-black tabular-nums leading-none"
-                            style={{ color: pageAccent }}
-                          >
-                            {formatPercentage(stat.value)}
-                          </div>
-                          <div className="mt-2 h-[18px] flex items-center">
-                            {stat.rank ? (
-                              <span
-                                className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums"
-                                style={{ backgroundColor: pagePillBg, color: pageAccent }}
-                              >
-                                {getOrdinalSuffix(stat.rank)}
-                              </span>
-                            ) : null}
-                          </div>
-                          <div
-                            className="w-full mt-2.5 h-1.5 rounded-full overflow-hidden"
-                            style={{ backgroundColor: pageTrackBg }}
-                          >
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readablePrimary.accent }}
-                            />
-                          </div>
-                        </div>
-                      ))}
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readablePrimary.accent }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  ))}
+                </div>
+              </div>
             </ShareableCard>
           );
         })()}
 
-        {playerAccolades.length > 0 && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 block">Top Accolades</span>
-            <AccoladeBadges accolades={topAccolades(playerAccolades)} accentColor={readablePrimary.body} />
+        {accoladeCollection.length > 0 && (
+          <div className="ch-card p-4 md:p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="ch-eyebrow">Top accolades</h3>
+              <button
+                type="button"
+                onClick={() => setActiveTab('accolades')}
+                className="text-xs font-semibold hover:underline underline-offset-2"
+                style={{ color: readablePrimary.body }}
+              >
+                View the collection ({accoladeCollection.length})
+              </button>
+            </div>
+            <AccoladeChips
+              accolades={accoladeCollection}
+              teamColor={primaryColor || '#f97316'}
+              readableTeamColor={readablePrimary.body}
+              onOpen={() => setActiveTab('accolades')}
+            />
           </div>
         )}
+          </div>
+        </div>
+        </div>
         </>}
 
         {/* Team Performance Splits (on/off ORTG/DRTG impact, <PlayerPerformanceSplits>)
@@ -2550,23 +2746,17 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
         {activeTab === 'stats' && <>
         {(careerHighs.length > 0 || seasonHighs.length > 0) && (() => {
-          const highsAccent = readablePrimary.body;
-          const highsTileBorder = withAlpha(readablePrimary.accent, 0.22);
           const HighsGrid = ({ highs }: { highs: StatHigh[] }) => (
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-2.5">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
               {highs.map((stat, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl px-2 py-3 flex flex-col items-center text-center bg-white dark:bg-neutral-800/40"
-                  style={{ border: `1px solid ${highsTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
-                >
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                <div key={i} className="ch-tile px-2 py-3 flex flex-col items-center text-center">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">
                     {stat.label}
                   </div>
-                  <div className="text-2xl md:text-3xl font-black tabular-nums leading-none" style={{ color: highsAccent }}>
+                  <div className="ch-display font-bold tabular-nums leading-none text-[1.9rem] mt-1.5" style={{ color: readablePrimary.body }}>
                     {stat.value}
                   </div>
-                  <div className="mt-2 text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+                  <div className="mt-2 text-[10px] leading-tight text-[color:var(--ch-muted)]">
                     vs {stat.opponent}
                     <br />
                     {stat.date ? formatDate(stat.date) : ''}
@@ -2579,18 +2769,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           // highs — showing both blocks would just be the same numbers twice.
           const isSingleSeason = !!currentSeason && currentSeason.games.length === playedCareerGames.length;
           return (
-            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4 space-y-5">
+            <div className="ch-card p-4 md:p-5 space-y-5">
               {seasonHighs.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      {isSingleSeason ? 'Season / Career High' : 'Season High'}
-                    </span>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <h3 className="ch-eyebrow">{isSingleSeason ? 'Season / career high' : 'Season high'}</h3>
                     {currentSeason && (
-                      <span
-                        className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                        style={{ backgroundColor: withAlpha(readablePrimary.accent, 0.14), color: highsAccent }}
-                      >
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full truncate" style={pillStyle}>
                         {currentSeason.label}
                       </span>
                     )}
@@ -2600,11 +2785,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               )}
               {careerHighs.length > 0 && !isSingleSeason && (
                 <div>
-                  <div className="mb-3">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                      Career High
-                    </span>
-                  </div>
+                  <h3 className="ch-eyebrow mb-3">Career high</h3>
                   <HighsGrid highs={careerHighs} />
                 </div>
               )}
@@ -2613,98 +2794,99 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         })()}
 
         {careerStats.length > 0 && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
-            <div className="p-4 pb-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-              <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Career Stats</span>
-              <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700">
+          <div className="ch-card overflow-hidden">
+            <div className="p-4 md:p-5 pb-0 md:pb-0 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <h3 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] text-[color:var(--ch-text)]">Career stats</h3>
+              <div className="ch-seg self-start" role="tablist" aria-label="Career stats view">
                 {["averages", "totals", "advanced"].map(tab => (
                   <button
                     key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={careerStatsTab === tab}
+                    data-active={careerStatsTab === tab}
                     onClick={() => setCareerStatsTab(tab)}
-                    className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium transition-colors capitalize ${
-                      careerStatsTab === tab ? 'text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-neutral-800'
-                    }`}
-                    style={careerStatsTab === tab ? { backgroundColor: readablePrimary.onWhite } : {}}
+                    className="px-3 h-8 text-xs font-semibold capitalize"
                   >
                     {tab}
                   </button>
                 ))}
               </div>
             </div>
-            <div className="overflow-x-auto mt-3">
-              <table className="w-full text-xs">
+            <div className="overflow-x-auto mt-4">
+              <table className="ch-table w-full text-xs">
                 <thead>
-                  <tr className="border-y border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
-                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Season</th>
-                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Team</th>
+                  <tr className="border-y border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]">
+                    <th className="px-2 py-2 text-left whitespace-nowrap">Season</th>
+                    <th className="px-2 py-2 text-left whitespace-nowrap">Team</th>
                     {careerStatsTab === "averages" && (
                       <>
-                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">MIN</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">FG%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">3P%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">FT%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
+                        <th className="px-2 py-2 text-center">GP</th>
+                        <th className="px-2 py-2 text-center">MIN</th>
+                        <th className="px-2 py-2 text-center">PTS</th>
+                        <th className="px-2 py-2 text-center">REB</th>
+                        <th className="px-2 py-2 text-center">AST</th>
+                        <th className="px-2 py-2 text-center">STL</th>
+                        <th className="px-2 py-2 text-center">BLK</th>
+                        <th className="px-2 py-2 text-center">TO</th>
+                        <th className="px-2 py-2 text-center">FG%</th>
+                        <th className="px-2 py-2 text-center">3P%</th>
+                        <th className="px-2 py-2 text-center">FT%</th>
+                        <th className="px-2 py-2 text-center">EFF</th>
                       </>
                     )}
                     {careerStatsTab === "totals" && (
                       <>
-                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">MIN</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">FG</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">3P</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">FT</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
+                        <th className="px-2 py-2 text-center">GP</th>
+                        <th className="px-2 py-2 text-center">MIN</th>
+                        <th className="px-2 py-2 text-center">PTS</th>
+                        <th className="px-2 py-2 text-center">REB</th>
+                        <th className="px-2 py-2 text-center">AST</th>
+                        <th className="px-2 py-2 text-center">STL</th>
+                        <th className="px-2 py-2 text-center">BLK</th>
+                        <th className="px-2 py-2 text-center">TO</th>
+                        <th className="px-2 py-2 text-center">FG</th>
+                        <th className="px-2 py-2 text-center">3P</th>
+                        <th className="px-2 py-2 text-center">FT</th>
+                        <th className="px-2 py-2 text-center">EFF</th>
                       </>
                     )}
                     {careerStatsTab === "advanced" && (
                       <>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="Games Played">GP</th>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="Minutes Per Game">MPG</th>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="True Shooting %">TS%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="Effective Field Goal %">eFG%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="Points Per Shot (PTS / FGA)">PPS</th>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="Assist to Turnover Ratio">AST/TO</th>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="3-Point Attempt Rate (3PA / FGA)">3PAr</th>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="Free Throw Rate (FTA / FGA)">FTr</th>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="Stocks per game (STL + BLK)">STK</th>
-                        <th className="px-2 py-1.5 text-center font-semibold" title="Efficiency per game">EFF</th>
+                        <th className="px-2 py-2 text-center" title="Games Played">GP</th>
+                        <th className="px-2 py-2 text-center" title="Minutes Per Game">MPG</th>
+                        <th className="px-2 py-2 text-center" title="True Shooting %">TS%</th>
+                        <th className="px-2 py-2 text-center" title="Effective Field Goal %">eFG%</th>
+                        <th className="px-2 py-2 text-center" title="Points Per Shot (PTS / FGA)">PPS</th>
+                        <th className="px-2 py-2 text-center" title="Assist to Turnover Ratio">AST/TO</th>
+                        <th className="px-2 py-2 text-center" title="3-Point Attempt Rate (3PA / FGA)">3PAr</th>
+                        <th className="px-2 py-2 text-center" title="Free Throw Rate (FTA / FGA)">FTr</th>
+                        <th className="px-2 py-2 text-center" title="Stocks per game (STL + BLK)">STK</th>
+                        <th className="px-2 py-2 text-center" title="Efficiency per game">EFF</th>
                       </>
                     )}
                   </tr>
                 </thead>
                 <tbody>
                   {careerStats.map((row, idx) => (
-                    <tr key={idx} className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${idx % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}>
-                      <td className="px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[100px] truncate">{row.season}</td>
-                      <td className="px-2 py-1.5 text-xs whitespace-nowrap">
-                        <div className="flex items-center gap-1">
+                    <tr key={idx} className="border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] tabular-nums">
+                      <td className="px-2 py-2 text-xs font-medium text-[color:var(--ch-text-2)] whitespace-nowrap max-w-[100px] truncate">{row.season}</td>
+                      <td className="px-2 py-2 text-xs whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
                           <TeamLogo teamName={row.team} leagueId={row.leagueId} size="xs" className="flex-shrink-0" />
-                           {leagueSlugs.get(row.leagueId) ? (
-                             <Link
-                               href={`/competition/${leagueSlugs.get(row.leagueId)}/team/${encodeURIComponent(row.team)}`}
-                               className="truncate max-w-[50px] hover:underline"
-                             >
-                               {getTeamAbbreviation(row.team)}
-                             </Link>
-                           ) : (
-                             <span className="truncate max-w-[50px]">{getTeamAbbreviation(row.team)}</span>
-                           )}
+                          {leagueSlugs.get(row.leagueId) ? (
+                            <Link
+                              href={`/competition/${leagueSlugs.get(row.leagueId)}/team/${encodeURIComponent(row.team)}`}
+                              className="truncate max-w-[50px] font-medium hover:underline underline-offset-2"
+                            >
+                              {getTeamAbbreviation(row.team)}
+                            </Link>
+                          ) : (
+                            <span className="truncate max-w-[50px] font-medium">{getTeamAbbreviation(row.team)}</span>
+                          )}
                           {row.previousTeams && row.previousTeams.length > 0 && (
                             <span
-                              className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[120px]"
+                              className="text-[10px] text-[color:var(--ch-muted)] truncate max-w-[120px]"
                               title={`Previous teams: ${row.previousTeams.join(', ')}`}
                             >
                               (prev: {row.previousTeams.map((t: string) => getTeamAbbreviation(t)).join(', ')})
@@ -2716,9 +2898,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                     </tr>
                   ))}
                   {careerTotals && careerStats.length > 1 && (
-                    <tr className="font-bold text-slate-900 dark:text-white border-t-2" style={{ borderColor: readablePrimary.accent }}>
-                      <td className="px-2 py-1.5 text-xs uppercase" style={{ color: readablePrimary.body }}>Career</td>
-                      <td className="px-2 py-1.5 text-xs"></td>
+                    <tr className="font-bold text-[color:var(--ch-text)] border-t-2 tabular-nums" style={{ borderColor: readablePrimary.accent }}>
+                      <td className="px-2 py-2 text-xs uppercase" style={{ color: readablePrimary.body }}>Career</td>
+                      <td className="px-2 py-2 text-xs"></td>
                       {renderCareerRow(careerTotals)}
                     </tr>
                   )}
@@ -2729,16 +2911,16 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         )}
 
         {playerLeagues.length > 0 && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Active Leagues</span>
+          <div className="ch-card p-4 md:p-5">
+            <h3 className="ch-eyebrow mb-3">Active leagues</h3>
             <div className="flex flex-wrap gap-2">
               {playerLeagues.map((league) => (
                 <Link
                   key={league.id}
                   href={`/competition/${league.slug}`}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-orange-300 dark:hover:border-orange-500/50 bg-white dark:bg-neutral-800 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-colors text-sm font-medium text-slate-700 dark:text-slate-300"
+                  className="ch-chip inline-flex items-center gap-2 h-9 px-3.5 text-[13px] font-medium"
                 >
-                  <Trophy className="h-4 w-4 text-orange-500" />
+                  <Trophy className="h-4 w-4" style={{ color: readablePrimary.body }} />
                   {league.name}
                 </Link>
               ))}
@@ -2747,12 +2929,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         )}
 
         {playerInfo?.instagramUrl && (
-          <div className="mb-4">
+          <div>
             <a
               href={playerInfo.instagramUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-80 transition-opacity"
+              className="inline-flex items-center gap-2 h-9 px-4 rounded-full text-sm font-semibold text-white hover:opacity-90 transition-opacity"
               style={{ background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)" }}
             >
               <Instagram className="h-4 w-4" />
@@ -2810,14 +2992,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           }
           wide
         >
-        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Shot Chart</span>
+        <div className="ch-card p-4 md:p-5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 md:pr-10">
+            <h3 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] text-[color:var(--ch-text)]">Shot chart</h3>
             <Select value={playerShotChartRange} onValueChange={setPlayerShotChartRange}>
-              <SelectTrigger className="w-full md:w-48 h-8 text-sm border-gray-200 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white">
+              <SelectTrigger className="w-full md:w-52 h-9 text-sm rounded-lg border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] text-[color:var(--ch-text)]">
                 <SelectValue placeholder="Select range" />
               </SelectTrigger>
-              <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+              <SelectContent>
                 <SelectItem value="season">Full Season</SelectItem>
                 <SelectItem value="last10">Last 10 Games</SelectItem>
                 <SelectItem value="last5">Last 5 Games</SelectItem>
@@ -2839,15 +3021,60 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         </div>
         </ShareableCard>}
 
-        {activeTab === 'games' && <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
-            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Game Log</span>
-            <div className="flex items-center gap-2">
+        {activeTab === 'games' && !user && (
+          // The full game log is for signed-in visitors. The rows behind the
+          // prompt are placeholders, not the player's games.
+          <div className="ch-card overflow-hidden relative" data-testid="games-signin-gate">
+            <div aria-hidden="true" className="p-4 md:p-5 space-y-3 blur-[2px] opacity-70 select-none">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="ch-skel h-3 w-14" />
+                  <div className="ch-skel h-3 flex-1" />
+                  <div className="ch-skel h-3 w-10" />
+                  <div className="ch-skel h-3 w-10 hidden sm:block" />
+                  <div className="ch-skel h-3 w-10 hidden sm:block" />
+                  <div className="ch-skel h-3 w-8" />
+                </div>
+              ))}
+            </div>
+            <div
+              className="absolute inset-0 flex items-center justify-center p-5"
+              style={{ background: "linear-gradient(180deg, color-mix(in srgb, var(--ch-surface) 45%, transparent) 0%, var(--ch-surface) 62%)" }}
+            >
+              <div className="text-center max-w-sm">
+                <span className="mx-auto h-11 w-11 rounded-xl flex items-center justify-center" style={pillStyle}>
+                  <Lock className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <h3 className="ch-display uppercase font-bold tracking-tight leading-[0.95] text-[1.6rem] mt-3 text-[color:var(--ch-text)]">
+                  Every game, every stat
+                </h3>
+                <p className="text-sm text-[color:var(--ch-text-2)] mt-2">
+                  Sign in to see {playerInfo?.name ? `${playerInfo.name.split(" ")[0]}'s` : "the"} full game log
+                  {filteredStats.length > 0 ? ` — ${filteredStats.length} game${filteredStats.length === 1 ? "" : "s"}` : ""} — and
+                  make a card from any of them. It's free.
+                </p>
+                <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
+                  <Link href={authHref(true)} className="ch-btn ch-btn-primary h-10 px-5 w-full sm:w-auto justify-center" data-testid="games-gate-register">
+                    Create free account
+                  </Link>
+                  <Link href={authHref(false)} className="ch-btn ch-btn-ghost h-10 px-5 w-full sm:w-auto justify-center" data-testid="games-gate-signin">
+                    Sign in
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'games' && user && <div className="ch-card overflow-hidden">
+          <div className="px-4 md:px-5 py-3.5 border-b border-[color:var(--ch-border)] flex flex-wrap items-center justify-between gap-2">
+            <h3 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] text-[color:var(--ch-text)]">Game log</h3>
+            <div className="flex items-center gap-3 text-xs text-[color:var(--ch-muted)]">
               {filteredStats.length > 0 && (
-                <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:block">Click a row to generate a card</span>
+                <span className="hidden sm:block">Tap a game for its card</span>
               )}
               {selectedLeagueIds.size > 0 && (
-                <span className="text-xs text-slate-400 dark:text-slate-500">
+                <span>
                   {selectedLeagueIds.size === 1
                     ? `Filtered: ${leagueNames.get(Array.from(selectedLeagueIds)[0]) || 'League'}`
                     : `${selectedLeagueIds.size} leagues selected`}
@@ -2856,60 +3083,60 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             </div>
           </div>
           {filteredStats.length === 0 ? (
-            <div className="p-6 md:p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+            <div className="p-6 md:p-8 text-center text-sm text-[color:var(--ch-text-2)]">
               No game statistics found for this player{selectedLeagueIds.size > 0 ? " in the selected league(s)" : ""}.
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="ch-table w-full text-xs">
                 <thead>
-                  <tr className="border-b border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
-                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Date</th>
-                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">OPP</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">MIN</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">FG</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">3PT</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">FT</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">REB</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">AST</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">STL</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">TO</th>
-                    <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
+                  <tr className="border-b border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]">
+                    <th className="px-2 py-2 text-left whitespace-nowrap">Date</th>
+                    <th className="px-2 py-2 text-left whitespace-nowrap">Opp</th>
+                    <th className="px-2 py-2 text-center">MIN</th>
+                    <th className="px-2 py-2 text-center">FG</th>
+                    <th className="px-2 py-2 text-center">3PT</th>
+                    <th className="px-2 py-2 text-center">FT</th>
+                    <th className="px-2 py-2 text-center">REB</th>
+                    <th className="px-2 py-2 text-center">AST</th>
+                    <th className="px-2 py-2 text-center">STL</th>
+                    <th className="px-2 py-2 text-center">BLK</th>
+                    <th className="px-2 py-2 text-center">TO</th>
+                    <th className="px-2 py-2 text-center">PTS</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStats.map((game, index) => {
+                  {filteredStats.map((game) => {
                     const opponentName = (game.opponent && game.opponent.trim()) || 'TBD';
                     return (
                       <tr
                         key={game.id}
                         onClick={() => setSelectedGameForCard(game)}
-                        className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-orange-50/60 dark:hover:bg-orange-900/10 transition-colors ${index % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}
+                        className="border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] tabular-nums cursor-pointer"
                         data-testid={`game-row-${game.id}`}
                       >
-                        <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        <td className="px-2 py-2 text-xs text-[color:var(--ch-text-2)] whitespace-nowrap">
                           {game.game_key ? (
                             <a
                               href={`/game/${encodeURIComponent(game.game_key)}`}
-                              className="hover:underline"
+                              className="hover:underline underline-offset-2"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {formatDate(game.game_date || game.created_at)}
+                              {formatDate(game.game_date || game.created_at || '')}
                             </a>
-                          ) : formatDate(game.game_date || game.created_at)}
+                          ) : formatDate(game.game_date || game.created_at || '')}
                         </td>
-                        <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap">{opponentName}</td>
-                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sminutes || '—'}</td>
-                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sfieldgoalsmade || 0}-{game.sfieldgoalsattempted || 0}</td>
-                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sthreepointersmade || 0}-{game.sthreepointersattempted || 0}</td>
-                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sfreethrowsmade || 0}-{game.sfreethrowsattempted || 0}</td>
-                        <td className="px-2 py-1.5 text-xs text-center">{game.sreboundstotal || game.rebounds_total || 0}</td>
-                        <td className="px-2 py-1.5 text-xs text-center">{game.sassists || game.assists || 0}</td>
-                        <td className="px-2 py-1.5 text-xs text-center">{game.ssteals || 0}</td>
-                        <td className="px-2 py-1.5 text-xs text-center">{game.sblocks || 0}</td>
-                        <td className="px-2 py-1.5 text-xs text-center">{game.sturnovers || game.turnovers || 0}</td>
-                        <td className="px-2 py-1.5 text-xs text-center font-bold text-slate-900 dark:text-white">{game.spoints || game.points || 0}</td>
+                        <td className="px-2 py-2 text-xs font-medium whitespace-nowrap">{opponentName}</td>
+                        <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sminutes || '—'}</td>
+                        <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sfieldgoalsmade || 0}-{game.sfieldgoalsattempted || 0}</td>
+                        <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sthreepointersmade || 0}-{game.sthreepointersattempted || 0}</td>
+                        <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sfreethrowsmade || 0}-{game.sfreethrowsattempted || 0}</td>
+                        <td className="px-2 py-2 text-xs text-center">{game.sreboundstotal || game.rebounds_total || 0}</td>
+                        <td className="px-2 py-2 text-xs text-center">{game.sassists || game.assists || 0}</td>
+                        <td className="px-2 py-2 text-xs text-center">{game.ssteals || 0}</td>
+                        <td className="px-2 py-2 text-xs text-center">{game.sblocks || 0}</td>
+                        <td className="px-2 py-2 text-xs text-center">{game.sturnovers || game.turnovers || 0}</td>
+                        <td className="px-2 py-2 text-xs text-center font-bold">{game.spoints || game.points || 0}</td>
                       </tr>
                     );
                   })}
@@ -2920,54 +3147,56 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         </div>}
 
         {activeTab === 'accolades' && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 block">Accolades</span>
-            {playerAccolades.length > 0 ? (
-              <AccoladeBadges accolades={playerAccolades} accentColor={readablePrimary.body} />
-            ) : (
-              <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">No accolades yet this season</div>
-            )}
-          </div>
+          <section aria-labelledby="player-collection-heading" className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2
+                  id="player-collection-heading"
+                  className="ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]"
+                >
+                  The collection
+                </h2>
+                <p className="mt-1.5 text-sm text-[color:var(--ch-text-2)]">
+                  Records, league-leader finishes and career-best seasons, one holder per season. Tap a card to flip it.
+                </p>
+              </div>
+              {accoladeCollection.length > 0 && (
+                <span className="text-xs font-medium tabular-nums text-[color:var(--ch-muted)]">
+                  {accoladeCollection.length} card{accoladeCollection.length === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+            <AccoladeCollection
+              accolades={accoladeCollection}
+              player={collectionPlayer}
+              seasonOrder={playedSeasons.map((s) => s.label)}
+              competitions={cardLeagues ?? {}}
+            />
+          </section>
         )}
       </div>
 
       {selectedGameForCard && playerInfo && createPortal(
+        // The card, on its own over the page. sa-pro gives it the card's
+        // colour tokens outside the profile's tree.
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          className="sa-pro fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm"
+          style={{ background: "rgba(0, 0, 0, 0.6)" }}
           onClick={() => setSelectedGameForCard(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${playerInfo.name} performance card`}
         >
-          <div
-            className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-xs sm:max-w-sm mx-auto overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-neutral-800">
-              <span className="text-sm font-bold text-slate-800 dark:text-white">
-                Performance Card
-                {(selectedGameForCard.opponent && selectedGameForCard.opponent.trim()) && (
-                  <span className="font-normal text-slate-500 dark:text-slate-400 ml-1.5">
-                    vs {selectedGameForCard.opponent.trim()}
-                  </span>
-                )}
-              </span>
-              <button
-                onClick={() => setSelectedGameForCard(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
-                aria-label="Close"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-4">
-              <PerformanceCardDownload
-                key={selectedGameForCard.id}
-                stat={selectedGameForCard}
-                playerName={playerInfo.name}
-                playerPhotoPath={playerInfo.photoPath}
-                photoFocusY={playerInfo.photoFocusY}
-              />
-            </div>
+          <div className="tc-sizes relative" style={{ width: "var(--fan-card-w)" }} onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setSelectedGameForCard(null)}
+              className="absolute -top-12 right-0 h-9 w-9 rounded-full bg-white/90 text-slate-700 hover:bg-white flex items-center justify-center shadow-md transition-colors"
+              aria-label="Close"
+            >
+              <XIcon className="h-4 w-4" />
+            </button>
+            <TradingCard perf={toCardPerformance(selectedGameForCard)} shareTitle="Performance card" />
           </div>
         </div>,
         document.body

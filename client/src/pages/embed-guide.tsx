@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { getAutoResizeSnippet } from "@/lib/widgetUtils";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 
 interface CopyButtonProps {
   text: string;
@@ -34,7 +36,7 @@ function CopyButton({ text, label = "Copy" }: CopyButtonProps) {
 function CodeBlock({ children }: { children: string }) {
   return (
     <div className="relative">
-      <pre className="bg-slate-900 text-green-300 text-xs p-4 rounded-lg overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+      <pre className="bg-[#0b0d10] ring-1 ring-white/5 text-green-300 text-xs p-4 pr-16 rounded-[10px] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
         <code>{children}</code>
       </pre>
       <CopyButton text={children} />
@@ -96,44 +98,52 @@ export default function EmbedGuide() {
   const autoResizeSnippet = getAutoResizeSnippet();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-orange-50">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">Swish Assistant Embeddable Widgets</h1>
-          <p className="mt-2 text-slate-600">
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+      <Helmet>
+        <title>Embeddable widgets | Swish Assistant</title>
+        <meta name="description" content="Put live standings, scores, leaders and player stats on any website with one iframe snippet." />
+      </Helmet>
+      <SiteHeader />
+      <main className="max-w-4xl mx-auto px-4 md:px-6 pt-6 md:pt-9 pb-16">
+        <header className="ch-rise mb-6 md:mb-8">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Developers</div>
+          <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[3rem] text-[color:var(--ch-text)]">
+            Embeddable widgets
+          </h1>
+          <p className="mt-2 text-sm md:text-[15px] text-[color:var(--ch-text-2)] max-w-2xl">
             Drop live basketball stats onto any website with a single iframe snippet. No login,
             no API keys, no build step.
           </p>
         </header>
 
-        <section className="bg-white rounded-xl border border-orange-100 shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-bold text-slate-800 mb-3">Quick start</h2>
-          <ol className="list-decimal pl-5 space-y-2 text-sm text-slate-700">
+        <section className="ch-card p-5 md:p-6 mb-5">
+          <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Quick start</h2>
+          <ol className="list-decimal pl-5 space-y-2 text-sm text-[color:var(--ch-text-2)] marker:text-[color:var(--ch-muted)]">
             <li>Pick a widget type and find your league slug from the Widget Builder.</li>
             <li>Copy a snippet below into your site's HTML.</li>
             <li>(Optional) Drop the auto-resize script in once to make widgets grow with their content.</li>
           </ol>
         </section>
 
-        <section className="bg-white rounded-xl border border-orange-100 shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-bold text-slate-800 mb-3">Fixed-size snippet</h2>
-          <p className="text-sm text-slate-600 mb-3">
+        <section className="ch-card p-5 md:p-6 mb-5">
+          <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Fixed-size snippet</h2>
+          <p className="text-sm text-[color:var(--ch-text-2)] mb-3">
             Best when you know exactly how much space you want the widget to occupy.
           </p>
           <CodeBlock>{fixedSnippet}</CodeBlock>
         </section>
 
-        <section className="bg-white rounded-xl border border-orange-100 shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-bold text-slate-800 mb-3">Responsive snippet</h2>
-          <p className="text-sm text-slate-600 mb-3">
+        <section className="ch-card p-5 md:p-6 mb-5">
+          <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Responsive snippet</h2>
+          <p className="text-sm text-[color:var(--ch-text-2)] mb-3">
             Fills the width of its container. Pair with the auto-resize script to also grow vertically.
           </p>
           <CodeBlock>{responsiveSnippet}</CodeBlock>
         </section>
 
-        <section id="auto-resize" className="bg-white rounded-xl border border-orange-100 shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-bold text-slate-800 mb-3">Auto-resize script</h2>
-          <p className="text-sm text-slate-600 mb-3">
+        <section id="auto-resize" className="ch-card p-5 md:p-6 mb-5">
+          <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Auto-resize script</h2>
+          <p className="text-sm text-[color:var(--ch-text-2)] mb-3">
             Paste this once anywhere on your page (just before <code>&lt;/body&gt;</code> works well).
             It listens for height messages from any Swish widget on the page and resizes the iframe
             so there are no scroll bars.
@@ -141,23 +151,23 @@ export default function EmbedGuide() {
           <CodeBlock>{autoResizeSnippet}</CodeBlock>
         </section>
 
-        <section className="bg-white rounded-xl border border-orange-100 shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-bold text-slate-800 mb-4">Widget types</h2>
+        <section className="ch-card p-5 md:p-6 mb-5">
+          <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-4">Widget types</h2>
           <div className="space-y-5">
             {widgetTypes.map(w => (
-              <div key={w.id} className="border-l-4 border-orange-500 pl-4">
-                <h3 className="font-bold text-slate-900">{w.title}</h3>
-                <p className="text-sm text-slate-600 mt-1">{w.description}</p>
-                <p className="text-xs text-slate-500 mt-2">
+              <div key={w.id} className="border-l-[3px] border-[color:var(--ch-accent)] pl-4">
+                <h3 className="font-semibold text-[color:var(--ch-text)]">{w.title}</h3>
+                <p className="text-sm text-[color:var(--ch-text-2)] mt-1">{w.description}</p>
+                <p className="text-xs text-[color:var(--ch-muted)] mt-2">
                   <span className="font-semibold uppercase tracking-wide">URL: </span>
-                  <code className="text-orange-700">/widget/{w.id}</code>
+                  <code className="text-[color:var(--ch-accent)]">/widget/{w.id}</code>
                 </p>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-[color:var(--ch-muted)] mt-1">
                   <span className="font-semibold uppercase tracking-wide">Required: </span>
                   {w.required.join(', ')}
                 </p>
                 {w.optional.length > 0 && (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-[color:var(--ch-muted)] mt-1">
                     <span className="font-semibold uppercase tracking-wide">Optional: </span>
                     {w.optional.join(', ')}
                   </p>
@@ -167,39 +177,39 @@ export default function EmbedGuide() {
           </div>
         </section>
 
-        <section className="bg-white rounded-xl border border-orange-100 shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-bold text-slate-800 mb-4">Styling parameters</h2>
-          <p className="text-sm text-slate-600 mb-4">
+        <section className="ch-card p-5 md:p-6 mb-5">
+          <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-4">Styling parameters</h2>
+          <p className="text-sm text-[color:var(--ch-text-2)] mb-4">
             All widgets accept the same look-and-feel parameters via the URL.
           </p>
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left border-b border-slate-200">
-                <th className="py-2 pr-4 font-semibold text-slate-700">Parameter</th>
-                <th className="py-2 font-semibold text-slate-700">Description</th>
+              <tr className="text-left border-b border-[color:var(--ch-border)]">
+                <th className="py-2 pr-4 font-semibold text-[color:var(--ch-text)]">Parameter</th>
+                <th className="py-2 font-semibold text-[color:var(--ch-text)]">Description</th>
               </tr>
             </thead>
             <tbody>
               {styleParams.map(p => (
-                <tr key={p.name} className="border-b border-slate-100 align-top">
-                  <td className="py-2 pr-4 font-mono text-orange-700">{p.name}</td>
-                  <td className="py-2 text-slate-600">{p.desc}</td>
+                <tr key={p.name} className="border-b border-[color:var(--ch-border)] align-top">
+                  <td className="py-2 pr-4 font-mono text-[color:var(--ch-accent)]">{p.name}</td>
+                  <td className="py-2 text-[color:var(--ch-text-2)]">{p.desc}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </section>
 
-        <section className="bg-white rounded-xl border border-orange-100 shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-bold text-slate-800 mb-3">Troubleshooting</h2>
-          <ul className="space-y-3 text-sm text-slate-700">
+        <section className="ch-card p-5 md:p-6 mb-5">
+          <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Troubleshooting</h2>
+          <ul className="space-y-3 text-sm text-[color:var(--ch-text-2)] [&_strong]:text-[color:var(--ch-text)]">
             <li>
               <strong>The iframe shows "League not found".</strong> Double-check the
-              <code className="mx-1 text-orange-700">leagueSlug</code> matches the slug shown in your
+              <code className="mx-1 text-[color:var(--ch-accent)]">leagueSlug</code> matches the slug shown in your
               league URL on Swish Assistant. Private leagues are not embeddable.
             </li>
             <li>
-              <strong>The widget is the wrong height.</strong> Either set <code className="mx-1 text-orange-700">height</code>
+              <strong>The widget is the wrong height.</strong> Either set <code className="mx-1 text-[color:var(--ch-accent)]">height</code>
               on the iframe, or drop in the auto-resize script above so it grows automatically.
             </li>
             <li>
@@ -209,7 +219,7 @@ export default function EmbedGuide() {
             </li>
             <li>
               <strong>Colours look off.</strong> Pass hex colours including the <code>#</code>, e.g.
-              <code className="mx-1 text-orange-700">primaryColor=%23ea580c</code> if URL-encoding,
+              <code className="mx-1 text-[color:var(--ch-accent)]">primaryColor=%23ea580c</code> if URL-encoding,
               or <code>primaryColor=#ea580c</code> when set in plain HTML.
             </li>
             <li>
@@ -219,10 +229,10 @@ export default function EmbedGuide() {
           </ul>
         </section>
 
-        <footer className="text-center text-xs text-slate-400 mt-10">
-          Need help? Email <a href="mailto:hello@swishassistant.com" className="text-orange-600 hover:underline">hello@swishassistant.com</a>.
+        <footer className="text-center text-xs text-[color:var(--ch-muted)] mt-10">
+          Need help? Email <a href="mailto:hello@swishassistant.com" className="font-medium text-[color:var(--ch-accent)] hover:underline">hello@swishassistant.com</a>.
         </footer>
-      </div>
+      </main>
     </div>
   );
 }

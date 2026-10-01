@@ -1,157 +1,107 @@
-
-import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { CheckCircle, ArrowLeft } from "lucide-react";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
-import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
+import { Helmet } from "react-helmet-async";
+import { CheckCircle, Clock, Lock } from "lucide-react";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 
 interface PlanDetails {
   name: string;
-  price: string;
   features: string[];
-  stripeProductId?: string;
 }
 
+// What each plan is planned to include. Prices and checkout are still being
+// finalised, so neither is shown and nothing here can be bought yet.
 const PLAN_CONFIGS: Record<string, PlanDetails> = {
   individual: {
     name: "Individual",
-    price: "£5",
     features: [
       "Public league hosting",
-      "Full AI league assistant", 
+      "Full AI league assistant",
       "1 scouting report/month",
-      "Priority support"
+      "Priority support",
     ],
-    stripeProductId: "price_individual_monthly" // Replace with actual Stripe price ID
   },
   "all-access": {
-    name: "All Access", 
-    price: "£15",
+    name: "All Access",
     features: [
       "Multiple league creation",
       "Full AI assistant features",
       "Full league branding",
-      "Unlimited scouting reports"
+      "Unlimited scouting reports",
     ],
-    stripeProductId: "price_all_access_monthly" // Replace with actual Stripe price ID
-  }
+  },
 };
 
+/**
+ * /payment — paid plans are coming soon. The page says so and the subscribe
+ * button can't be pressed until checkout opens.
+ */
 export default function PaymentPage() {
-  const [, setLocation] = useLocation();
-  const [planDetails, setPlanDetails] = useState<PlanDetails | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const plan = urlParams.get('plan');
-    
-    if (plan && PLAN_CONFIGS[plan]) {
-      setPlanDetails(PLAN_CONFIGS[plan]);
-    } else {
-      // Invalid plan, redirect back
-      setLocation('/');
-    }
-  }, [setLocation]);
-
-  const handleStripeCheckout = async () => {
-    if (!planDetails?.stripeProductId) return;
-    
-    setLoading(true);
-    
-    try {
-      await apiRequest('POST', '/api/create-checkout-session', {
-        priceId: planDetails.stripeProductId,
-        successUrl: `${window.location.origin}/payment-success`,
-        cancelUrl: `${window.location.origin}/payment`,
-      });
-    } catch (error) {
-      console.error('Payment error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!planDetails) return null;
+  const plan = PLAN_CONFIGS[new URLSearchParams(window.location.search).get("plan") || ""];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-white py-12">
-      <div className="max-w-2xl mx-auto px-6">
-        
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <img src={SwishLogo} alt="Swish Logo" className="h-12" />
-            <span className="font-bold text-2xl text-orange-600">Swish Assistant</span>
-          </div>
-          <Button 
-            variant="ghost" 
-            onClick={() => setLocation('/')}
-            className="text-gray-600 hover:text-gray-800 mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Plans
-          </Button>
-        </div>
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+      <Helmet>
+        <title>Plans coming soon | Swish Assistant</title>
+        <meta name="robots" content="noindex" />
+      </Helmet>
+      <SiteHeader />
 
-        {/* Payment Card */}
-        <Card className="bg-white shadow-xl border-2 border-orange-200">
-          <CardHeader className="text-center bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-t-lg">
-            <CardTitle className="text-2xl">Complete Your Purchase</CardTitle>
-            <CardDescription className="text-orange-100">
-              You're upgrading to the {planDetails.name} plan
-            </CardDescription>
-          </CardHeader>
-          
-          <CardContent className="p-8">
-            
-            {/* Plan Summary */}
-            <div className="bg-gray-50 rounded-lg p-6 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-gray-900">{planDetails.name} Plan</h3>
-                <Badge className="bg-orange-500 text-white text-lg px-3 py-1">
-                  {planDetails.price}/month
-                </Badge>
-              </div>
-              
-              <div className="space-y-2">
-                {planDetails.features.map((feature, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    <span className="text-gray-700">{feature}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Payment Button */}
-            <Button 
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 text-lg font-semibold"
-              onClick={handleStripeCheckout}
-              disabled={loading}
-            >
-              {loading ? "Processing..." : `Subscribe for ${planDetails.price}/month`}
-            </Button>
-            
-            <p className="text-center text-sm text-gray-500 mt-4">
-              Secure payment powered by Stripe. Cancel anytime.
-            </p>
-          </CardContent>
-        </Card>
-        
-        {/* Security Info */}
-        <div className="text-center mt-8 text-sm text-gray-600">
-          <p>🔒 Your payment information is secure and encrypted</p>
-          <p className="mt-2">
-            <a href="/privacy" className="text-orange-600 hover:underline">Privacy Policy</a>
-            {" • "}
-            <a href="/terms" className="text-orange-600 hover:underline">Terms of Service</a>
+      <main className="max-w-xl mx-auto px-4 md:px-6 pt-10 md:pt-16 pb-16">
+        <div className="ch-rise text-center">
+          <span className="mx-auto mb-4 h-14 w-14 rounded-2xl flex items-center justify-center bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]">
+            <Clock className="h-7 w-7" aria-hidden="true" />
+          </span>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Plans</div>
+          <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[3rem] text-[color:var(--ch-text)]">
+            Coming soon
+          </h1>
+          <p className="mt-2 text-sm md:text-[15px] text-[color:var(--ch-text-2)]">
+            We're finalising our paid plans. Everything that's free today stays free, and we'll let members know as soon as subscriptions open.
           </p>
         </div>
-      </div>
+
+        <div className="ch-card ch-rise mt-7 p-5 md:p-7" style={{ animationDelay: "60ms" }} data-testid="payment-coming-soon">
+          {plan && (
+            <div className="mb-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.4rem] text-[color:var(--ch-text)]">
+                  {plan.name} plan
+                </h2>
+                <span className="rounded-full bg-[color:var(--ch-surface-3)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--ch-text-2)]">
+                  Coming soon
+                </span>
+              </div>
+              <ul className="mt-4 space-y-2">
+                {plan.features.map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-sm text-[color:var(--ch-text-2)]">
+                    <CheckCircle className="h-4 w-4 shrink-0 text-[color:var(--ch-muted)]" aria-hidden="true" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            className="ch-btn w-full h-11 justify-center text-[15px] bg-[color:var(--ch-surface-3)] text-[color:var(--ch-muted)] cursor-not-allowed"
+            data-testid="button-subscribe-disabled"
+          >
+            <Lock className="h-4 w-4" aria-hidden="true" />
+            Subscribe — coming soon
+          </button>
+          <p className="mt-3 text-center text-xs text-[color:var(--ch-muted)]">
+            Checkout isn't open yet, so you won't be charged for anything.
+          </p>
+        </div>
+
+        <div className="ch-rise mt-6 flex flex-wrap justify-center gap-3" style={{ animationDelay: "120ms" }}>
+          <Link href="/contact-sales" className="ch-btn ch-btn-ghost h-10 px-5">Talk to us</Link>
+          <Link href="/" className="ch-btn ch-btn-primary h-10 px-5">Back to home</Link>
+        </div>
+      </main>
     </div>
   );
 }

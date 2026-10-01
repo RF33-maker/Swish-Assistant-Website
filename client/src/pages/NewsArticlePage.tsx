@@ -1,14 +1,12 @@
 import { useEffect } from "react";
-import { Link, useParams, useLocation } from "wouter";
+import { Link, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/lib/supabase";
 import type { NewsArticle } from "@shared/schema";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ExternalLink, Newspaper, CalendarDays } from "lucide-react";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import GameEmbed from "@/components/GameEmbed";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { isGameSlug } from "@/lib/gameSlug";
 
 const ARTICLE_COLUMNS =
@@ -49,7 +47,7 @@ function renderLineWithInlineLinks(line: string, lineKey: string): React.ReactNo
       <a
         key={`${lineKey}-link-${match.index}`}
         href={href}
-        className="text-orange-600 underline hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+        className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80"
         target="_blank"
         rel="noopener noreferrer"
       >
@@ -115,30 +113,35 @@ function formatDate(value: string | Date | null | undefined) {
 
 function PageShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50/40 to-white dark:from-neutral-950 dark:to-neutral-950 flex flex-col">
-      <header className="bg-white dark:bg-neutral-900 border-b border-orange-100 dark:border-neutral-800">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <img src={SwishLogo} alt="Swish Assistant" className="h-8" />
-            <span className="font-bold text-lg text-orange-600">
-              Swish Assistant
-            </span>
-          </Link>
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+      <SiteHeader />
+      <main className="pb-16">
+        <div className="max-w-3xl mx-auto px-4 md:px-6 pt-6 md:pt-8">
           <Link
             href="/news"
-            className="text-sm font-medium text-slate-600 hover:text-orange-600 dark:text-slate-300 dark:hover:text-orange-400 inline-flex items-center gap-1"
+            className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)] transition-colors"
             data-testid="link-home"
           >
-            <ArrowLeft className="h-4 w-4" /> All News
+            <ArrowLeft className="h-4 w-4" /> All news
           </Link>
         </div>
-      </header>
-      <main className="flex-1">{children}</main>
-      <footer className="border-t border-orange-100 dark:border-neutral-800 mt-12 py-6">
-        <div className="max-w-5xl mx-auto px-6 text-xs text-slate-500 dark:text-slate-400 text-center">
-          &copy; {new Date().getFullYear()} Swish Assistant. All rights reserved.
-        </div>
-      </footer>
+        {children}
+      </main>
+    </div>
+  );
+}
+
+function NotFound({ message }: { message: string }) {
+  return (
+    <div className="max-w-3xl mx-auto px-4 md:px-6 py-10" data-testid="news-not-found">
+      <div className="ch-card p-10 text-center">
+        <Newspaper className="h-9 w-9 mx-auto text-[color:var(--ch-muted)] mb-3" />
+        <h1 className="ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2rem] text-[color:var(--ch-text)]">
+          Article not found
+        </h1>
+        <p className="mt-2 text-sm text-[color:var(--ch-text-2)]">{message}</p>
+        <Link href="/news" className="ch-btn ch-btn-primary h-10 px-5 mt-6">Back to news</Link>
+      </div>
     </div>
   );
 }
@@ -146,7 +149,6 @@ function PageShell({ children }: { children: React.ReactNode }) {
 export default function NewsArticlePage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug || "";
-  const [, setLocation] = useLocation();
 
   const isUUID = UUID_REGEX.test(slug);
 
@@ -189,21 +191,7 @@ export default function NewsArticlePage() {
   if (!slug) {
     return (
       <PageShell>
-        <div className="max-w-3xl mx-auto px-6 py-16 text-center" data-testid="news-not-found">
-          <Newspaper className="h-10 w-10 mx-auto text-orange-400 mb-3" />
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-            Article not found
-          </h1>
-          <p className="mt-2 text-slate-600 dark:text-slate-400">
-            The article you're looking for doesn't exist or is no longer available.
-          </p>
-          <Button
-            className="mt-6 bg-orange-500 hover:bg-orange-600 text-white"
-            onClick={() => setLocation("/news")}
-          >
-            Back to news
-          </Button>
-        </div>
+        <NotFound message="The article you're looking for doesn't exist or is no longer available." />
       </PageShell>
     );
   }
@@ -211,18 +199,16 @@ export default function NewsArticlePage() {
   if (isLoading || (isUUID && article?.slug)) {
     return (
       <PageShell>
-        <article className="max-w-3xl mx-auto px-6 py-10">
-          <Skeleton className="h-4 w-24 mb-4" />
-          <Skeleton className="h-9 w-full mb-3" />
-          <Skeleton className="h-9 w-3/4 mb-6" />
-          <Skeleton className="h-4 w-40 mb-8" />
-          <Skeleton className="h-72 w-full rounded-2xl mb-8" />
+        <article className="max-w-3xl mx-auto px-4 md:px-6 pt-6">
+          <div className="ch-skel h-4 w-24 mb-4" />
+          <div className="ch-skel h-10 w-full mb-3" />
+          <div className="ch-skel h-10 w-3/4 mb-6" />
+          <div className="ch-skel h-72 w-full rounded-[14px] mb-8" />
           <div className="space-y-3">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-4/5" />
+            <div className="ch-skel h-4 w-full" />
+            <div className="ch-skel h-4 w-full" />
+            <div className="ch-skel h-4 w-5/6" />
+            <div className="ch-skel h-4 w-4/5" />
           </div>
         </article>
       </PageShell>
@@ -232,21 +218,7 @@ export default function NewsArticlePage() {
   if (isError || !article) {
     return (
       <PageShell>
-        <div className="max-w-3xl mx-auto px-6 py-16 text-center" data-testid="news-not-found">
-          <Newspaper className="h-10 w-10 mx-auto text-orange-400 mb-3" />
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-            Article not found
-          </h1>
-          <p className="mt-2 text-slate-600 dark:text-slate-400">
-            This story may have been unpublished or removed.
-          </p>
-          <Button
-            className="mt-6 bg-orange-500 hover:bg-orange-600 text-white"
-            onClick={() => setLocation("/news")}
-          >
-            Back to news
-          </Button>
-        </div>
+        <NotFound message="This story may have been unpublished or removed." />
       </PageShell>
     );
   }
@@ -309,18 +281,18 @@ export default function NewsArticlePage() {
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
-      <article className="max-w-3xl mx-auto px-6 py-10" data-testid="news-article">
-        <div className="mb-5 flex flex-wrap items-center gap-3 text-xs">
+      <article className="max-w-3xl mx-auto px-4 md:px-6 pt-6 ch-rise" data-testid="news-article">
+        <div className="mb-4 flex flex-wrap items-center gap-3 text-xs">
           {article.league && (
             <span
-              className="font-semibold text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/40 px-2.5 py-1 rounded-full uppercase tracking-wide"
+              className="inline-flex items-center h-6 px-2 rounded text-[10.5px] font-bold uppercase tracking-[0.08em] bg-orange-500 text-white"
               data-testid="text-league-badge"
             >
               {article.league}
             </span>
           )}
           {article.published_at && (
-            <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400 font-medium">
+            <span className="inline-flex items-center gap-1 font-medium text-[color:var(--ch-muted)]">
               <CalendarDays className="h-3.5 w-3.5" />
               <time dateTime={new Date(article.published_at).toISOString()}>
                 {formatDate(article.published_at)}
@@ -330,7 +302,7 @@ export default function NewsArticlePage() {
         </div>
 
         <h1
-          className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white leading-tight"
+          className="ch-display uppercase font-bold tracking-tight leading-[0.98] text-[2.1rem] md:text-[3rem] text-[color:var(--ch-text)]"
           data-testid="text-article-title"
         >
           {article.title}
@@ -338,7 +310,7 @@ export default function NewsArticlePage() {
 
         {article.summary && (
           <p
-            className="mt-4 text-lg text-slate-600 dark:text-slate-300 leading-relaxed"
+            className="mt-4 text-lg leading-relaxed text-[color:var(--ch-text-2)]"
             data-testid="text-article-summary"
           >
             {article.summary}
@@ -346,7 +318,7 @@ export default function NewsArticlePage() {
         )}
 
         {article.image_url && (
-          <div className="mt-8 rounded-2xl overflow-hidden bg-orange-50 dark:bg-neutral-800 border border-orange-100 dark:border-neutral-800">
+          <div className="mt-7 rounded-[14px] overflow-hidden bg-[color:var(--ch-surface-3)] border border-[color:var(--ch-border)] shadow-[var(--ch-shadow)]">
             <img
               src={article.image_url}
               alt={article.title}
@@ -359,24 +331,24 @@ export default function NewsArticlePage() {
 
         {article.body ? (
           <div
-            className="mt-8 text-slate-800 dark:text-slate-200 text-base md:text-lg leading-relaxed"
+            className="mt-8 text-[16px] md:text-[17px] leading-[1.75] text-[color:var(--ch-text)]"
             data-testid="text-article-body"
           >
             {parseArticleBody(article.body)}
           </div>
         ) : (
-          <p className="mt-8 text-slate-500 dark:text-slate-400 italic">
+          <p className="mt-8 italic text-[color:var(--ch-muted)]">
             No article body provided.
           </p>
         )}
 
         {article.source_url && (
-          <div className="mt-10 pt-6 border-t border-orange-100 dark:border-neutral-800">
+          <div className="mt-10 pt-6 border-t border-[color:var(--ch-border)]">
             <a
               href={article.source_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--ch-accent)] hover:opacity-80"
               data-testid="link-source"
             >
               Read the original source <ExternalLink className="h-4 w-4" />
@@ -385,15 +357,10 @@ export default function NewsArticlePage() {
         )}
 
         <div className="mt-10">
-          <Button
-            variant="ghost"
-            onClick={() => setLocation("/news")}
-            className="text-slate-600 hover:text-orange-600 dark:text-slate-300 dark:hover:text-orange-400"
-            data-testid="button-back"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
+          <Link href="/news" className="ch-btn ch-btn-ghost h-10 px-4" data-testid="button-back">
+            <ArrowLeft className="h-4 w-4" />
             Back to all news
-          </Button>
+          </Link>
         </div>
       </article>
     </PageShell>

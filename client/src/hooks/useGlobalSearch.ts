@@ -36,7 +36,7 @@ interface PlayerRow {
 
 interface PlayerStatRow {
   player_id: string | number;
-  team: string | null;
+  team_name: string | null;
 }
 
 function isAbbreviated(name: string): boolean {
@@ -50,7 +50,7 @@ function getNameParts(name: string): { first: string; last: string } {
   return { first: parts[0] || "", last: parts[parts.length - 1] || "" };
 }
 
-function areSamePlayer(a: string, b: string): boolean {
+export function areSamePlayer(a: string, b: string): boolean {
   const pa = getNameParts(a);
   const pb = getNameParts(b);
   if (pa.last !== pb.last) return false;
@@ -117,14 +117,14 @@ export function useGlobalSearch() {
         const playerIds = players.map((p) => p.id);
         const { data: statsData } = await supabase
           .from("player_stats")
-          .select("player_id, team")
+          .select("player_id, team_name")
           .in("player_id", playerIds)
           .limit(100);
         if (statsData) {
           (statsData as PlayerStatRow[]).forEach((s) => {
             const key = String(s.player_id);
-            if (key && s.team && !playerTeamMap[key]) {
-              playerTeamMap[key] = s.team;
+            if (key && s.team_name && !playerTeamMap[key]) {
+              playerTeamMap[key] = s.team_name;
             }
           });
         }

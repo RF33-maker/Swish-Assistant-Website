@@ -77,8 +77,13 @@ function teamLevel(name: string): string {
 // levels — otherwise its "men" reads as a gender and splits the club — while
 // "Women", age groups and reserve sides (II, III) still stay separate.
 export function isSameTeam(a: string, b: string): boolean {
-  const level = (name: string) => teamLevel((name || "").replace(/\s+Senior\s+Men\b/gi, " "));
-  return identityKey(a) === identityKey(b) && level(a) === level(b);
+  return teamClubKey(a) === teamClubKey(b);
+}
+
+// One key per club side, so names can be grouped rather than compared in
+// pairs: teamClubKey(a) === teamClubKey(b) exactly when isSameTeam(a, b).
+export function teamClubKey(name: string): string {
+  return `${identityKey(name)}|${teamLevel((name || "").replace(/\s+Senior\s+Men\b/gi, " "))}`;
 }
 
 function jaroWinkler(a: string, b: string): number {

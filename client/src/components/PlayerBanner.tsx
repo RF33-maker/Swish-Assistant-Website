@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Upload, Loader2, Move, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { ProfileChip } from "@/components/ProfileChip";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { getContrastColor } from "@/lib/colorExtractor";
-import { shadeHex } from "@/lib/colorContrast";
+import { relativeLuminance, shadeHex } from "@/lib/colorContrast";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 
 interface PlayerBannerProps {
@@ -33,7 +32,8 @@ interface PlayerBannerProps {
   handlePhotoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   photoUploading: boolean;
   fileInputRef: React.RefObject<HTMLInputElement>;
-  isAuthenticated: boolean;
+  /** Admins only: storage and the players table reject everyone else's photo writes. */
+  canEditPhoto: boolean;
   brandColorOverride?: string;
   className?: string;
   leagueChip?: { label: string; onClick: () => void };
@@ -76,7 +76,7 @@ export function PlayerBanner({
   handlePhotoUpload,
   photoUploading,
   fileInputRef,
-  isAuthenticated,
+  canEditPhoto,
   brandColorOverride,
   className,
   leagueChip,
@@ -120,48 +120,86 @@ export function PlayerBanner({
     .filter(Boolean)
     .join(" · ");
 
+  // Glass chips and pills that read on the team colour, whichever way the
+  // text contrast goes.
+  const onLight = textColor.toLowerCase() === "#000000";
+  const glass = onLight
+    ? "bg-black/[0.07] hover:bg-black/[0.12] border-black/10"
+    : "bg-white/[0.12] hover:bg-white/20 border-white/20";
+  // The team logo as a tone-on-tone watermark, as on the trading cards.
+  const darkTeam = relativeLuminance(bgColor) < 0.18;
+  const watermarkStyle: CSSProperties = darkTeam
+    ? { filter: "grayscale(1) invert(1)", mixBlendMode: "screen", opacity: 0.16 }
+    : { filter: "grayscale(1) contrast(1.15)", mixBlendMode: "multiply", opacity: 0.24 };
+
   return (
-    <div
-      className={`relative rounded-2xl overflow-hidden ${className || ''}`}
-      style={{ background: `linear-gradient(135deg, ${bgColor}, ${gradientEnd})` }}
+    <section
+      className={`ch-hero ch-rise ${className || ''}`}
+      style={{
+        background: `radial-gradient(120% 140% at 85% 0%, color-mix(in srgb, ${bgColor} 80%, #fff) 0%, ${bgColor} 45%, ${gradientEnd} 100%)`,
+        color: textColor,
+      }}
+      aria-label={`${playerInfo.name} profile`}
     >
+      <svg aria-hidden="true" viewBox="0 0 200 80" preserveAspectRatio="xMaxYMid slice" className="absolute inset-0 h-full w-full pointer-events-none" fill="none" stroke={onLight ? "black" : "white"} strokeWidth="0.5" style={{ opacity: onLight ? 0.08 : 0.12 }}>
+        <circle cx="150" cy="-4" r="30" />
+        <path d="M 118 0 V 22 A 32 32 0 0 0 182 22 V 0" />
+        <rect x="138" y="0" width="24" height="30" />
+      </svg>
       {teamLogoUrl && (
         <img
           src={teamLogoUrl}
           alt=""
           aria-hidden="true"
-          className="absolute left-0 top-1/2 h-[170%] max-w-none object-contain opacity-15 pointer-events-none select-none"
-          style={{ transform: 'translate(-20%, -50%)' }}
+          className="absolute left-0 top-1/2 h-[150%] max-w-none object-contain pointer-events-none select-none"
+          style={{ transform: 'translate(-22%, -50%)', ...watermarkStyle }}
         />
       )}
 
-      <div className="relative p-5 md:p-8" style={{ minHeight: 'clamp(180px, 26vw, 300px)' }}>
+      <div className="relative p-5 md:p-8" style={{ minHeight: 'clamp(200px, 26vw, 320px)' }}>
         {(leagueChip || teamChip) && (
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            {leagueChip && <ProfileChip label={leagueChip.label} onClick={leagueChip.onClick} />}
-            {teamChip && <ProfileChip label={teamChip.label} onClick={teamChip.onClick} />}
+          <div className="flex flex-wrap items-center gap-2 mb-4 max-w-[70%] md:max-w-[60%]">
+            {[leagueChip, teamChip].filter((c): c is NonNullable<typeof c> => !!c).map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={chip.onClick}
+                className={`inline-flex items-center h-7 px-3 rounded-full border text-xs font-semibold backdrop-blur transition-colors max-w-full ${glass}`}
+              >
+                <span className="truncate">{chip.label}</span>
+              </button>
+            ))}
           </div>
         )}
 
         {/* Text column is capped to roughly half width so the large bottom-anchored
             photo below always has clear room on the right, at any card height. */}
         <div className="max-w-[60%] md:max-w-[55%]">
-          <div
-            className="font-black leading-tight"
-            style={{ color: textColor, fontSize: 'clamp(1.5rem, 4vw, 2.5rem)' }}
-            data-testid="text-player-name"
-          >
-            {playerInfo.name}
-          </div>
           {subtitle && (
-            <div className="text-sm md:text-base mt-1" style={{ color: textColor, opacity: 0.85 }}>
+            <div className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.14em]" style={{ opacity: 0.75 }}>
               {subtitle}
             </div>
           )}
+          <h1
+            className="ch-display uppercase font-bold leading-[0.92] tracking-tight break-words text-[2rem] sm:text-[2.6rem] md:text-[3.4rem] mt-1"
+            data-testid="text-player-name"
+          >
+            {playerInfo.name}
+          </h1>
           {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
-            <p className="text-xs italic mt-2" style={{ color: textColor, opacity: 0.7 }}>
+            <p className="text-xs mt-2" style={{ opacity: 0.72 }}>
               Previously: {playerInfo.previousTeams.join(", ")}
             </p>
+          )}
+          {detailItems.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {detailItems.map((item) => (
+                <span key={item.label} className={`inline-flex items-baseline gap-1.5 h-7 px-2.5 rounded-lg border text-xs ${glass}`}>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ opacity: 0.7 }}>{item.label}</span>
+                  <span className="font-bold tabular-nums">{item.value}</span>
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
@@ -210,16 +248,15 @@ export function PlayerBanner({
           </div>
         ) : (
           <div
-            className="absolute bottom-4 right-4 md:right-8 w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center border-2"
-            style={{ borderColor: 'rgba(255,255,255,0.35)', backgroundColor: 'rgba(255,255,255,0.15)' }}
+            className={`absolute bottom-5 right-5 md:bottom-8 md:right-8 w-20 h-20 md:w-28 md:h-28 rounded-full flex items-center justify-center border ${onLight ? 'border-black/15 bg-black/[0.06]' : 'border-white/30 bg-white/15'}`}
           >
-            <span className="font-bold text-lg md:text-xl" style={{ color: textColor }}>
+            <span className="ch-display font-bold text-2xl md:text-4xl">
               {getInitials(playerInfo.name)}
             </span>
           </div>
         )}
 
-        {isAuthenticated && playerInfo.playerId && !showFocusAdjuster && (
+        {canEditPhoto && playerInfo.playerId && !showFocusAdjuster && (
           <div className="absolute bottom-3 right-3 z-10 flex gap-2">
             <input
               ref={fileInputRef}
@@ -303,30 +340,7 @@ export function PlayerBanner({
           </div>
         )}
       </div>
-
-      {detailItems.length > 0 && (
-        <div
-          className="relative flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2 md:px-8 md:py-3 border-t"
-          style={{ borderColor: 'rgba(255,255,255,0.15)' }}
-        >
-          {detailItems.map((item, idx) => (
-            <div key={item.label} className="flex items-center gap-1.5">
-              <span className="text-xs font-bold tracking-wide" style={{ color: textColor, opacity: 0.7 }}>
-                {item.label}
-              </span>
-              <span className="text-xs font-bold" style={{ color: textColor }}>
-                {item.value}
-              </span>
-              {idx < detailItems.length - 1 && (
-                <span className="text-xs font-bold ml-2" style={{ color: textColor, opacity: 0.4 }}>
-                  |
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+    </section>
   );
 }
 

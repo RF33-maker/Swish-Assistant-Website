@@ -1,75 +1,71 @@
 import { useState, useEffect } from "react"
 import { useLocation } from "wouter"
 import { Helmet } from "react-helmet-async"
-import { supabase } from "@/lib/supabase"
 import SwishLogo from "@/assets/Swish Assistant Logo.png"
 import Ballpark from "@/assets/ballparksports.jpg"
-import UL from "@/assets/uploadimage.png"
 import BCB from "@/assets/BCB Logo.jpg"
 import SLB from "@/assets/Super-League-Basketball-Logo.png"
 import NBLBE from "@/assets/NBLBE.jpg"
 import { Button } from "@/components/ui/button"
-import { Analytics } from "@vercel/analytics/next"
-import { ChevronDown, X, UserPlus } from "lucide-react"
+import { X, UserPlus, Mail, Check } from "lucide-react"
 import LatestScoresSection from "@/components/home/LatestScoresSection"
 import LatestNewsSection from "@/components/home/LatestNewsSection"
 import ScoresBlock from "@/components/home/ScoresBlock"
+import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSection"
 import PodcastSection from "@/components/home/PodcastSection"
 import TopPlayersSection from "@/components/home/TopPlayersSection"
-import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSection"
+import HomeTodayBar from "@/components/home/HomeTodayBar"
+import PlatformStatsStrip from "@/components/home/PlatformStatsStrip"
+import ScrollStory from "@/components/home/story/ScrollStory"
+import ExploreSection from "@/components/home/ExploreSection"
+import AudienceSection from "@/components/home/AudienceSection"
+import HomeFooter from "@/components/home/HomeFooter"
+import SectionHeader from "@/components/home/SectionHeader"
 import { InstagramFeedSection } from "@/components/InstagramFeedSection"
-import { useGlobalSearch } from "@/hooks/useGlobalSearch"
 import { useAuth } from "@/hooks/use-auth"
+import { useReadableTeamColor } from "@/hooks/useReadableColor"
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader"
 
 const PLATFORM_INSTAGRAM_HANDLE = "swishassistant"
+const HOSTED_LEAGUE_LOGOS = [Ballpark, NBLBE, BCB, SLB]
+const SWISH_ORANGE = "#f97316"
 
-function LeagueLogosCarousel() {
-  const logos = [Ballpark, NBLBE, BCB, SLB]
-  
+/**
+ * "Home to these leagues" — the hosted-league logos as a slow marquee.
+ * Tripled so the -50% loop in .animate-infinite-scroll never shows a gap.
+ */
+function HostedLeaguesBand() {
   return (
-    <section className="w-full bg-orange-500 py-10 text-white overflow-hidden">
-      <h2 className="text-center text-sm uppercase mb-6">
-        Already hosting these leagues and more!
-      </h2>
-
-      <div className="relative w-full">
-        <div className="flex gap-6 md:gap-12 animate-infinite-scroll">
-          {[...logos, ...logos].map((img, i) => (
-            <div 
-              key={i} 
-              className="flex-shrink-0 flex items-center justify-center h-20 md:h-24 w-28 md:w-36"
-            >
-              <img
-                src={img}
-                alt={`League Logo ${(i % logos.length) + 1}`}
-                className="h-14 md:h-20 w-auto object-contain rounded-xl shadow-md hover:shadow-lg transition duration-300 hover:scale-110"
-              />
-            </div>
-          ))}
+    <section className="ch-glass-band border-y border-[color:var(--ch-border)] bg-[color:var(--ch-surface)]" aria-label="Leagues on Swish Assistant">
+      <div className="max-w-7xl mx-auto px-5 md:px-8 py-6 md:py-7 flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
+        <h2 className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-muted)] md:w-44">
+          Home to these leagues and more
+        </h2>
+        <div
+          className="ch-marquee relative flex-1 overflow-hidden"
+          style={{ maskImage: "linear-gradient(90deg, transparent, black 8%, black 92%, transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, black 8%, black 92%, transparent)" }}
+        >
+          <div className="flex gap-4 md:gap-6 w-max animate-infinite-scroll">
+            {[...HOSTED_LEAGUE_LOGOS, ...HOSTED_LEAGUE_LOGOS, ...HOSTED_LEAGUE_LOGOS].map((img, i) => (
+              <div
+                key={i}
+                className="flex-shrink-0 h-14 md:h-16 w-24 md:w-28 rounded-xl bg-white ring-1 ring-black/5 flex items-center justify-center p-2.5"
+              >
+                <img src={img} alt={`League ${(i % HOSTED_LEAGUE_LOGOS.length) + 1}`} className="max-h-full max-w-full object-contain" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
   )
 }
 
-function cleanLeagueName(name: string): string {
-  return name
-    .replace(/\s+\d{4}\/\d{4}\s*$/, '')
-    .replace(/\s+\d{4}\d{4}\s*$/, '')
-    .replace(/\s+\d{2}\/\d{2}\s*$/, '')
-    .replace(/\s+\d{4}\/\d{2}\s*$/, '')
-    .trim();
-}
-
 export default function LandingPage() {
   const [, setLocation] = useLocation()
-  const [trendingLeagues, setTrendingLeagues] = useState<any[]>([]);
-  // Search itself now lives in SiteHeader; the hero league shortcuts still
-  // route through the same selection handler.
-  const { handleSelect } = useGlobalSearch();
   const { user, isLoading: authLoading } = useAuth();
   const [showPopup, setShowPopup] = useState(false);
+  const accent = useReadableTeamColor(SWISH_ORANGE).body;
 
   // Show the welcome popup once per session, only to guests
   useEffect(() => {
@@ -99,87 +95,15 @@ export default function LandingPage() {
     setShowPopup(false);
   };
 
-  useEffect(() => {
-    const fetchTrending = async () => {
-      // Trending items can be pinned two ways: a single competition/season
-      // (routes to /competition/:slug), or a league brand that groups
-      // several seasons and competition types under one season-picker page
-      // (routes to /league/:slug — see pages/competition/[slug].tsx, the
-      // actual component behind that route despite the file layout).
-      // Both tables carry their own trending_position, so pinning a league
-      // brand — e.g. BCB or SLB — surfaces its season/competition picker
-      // from the homepage instead of jumping straight to one specific season.
-      const [competitionsResult, leaguesResult] = await Promise.all([
-        supabase
-          .from("competitions")
-          .select("name, slug, logo_url, banner_url, trending_position")
-          .eq("is_public", true)
-          .not("trending_position", "is", null)
-          .order("trending_position", { ascending: true }),
-        supabase
-          .from("leagues")
-          .select("name, slug, logo_url, banner_url, trending_position")
-          .not("trending_position", "is", null)
-          .order("trending_position", { ascending: true }),
-      ]);
-
-      // Competition slugs that are redundant in THIS row specifically because
-      // their brand-level league (e.g. "British Championship Basketball",
-      // "NBL Division One" — which also covers WNBL D1 via its own gender
-      // picker) is also pinned to trending and already routes to that season
-      // via its own season/gender picker — showing both is two cards for one
-      // destination. Scoped to this row only (not the trending_position
-      // column itself), so Top Players / Latest Scores — which also read
-      // trending_position — keep surfacing that season's data untouched.
-      // The mapped value is the brand's own trending_position: the brand
-      // card inherits the excluded competition's slot rather than whatever
-      // position the brand row happens to carry, so it doesn't get bumped
-      // out by an unrelated tie against some other competition.
-      const SUPERSEDED_BY_LEAGUE_BRAND: Record<string, string> = {
-        "british-championship-basketball-2026-2027": "british-championship-basketball",
-        "nbl-division-1-2026-2027": "nbl-division-one",
-      };
-      // Shorter label for this row only — the underlying league name stays
-      // "NBL Division One" everywhere else (its own brand page, search, etc).
-      const DISPLAY_NAME_OVERRIDE: Record<string, string> = {
-        "nbl-division-one": "NBL",
-      };
-
-      const inheritedPositionByLeagueSlug = new Map<string, number>();
-      (competitionsResult.data || []).forEach((row: any) => {
-        const leagueSlug = SUPERSEDED_BY_LEAGUE_BRAND[row.slug];
-        if (leagueSlug) inheritedPositionByLeagueSlug.set(leagueSlug, row.trending_position);
-      });
-
-      const combined = [
-        ...(competitionsResult.data || [])
-          .filter((row: any) => !(row.slug in SUPERSEDED_BY_LEAGUE_BRAND))
-          .map((row: any) => ({ ...row, _type: "competition" as const, _sortPos: row.trending_position })),
-        ...(leaguesResult.data || []).map((row: any) => ({
-          ...row,
-          name: DISPLAY_NAME_OVERRIDE[row.slug] ?? row.name,
-          _type: "league" as const,
-          _sortPos: inheritedPositionByLeagueSlug.get(row.slug) ?? row.trending_position,
-        })),
-      ].sort((a, b) => a._sortPos - b._sortPos);
-
-      const seen = new Set<string>();
-      const deduped: any[] = [];
-      for (const item of combined) {
-        const key = `${item._type}:${item.slug}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          deduped.push(item);
-        }
-      }
-      setTrendingLeagues(deduped.slice(0, 4));
-    };
-
-    fetchTrending();
-  }, []);
-
   return (
-    <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-300`}>
+    <div
+      className={`${SITE_RAIL_OFFSET} sa-pro ch-story-page relative min-h-screen flex flex-col`}
+      style={{ "--ch-accent": accent } as React.CSSProperties}
+    >
+      {/* Layers: the scroll story paints behind everything (z-0), the page
+          sits above it (z-1), and the story's basketballs are drawn over the
+          top (z-2) — pointer-events-free except the page itself. */}
+      <ScrollStory />
       {/* The homepage's title used to come only from index.html, so once other
           pages started setting theirs via Helmet (e.g. /scores), navigating
           back here kept their title. Declaring it restores it in-app. */}
@@ -194,224 +118,161 @@ export default function LandingPage() {
       {/* Welcome popup — shown once per session to guests */}
       {showPopup && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 sm:p-6"
-          style={{ background: 'rgba(0,0,0,0.45)' }}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-[2px]"
           onClick={dismissPopup}
         >
           <div
-            className="relative bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border border-orange-200 dark:border-neutral-700 max-w-sm w-full p-6 animate-fade-in-up"
+            className="ch-force-dark dark relative w-full max-w-sm overflow-hidden rounded-2xl text-white shadow-2xl ring-1 ring-white/10 animate-fade-in-up isolate"
+            style={{ background: "#0b0d12" }}
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="welcome-title"
           >
-            {/* Close */}
-            <button
-              onClick={dismissPopup}
-              className="absolute top-3 right-3 p-1.5 rounded-full text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-              aria-label="Dismiss"
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            {/* Icon + heading */}
-            <div className="flex items-center gap-3 mb-3">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center flex-shrink-0">
-                <UserPlus className="h-5 w-5 text-white" />
-              </div>
-              <h2 className="font-bold text-lg text-slate-900 dark:text-white leading-tight">
-                Create your free account
-              </h2>
-            </div>
-
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-5 leading-relaxed">
-              Track players, download performance cards, and get insights — all for free. No credit card needed.
-            </p>
-
-            <div className="flex flex-col gap-2">
-              <a
-                href="/auth?tab=register"
-                className="block w-full text-center bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold px-4 py-2.5 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
-                onClick={dismissPopup}
-              >
-                Register free →
-              </a>
+            <div aria-hidden="true" className="absolute -top-20 -right-16 h-56 w-56 rounded-full blur-3xl opacity-60 -z-10" style={{ background: "radial-gradient(circle, rgba(249,115,22,0.55) 0%, transparent 65%)" }} />
+            <div className="p-6">
+              {/* Close */}
               <button
                 onClick={dismissPopup}
-                className="block w-full text-center text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 py-1.5 transition-colors"
+                className="absolute top-3 right-3 h-8 w-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Dismiss"
               >
-                Maybe later
+                <X className="h-4 w-4" />
               </button>
+
+              <span className="h-11 w-11 rounded-xl flex items-center justify-center bg-orange-500/15 text-orange-300">
+                <UserPlus className="h-5 w-5" />
+              </span>
+              <h2 id="welcome-title" className="ch-display uppercase font-bold text-[1.75rem] leading-[0.95] tracking-tight mt-4">
+                Create your free account
+              </h2>
+              <p className="text-sm text-white/65 mt-2.5 leading-relaxed">
+                Track players, download performance cards, and get insights — all for free. No credit card needed.
+              </p>
+              <ul className="mt-4 space-y-1.5 text-[13px] text-white/75">
+                {["Follow your leagues and players", "Shareable performance cards", "Free forever for fans"].map((t) => (
+                  <li key={t} className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-orange-300" />{t}</li>
+                ))}
+              </ul>
+
+              <div className="flex flex-col gap-2 mt-6">
+                <a
+                  href="/auth?tab=register"
+                  className="flex items-center justify-center gap-2 h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-[15px] font-semibold transition-colors"
+                  onClick={dismissPopup}
+                >
+                  Register free →
+                </a>
+                <button
+                  onClick={dismissPopup}
+                  className="h-9 text-sm text-white/55 hover:text-white transition-colors"
+                >
+                  Maybe later
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      <SiteHeader />
+      <div className="relative z-[1] flex flex-col min-h-screen">
+      {/* The homepage has its own search below, so the header shows the
+          logo instead; other pages keep the header search. */}
+      <SiteHeader hideSearch />
 
-      {/* Live scores ticker (BR-style) */}
+      {/* Live scores ticker */}
       <LatestScoresSection />
 
-      {/* Hero Section with Gradient Background */}
-      <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-neutral-950 dark:to-neutral-900 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
-        <main className="flex flex-col items-center justify-center px-6 text-center">
-        <h1 className="sr-only">Swish Assistant — Basketball Stats, League Insights &amp; AI-Powered Scouting</h1>
-        {/* Trending Performance */}
+      {/* Content first (Bleacher Report / StatMuse): today's bar with
+          search and league shortcuts, then the games and the week's top
+          performances. */}
+      <HomeTodayBar />
+
+      {/* data-story="scores": the scores and the performances — the hoop
+          from the search bar hangs behind both as they scroll over it. */}
+      <div data-story="scores">
+        <div className="max-w-7xl mx-auto w-full px-5 md:px-8">
+          <ScoresBlock />
+        </div>
+
         <TrendingPerformanceSection />
-        {/* Suggestions */}
-        <div className="w-full max-w-xl">
-          <h3 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-3 animate-slide-in-left" style={{ animationDelay: '0.75s', opacity: 0, animationFillMode: 'forwards' }}>Trending</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(trendingLeagues.length > 0
-              ? trendingLeagues
-              : [
-                  { name: "SLB Championship 25/26", slug: "super-league-basketball-20252026", logo_url: null, banner_url: null, _type: "competition" },
-                  { name: "BCB Trophy 2026-2027", slug: "bcb-trophy-2026-2027", logo_url: null, banner_url: null, _type: "competition" },
-                  { name: "NBL Division One 25/26", slug: "national-basketball-league-d1-mens-20252026", logo_url: null, banner_url: null, _type: "competition" },
-                  { name: "WNBL Division One 25/26", slug: "national-basketball-league-d1-womens-20252026", logo_url: null, banner_url: null, _type: "competition" },
-                ]
-            ).map((league, i) => {
-              const hasBanner = !!league.banner_url;
-              const isCompetition = league._type === "competition";
-              return (
-              <button
-                key={league.slug}
-                onClick={() => handleSelect({ type: isCompetition ? 'competition' : 'league', name: league.name, slug: league.slug, logo_url: league.logo_url ?? null } as any)}
-                className="relative overflow-hidden rounded-2xl h-24 hover:scale-[1.03] hover:shadow-lg transition-all duration-300 animate-slide-in-left group"
-                style={{
-                  animationDelay: `${0.8 + i * 0.075}s`,
-                  opacity: 0,
-                  animationFillMode: 'forwards',
-                  backgroundColor: '#1a1a1a',
-                }}
-              >
-                {hasBanner && (
-                  <img
-                    src={league.banner_url}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity"
-                  />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
-                  <span className="font-semibold text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{cleanLeagueName(league.name)}</span>
-                  {league.logo_url && (
-                    <img src={league.logo_url} alt={`${league.name} logo`} className="h-10 w-10 object-contain ml-2 flex-shrink-0" />
-                  )}
-                </div>
-              </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Tagline */}
-        <p className="mt-6 md:mt-8 text-slate-600 dark:text-slate-400 text-sm md:text-base font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
-          Explore stats, track performance, drive narrative and discover the next MVP.
-        </p>
-
-        {/* Registration CTA — only shown to guests */}
-        {!authLoading && !user && (
-          <div className="mt-5 animate-fade-in-up" style={{ animationDelay: '1.15s', opacity: 0, animationFillMode: 'forwards' }}>
-            <a
-              href="/auth?tab=register"
-              className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold px-6 py-2.5 rounded-full shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 text-sm md:text-base"
-            >
-              <UserPlus className="h-4 w-4" />
-              Create free account
-            </a>
-            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-              Already have one?{" "}
-              <a href="/auth" className="text-orange-500 hover:text-orange-600 underline underline-offset-2">
-                Sign in
-              </a>
-            </p>
-          </div>
-        )}
-
-        {/* League Logos Section */}
-        <div className="mt-8 md:mt-12 w-full max-w-5xl mx-auto">
-          {/* Heading */}
-          <h2 className="text-center text-xs md:text-sm uppercase text-orange-600 font-semibold tracking-wide mb-4 md:mb-6 animate-fade-in-up" style={{ animationDelay: '1.2s', opacity: 0, animationFillMode: 'forwards' }}>
-            Already hosting these leagues and more!
-          </h2>
-          
-          {/* Logos Carousel */}
-          <div className="overflow-hidden animate-fade-in-up" style={{ animationDelay: '1.3s', opacity: 0, animationFillMode: 'forwards' }}>
-            <div className="flex gap-6 md:gap-8 animate-infinite-scroll">
-              {[...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB])].map((img, i) => (
-                <div 
-                  key={i} 
-                  className="flex-shrink-0 flex items-center justify-center bg-white dark:bg-neutral-900 rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
-                >
-                  <img
-                    src={img}
-                    alt={`League ${i + 1}`}
-                    className="h-12 md:h-16 w-auto object-contain"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Scroll Indicator */}
-        <div className="mt-8 md:mt-12 flex justify-center animate-fade-in-up" style={{ animationDelay: '1.5s', opacity: 0, animationFillMode: 'forwards' }}>
-          <ChevronDown className="h-6 w-6 md:h-8 md:w-8 text-orange-500 animate-bounce" />
-        </div>
-        </main>
       </div>
 
-      {/* Scores: at-a-glance live/next games, handing off to /scores */}
-      <ScoresBlock />
+      <div data-story="leagues">
+        <ExploreSection />
+      </div>
 
-      {/* News, podcast & top players sections (scores ticker is rendered above the hero) */}
-      <LatestNewsSection />
+      <div data-story="news">
+        <LatestNewsSection />
+      </div>
+
+      {/* Podcast, top players & socials */}
+      <div data-story="media">
       <PodcastSection />
       <TopPlayersSection />
 
       {/* Stay Connected — Instagram feed */}
-      <section className="py-6 md:py-8 bg-white dark:bg-neutral-950">
-        <div className="max-w-6xl mx-auto px-4 md:px-6">
-          <InstagramFeedSection handle={PLATFORM_INSTAGRAM_HANDLE} />
+      <section className="py-12 md:py-16" aria-labelledby="social-heading">
+        <div className="max-w-7xl mx-auto px-5 md:px-8">
+          <SectionHeader
+            id="social-heading"
+            eyebrow="Stay connected"
+            title="Follow the action"
+            description="Highlights, performance cards and matchday updates from @swishassistant."
+          />
+          <InstagramFeedSection handle={PLATFORM_INSTAGRAM_HANDLE} title="" />
         </div>
       </section>
+      </div>
+
+      {/* Below the content: who Swish is and what it offers */}
+      <div data-story="brand">
+        <HostedLeaguesBand />
+        <div className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-16">
+          <PlatformStatsStrip />
+        </div>
+        <AudienceSection />
+      </div>
 
       {/* Newsletter Signup Section */}
-      <section id="subscribe" className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-neutral-800 dark:to-neutral-900 relative overflow-hidden flex items-center">
-        {/* Background Logo */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-5 dark:opacity-[0.03]">
-          <img 
-            src={SwishLogo} 
-            alt="Swish Logo Background" 
-            className="w-96 h-96 object-contain transform rotate-12"
-          />
-        </div>
-
-        <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
-          <h3 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
-            Stay Updated with Swish Assistant
-          </h3>
-          <p className="text-gray-600 dark:text-slate-300 mb-8 max-w-2xl mx-auto">
-            Get the latest news, feature updates, and tips delivered straight to your inbox. 
-            Be the first to know about new league management features and AI improvements.
-          </p>
-
-          <form className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto mb-3">
-            <input
-              type="email"
-              placeholder="Enter your email address"
-              className="flex-1 px-5 py-3.5 rounded-xl border border-orange-200 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white dark:bg-neutral-800 dark:text-white dark:placeholder-slate-400 shadow-sm transition-all duration-200"
-              required
-            />
-            <button
-              type="submit"
-              className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 py-3.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105"
-            >
-              Subscribe
-            </button>
-          </form>
-
-          <p className="text-xs text-gray-400 dark:text-slate-500 italic">
-            No spam, just updates. Unsubscribe anytime.
-          </p>
+      <section id="subscribe" className="py-12 md:py-16 px-5 md:px-8">
+        <div className="ch-force-dark dark relative max-w-7xl mx-auto overflow-hidden rounded-[20px] text-white isolate" style={{ background: "#0b0d12" }}>
+          <div aria-hidden="true" className="absolute -left-24 -bottom-32 h-80 w-80 rounded-full blur-3xl opacity-60 -z-10" style={{ background: "radial-gradient(circle, rgba(249,115,22,0.5) 0%, transparent 65%)" }} />
+          <img src={SwishLogo} alt="" aria-hidden="true" className="absolute -right-10 -top-10 w-72 h-72 object-contain opacity-[0.05] rotate-12 -z-10" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center p-7 md:p-12">
+            <div>
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-300 mb-3">
+                <Mail className="h-3.5 w-3.5" /> Newsletter
+              </div>
+              <h3 className="ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[3rem]">
+                Stay updated with Swish Assistant
+              </h3>
+              <p className="mt-3 text-white/65 max-w-lg">
+                Get the latest news, feature updates, and tips delivered straight to your inbox.
+                Be the first to know about new league management features and AI improvements.
+              </p>
+            </div>
+            <div>
+              <form className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="email"
+                  placeholder="Enter your email address"
+                  aria-label="Email address"
+                  className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-white/[0.07] border border-white/15 text-white placeholder:text-white/40 focus:outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-500/20 transition"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="h-12 px-6 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold transition-colors"
+                >
+                  Subscribe
+                </button>
+              </form>
+              <p className="mt-3 text-xs text-white/45">
+                No spam, just updates. Unsubscribe anytime.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -611,93 +472,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-[#0a0a0f] text-white py-12 border-t-4 border-t-orange-500">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-
-            {/* Company Info */}
-            <div className="md:col-span-2">
-              <div className="flex items-center gap-3 mb-4">
-                <img src={SwishLogo} alt="Swish Logo" className="h-8" />
-                <span className="font-bold text-xl text-white">Swish Assistant</span>
-                <div className="flex gap-3 ml-2">
-                  <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-orange-400 transition-colors">
-                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                    </svg>
-                  </a>
-                  <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-orange-400 transition-colors">
-                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
-                    </svg>
-                  </a>
-                  <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-orange-400 transition-colors">
-                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                    </svg>
-                  </a>
-                </div>
-              </div>
-              <p className="text-gray-300 mb-4">
-                Redefining how we see basketball stats.
-                
-                Our sport, your leagues, your players, your stats, all just a few clicks away.
-              </p>
-            </div>
-
-            {/* Quick Links */}
-            <div>
-              <h4 className="font-semibold text-lg mb-4 text-white">Quick Links</h4>
-              <ul className="space-y-2">
-                {/* <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Get Started</a></li>
-                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Login</a></li>
-                <li><a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a></li>
-                <li><a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a></li> */}
-                <li><a href="/news" className="text-gray-300 hover:text-white transition-colors">Latest News</a></li>
-                <li><a href="#subscribe" className="text-gray-300 hover:text-white transition-colors">Subscribe</a></li>
-              </ul>
-            </div>
-
-            {/* Legal */}
-            <div>
-              <h4 className="font-semibold text-lg mb-4 text-white">Legal</h4>
-              <ul className="space-y-2">
-                <li><a href="/privacy" className="text-gray-300 hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="/terms" className="text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
-                <li><a href="/cookies" className="text-gray-300 hover:text-white transition-colors">Cookie Policy</a></li>
-                <li><a href="#support" className="text-gray-300 hover:text-white transition-colors">Support</a></li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-800 mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center">
-            <p className="text-gray-400 text-sm">
-              &copy; {new Date().getFullYear()} Swish Assistant. All rights reserved.
-            </p>
-            <div className="flex gap-6 mt-4 sm:mt-0">
-              <a href="#twitter" className="text-gray-400 hover:text-orange-400 transition-colors">
-                <span className="sr-only">Twitter</span>
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
-                </svg>
-              </a>
-              <a href="#linkedin" className="text-gray-400 hover:text-orange-400 transition-colors">
-                <span className="sr-only">LinkedIn</span>
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                </svg>
-              </a>
-              <a href="#youtube" className="text-gray-400 hover:text-orange-400 transition-colors">
-                <span className="sr-only">YouTube</span>
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                </svg>
-              </a>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <HomeFooter />
+      </div>
 
     </div>
   )
