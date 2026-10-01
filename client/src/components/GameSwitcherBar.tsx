@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
 import { TeamLogo } from "./TeamLogo";
+import EntityLink from "./EntityLink";
 import { generateGameSlug } from "@/lib/gameSlug";
 import { CheckCircle2, Clock, Radio } from "lucide-react";
 
@@ -261,9 +262,10 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
               const isCurrent = game.game_key === currentGameKey;
 
               return (
-                <button
+                <EntityLink
                   key={game.game_key}
-                  onClick={() => handleGameClick(game)}
+                  href={`/game/${encodeURIComponent(game.game_key)}`}
+                  onNavigate={() => handleGameClick(game)}
                   className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[200px] sm:min-w-[250px] ${
                     isCurrent
                       ? 'bg-orange-500 text-white ring-1 ring-orange-400'
@@ -309,7 +311,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
                       Final
                     </span>
                   )}
-                </button>
+                </EntityLink>
               );
             })}
           </div>

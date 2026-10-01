@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { teamPath } from "@shared/seo";
 
 export type SearchSuggestion =
   | { type: "competition"; name: string; slug: string; logo_url: string | null }
@@ -226,12 +227,7 @@ export function useGlobalSearch() {
     } else if (item.type === "league") {
       setLocation(`/league/${item.slug}`);
     } else if (item.type === "team") {
-      const encodedName = encodeURIComponent(item.name);
-      if (item.league_slug) {
-        setLocation(`/competition/${item.league_slug}/team/${encodedName}`);
-      } else {
-        setLocation(`/team/${encodedName}`);
-      }
+      setLocation(teamPath(item.name, item.league_slug) || `/team/${encodeURIComponent(item.name)}`);
     } else if (item.type === "player") {
       const identifier = item.player_slug || item.player_id;
       setLocation(`/player/${identifier}`);

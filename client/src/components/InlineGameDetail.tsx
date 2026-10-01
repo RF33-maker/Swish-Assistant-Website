@@ -10,6 +10,8 @@ import PlayByPlay from "./PlayByPlay";
 import UpcomingGamePreview, { type PreviewGame } from "./UpcomingGamePreview";
 import GameScoreHero, { useMatchupColors } from "./game/GameScoreHero";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "./game/GameOverview";
+import { playerPath, teamPath } from "@shared/seo";
+import { gameRecap } from "@shared/recaps";
 
 export interface GameInfo {
   date: string;
@@ -35,6 +37,9 @@ interface InlineGameDetailProps {
 
 interface PlayerStat {
   id?: string;
+  /** players.id and slug, for linking to the player's page. */
+  playerId?: string | null;
+  slug?: string | null;
   firstname: string;
   familyname: string;
   team: string;
@@ -105,14 +110,18 @@ function parseMinutes(s: string | null | undefined): string {
   return `${w}:${sec.toString().padStart(2, "0")}`;
 }
 
+const fullName = (p: PlayerStat) => `${p.firstname} ${p.familyname}`.trim();
+
 const toLeader = (p: PlayerStat): GameLeaderPlayer => ({
-  name: `${p.firstname} ${p.familyname}`.trim(),
+  name: fullName(p),
   spoints: p.spoints,
   sreboundstotal: p.sreboundstotal,
   sassists: p.sassists,
   ssteals: p.ssteals,
   sblocks: p.sblocks,
 });
+
+const pickLink = (p: { href: string | null; onSelect: (() => void) | null }) => ({ href: p.href, onSelect: p.onSelect });
 
 function formatLiveClock(clock: string | null | undefined): string | null {
   if (!clock) return null;
@@ -324,6 +333,7 @@ export function InlineGameDetail({
         if (boxRows && boxRows.length > 0) {
           const toStat = (r: any): PlayerStat => ({
             id: r.id || r.player_id,
+            playerId: r.player_id ?? null,
             firstname: r.player_name || `${r.firstname || ""} ${r.familyname || ""}`.trim() || "Unknown",
             familyname: "",
             team: r.team_name || r.team || "",
@@ -415,6 +425,13 @@ export function InlineGameDetail({
           const awayStats = boxRows.filter(matchesAway)
             .map(toStat).sort((a, b) => (b.spoints || 0) - (a.spoints || 0));
 
+          // Slugs, so names link to the canonical player page (no redirect hop).
+          const playerIds = Array.from(new Set([...homeStats, ...awayStats].map((p) => p.playerId).filter(Boolean))) as string[];
+          if (playerIds.length) {
+            const { data: slugRows } = await supabase.from("players").select("id, slug").in("id", playerIds);
+            const slugById = new Map((slugRows || []).map((row: any) => [row.id, row.slug]));
+            for (const p of [...homeStats, ...awayStats]) p.slug = (p.playerId && slugById.get(p.playerId)) || null;
+          }
           setHomePlayerStats(homeStats);
           setAwayPlayerStats(awayStats);
 
@@ -551,16 +568,37 @@ export function InlineGameDetail({
 
   const { hometeam, awayteam, homeScore, awayScore, date, status } = gameInfo;
 
-  const teamHref = (team: string) =>
-    leagueSlug ? `/competition/${leagueSlug}/team/${encodeURIComponent(team)}` : undefined;
+  const teamHref = (team: string) => teamPath(team, leagueSlug) || undefined;
+  // A player's page; inside the league page a plain click opens them inline.
+  const linked = <T extends PlayerStat>(p: T) => {
+    const href = playerPath({ slug: p.slug, full_name: fullName(p), id: p.playerId });
+    const key = p.slug || p.playerId;
+    return { ...p, href, onSelect: onSelectPlayer && key ? () => onSelectPlayer(key) : null };
+  };
+  const quarterOf = (row: TeamStatRow | null, q: 1 | 2 | 3 | 4) => (row ? row[`p${q}_score`] || 0 : 0);
+  const topOf = (players: PlayerStat[]) => players[0] ? { name: fullName(players[0]), pts: players[0].spoints || 0, reb: players[0].sreboundstotal, ast: players[0].sassists } : null;
+  const recap = isFinalStatus
+    ? gameRecap({
+        home: hometeam,
+        away: awayteam,
+        homeScore,
+        awayScore,
+        competition: competitionName,
+        date,
+        quarters: ([1, 2, 3, 4] as const).map((q) => ({ home: quarterOf(homeTeamStats, q), away: quarterOf(awayTeamStats, q) })),
+        topHome: topOf(homePlayerStats),
+        topAway: topOf(awayPlayerStats),
+      })
+    : [];
   const liveLabel = isLive && liveClock
     ? [liveClock.period ? (liveClock.period <= 4 ? `Q${liveClock.period}` : `OT${liveClock.period - 4}`) : null, formatLiveClock(liveClock.clock)]
         .filter(Boolean).join(" · ")
     : null;
   const BoxScoreTable = ({ players, teamName, score, color }: { players: PlayerStat[]; teamName: string; score: number; color: string }) => (
     <SharedBoxScore
-      players={players}
+      players={players.map(linked)}
       teamName={teamName}
+      teamHref={teamHref(teamName)}
       score={score}
       leagueId={leagueId ?? undefined}
       headerColor={color}
@@ -628,10 +666,11 @@ export function InlineGameDetail({
                 leagueId={leagueId}
                 home={homeTeamStats}
                 away={awayTeamStats}
-                homePlayers={homePlayerStats.map(toLeader)}
-                awayPlayers={awayPlayerStats.map(toLeader)}
+                homePlayers={homePlayerStats.map((p) => ({ ...toLeader(p), ...pickLink(linked(p)) }))}
+                awayPlayers={awayPlayerStats.map((p) => ({ ...toLeader(p), ...pickLink(linked(p)) }))}
                 events={eventsLoading ? null : liveEvents}
                 colors={colors}
+                recap={recap}
               />
             </TabsContent>
 

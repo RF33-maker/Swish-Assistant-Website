@@ -11,6 +11,8 @@ import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { parseScheduleTime } from "@/lib/scheduleTime";
 import { aggregateTeamStats } from "@/lib/teamStatsAggregate";
+import { playerPath, teamPath } from "@shared/seo";
+import EntityLink from "@/components/EntityLink";
 
 export type PreviewGame = {
   league_id: string;
@@ -92,12 +94,10 @@ function computeStreak(form: FormResult[]): { count: number; type: "W" | "L" } |
 }
 
 export default function UpcomingGamePreview({ game, onRefresh, embedded = false, leagueSlug, onSelectPlayer }: { game: PreviewGame; onRefresh?: () => void; embedded?: boolean; leagueSlug?: string; onSelectPlayer?: (playerSlug: string) => void }) {
-  const teamHref = (teamName: string) => leagueSlug
-    ? `/competition/${leagueSlug}/team/${encodeURIComponent(teamName)}`
-    : `/team/${encodeURIComponent(teamName)}`;
-  const playerHref = (slug: string) => leagueSlug
-    ? `/competition/${leagueSlug}/player/${encodeURIComponent(slug)}`
-    : `/player/${encodeURIComponent(slug)}`;
+  // The team's permanent page, opened on this competition.
+  const teamHref = (teamName: string) => teamPath(teamName, leagueSlug) || `/team/${encodeURIComponent(teamName)}`;
+  // The canonical player page (inside the league page a click still opens it inline).
+  const playerHref = (slug: string) => playerPath({ slug }) || `/player/${encodeURIComponent(slug)}`;
 
   const [left, setLeft] = useState(() => countdown(game.matchtime));
   const arrived = left.days + left.hours + left.minutes + left.seconds === 0;
@@ -454,7 +454,7 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
             const slug = ids.map((id) => storySlugs?.get(id)).find(Boolean) || ids[0];
             if (!slug) return children;
             return onSelectPlayer
-              ? <StorylinePlayerLink onClick={() => onSelectPlayer(slug)}>{children}</StorylinePlayerLink>
+              ? <StorylinePlayerLink href={playerHref(slug)} onClick={() => onSelectPlayer(slug)}>{children}</StorylinePlayerLink>
               : <StorylinePlayerLink href={playerHref(slug)}>{children}</StorylinePlayerLink>;
           }}
         />
@@ -559,19 +559,13 @@ function LeaderColumn({
         {players.length ? players.map((player) => (
           <div key={player.name} className="ch-tile px-3 py-2">
             {player.slug ? (
-              onSelectPlayer ? (
-                <button
-                  type="button"
-                  onClick={() => onSelectPlayer(player.slug as string)}
-                  className="truncate text-sm font-semibold hover:underline text-left"
-                >
-                  {player.name}
-                </button>
-              ) : (
-                <Link href={playerHref(player.slug)} className="truncate text-sm font-semibold hover:underline">
-                  {player.name}
-                </Link>
-              )
+              <EntityLink
+                href={playerHref(player.slug)}
+                onNavigate={onSelectPlayer ? () => onSelectPlayer(player.slug as string) : undefined}
+                className="block truncate text-sm font-semibold hover:underline"
+              >
+                {player.name}
+              </EntityLink>
             ) : (
               <div className="truncate text-sm font-semibold">{player.name}</div>
             )}
