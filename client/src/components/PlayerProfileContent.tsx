@@ -25,7 +25,7 @@ import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import TradingCard, { type TradingCardPerformance } from "@/components/cards/TradingCard";
-import TiltCard, { requestTiltPermission } from "@/components/cards/TiltCard";
+import { requestTiltPermission } from "@/components/cards/TiltCard";
 import { computeGmSc } from "@/lib/performanceCardUtils";
 import { computePastSeasonAccolades, computePlayerAccolades } from "@/lib/accolades";
 import { AccoladeChips, AccoladeCollection } from "@/components/cards/AccoladeCollection";
@@ -3203,9 +3203,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             >
               <XIcon className="h-4 w-4" />
             </button>
-            <TiltCard>
-              <TradingCard perf={toCardPerformance(selectedGameForCard)} shareTitle="Performance card" />
-            </TiltCard>
+            <TradingCard perf={toCardPerformance(selectedGameForCard)} shareTitle="Performance card" />
           </div>
         </div>,
         document.body

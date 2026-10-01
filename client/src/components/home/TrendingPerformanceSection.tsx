@@ -326,6 +326,8 @@ export default function TrendingPerformanceSection({
                 <TradingCard
                   perf={toCardPerformance(p, leagueNames[p.league_id], leagueLogos[p.league_id], playerMeta[p.player_id])}
                   onOpen={isCenter && profileHref(p, playerMeta[p.player_id]) ? () => open(p) : undefined}
+                  // Only the front card leans; the fanned-out ones stay put.
+                  tilt={isCenter}
                 />
               )}
             />
