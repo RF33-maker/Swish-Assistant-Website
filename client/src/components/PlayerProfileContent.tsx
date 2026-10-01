@@ -25,6 +25,7 @@ import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import TradingCard, { type TradingCardPerformance } from "@/components/cards/TradingCard";
+import TiltCard, { requestTiltPermission } from "@/components/cards/TiltCard";
 import { computeGmSc } from "@/lib/performanceCardUtils";
 import { computePastSeasonAccolades, computePlayerAccolades } from "@/lib/accolades";
 import { AccoladeChips, AccoladeCollection } from "@/components/cards/AccoladeCollection";
@@ -3111,7 +3112,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                     return (
                       <tr
                         key={game.id}
-                        onClick={() => setSelectedGameForCard(game)}
+                        onClick={() => {
+                          // Must run inside the tap for iOS to allow motion access.
+                          requestTiltPermission();
+                          setSelectedGameForCard(game);
+                        }}
                         className="border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] tabular-nums cursor-pointer"
                         data-testid={`game-row-${game.id}`}
                       >
@@ -3198,7 +3203,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             >
               <XIcon className="h-4 w-4" />
             </button>
-            <TradingCard perf={toCardPerformance(selectedGameForCard)} shareTitle="Performance card" />
+            <TiltCard>
+              <TradingCard perf={toCardPerformance(selectedGameForCard)} shareTitle="Performance card" />
+            </TiltCard>
           </div>
         </div>,
         document.body
