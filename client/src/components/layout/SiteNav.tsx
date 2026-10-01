@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { Link, useLocation } from "wouter"
-import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings } from "lucide-react"
+import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2 } from "lucide-react"
 import { SheetClose } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import StatsThreadLogo from "@/assets/statsthread-logo.svg"
@@ -37,7 +37,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet?: boolean; layout?: "rail" | "sheet" }) {
   const [location] = useLocation()
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const { data: scores } = useScores()
   const { data: leagues = [] } = useNavLeagues()
   const liveCount = scores?.live.length ?? 0
@@ -101,6 +101,10 @@ export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet
           {/* These were buttons in the league page's own header; that header
               is replaced by this shared one, so they live here now — and are
               reachable from every page, not just league pages. */}
+          {internalLink("/dashboard", location.startsWith("/dashboard"), <>
+            <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Dashboard
+          </>, "dashboard")}
           {internalLink("/coaches-hub", location.startsWith("/coaches-hub"), <>
             <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />
             Coaches Hub
@@ -109,6 +113,12 @@ export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet
             <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
             League Admin
           </>, "league-admin")}
+          {/* /social-tools is admin-only, so only admins get the shortcut;
+              everyone else sees the locked card on the dashboard. */}
+          {isAdmin && internalLink("/social-tools", location.startsWith("/social-tools"), <>
+            <Share2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Swish Social
+          </>, "swish-social")}
         </>
       ) : (
         <>
