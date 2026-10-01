@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Highlight from '@tiptap/extension-highlight';
@@ -69,6 +69,28 @@ const EMPTY_REPORT: ScoutingReport = {
   weaknesses: [],
 };
 
+
+type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error';
+
+interface SavedReportSummary {
+  id: string;
+  name: string;
+  template_id: string;
+  created_at: string | null;
+}
+
+const DEFAULT_TITLE = 'New Scouting Report';
+const DEFAULT_CONTENT = '<h1>New Scouting Report</h1><p>Start writing your analysis...</p>';
+const DEFAULT_TEMPLATE_ID = 'clean-pro';
+const AUTOSAVE_DELAY_MS = 1000;
+
+const SAVE_STATUS_LABEL: Record<SaveStatus, string> = {
+  idle: 'Not saved yet',
+  unsaved: 'Unsaved changes',
+  saving: 'Saving...',
+  saved: 'Saved',
+  error: 'Save failed — retry',
+};
 
 const blockTypes = [
   {
@@ -151,16 +173,46 @@ export default function UnifiedScoutingEditor({
   onChatInsert, 
   reportData, 
   onReportDataChange, 
-  selectedTemplateId = "clean-pro", 
+  selectedTemplateId = DEFAULT_TEMPLATE_ID, 
   onTemplateChange, 
   parseError 
 }: UnifiedScoutingEditorProps) {
   const { user } = useAuth();
+  const leagueId = leagueContext?.leagueId ?? null;
   const [activeTab, setActiveTab] = useState('blocks');
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [documentTitle, setDocumentTitle] = useState('New Scouting Report');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [documentTitle, setDocumentTitle] = useState(DEFAULT_TITLE);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [savedReports, setSavedReports] = useState<SavedReportSummary[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+
+  // The editor's onUpdate handler is created once, so everything the save
+  // reads goes through refs rather than render-time closures.
+  const docIdRef = useRef<string | null>(null);
+  const titleRef = useRef(documentTitle);
+  const reportDataRef = useRef(reportData);
+  const templateIdRef = useRef(selectedTemplateId);
+  const leagueIdRef = useRef(leagueId);
+  const savingRef = useRef(false);
+  const pendingSaveRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveDocumentRef = useRef<() => Promise<void>>(async () => {});
+  titleRef.current = documentTitle;
+  reportDataRef.current = reportData;
+  templateIdRef.current = selectedTemplateId;
+  leagueIdRef.current = leagueId;
+
+  const scheduleSave = () => {
+    dirtyRef.current = true;
+    setSaveStatus('unsaved');
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      saveDocumentRef.current();
+    }, AUTOSAVE_DELAY_MS);
+  };
 
   const editor = useEditor({
     extensions: [
@@ -170,50 +222,219 @@ export default function UnifiedScoutingEditor({
         placeholder: 'Start writing your analysis...'
       })
     ],
-    content: '<h1>New Scouting Report</h1><p>Start writing your analysis...</p>',
-    onUpdate: ({ editor }) => {
-      saveDocument();
+    content: DEFAULT_CONTENT,
+    onUpdate: () => {
+      scheduleSave();
     }
   });
 
   const saveDocument = async () => {
-    if (!editor || !user || isSaving) return;
-    
-    setIsSaving(true);
+    if (!editor || !user) return;
+    if (savingRef.current) {
+      // A save is in flight; run once more when it finishes so the latest edits land.
+      pendingSaveRef.current = true;
+      return;
+    }
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    savingRef.current = true;
+    dirtyRef.current = false;
+    setSaveStatus('saving');
+
     try {
-      const content = editor.getHTML();
-      
-      if (currentDocumentId) {
-        await supabase
-          .from('scouting_reports')
-          .update({
-            title: documentTitle,
-            content,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', currentDocumentId);
-      } else {
-        const { data, error } = await supabase
-          .from('scouting_reports')
-          .insert({
-            title: documentTitle,
-            content,
-            user_id: user.id,
-            league_id: leagueContext?.leagueId || null
-          })
-          .select('id')
-          .single();
-        
-        if (data) {
-          setCurrentDocumentId(data.id);
+      const fields = {
+        name: titleRef.current.trim() || DEFAULT_TITLE,
+        template_id: templateIdRef.current || DEFAULT_TEMPLATE_ID,
+        data: { html: editor.getHTML(), report: reportDataRef.current ?? null },
+      };
+      // created_by is filled in by the column default (auth.uid()), which RLS checks.
+      const { data, error } = docIdRef.current
+        ? await supabase
+            .from('scouting_reports')
+            .update(fields)
+            .eq('id', docIdRef.current)
+            .select('id, name, template_id, created_at')
+            .single()
+        : await supabase
+            .from('scouting_reports')
+            .insert({ ...fields, league_id: leagueIdRef.current })
+            .select('id, name, template_id, created_at')
+            .single();
+      if (error) throw error;
+
+      docIdRef.current = data.id;
+      setCurrentDocumentId(data.id);
+      setSavedReports((prev) => [data, ...prev.filter((r) => r.id !== data.id)]
+        .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')));
+      setSaveStatus(dirtyRef.current ? 'unsaved' : 'saved');
+    } catch (error: any) {
+      console.error('Error saving scouting report:', error);
+      dirtyRef.current = true;
+      setSaveStatus((prev) => {
+        // Toast once per failure streak rather than on every autosave attempt.
+        if (prev !== 'error') {
+          toast({
+            title: "Couldn't save report",
+            description: error?.message || 'Your changes have not been saved. Check your connection and try again.',
+            variant: 'destructive',
+          });
         }
-      }
-    } catch (error) {
-      console.error('Error saving document:', error);
+        return 'error';
+      });
+      pendingSaveRef.current = false;
     } finally {
-      setIsSaving(false);
+      savingRef.current = false;
+      if (pendingSaveRef.current) {
+        pendingSaveRef.current = false;
+        saveDocumentRef.current();
+      }
     }
   };
+  saveDocumentRef.current = saveDocument;
+
+  // Title, template and AI report data are saved with the document too. The
+  // snapshot holds what was last loaded, so opening a report doesn't re-save it.
+  const loadedSnapshotRef = useRef({ title: documentTitle, templateId: selectedTemplateId, report: reportData });
+  useEffect(() => {
+    const snap = loadedSnapshotRef.current;
+    const changed = documentTitle !== snap.title || selectedTemplateId !== snap.templateId || reportData !== snap.report;
+    if (docIdRef.current && changed) scheduleSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentTitle, selectedTemplateId, reportData]);
+
+  // Flush pending edits when the editor unmounts (e.g. switching Coaches Hub tabs).
+  useEffect(() => () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveDocumentRef.current();
+    }
+  }, []);
+
+  const loadReports = async () => {
+    if (!user) return;
+    setReportsLoading(true);
+    let query = supabase
+      .from('scouting_reports')
+      .select('id, name, template_id, created_at')
+      .eq('created_by', user.id)
+      .order('created_at', { ascending: false });
+    query = leagueId ? query.eq('league_id', leagueId) : query.is('league_id', null);
+    const { data, error } = await query;
+    setReportsLoading(false);
+    if (error) {
+      console.error('Error loading scouting reports:', error);
+      toast({ title: "Couldn't load your reports", description: error.message, variant: 'destructive' });
+      return;
+    }
+    setSavedReports(data ?? []);
+  };
+
+  const flushPendingSave = async () => {
+    if (saveTimerRef.current || dirtyRef.current) await saveDocumentRef.current();
+  };
+
+  const resetDocument = () => {
+    docIdRef.current = null;
+    dirtyRef.current = false;
+    setCurrentDocumentId(null);
+    setDocumentTitle(DEFAULT_TITLE);
+    editor?.commands.setContent(DEFAULT_CONTENT, false);
+    onReportDataChange?.(null);
+    setSaveStatus('idle');
+  };
+
+  // Each league has its own list of reports; start fresh when the league changes.
+  useEffect(() => {
+    if (!editor) return;
+    if (docIdRef.current) {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      resetDocument();
+    }
+    loadReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, user?.id, leagueId]);
+
+  const newDocument = async () => {
+    await flushPendingSave();
+    resetDocument();
+  };
+
+  const openDocument = async (id: string) => {
+    if (!editor || id === docIdRef.current) return;
+    await flushPendingSave();
+    const { data, error } = await supabase
+      .from('scouting_reports')
+      .select('id, name, template_id, data')
+      .eq('id', id)
+      .single();
+    if (error || !data) {
+      console.error('Error opening scouting report:', error);
+      toast({ title: "Couldn't open report", description: error?.message, variant: 'destructive' });
+      return;
+    }
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const report = data.data?.report ?? null;
+    const templateId = data.template_id || selectedTemplateId;
+    loadedSnapshotRef.current = { title: data.name, templateId, report };
+    docIdRef.current = data.id;
+    dirtyRef.current = false;
+    setCurrentDocumentId(data.id);
+    setDocumentTitle(data.name);
+    editor.commands.setContent(data.data?.html ?? '', false);
+    if (templateId !== selectedTemplateId) onTemplateChange?.(templateId);
+    onReportDataChange?.(report);
+    setSaveStatus('saved');
+  };
+
+  const renderReportsList = (afterPick?: () => void) => (
+    <div className="space-y-2">
+      <Button
+        onClick={() => { newDocument(); afterPick?.(); }}
+        variant="outline"
+        size="sm"
+        className="w-full justify-start"
+      >
+        <Plus className="w-4 h-4 mr-2" />
+        New report
+      </Button>
+      {reportsLoading ? (
+        <p className="text-xs text-gray-500 px-1">Loading…</p>
+      ) : savedReports.length === 0 ? (
+        <p className="text-xs text-gray-500 px-1">
+          No saved reports{leagueContext ? ` for ${leagueContext.leagueName}` : ''} yet. Reports save automatically as you type.
+        </p>
+      ) : (
+        savedReports.map((r) => {
+          const selected = r.id === currentDocumentId;
+          return (
+            <Card
+              key={r.id}
+              className={`cursor-pointer transition-all duration-200 border bg-white ${
+                selected ? 'border-orange-400 ring-1 ring-orange-300' : 'border-gray-200 hover:shadow-sm hover:border-orange-200'
+              }`}
+              onClick={() => { openDocument(r.id); afterPick?.(); }}
+            >
+              <CardContent className="p-3">
+                <div className="font-semibold text-sm text-gray-900 truncate">{r.name}</div>
+                <div className="text-xs text-gray-500">
+                  {r.created_at ? `Created ${new Date(r.created_at).toLocaleDateString()}` : ''}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
+    </div>
+  );
 
   const insertBlock = (block: typeof blockTypes[0]) => {
     if (editor) {
@@ -317,12 +538,23 @@ export default function UnifiedScoutingEditor({
           <FileText className="w-6 h-6 text-orange-600 dark:text-orange-400" />
           <Input
             value={documentTitle}
-            onChange={(e) => setDocumentTitle(e.target.value)}
+            onChange={(e) => {
+              setDocumentTitle(e.target.value);
+              if (!docIdRef.current) scheduleSave();
+            }}
             className="text-lg font-semibold border-none bg-transparent p-0 h-auto focus-visible:ring-0 text-slate-900 dark:text-white"
           />
-          <Badge variant="secondary" className="text-xs">
-            {isSaving ? 'Saving...' : 'Saved'}
-          </Badge>
+          {saveStatus === 'error' ? (
+            <button type="button" onClick={() => saveDocument()} title="Retry saving">
+              <Badge variant="destructive" className="text-xs whitespace-nowrap">
+                {SAVE_STATUS_LABEL.error}
+              </Badge>
+            </button>
+          ) : (
+            <Badge variant="secondary" className="text-xs whitespace-nowrap">
+              {SAVE_STATUS_LABEL[saveStatus]}
+            </Badge>
+          )}
         </div>
         
         <div className="flex items-center gap-2">
@@ -349,7 +581,13 @@ export default function UnifiedScoutingEditor({
             <aside className="w-full bg-gray-50 dark:bg-neutral-950 border-r border-gray-200 dark:border-neutral-800 flex flex-col">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
                 <div className="p-4 border-b border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
-                  <TabsList className="grid w-full grid-cols-3 h-12 bg-gray-100 dark:bg-neutral-800 p-1 rounded-lg">
+                  <TabsList className="grid w-full grid-cols-4 h-12 bg-gray-100 dark:bg-neutral-800 p-1 rounded-lg">
+                    <TabsTrigger 
+                      value="reports" 
+                      className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+                    >
+                      Reports
+                    </TabsTrigger>
                     <TabsTrigger 
                       value="blocks" 
                       className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
@@ -372,6 +610,14 @@ export default function UnifiedScoutingEditor({
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4">
+                  <TabsContent value="reports" className="mt-0">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2">My Reports</h3>
+                      <p className="text-xs text-gray-500">Your saved scouting reports{leagueContext ? ` for ${leagueContext.leagueName}` : ''}</p>
+                    </div>
+                    {renderReportsList()}
+                  </TabsContent>
+
                   <TabsContent value="blocks" className="mt-0 space-y-2">
                     <div className="mb-4">
                       <h3 className="text-sm font-semibold text-gray-900 mb-2">Content Blocks</h3>
@@ -589,7 +835,13 @@ export default function UnifiedScoutingEditor({
               </div>
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-                <TabsList className="grid w-full grid-cols-3 m-4 h-12 bg-gray-100 dark:bg-neutral-800 p-1 rounded-lg">
+                <TabsList className="grid w-[calc(100%-2rem)] grid-cols-4 m-4 h-12 bg-gray-100 dark:bg-neutral-800 p-1 rounded-lg">
+                  <TabsTrigger 
+                    value="reports"
+                    className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+                  >
+                    Reports
+                  </TabsTrigger>
                   <TabsTrigger 
                     value="blocks"
                     className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
@@ -611,6 +863,10 @@ export default function UnifiedScoutingEditor({
                 </TabsList>
 
                 <div className="px-4 pb-4 overflow-y-auto max-h-[calc(100vh-200px)]">
+                  <TabsContent value="reports">
+                    {renderReportsList(() => setShowMobileMenu(false))}
+                  </TabsContent>
+
                   <TabsContent value="blocks" className="space-y-3">
                     {blockTypes.map((block) => (
                       <Card 
