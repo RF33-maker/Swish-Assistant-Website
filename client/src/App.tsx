@@ -41,6 +41,10 @@ import SettingsPage from "@/pages/settings-page";
 import ProfilePage from "./pages/profile-page";
 import ImportPlayersPage from "@/pages/admin/import-players";
 import UnconfirmedAccountsPage from "@/pages/admin/unconfirmed-accounts";
+import PlayerClaimsAdminPage from "@/pages/admin/player-claims";
+import ClaimProfilePage from "@/pages/claim-profile";
+import PublicProfilePage from "@/pages/public-profile";
+import EditMyProfilePage from "@/pages/edit-my-profile";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
 import PrivacyPolicyPage from "@/pages/privacy";
@@ -101,6 +105,9 @@ function Router() {
       <Route path="/embed" component={EmbedGuide} />
       <Route path="/news" component={NewsIndexPage} />
       <Route path="/news/:slug" component={NewsArticlePage} />
+      <Route path="/p/:slug" component={PublicProfilePage} />
+      {/* Handles signed-out and unconfirmed visitors itself, so it can send them back here after sign-in. */}
+      <Route path="/claim" component={ClaimProfilePage} />
 
       {/* Member routes — any authenticated user */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
@@ -108,6 +115,7 @@ function Router() {
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/payment" component={PaymentPage} />
+      <ProtectedRoute path="/my-profile/edit" component={EditMyProfilePage} />
       <AdminRoute path="/social-tools" component={SocialToolsPage} />
       <AdminRoute path="/api-widgets" component={WidgetBuilder} />
 
@@ -120,6 +128,7 @@ function Router() {
       <AdminRoute path="/news-manager" component={NewsManager} />
       <AdminRoute path="/admin/import-players" component={ImportPlayersPage} />
       <AdminRoute path="/admin/unconfirmed-accounts" component={UnconfirmedAccountsPage} />
+      <AdminRoute path="/admin/player-claims" component={PlayerClaimsAdminPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />
