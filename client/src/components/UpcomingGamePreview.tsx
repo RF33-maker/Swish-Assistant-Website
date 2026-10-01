@@ -3,6 +3,10 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Clock3, MapPin, RefreshCw } from "lucide-react";
 import GameScoreHero, { StatCompareRow, useMatchupColors } from "@/components/game/GameScoreHero";
+import GameStorylines, { StorylinePlayerLink } from "@/components/game/GameStorylines";
+import TicketsCard from "@/components/game/TicketsCard";
+import { buildGameStorylines } from "@/lib/gameStorylines";
+import { fetchAndMergePlayerRankings } from "@/lib/playerRankings";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { parseScheduleTime } from "@/lib/scheduleTime";
@@ -17,6 +21,9 @@ export type PreviewGame = {
   venue?: string | null;
   home_team_id?: string | null;
   away_team_id?: string | null;
+  /** Where to buy tickets. Not stored anywhere yet, so the tickets card shows
+   *  its "coming soon" placeholder until a source is added. */
+  ticket_url?: string | null;
 };
 
 type ContextRow = {
@@ -258,6 +265,41 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
     enabled: !!context?.leagueId && (!!context?.homeId || !!context?.awayId),
   });
 
+  // League-wide player ranks for the storylines, merged the same way as the
+  // Coaches Hub and League Leaders so "leads the league" agrees with them.
+  const { data: rankings, isLoading: rankingsLoading } = useQuery({
+    queryKey: ["player-rankings", context?.leagueId],
+    queryFn: () => fetchAndMergePlayerRankings(context!.leagueId),
+    enabled: !!context?.leagueId,
+    staleTime: 5 * 60_000,
+  });
+
+  const storylines = useMemo(() => {
+    if (!context) return [];
+    return buildGameStorylines({
+      homeTeam: game.hometeam,
+      awayTeam: game.awayteam,
+      homeId: context.homeId,
+      awayId: context.awayId,
+      teamRows: context.rows,
+      players: rankings || [],
+      seasonLabel: context.previous ? "last season" : "this season",
+    });
+  }, [context, rankings, game.hometeam, game.awayteam]);
+
+  const storyPlayerIds = useMemo(
+    () => storylines.flatMap((s) => s.player?.playerIds ?? []),
+    [storylines],
+  );
+  const { data: storySlugs } = useQuery({
+    queryKey: ["storyline-player-slugs", ...storyPlayerIds],
+    queryFn: async () => {
+      const { data } = await supabase.from("players").select("id,slug").in("id", storyPlayerIds);
+      return new Map((data || []).filter((r: any) => r.slug).map((r: any) => [r.id as string, r.slug as string]));
+    },
+    enabled: storyPlayerIds.length > 0,
+  });
+
   const summaries = useMemo(() => {
     const summarize = (teamId?: string | null) => {
       if (!teamId) return { form: [] as FormResult[], wins: 0, losses: 0 };
@@ -398,6 +440,24 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
             <button onClick={onRefresh} className="ch-btn ch-btn-ghost h-9 px-3 text-sm"><RefreshCw className="h-4 w-4" />Check for live coverage</button>
           </div>
         )}
+
+        <TicketsCard homeTeam={game.hometeam} awayTeam={game.awayteam} ticketUrl={game.ticket_url} colors={colors} />
+
+        <GameStorylines
+          storylines={storylines}
+          loading={contextLoading || (!!context?.leagueId && rankingsLoading)}
+          colors={colors}
+          seasonNote={context?.previous ? `Ranks from ${contextLabel.toLowerCase()}` : null}
+          playerLink={(story, children) => {
+            const ids = story.player?.playerIds ?? [];
+            // The profile resolves a raw player id when there's no slug yet.
+            const slug = ids.map((id) => storySlugs?.get(id)).find(Boolean) || ids[0];
+            if (!slug) return children;
+            return onSelectPlayer
+              ? <StorylinePlayerLink onClick={() => onSelectPlayer(slug)}>{children}</StorylinePlayerLink>
+              : <StorylinePlayerLink href={playerHref(slug)}>{children}</StorylinePlayerLink>;
+          }}
+        />
 
         <section className="ch-card mt-4 p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
