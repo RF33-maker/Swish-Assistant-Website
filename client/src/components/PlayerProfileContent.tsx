@@ -3178,9 +3178,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
       {selectedGameForCard && playerInfo && createPortal(
         // The card, on its own over the page. sa-pro gives it the card's
-        // colour tokens outside the profile's tree.
+        // colour tokens outside the profile's tree. z-50 (not higher) so the
+        // card's own download/share dialog, also z-50 but portalled after
+        // this, opens on top instead of behind it.
         <div
-          className="sa-pro fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm"
+          className="sa-pro fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
           style={{ background: "rgba(0, 0, 0, 0.6)" }}
           onClick={() => setSelectedGameForCard(null)}
           role="dialog"
