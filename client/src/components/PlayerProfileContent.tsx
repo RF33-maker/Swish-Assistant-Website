@@ -1823,10 +1823,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   }, [playerInfo?.team, playerInfo?.leagueId]);
 
   // DOB and Instagram are tier-gated server-side: get_player_public_details only
-  // returns them for players with a verified DOB who are 18+. Fetched separately
-  // so a failure here never breaks the main profile load.
+  // returns them (and the /p/ slug) for players with a verified DOB who are 18+.
+  // Fetched separately so a failure here never breaks the main profile load.
+  const [claimInfo, setClaimInfo] = useState<{ isClaimed: boolean; profileSlug: string | null } | null>(null);
   useEffect(() => {
     const playerId = playerInfo?.playerId;
+    setClaimInfo(null);
     if (!playerId) return;
     let cancelled = false;
     supabase
@@ -1834,7 +1836,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled || error || !data) return;
-        const details = data as { date_of_birth: string | null; instagram_handle: string | null };
+        const details = data as {
+          date_of_birth: string | null;
+          instagram_handle: string | null;
+          is_claimed: boolean;
+          profile_slug: string | null;
+        };
+        setClaimInfo({ isClaimed: details.is_claimed, profileSlug: details.profile_slug });
         if (!details.date_of_birth && !details.instagram_handle) return;
         setPlayerInfo(prev => prev ? {
           ...prev,
@@ -2424,15 +2432,38 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 @{playerInfo.instagramHandle.replace(/^@/, "")}
               </a>
             )}
-            {/* Players can request to own their page (see "Own your page" on the homepage) */}
-            <Link
-              href={`/contact-sales?topic=player-page&player=${encodeURIComponent(playerInfo.name)}&url=${encodeURIComponent(window.location.origin + window.location.pathname)}`}
-              className="ch-chip inline-flex items-center gap-1.5 h-8 px-3 text-[13px] font-medium sm:ml-auto"
-              data-testid="claim-player-page"
-            >
-              <BadgeCheck className="w-3.5 h-3.5" style={{ color: readablePrimary.body }} aria-hidden="true" />
-              Is this you? Claim this page
-            </Link>
+            {/* Claimed: verified adults link to their /p/ profile; minors' /p/ links stay share-by-link only. */}
+            {claimInfo?.isClaimed ? (
+              claimInfo.profileSlug && (
+                <Link
+                  href={`/p/${claimInfo.profileSlug}`}
+                  className="ch-chip inline-flex items-center gap-1.5 h-8 px-3 text-[13px] font-medium sm:ml-auto"
+                  data-testid="verified-player-profile"
+                >
+                  <BadgeCheck className="w-3.5 h-3.5" style={{ color: readablePrimary.body }} aria-hidden="true" />
+                  Verified profile
+                </Link>
+              )
+            ) : (
+              <>
+                {/* Players request a claim code (see "Own your page" on the homepage), then redeem it at /claim */}
+                <Link
+                  href={`/contact-sales?topic=player-page&player=${encodeURIComponent(playerInfo.name)}&url=${encodeURIComponent(window.location.origin + window.location.pathname)}`}
+                  className="ch-chip inline-flex items-center gap-1.5 h-8 px-3 text-[13px] font-medium sm:ml-auto"
+                  data-testid="claim-player-page"
+                >
+                  <BadgeCheck className="w-3.5 h-3.5" style={{ color: readablePrimary.body }} aria-hidden="true" />
+                  Is this you? Claim this page
+                </Link>
+                <Link
+                  href="/claim"
+                  className="ch-chip inline-flex items-center h-8 px-3 text-[13px] font-medium"
+                  data-testid="redeem-claim-code"
+                >
+                  Have a code?
+                </Link>
+              </>
+            )}
           </div>
         )}
 
