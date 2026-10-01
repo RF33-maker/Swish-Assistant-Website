@@ -1,7 +1,6 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -11,19 +10,58 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
-import { BarChart2, Download, Sparkles, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
-import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { ArrowLeft, BadgeCheck, BarChart2, Download, Sparkles, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
+import { CHECKBOX, ERROR, INPUT, LABEL, LINK, SUBMIT, SUCCESS } from "@/components/layout/AuthShell";
 import { supabase } from "@/lib/supabase";
+import { Helmet } from "react-helmet-async";
 import { PASSWORD_REQUIREMENTS, validatePassword } from "@shared/passwordPolicy";
+
+// ── Copy ───────────────────────────────────────────────────────────────────
+
+const HEADINGS: Record<string, { title: string; intro: string }> = {
+  login: {
+    title: "Welcome back",
+    intro: "Sign in to see full game logs, download cards and follow your leagues.",
+  },
+  register: {
+    title: "Create your free account",
+    intro: "Free for fans, players and coaches. See every game and download any card.",
+  },
+  forgot: {
+    title: "Reset your password",
+    intro: "Enter your email and we'll send you a link to set a new one.",
+  },
+};
+
+const PERKS = [
+  {
+    icon: BarChart2,
+    title: "Live scores & deep stats",
+    text: "Results, standings, shot charts and leaders across every competition we cover.",
+  },
+  {
+    icon: Download,
+    title: "Download performance cards",
+    text: "Save any player's standout games as collectible cards, sized for Instagram and X.",
+  },
+  {
+    icon: BadgeCheck,
+    title: "Own your player page",
+    text: "Request your page to update your details, add your own photo and download your cards.",
+  },
+  {
+    icon: Sparkles,
+    title: "AI assistant — coming soon",
+    text: "Members get first access when the Swish AI assistant launches.",
+  },
+];
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -85,12 +123,19 @@ export default function AuthPage() {
   const initialTab = new URLSearchParams(window.location.search).get("tab") === "register" ? "register" : "login";
   const [activeTab, setActiveTab] = useState(initialTab);
 
+  // ?next= returns people to the page that sent them here (e.g. a player's
+  // game log). Same-site paths only, never another origin.
+  const nextPath = (() => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : null;
+  })();
+
   // Redirect if already authenticated
   useEffect(() => {
     if (user) {
-      setLocation("/dashboard");
+      setLocation(nextPath || "/dashboard");
     }
-  }, [user, setLocation]);
+  }, [user, setLocation, nextPath]);
 
   // ── Login form ──────────────────────────────────────────────────────────
   const loginForm = useForm<z.infer<typeof loginSchema>>({
@@ -174,37 +219,35 @@ export default function AuthPage() {
   };
 
   // ── Render ──────────────────────────────────────────────────────────────
-  return (
-    <div className="min-h-screen flex flex-col md:flex-row">
-      {/* Left Column – Auth Forms */}
-      <div className="w-full md:w-1/2 bg-gradient-to-br from-orange-100 via-white to-white p-4 md:p-8 flex items-center justify-center text-gray-800">
-        <Card className="w-full max-w-full md:max-w-md shadow-none border border-gray-200 bg-white">
-          <CardHeader className="text-center p-4 md:p-6 pb-2">
-            <div className="flex flex-col items-center gap-2 mb-2">
-              <img
-                src={SwishAssistantLogo}
-                alt="Swish Assistant Logo"
-                className="h-12 md:h-16"
-              />
-              <h1 className="text-lg md:text-xl font-bold text-swish-dark">
-                Swish Assistant
-              </h1>
-              <p className="text-sm text-muted-foreground text-center">
-                Access your team's AI-powered game insights — faster, smarter,
-                and on your terms
-              </p>
-            </div>
-          </CardHeader>
+  const heading = HEADINGS[activeTab] ?? HEADINGS.login;
 
-          <CardContent className="pt-2">
+  return (
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+      <Helmet>
+        <title>{`${activeTab === "register" ? "Create account" : activeTab === "forgot" ? "Reset password" : "Sign in"} | Swish Assistant`}</title>
+      </Helmet>
+      <SiteHeader hideSearch />
+
+      <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-12 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-start">
+        {/* Forms */}
+        <section className="lg:col-span-6 xl:col-span-5 ch-rise" aria-labelledby="auth-heading">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Swish Assistant</div>
+          <h1 id="auth-heading" className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[2.75rem] text-[color:var(--ch-text)]">
+            {heading.title}
+          </h1>
+          <p className="mt-2 text-sm md:text-[15px] text-[color:var(--ch-text-2)]">{heading.intro}</p>
+
+          <div className="mt-6 ch-card p-5 md:p-7">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-2 mb-4">
-                <TabsTrigger value="login">Sign in</TabsTrigger>
-                <TabsTrigger value="register">Create account</TabsTrigger>
-              </TabsList>
+              {activeTab !== "forgot" && (
+                <TabsList className="ch-seg w-full h-auto mb-5 [&>button]:flex-1">
+                  <TabsTrigger value="login" className="h-9 text-sm">Sign in</TabsTrigger>
+                  <TabsTrigger value="register" className="h-9 text-sm">Create account</TabsTrigger>
+                </TabsList>
+              )}
 
               {/* ── Sign in ── */}
-              <TabsContent value="login">
+              <TabsContent value="login" className="mt-0">
                 <Form {...loginForm}>
                   <form
                     onSubmit={loginForm.handleSubmit(onLoginSubmit)}
@@ -215,13 +258,14 @@ export default function AuthPage() {
                       name="username"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email</FormLabel>
+                          <FormLabel className={LABEL}>Email</FormLabel>
                           <FormControl>
                             <Input
                               {...field}
                               type="email"
-                              placeholder="coach@email.com"
-                              className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
+                              autoComplete="email"
+                              placeholder="you@email.com"
+                              className={INPUT}
                               data-testid="input-email"
                             />
                           </FormControl>
@@ -234,13 +278,14 @@ export default function AuthPage() {
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Password</FormLabel>
+                          <FormLabel className={LABEL}>Password</FormLabel>
                           <FormControl>
                             <Input
                               {...field}
                               type="password"
+                              autoComplete="current-password"
                               placeholder="••••••••"
-                              className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
+                              className={INPUT}
                               data-testid="input-password"
                             />
                           </FormControl>
@@ -259,10 +304,11 @@ export default function AuthPage() {
                               id="rememberMe"
                               checked={field.value}
                               onCheckedChange={field.onChange}
+                              className={CHECKBOX}
                             />
                             <label
                               htmlFor="rememberMe"
-                              className="text-sm text-gray-600 cursor-pointer"
+                              className="text-sm text-[color:var(--ch-text-2)] cursor-pointer"
                             >
                               Remember me
                             </label>
@@ -271,58 +317,57 @@ export default function AuthPage() {
                       />
                       <button
                         type="button"
-                        className="text-sm text-orange-600 hover:text-orange-700 hover:underline"
+                        className={`text-sm ${LINK}`}
                         onClick={() => setActiveTab("forgot")}
                       >
                         Forgot password?
                       </button>
                     </div>
 
-                    <Button
+                    <button
                       type="submit"
-                      className="w-full bg-[#FFC285] hover:bg-[#ffb76c] text-white font-medium"
+                      className={SUBMIT}
                       disabled={loginMutation.isPending}
                       data-testid="button-signin"
                     >
                       {loginMutation.isPending ? "Signing in…" : "Sign in"}
-                    </Button>
+                    </button>
                   </form>
                 </Form>
               </TabsContent>
 
               {/* ── Create account ── */}
-              <TabsContent value="register">
+              <TabsContent value="register" className="mt-0">
                 {registrationSent ? (
-                  <div className="space-y-3">
-                    <Alert className="border-green-200 bg-green-50">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-green-800">
+                  <div className="space-y-4">
+                    <Alert className={SUCCESS}>
+                      <CheckCircle className="h-4 w-4" />
+                      <AlertDescription>
                         <strong>Check your inbox.</strong> We've sent a
                         verification link to your email address. Click it to
                         activate your account, then sign in.
                       </AlertDescription>
                     </Alert>
-                    <div className="text-center space-y-1">
-                      <p className="text-sm text-slate-500">
+                    <div className="text-center space-y-2">
+                      <p className="text-sm text-[color:var(--ch-muted)]">
                         Didn't receive it? Check your spam folder or resend.
                       </p>
                       {resendError && (
-                        <p className="text-xs text-red-600">{resendError}</p>
+                        <p className="text-xs text-red-600 dark:text-red-400">{resendError}</p>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
+                      <button
+                        type="button"
                         onClick={handleResendVerification}
                         disabled={resendLoading || resendCooldown}
-                        className="border-orange-200 text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+                        className="ch-btn ch-btn-ghost h-9 px-4 disabled:opacity-50"
                       >
-                        <RefreshCw className={`h-3 w-3 mr-1.5 ${resendLoading ? "animate-spin" : ""}`} />
+                        <RefreshCw className={`h-3.5 w-3.5 ${resendLoading ? "animate-spin" : ""}`} />
                         {resendCooldown
                           ? "Email sent — check your inbox"
                           : resendLoading
                           ? "Sending…"
                           : "Resend verification email"}
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -336,13 +381,14 @@ export default function AuthPage() {
                         name="username"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Email address</FormLabel>
+                            <FormLabel className={LABEL}>Email address</FormLabel>
                             <FormControl>
                               <Input
                                 {...field}
                                 type="email"
-                                placeholder="coach@email.com"
-                                className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
+                                autoComplete="email"
+                                placeholder="you@email.com"
+                                className={INPUT}
                                 data-testid="input-register-email"
                               />
                             </FormControl>
@@ -356,23 +402,24 @@ export default function AuthPage() {
                         name="password"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Password</FormLabel>
+                            <FormLabel className={LABEL}>Password</FormLabel>
                             <FormControl>
                               <Input
                                 {...field}
                                 type="password"
+                                autoComplete="new-password"
                                 placeholder="At least 8 characters"
-                                className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
+                                className={INPUT}
                                 data-testid="input-register-password"
                               />
                             </FormControl>
-                            <ul className="text-xs text-gray-500 mt-1 space-y-0.5">
+                            <ul className="text-xs text-[color:var(--ch-muted)] mt-1.5 space-y-0.5">
                               {PASSWORD_REQUIREMENTS.map((req) => {
                                 const met = req.test(field.value ?? "");
                                 return (
                                   <li
                                     key={req.label}
-                                    className={met ? "text-green-600 flex items-center gap-1" : "flex items-center gap-1"}
+                                    className={met ? "text-emerald-600 dark:text-emerald-400 flex items-center gap-1" : "flex items-center gap-1"}
                                   >
                                     <CheckCircle className={`h-3 w-3 ${met ? "opacity-100" : "opacity-30"}`} />
                                     {req.label}
@@ -390,13 +437,14 @@ export default function AuthPage() {
                         name="confirmPassword"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Confirm password</FormLabel>
+                            <FormLabel className={LABEL}>Confirm password</FormLabel>
                             <FormControl>
                               <Input
                                 {...field}
                                 type="password"
+                                autoComplete="new-password"
                                 placeholder="••••••••"
-                                className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
+                                className={INPUT}
                                 data-testid="input-register-confirm"
                               />
                             </FormControl>
@@ -411,24 +459,24 @@ export default function AuthPage() {
                         name="terms"
                         render={({ field }) => (
                           <FormItem>
-                            <div className="flex items-start space-x-2">
+                            <div className="flex items-start space-x-2.5">
                               <FormControl>
                                 <Checkbox
                                   id="terms"
                                   checked={field.value}
                                   onCheckedChange={field.onChange}
-                                  className="mt-0.5"
+                                  className={`mt-0.5 ${CHECKBOX}`}
                                   data-testid="checkbox-terms"
                                 />
                               </FormControl>
                               <label
                                 htmlFor="terms"
-                                className="text-sm text-gray-600 leading-relaxed cursor-pointer"
+                                className="text-sm text-[color:var(--ch-text-2)] leading-relaxed cursor-pointer"
                               >
                                 I have read and agree to the{" "}
                                 <Link
                                   href="/terms"
-                                  className="text-orange-600 hover:text-orange-700 underline"
+                                  className={LINK}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -437,7 +485,7 @@ export default function AuthPage() {
                                 and{" "}
                                 <Link
                                   href="/privacy"
-                                  className="text-orange-600 hover:text-orange-700 underline"
+                                  className={LINK}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
@@ -457,19 +505,19 @@ export default function AuthPage() {
                         name="marketingConsent"
                         render={({ field }) => (
                           <FormItem>
-                            <div className="flex items-start space-x-2">
+                            <div className="flex items-start space-x-2.5">
                               <FormControl>
                                 <Checkbox
                                   id="marketingConsent"
                                   checked={field.value}
                                   onCheckedChange={field.onChange}
-                                  className="mt-0.5"
+                                  className={`mt-0.5 ${CHECKBOX}`}
                                   data-testid="checkbox-marketing"
                                 />
                               </FormControl>
                               <label
                                 htmlFor="marketingConsent"
-                                className="text-sm text-gray-500 leading-relaxed cursor-pointer"
+                                className="text-sm text-[color:var(--ch-muted)] leading-relaxed cursor-pointer"
                               >
                                 I'd like to receive occasional product news and
                                 tips by email. You can change this preference at
@@ -480,18 +528,18 @@ export default function AuthPage() {
                         )}
                       />
 
-                      <Button
+                      <button
                         type="submit"
-                        className="w-full bg-[#FFC285] hover:bg-[#ffb76c] text-white font-medium"
+                        className={SUBMIT}
                         disabled={registerMutation.isPending}
                         data-testid="button-register"
                       >
                         {registerMutation.isPending
                           ? "Creating account…"
                           : "Create account"}
-                      </Button>
+                      </button>
 
-                      <p className="text-xs text-gray-400 text-center">
+                      <p className="text-xs text-[color:var(--ch-muted)] text-center">
                         We'll send a verification email. You must verify your
                         address before accessing member features.
                       </p>
@@ -501,29 +549,35 @@ export default function AuthPage() {
               </TabsContent>
 
               {/* ── Forgot password ── */}
-              <TabsContent value="forgot">
+              <TabsContent value="forgot" className="mt-0">
                 {forgotSent ? (
-                  <Alert className="border-green-200 bg-green-50">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-800">
-                      If that address has an account, we've sent a reset link.
-                      Check your inbox (and spam folder).
-                    </AlertDescription>
-                  </Alert>
+                  <div className="space-y-4">
+                    <Alert className={SUCCESS}>
+                      <CheckCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        If that address has an account, we've sent a reset link.
+                        Check your inbox (and spam folder).
+                      </AlertDescription>
+                    </Alert>
+                    <button
+                      type="button"
+                      className="w-full inline-flex items-center justify-center gap-1.5 text-sm text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
+                      onClick={() => setActiveTab("login")}
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                      Back to sign in
+                    </button>
+                  </div>
                 ) : (
                   <Form {...forgotForm}>
                     <form
                       onSubmit={forgotForm.handleSubmit(onForgotSubmit)}
                       className="space-y-4"
                     >
-                      <p className="text-sm text-gray-600 mb-2">
-                        Enter your email address and we'll send you a link to
-                        reset your password.
-                      </p>
                       {forgotError && (
-                        <Alert className="border-red-200 bg-red-50">
-                          <AlertCircle className="h-4 w-4 text-red-600" />
-                          <AlertDescription className="text-red-700">
+                        <Alert className={ERROR}>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
                             {forgotError}
                           </AlertDescription>
                         </Alert>
@@ -533,13 +587,14 @@ export default function AuthPage() {
                         name="email"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Email address</FormLabel>
+                            <FormLabel className={LABEL}>Email address</FormLabel>
                             <FormControl>
                               <Input
                                 {...field}
                                 type="email"
-                                placeholder="coach@email.com"
-                                className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400"
+                                autoComplete="email"
+                                placeholder="you@email.com"
+                                className={INPUT}
                                 data-testid="input-forgot-email"
                               />
                             </FormControl>
@@ -547,99 +602,72 @@ export default function AuthPage() {
                           </FormItem>
                         )}
                       />
-                      <Button
+                      <button
                         type="submit"
-                        className="w-full bg-[#FFC285] hover:bg-[#ffb76c] text-white font-medium"
+                        className={SUBMIT}
+                        disabled={forgotForm.formState.isSubmitting}
                         data-testid="button-forgot-submit"
                       >
-                        Send reset link
-                      </Button>
+                        {forgotForm.formState.isSubmitting ? "Sending…" : "Send reset link"}
+                      </button>
                       <button
                         type="button"
-                        className="w-full text-sm text-gray-500 hover:text-gray-700"
+                        className="w-full inline-flex items-center justify-center gap-1.5 text-sm text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
                         onClick={() => setActiveTab("login")}
                       >
-                        ← Back to sign in
+                        <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                        Back to sign in
                       </button>
                     </form>
                   </Form>
                 )}
               </TabsContent>
             </Tabs>
-
-            <div className="relative mt-6">
-              <div className="absolute inset-0 flex items-center">
-                <Separator className="w-full" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="mt-6 text-center text-xs text-gray-400">
-                  Powered by Automated Athlete
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Right Column – Hero */}
-      <div className="hidden md:block md:w-1/2 bg-white p-8 text-gray-800">
-        <div className="h-full flex flex-col justify-center max-w-lg mx-auto">
-          <h1 className="text-4xl font-bold mb-6 text-swish-dark">
-            Your league, all in one place
-          </h1>
-          <p className="text-lg mb-8 text-gray-600">
-            Swish Assistant brings live scores, deep player stats, and
-            shareable performance cards to every league — completely free.
-          </p>
-
-          <div className="space-y-6">
-            <div className="flex items-start space-x-3">
-              <div className="mt-1 bg-swish-peach p-2 rounded-full">
-                <BarChart2 size={20} className="text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-swish-dark">
-                  Live scores &amp; deep stats
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Follow game results, standings, shot charts, and player
-                  leaders across every competition in your league.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start space-x-3">
-              <div className="mt-1 bg-swish-peach p-2 rounded-full">
-                <Download size={20} className="text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-swish-dark">
-                  Download performance cards
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Save and share any player's game highlights as a card built
-                  for Instagram, X, and beyond.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start space-x-3">
-              <div className="mt-1 bg-swish-peach p-2 rounded-full">
-                <Sparkles size={20} className="text-white" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-swish-dark">
-                  AI chatbot — coming soon
-                </h3>
-                <p className="text-sm text-gray-600">
-                  Members get first access when the Swish AI assistant launches.
-                  Ask anything about your league's stats and get instant answers.
-                </p>
-              </div>
-            </div>
           </div>
-        </div>
-      </div>
+
+          <p className="mt-4 text-center text-xs text-[color:var(--ch-muted)]">Powered by Automated Athlete</p>
+        </section>
+
+        {/* Why sign up */}
+        <aside
+          className="hidden lg:block lg:col-span-6 xl:col-span-7 ch-hero ch-force-dark ch-rise p-8 xl:p-10 text-white"
+          style={{
+            animationDelay: "80ms",
+            background: "radial-gradient(120% 90% at 100% 0%, rgba(249,115,22,0.55) 0%, rgba(249,115,22,0.12) 45%, transparent 70%), #111317",
+          }}
+          aria-label="What you get with a free account"
+        >
+          <svg className="absolute inset-0 h-full w-full opacity-[0.08] pointer-events-none" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <g fill="none" stroke="#fff" strokeWidth="1.5">
+              <circle cx="400" cy="0" r="120" />
+              <circle cx="400" cy="0" r="40" />
+              <path d="M180 0 A 220 220 0 0 0 400 220" />
+            </g>
+          </svg>
+          <div className="relative">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-300">Free account</div>
+            <h2 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.5rem] xl:text-[3rem]">
+              Free to follow.<br />Yours to own.
+            </h2>
+            <p className="mt-3 text-[15px] text-white/75 max-w-md">
+              Live scores, deep player stats and shareable performance cards for every league on Swish.
+            </p>
+            <ul className="mt-8 space-y-5">
+              {PERKS.map(({ icon: Icon, title, text }) => (
+                <li key={title} className="flex items-start gap-3.5">
+                  <span className="h-10 w-10 shrink-0 rounded-xl bg-white/[0.08] border border-white/15 flex items-center justify-center">
+                    <Icon className="h-5 w-5 text-orange-300" aria-hidden="true" />
+                  </span>
+                  <span>
+                    <span className="block font-semibold">{title}</span>
+                    <span className="block text-sm text-white/70">{text}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+      </main>
     </div>
   );
 }

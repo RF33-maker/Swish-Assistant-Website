@@ -604,7 +604,16 @@ export default function LeaguePage() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isEditingYoutube, setIsEditingYoutube] = useState(false);
   const [updatingYoutube, setUpdatingYoutube] = useState(false);
-  const [activeSection, setActiveSection] = useState(urlPlayerSlug ? 'player' : (urlGameKey ? 'game' : 'overview'));
+  // ?section= opens a section directly, e.g. ?section=leaders from the old
+  // /league-leaders/:slug links.
+  const [activeSection, setActiveSection] = useState(() => {
+    if (urlPlayerSlug) return 'player';
+    if (urlGameKey) return 'game';
+    const section = new URLSearchParams(window.location.search).get('section');
+    return section && ['teams', 'standings', 'stats', 'teamstats', 'schedule', 'leaders', 'comparison', 'overview'].includes(section)
+      ? section
+      : 'overview';
+  });
   const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');

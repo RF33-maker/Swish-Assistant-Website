@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Download, Share2, Loader2, RefreshCw, AlertTriangle, Lock, Bell, Sparkles } from "lucide-react";
 import html2canvas from "html2canvas";
 import {
@@ -958,23 +959,30 @@ export default function ShareableCard({
     <>
       {/* Off-screen capture node — always in the DOM so html2canvas sees a
           clean, unscaled, full-resolution element regardless of modal state.
-          When captureCard is provided it replaces the default banner layout. */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: "fixed",
-          left: -9999,
-          top: -9999,
-          pointerEvents: "none",
-          zIndex: -1,
-        }}
-      >
-        {captureCard ? (
-          <div ref={captureRef}>{captureCard}</div>
-        ) : (
-          cardMarkup
-        )}
-      </div>
+          When captureCard is provided it replaces the default banner layout.
+          Cards that draw their own image (generateCardBlob) don't need it.
+          It lives on <body>: under a transformed parent (a fanned or flipped
+          card) "fixed" would anchor to that parent instead of the viewport,
+          and a rotation can swing it into the page's scrollable area. */}
+      {!generateCardBlob && createPortal(
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            left: -9999,
+            top: -9999,
+            pointerEvents: "none",
+            zIndex: -1,
+          }}
+        >
+          {captureCard ? (
+            <div ref={captureRef}>{captureCard}</div>
+          ) : (
+            cardMarkup
+          )}
+        </div>,
+        document.body,
+      )}
 
       <div className="relative group">
         {children}
@@ -1121,7 +1129,8 @@ export default function ShareableCard({
                   <img
                     src={previewBlobUrl}
                     alt={`Share preview for ${title}`}
-                    className="w-full h-auto block"
+                    // Tall (portrait) cards shrink to fit above the action bar.
+                    className="w-full h-auto block max-h-[calc(92vh-72px)] object-contain"
                     style={{ display: "block" }}
                   />
                 ) : null}

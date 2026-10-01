@@ -135,13 +135,13 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
   }
 
   return (
-    <div className={`${baseClasses} bg-orange-500 text-white font-bold border-2 border-orange-600`}>
+    <div data-size={typeof size === 'number' ? undefined : size} className={`${baseClasses} team-logo-fallback bg-orange-500 text-white font-bold border-2 border-orange-600`}>
       <div className="text-center">
-        <div className={`font-bold ${size === 'xs' ? 'text-[8px]' : size === 'sm' ? 'text-xs' : size === 'md' ? 'text-sm' : 'text-lg'}`}>
+        <div className={`team-logo-fallback-letter font-bold ${size === 'xs' ? 'text-[8px]' : size === 'sm' ? 'text-xs' : size === 'md' ? 'text-sm' : 'text-lg'}`}>
           {teamName.charAt(0).toUpperCase()}
         </div>
         {size !== 'xs' && size !== 'sm' && (
-          <div className="text-xs opacity-75 leading-none">TEAM</div>
+          <div className="team-logo-fallback-label text-xs opacity-75 leading-none">TEAM</div>
         )}
       </div>
     </div>

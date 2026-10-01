@@ -15,6 +15,8 @@ export interface Accolade {
   seasonLabel?: string;   // which season this accolade is scoped to, or "All-time" —
                           // shown on the badge itself so a rank/record earned in a
                           // past season is never mistaken for a current-season one
+  leagueId?: string;      // a league_id of the season/competition it was earned in
+                          // (for its logo on the collectible card)
 }
 
 interface StatHighLike {
@@ -23,6 +25,7 @@ interface StatHighLike {
   opponent: string;
   date: string;
   gameKey?: string | null;
+  leagueId?: string;      // the game's competition
 }
 
 interface PlayerRankingsLike {
@@ -96,6 +99,7 @@ function recordMedals(
         date: high.date,
         gameKey: high.gameKey ?? null,
         seasonLabel: 'All-time',
+        leagueId: high.leagueId,
       });
     } else if (seasonHigh && seasonMax > 0 && seasonHigh.value >= seasonMax) {
       accolades.push({
@@ -109,6 +113,7 @@ function recordMedals(
         date: seasonHigh.date,
         gameKey: seasonHigh.gameKey ?? null,
         seasonLabel: seasonLabel || 'This season',
+        leagueId: seasonHigh.leagueId,
       });
     }
   }
@@ -116,6 +121,22 @@ function recordMedals(
 }
 
 export function computePlayerAccolades(
+  seasonHighs: StatHighLike[],
+  competitionHighs: StatHighLike[],
+  careerStats: SeasonStatRow[],
+  currentSeasonLeagueId: string | null,
+  currentSeasonLabel: string,
+  playerRankings: PlayerRankingsLike | null,
+  seasonMaxes: RecordMaxes,
+  allTimeMaxes: RecordMaxes,
+): Accolade[] {
+  return computeCurrentSeasonAccolades(
+    seasonHighs, competitionHighs, careerStats, currentSeasonLeagueId, currentSeasonLabel,
+    playerRankings, seasonMaxes, allTimeMaxes,
+  ).map(a => ({ ...a, leagueId: a.leagueId ?? currentSeasonLeagueId ?? undefined }));
+}
+
+function computeCurrentSeasonAccolades(
   seasonHighs: StatHighLike[],
   competitionHighs: StatHighLike[],
   careerStats: SeasonStatRow[],
@@ -321,6 +342,44 @@ const TIER_PRIORITY: Record<AccoladeTier, number> = {
   bronze: 4,
   star: 5,
 };
+
+interface PastSeasonLike {
+  label: string;
+  leagueId?: string;
+  highs: StatHighLike[];
+  maxes: RecordMaxes;
+}
+
+// Season records (Platinum) from the player's past seasons, each judged
+// against that season's own single-game records. The current season's
+// accolades come from computePlayerAccolades; this keeps the ones a player
+// earned earlier in their collection once a new season starts.
+export function computePastSeasonAccolades(seasons: PastSeasonLike[]): Accolade[] {
+  const accolades: Accolade[] = [];
+  for (const season of seasons) {
+    for (const high of season.highs) {
+      const key = RECORD_KEY_BY_STAT_LABEL[high.label];
+      if (!key) continue;
+      const seasonMax = season.maxes[key];
+      if (seasonMax > 0 && high.value > 0 && high.value >= seasonMax) {
+        accolades.push({
+          tier: 'platinum',
+          label: `${high.label} Record`,
+          detail: `${high.value} vs ${high.opponent}`,
+          description: `Season record for ${season.label} — ${high.value} ${high.label} in a single game, set on ${formatShortDate(high.date)} vs ${high.opponent}.`,
+          value: `${high.value}`,
+          unit: high.label,
+          opponent: high.opponent,
+          date: high.date,
+          gameKey: high.gameKey ?? null,
+          seasonLabel: season.label,
+          leagueId: high.leagueId ?? season.leagueId,
+        });
+      }
+    }
+  }
+  return accolades;
+}
 
 // Highest-prestige accolades first, for a condensed "top N" preview strip
 // (e.g. on an Overview tab) separate from the full badge list.

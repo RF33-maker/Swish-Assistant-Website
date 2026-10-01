@@ -1,270 +1,319 @@
-import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { Helmet } from "react-helmet-async";
+import { ArrowRight, BadgeCheck, ChevronRight, Loader2, Search, Users, X } from "lucide-react";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
+import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSection";
 import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Search, User, Trophy, TrendingUp } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+import { areSamePlayer } from "@/hooks/useGlobalSearch";
 
-interface Player {
+const SITE_URL = "https://swishassistant.com";
+const MIN_QUERY = 2;
+
+type PlayerRow = {
+  id: string;
+  full_name: string;
+  slug: string | null;
+  photo_path: string | null;
+  photo_path_bg_removed: string | null;
+  league_id: string | null;
+  team_name: string | null;
+  current_team: string | null;
+};
+
+type PlayerResult = {
+  key: string;
   name: string;
-  team_name: string;
-  player_id: string;
-  player_slug?: string;
-  games_played: number;
-  avg_points: number;
-  avg_rebounds: number;
-  avg_assists: number;
+  href: string;
+  team: string | null;
+  leagueId: string | null;
+  photo: string | null;
+};
+
+const fold = (value: string) => value.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function initials(name: string) {
+  const words = fold(name).replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean);
+  return (words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] || "?").slice(0, 2)).toUpperCase();
 }
 
-export default function PlayersListPage() {
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
-  
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [filteredPlayers, setFilteredPlayers] = useState<Player[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [loading, setLoading] = useState(true);
+// Placeholder sides from youth events ("14U Team 2", "Team", "1") say
+// nothing about who a player is, so they count as no team.
+const isPlaceholderTeam = (name: string) =>
+  /^\d+$/.test(name) ||
+  name.includes(":") ||
+  /^team(\s+\d+)?$/i.test(name) ||
+  /^(team\s+)?(black|white|red|blue|green|gold|diamond)$/i.test(name) ||
+  /^(u\d{1,2}|\d{1,2}u|\d{1,2}\+)\s+team\b/i.test(name);
 
-  useEffect(() => {
-    const fetchPlayers = async () => {
-      setLoading(true);
-      try {
-        // Get all player stats to build player list, including slug from players table
-        const { data: allStats, error } = await supabase
-          .from('player_stats')
-          .select('*, players:player_id(slug)');
+const teamOf = (row: PlayerRow) => {
+  const team = (row.current_team || row.team_name || "").trim();
+  return team && !isPlaceholderTeam(team) ? team : null;
+};
 
-        if (error) {
-          console.error('Error fetching player stats:', error);
-          toast({
-            title: "Error Loading Players",
-            description: "Failed to load player list from database",
-            variant: "destructive",
-          });
-          return;
-        }
+// "Manchester Magic Senior Men I" is "Manchester Magic", as on /teams.
+const clubName = (team: string) =>
+  team.replace(/\s+Senior\s+Men\b/i, "").replace(/\s+Senior\s+Women\b/i, " Women").replace(/\s+I$/, "").trim();
+const sameTeam = (a: string | null, b: string | null) =>
+  !a || !b || fold(clubName(a)).replace(/[^a-z0-9]/g, "") === fold(clubName(b)).replace(/[^a-z0-9]/g, "");
 
-        if (!allStats || allStats.length === 0) {
-          setPlayers([]);
-          setFilteredPlayers([]);
-          return;
-        }
+async function searchPlayers(term: string): Promise<PlayerResult[]> {
+  const safe = term.replace(/[%_\\]/g, "").trim();
+  const { data, error } = await supabase
+    .from("players")
+    .select("id, full_name, slug, photo_path, photo_path_bg_removed, league_id, team_name, current_team")
+    .ilike("full_name", `%${safe}%`)
+    .order("full_name")
+    .limit(60);
+  if (error) throw new Error(error.message);
 
-        // Group stats by player_id instead of name to avoid mismatches (K Walker vs Kai Walker)
-        const playerMap = new Map<string, {
-          name: string;
-          team_name: string;
-          player_id: string;
-          player_slug?: string;
-          stats: any[];
-        }>();
-
-        allStats.forEach((stat) => {
-          // Use player_id for grouping to properly identify players, fallback to record id if no player_id
-          const playerId = stat.player_id || stat.id;
-          const playerName = stat.name || stat.player_name || 'Unknown Player';
-          const playerSlug = stat.players?.slug || null;
-          
-          if (!playerMap.has(playerId)) {
-            playerMap.set(playerId, {
-              name: playerName,
-              team_name: stat.team_name || stat.team || 'Unknown Team',
-              player_id: playerId,
-              player_slug: playerSlug,
-              stats: []
-            });
-          }
-          
-          playerMap.get(playerId)!.stats.push(stat);
-        });
-
-        // Calculate averages for each player
-        const playersWithAverages: Player[] = Array.from(playerMap.values()).map(player => {
-          const stats = player.stats;
-          const gamesPlayed = stats.length;
-          
-          const totals = stats.reduce((acc, game) => ({
-            points: acc.points + (game.points || 0),
-            rebounds: acc.rebounds + (game.rebounds || 0),
-            assists: acc.assists + (game.assists || 0),
-          }), { points: 0, rebounds: 0, assists: 0 });
-
-          return {
-            name: player.name,
-            team_name: player.team_name,
-            player_id: player.player_id,
-            player_slug: player.player_slug,
-            games_played: gamesPlayed,
-            avg_points: gamesPlayed > 0 ? totals.points / gamesPlayed : 0,
-            avg_rebounds: gamesPlayed > 0 ? totals.rebounds / gamesPlayed : 0,
-            avg_assists: gamesPlayed > 0 ? totals.assists / gamesPlayed : 0,
-          };
-        });
-
-        setPlayers(playersWithAverages);
-        setFilteredPlayers(playersWithAverages);
-      } catch (error) {
-        console.error('Error processing player data:', error);
-        toast({
-          title: "Error",
-          description: "Failed to process player data",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPlayers();
-  }, [toast]);
-
-  useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredPlayers(players);
-    } else {
-      const filtered = players.filter(player =>
-        player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        player.team_name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredPlayers(filtered);
-    }
-  }, [searchTerm, players]);
-
-  const handlePlayerClick = (player: Player) => {
-    // Use slug if available, fallback to player_id for backward compatibility
-    const identifier = player.player_slug || player.player_id;
-    setLocation(`/player/${identifier}`);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
-          <p className="text-orange-800">Loading players...</p>
-        </div>
-      </div>
+  // A player has a row per competition; list them once. Rows sharing a
+  // profile are one player; otherwise names are matched as the header search
+  // does, keeping namesakes on different teams apart.
+  const groups: PlayerRow[][] = [];
+  for (const row of (data || []) as PlayerRow[]) {
+    const group = groups.find((g) =>
+      g.some((p) =>
+        (!!row.slug && p.slug === row.slug) ||
+        (areSamePlayer(p.full_name, row.full_name) && sameTeam(teamOf(p), teamOf(row))),
+      ),
     );
+    if (group) group.push(row);
+    else groups.push([row]);
   }
 
+  // Names with a word starting with the search come before mid-word matches.
+  const q = fold(safe);
+  const rank = (name: string) => (fold(name).split(/[\s-]+/).some((w) => w.startsWith(q)) ? 0 : 1);
+
+  return groups
+    .map((group) => {
+      // The fullest spelling of the name, and a photo if any row has one.
+      const best = [...group].sort((a, b) =>
+        Number(!!b.slug) - Number(!!a.slug) || b.full_name.length - a.full_name.length,
+      )[0];
+      const photoPath = group.find((p) => p.photo_path)?.photo_path || group.find((p) => p.photo_path_bg_removed)?.photo_path_bg_removed || null;
+      const team = teamOf(best) || group.map(teamOf).find(Boolean) || null;
+      return {
+        key: String(best.id),
+        name: best.full_name,
+        href: `/player/${best.slug || best.id}`,
+        team: team ? clubName(team) : null,
+        leagueId: best.league_id,
+        photo: photoPath ? getPlayerPhotoUrlCached(photoPath) : null,
+      };
+    })
+    .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+}
+
+// The competition each result plays in, as shown on cards elsewhere.
+async function fetchCompetitionNames(ids: string[]): Promise<Record<string, string>> {
+  const names: Record<string, string> = {};
+  for (let i = 0; i < ids.length; i += 20) {
+    const res = await fetch(`/api/competition-display?ids=${ids.slice(i, i + 20).join(",")}`);
+    if (!res.ok) continue;
+    const body = (await res.json()) as Record<string, { name: string | null }>;
+    for (const [id, value] of Object.entries(body)) if (value?.name) names[id] = value.name;
+  }
+  return names;
+}
+
+function PlayerAvatar({ name, photo }: { name: string; photo: string | null }) {
+  const [failed, setFailed] = useState(false);
   return (
-    <div className="min-h-screen bg-white">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-orange-900 mb-2">Players</h1>
-          <p className="text-orange-700">Browse all players and their season statistics</p>
-        </div>
+    <span className="h-12 w-12 shrink-0 rounded-full ch-tile overflow-hidden flex items-center justify-center">
+      {photo && !failed ? (
+        <img src={photo} alt="" loading="lazy" onError={() => setFailed(true)} className="h-full w-full object-cover object-top" />
+      ) : (
+        <span className="ch-display font-bold text-[17px] tracking-tight text-[color:var(--ch-text-2)]">{initials(name)}</span>
+      )}
+    </span>
+  );
+}
 
-        {/* Search */}
-        <div className="mb-6">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-orange-400 h-4 w-4" />
-            <Input
-              placeholder="Find your league"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 border-orange-200 focus:border-orange-400"
-            />
-          </div>
-        </div>
+function PlayerCard({ player, competition }: { player: PlayerResult; competition?: string }) {
+  return (
+    <Link href={player.href} className="ch-card ch-hover group flex items-center gap-3.5 p-3.5 md:p-4 min-w-0" data-testid="player-search-result">
+      <PlayerAvatar name={player.name} photo={player.photo} />
+      <span className="min-w-0 flex-1">
+        <span className="block ch-display uppercase font-bold tracking-tight leading-none text-[1.15rem] md:text-[1.25rem] text-[color:var(--ch-text)] truncate">
+          {player.name}
+        </span>
+        <span className="mt-1 block text-xs text-[color:var(--ch-text-2)] truncate">{player.team || "Team not listed"}</span>
+        {competition && <span className="mt-0.5 block text-[11px] text-[color:var(--ch-muted)] truncate">{competition}</span>}
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-[color:var(--ch-muted)] group-hover:text-[color:var(--ch-accent)] transition-colors" aria-hidden="true" />
+    </Link>
+  );
+}
 
-        {/* Player Cards */}
-        {filteredPlayers.length === 0 ? (
-          <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20">
-            <CardContent className="p-8 text-center">
-              <User className="h-16 w-16 text-orange-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-orange-900 mb-2">No Players Found</h3>
-              <p className="text-orange-600">
-                {players.length === 0 
-                  ? "No player statistics are available in the database."
-                  : "No players match your search criteria."
-                }
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPlayers.map((player, index) => (
-              <Card 
-                key={`${player.name}-${player.player_id}`}
-                className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-2xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 hover:-translate-y-2 group animate-slide-in-up"
-                onClick={() => handlePlayerClick(player)}
-                style={{ animationDelay: `${index * 100}ms` }}
+/**
+ * /players — find any player by name, with the week's standout performances
+ * underneath for anyone just browsing.
+ */
+export default function PlayersListPage() {
+  const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get("q") || "");
+  const [term, setTerm] = useState(query.trim());
+
+  useEffect(() => {
+    const t = setTimeout(() => setTerm(query.trim()), 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // Keep the search in the address, so results can be shared or revisited.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (term) url.searchParams.set("q", term);
+    else url.searchParams.delete("q");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, [term]);
+
+  const searching = term.length >= MIN_QUERY;
+  const { data: results = [], isLoading, isFetching, isError } = useQuery({
+    queryKey: ["players-directory", "search", term],
+    queryFn: () => searchPlayers(term),
+    enabled: searching,
+    placeholderData: keepPreviousData,
+    staleTime: 60 * 1000,
+  });
+
+  const leagueIds = useMemo(
+    () => Array.from(new Set(results.map((r) => r.leagueId).filter((id): id is string => !!id))).sort(),
+    [results],
+  );
+  const { data: competitionNames = {} } = useQuery({
+    queryKey: ["players-directory", "competitions", leagueIds.join(",")],
+    queryFn: () => fetchCompetitionNames(leagueIds),
+    enabled: leagueIds.length > 0,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const { data: platform } = useQuery<{ players?: number }>({
+    queryKey: ["public", "platform-stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/platform-stats");
+      return res.ok ? res.json() : {};
+    },
+    staleTime: 15 * 60 * 1000,
+  });
+  const playerCount = platform?.players ? `${Math.floor(platform.players / 100) * 100}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : null;
+
+  const description = "Find any player in the leagues on Swish Assistant — season stats, game logs, shot charts and collectible performance cards.";
+  const canonical = `${SITE_URL}/players`;
+
+  return (
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+      <Helmet>
+        <title>Players | Swish Assistant</title>
+        <meta name="description" content={description} />
+        <meta property="og:title" content="Players | Swish Assistant" />
+        <meta property="og:description" content={description} />
+        <meta property="og:url" content={canonical} />
+        <link rel="canonical" href={canonical} />
+      </Helmet>
+      <SiteHeader />
+
+      <main className="max-w-6xl mx-auto px-4 md:px-6 pt-6 md:pt-9">
+        <header className="ch-rise mb-6">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Players</div>
+          <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[3.25rem] text-[color:var(--ch-text)]">
+            Find a player
+          </h1>
+          <p className="mt-2 text-sm md:text-[15px] text-[color:var(--ch-text-2)] max-w-2xl">
+            {playerCount ? `${playerCount}+ players` : "Every player"} with season stats, game logs, shot charts and cards. Search by name.
+          </p>
+        </header>
+
+        <label className="ch-rise relative block max-w-2xl" style={{ animationDelay: "60ms" }}>
+          <span className="sr-only">Search players</span>
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[color:var(--ch-muted)] pointer-events-none" aria-hidden="true" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by player name"
+            autoComplete="off"
+            autoFocus
+            className="ch-input w-full h-12 md:h-14 pl-12 pr-12 text-[16px] md:text-[17px] [&::-webkit-search-cancel-button]:hidden"
+            data-testid="players-search"
+          />
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
+            {searching && isFetching ? (
+              <Loader2 className="h-4 w-4 m-2 animate-spin text-[color:var(--ch-muted)]" aria-label="Searching" />
+            ) : query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="h-8 w-8 rounded-md flex items-center justify-center text-[color:var(--ch-muted)] hover:text-[color:var(--ch-text)]"
+                aria-label="Clear search"
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
-                      <User className="h-6 w-6 text-white group-hover:animate-pulse" />
-                    </div>
-                    <div className="flex-1">
-                      <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">{player.name}</CardTitle>
-                      <CardDescription className="flex items-center gap-1 group-hover:text-orange-600 transition-colors duration-300">
-                        <Trophy className="h-3 w-3 group-hover:animate-bounce" />
-                        {player.team_name}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-4 mb-4">
-                    <div className="text-center group-hover:transform group-hover:scale-110 transition-all duration-300">
-                      <div className="text-2xl font-bold text-orange-600 group-hover:text-orange-700 group-hover:animate-pulse">{player.avg_points.toFixed(1)}</div>
-                      <div className="text-xs text-orange-700 group-hover:text-orange-800">PPG</div>
-                      <div className="w-full bg-orange-100 h-1 rounded-full mt-1 overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110"
-                          style={{ width: `${Math.min((player.avg_points / 30) * 100, 100)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="text-center group-hover:transform group-hover:scale-110 transition-all duration-300">
-                      <div className="text-2xl font-bold text-orange-600 group-hover:text-orange-700 group-hover:animate-bounce">{player.avg_rebounds.toFixed(1)}</div>
-                      <div className="text-xs text-orange-700 group-hover:text-orange-800">RPG</div>
-                      <div className="w-full bg-orange-100 h-1 rounded-full mt-1 overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-orange-400 to-yellow-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110"
-                          style={{ width: `${Math.min((player.avg_rebounds / 15) * 100, 100)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                    <div className="text-center group-hover:transform group-hover:scale-110 transition-all duration-300">
-                      <div className="text-2xl font-bold text-orange-600 group-hover:text-orange-700 group-hover:animate-pulse">{player.avg_assists.toFixed(1)}</div>
-                      <div className="text-xs text-orange-700 group-hover:text-orange-800">APG</div>
-                      <div className="w-full bg-orange-100 h-1 rounded-full mt-1 overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-orange-400 to-green-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110"
-                          style={{ width: `${Math.min((player.avg_assists / 12) * 100, 100)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="border-orange-300 text-orange-700">
-                      {player.games_played} games
-                    </Badge>
-                    <Button 
-                      size="sm" 
-                      className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlayerClick(player);
-                      }}
-                    >
-                      <TrendingUp className="h-3 w-3 mr-1 group-hover:animate-bounce" />
-                      View Stats
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </span>
+        </label>
+
+        <div className="mt-6 md:mt-8" aria-live="polite">
+          {!searching ? (
+            query.trim().length > 0 && (
+              <p className="text-sm text-[color:var(--ch-muted)]">Keep typing — at least {MIN_QUERY} letters.</p>
+            )
+          ) : isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4" aria-busy="true">
+              {Array.from({ length: 6 }, (_, i) => <div key={i} className="ch-skel h-[84px] rounded-[14px]" />)}
+            </div>
+          ) : isError ? (
+            <div className="ch-card p-8 text-center text-sm text-[color:var(--ch-text-2)]">
+              Search isn't available right now. Please try again in a moment.
+            </div>
+          ) : results.length === 0 ? (
+            <div className="ch-card border-dashed p-10 text-center" data-testid="players-empty">
+              <Users className="h-9 w-9 text-[color:var(--ch-muted)] mx-auto mb-3" aria-hidden="true" />
+              <p className="font-medium text-[color:var(--ch-text)] text-lg">No players match “{term}”</p>
+              <p className="text-sm text-[color:var(--ch-text-2)] mt-1">Try their surname, or find them through their team.</p>
+              <Link href="/teams" className="mt-5 ch-btn ch-btn-ghost h-10 px-5">Browse teams</Link>
+            </div>
+          ) : (
+            <section aria-labelledby="players-results-heading">
+              <h2 id="players-results-heading" className="flex items-baseline gap-2.5 mb-3 md:mb-4">
+                <span className="ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]">
+                  Players
+                </span>
+                <span className="text-sm font-medium text-[color:var(--ch-muted)] ch-num">{results.length}</span>
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+                {results.map((player) => (
+                  <PlayerCard key={player.key} player={player} competition={player.leagueId ? competitionNames[player.leagueId] : undefined} />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      </main>
+
+      <TrendingPerformanceSection headerClassName="max-w-6xl mx-auto px-4 md:px-6" />
+
+      <section className="max-w-6xl mx-auto px-4 md:px-6 pb-16" aria-labelledby="claim-heading">
+        <div className="ch-card p-5 md:p-7 flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+          <span className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0 bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]">
+            <BadgeCheck className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="claim-heading" className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.5rem] text-[color:var(--ch-text)]">
+              Is one of these pages yours?
+            </h2>
+            <p className="mt-1.5 text-sm text-[color:var(--ch-text-2)] max-w-2xl">
+              Claim your player page to keep your details up to date, add your own photo and download your cards.
+            </p>
           </div>
-        )}
-      </div>
+          <Link href="/contact-sales?topic=player-page" className="ch-btn ch-btn-primary h-10 px-5 self-start md:self-auto">
+            Claim your page
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

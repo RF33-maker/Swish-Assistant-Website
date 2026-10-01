@@ -392,7 +392,8 @@
   background: var(--ch-bg);
   color: var(--ch-text);
 }
-.dark .sa-pro {
+.dark .sa-pro,
+.sa-pro .ch-force-dark {
   --ch-bg: #08090b;
   --ch-surface: #111317;
   --ch-surface-2: #16191e;
@@ -490,7 +491,8 @@
   transition: background .15s ease, color .15s ease, box-shadow .15s ease;
 }
 .sa-pro .ch-seg > button:hover { color: var(--ch-text); }
-.sa-pro .ch-seg > button[data-active='true'] {
+.sa-pro .ch-seg > button[data-active='true'],
+.sa-pro .ch-seg > button[data-state='active'] {
   background: var(--ch-surface);
   color: var(--ch-text);
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px var(--ch-border);
@@ -539,6 +541,19 @@
   border-color: var(--ch-border-strong);
   box-shadow: 0 0 0 4px var(--ch-accent-soft);
 }
+
+/* A team with no logo: a quiet monogram on the redesigned pages instead of
+   the old orange block (embeds and widgets keep theirs). */
+.sa-pro .team-logo-fallback {
+  background: #eef0f3;
+  border-color: transparent;
+  color: #4b5563;
+  font-family: 'Barlow Condensed', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+.sa-pro .team-logo-fallback-label { display: none; }
+.sa-pro .team-logo-fallback[data-size='md'] .team-logo-fallback-letter { font-size: 1.25rem; line-height: 1; }
+.sa-pro .team-logo-fallback[data-size='lg'] .team-logo-fallback-letter { font-size: 1.75rem; line-height: 1; }
+.sa-pro .team-logo-fallback[data-size='xl'] .team-logo-fallback-letter { font-size: 2.75rem; line-height: 1; }
 
 /* Tables */
 .sa-pro .ch-table thead th {
@@ -601,4 +616,240 @@
   .sa-pro .ch-seg > button { min-height: 36px; }
   .sa-pro .ch-seg.ch-seg-fill { display: flex; width: 100%; }
   .sa-pro .ch-seg.ch-seg-fill > button { flex: 1 1 0; justify-content: center; }
+}
+
+/* ── Motion (homepage) ─────────────────────────────────────────────────────
+   Transform/opacity only, so it stays smooth on phones. Everything here is
+   switched off under prefers-reduced-motion at the end of this block. */
+
+/* Scroll reveal */
+.sa-pro .ch-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity .65s cubic-bezier(.2,.7,.2,1), transform .65s cubic-bezier(.2,.7,.2,1);
+}
+.sa-pro .ch-reveal.is-in { opacity: 1; transform: none; }
+
+/* Section eyebrow line draws in with its header */
+.sa-pro .ch-eyebrow-line {
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform .7s cubic-bezier(.2,.7,.2,1) .15s;
+}
+.sa-pro .is-in .ch-eyebrow-line { transform: scaleX(1); }
+
+/* A dribble: two bounces, the second smaller */
+@keyframes ch-dribble {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-6px); }
+  50% { transform: translateY(0); }
+  68% { transform: translateY(-2.5px); }
+  82% { transform: translateY(0); }
+}
+.sa-pro .ch-dribble-on-hover:hover .ch-dribble-target,
+.sa-pro .ch-dribble-on-hover:focus-visible .ch-dribble-target { animation: ch-dribble .7s ease-out; }
+
+/* Card sheen on hover */
+.sa-pro .ch-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.16) 46%, transparent 62%);
+  transform: translateX(-120%);
+  transition: transform .9s cubic-bezier(.2,.7,.2,1);
+  pointer-events: none;
+}
+.sa-pro .ch-shine:hover::after { transform: translateX(120%); }
+
+/* Podcast equalizer */
+@keyframes ch-eq { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+.sa-pro .ch-eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.sa-pro .ch-eq > span { width: 3px; height: 100%; border-radius: 1px; background: currentColor; transform-origin: bottom; animation: ch-eq 1.1s ease-in-out infinite; }
+.sa-pro .ch-eq > span:nth-child(2) { animation-delay: -.35s; animation-duration: .9s; }
+.sa-pro .ch-eq > span:nth-child(3) { animation-delay: -.6s; animation-duration: 1.3s; }
+.sa-pro .ch-eq > span:nth-child(4) { animation-delay: -.2s; animation-duration: 1s; }
+
+/* Marquee pauses under the pointer */
+.sa-pro .ch-marquee:hover .animate-infinite-scroll { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-pro .ch-reveal, .sa-pro .ch-reveal.is-in { opacity: 1; transform: none; transition: none; }
+  .sa-pro .ch-eyebrow-line { transform: none; transition: none; }
+  .sa-pro .ch-dribble-target, .sa-pro .ch-eq > span { animation: none !important; }
+  .sa-pro .ch-shine::after { display: none; }
+  .sa-pro .animate-infinite-scroll { animation: none; }
+}
+
+/* ── Homepage scroll story: frosted-glass surfaces ─────────────────────────
+   The homepage paints a moving background (ScrollStory) behind the content,
+   so its cards and bands become frosted glass and the story shows through,
+   blurred. Phones keep them near-solid with no blur: re-blurring on every
+   scroll frame is too costly there. Scoped to .ch-story-page only. */
+.sa-pro.ch-story-page .ch-card {
+  background: color-mix(in srgb, var(--ch-surface) 80%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+.sa-pro.ch-story-page .ch-glass-band {
+  background: color-mix(in srgb, var(--ch-surface) 68%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+.sa-pro.ch-story-page .ch-podcast-band {
+  background: rgba(7, 8, 10, 0.78);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+@media (max-width: 767px) {
+  .sa-pro.ch-story-page .ch-card { background: color-mix(in srgb, var(--ch-surface) 94%, transparent); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .sa-pro.ch-story-page .ch-glass-band { background: color-mix(in srgb, var(--ch-surface) 90%, transparent); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .sa-pro.ch-story-page .ch-podcast-band { background: rgba(7, 8, 10, 0.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* ── Homepage search: entrance + travelling glow ──────────────────────────
+   The homepage's main search sweeps in, then carries the orange glow that
+   circles the header search on other pages (same --border-angle spin). The
+   ring is a pseudo-element of the form itself, so when the scroll story
+   fades the form out, the glow goes with it. */
+@keyframes ch-search-in {
+  0% { opacity: 0; transform: translateY(16px) scale(0.94); }
+  55% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+.sa-pro .ch-search-in { animation: ch-search-in .8s cubic-bezier(.2,.8,.2,1) .12s both; }
+.sa-pro .ch-search-glow { position: relative; isolation: isolate; }
+.sa-pro .ch-search-glow::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--border-angle),
+    transparent 0deg,
+    #f97316 50deg,
+    #fb923c 100deg,
+    #fdba74 140deg,
+    #fbbf24 180deg,
+    transparent 235deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: border-spin 4s linear infinite;
+  filter: blur(1px);
+  opacity: .9;
+  pointer-events: none;
+  z-index: -1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sa-pro .ch-search-in { animation: none; }
+  .sa-pro .ch-search-glow::before { animation: none; }
+}
+
+/* ── Card fan carousel (components/ui/card-fan-carousel.tsx) ───────────────
+   Card sizes per breakpoint live here as variables; the component reads
+   them to fit the fan's spread to its container. */
+/* Trading card sizes (components/cards/TradingCard) — shared by the fan
+   and anywhere else the card appears (.tc-sizes on a container). */
+.fan-layout,
+.tc-sizes {
+  --fan-card-w: 12.5rem;
+  --fan-card-h: 20rem;
+}
+.fan-layout {
+  position: relative;
+  width: 100%;
+  max-width: 80rem;
+  margin: 0 auto;
+  outline: none;
+  touch-action: pan-y; /* horizontal swipes cycle; vertical still scrolls */
+}
+@media (min-width: 480px) { .fan-layout, .tc-sizes { --fan-card-w: 14rem; --fan-card-h: 21.25rem; } }
+@media (min-width: 640px) { .fan-layout, .tc-sizes { --fan-card-w: 15rem; --fan-card-h: 22.75rem; } }
+@media (min-width: 768px) { .fan-layout, .tc-sizes { --fan-card-w: 16rem; --fan-card-h: 24.25rem; } }
+@media (min-width: 1024px) { .fan-layout, .tc-sizes { --fan-card-w: 17rem; --fan-card-h: 25.75rem; } }
+.fan-layout:focus-visible { box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.5); border-radius: 16px; }
+.fan-card {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  width: var(--fan-card-w);
+  height: var(--fan-card-h);
+  margin-left: calc(var(--fan-card-w) / -2);
+  transform-origin: 50% 60%;
+  opacity: 0;
+  will-change: transform, opacity;
+  cursor: pointer;
+}
+/* Side cards in the fan aren't focused — only the centre card can share. */
+.fan-card:not(.is-center) button[aria-label^="Download"] { opacity: 0 !important; pointer-events: none; }
+
+/* Player profile overview (components/PlayerProfileContent): the Latest and
+   Best cards with the season numbers beside them whenever the profile is wide
+   enough. It also renders inside league pages, so this keys off its own
+   width rather than the viewport's. */
+.pp-overview { container-type: inline-size; }
+.pp-overview-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@container (min-width: 560px) {
+  .pp-overview .pp-tiles-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@container (min-width: 880px) {
+  .pp-overview-grid { grid-template-columns: auto minmax(0, 1fr); }
+  .pp-overview-grid > :only-child { grid-column: 1 / -1; }
+  .pp-overview-grid > :not(:only-child) .pp-tiles-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Collectible accolade cards (components/cards/AccoladeCard): a card that
+   flips over to its details, a slowly shifting foil frame and a sheen across
+   the art. Each season's cards sit in a holder like a binder page. */
+.acc-flip { position: relative; perspective: 1400px; }
+.acc-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform .7s cubic-bezier(.2, .7, .2, 1);
+}
+.acc-flip[data-flipped="true"] .acc-flip-inner { transform: rotateY(180deg); }
+.acc-face {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+.acc-face-back { transform: rotateY(180deg); }
+.acc-foil { animation: acc-foil 9s ease-in-out infinite alternate; }
+@keyframes acc-foil { from { background-position: 0% 0%; } to { background-position: 100% 100%; } }
+.acc-sheen {
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 45%, rgba(255, 255, 255, 0.05) 52%, transparent 60%);
+  background-size: 250% 100%;
+  animation: acc-sheen 7s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes acc-sheen { 0% { background-position: 130% 0; } 55%, 100% { background-position: -30% 0; } }
+.sa-pro .acc-binder {
+  background-color: var(--ch-surface-2);
+  background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ch-text) 8%, transparent) 1px, transparent 0);
+  background-size: 14px 14px;
+}
+.acc-sleeve { position: relative; }
+.acc-sleeve::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  pointer-events: none;
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 26%, rgba(255, 255, 255, 0) 74%, rgba(255, 255, 255, 0.07) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+@media (prefers-reduced-motion: reduce) {
+  .acc-flip-inner { transition: none; }
+  .acc-foil, .acc-sheen { animation: none; }
 }

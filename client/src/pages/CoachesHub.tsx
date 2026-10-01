@@ -1269,7 +1269,7 @@ export default function CoachesHub() {
           // permission wall.
           ...(!isCoach ? [{ href: '/league-admin', label: 'Upload Player Stats', sub: 'Add box scores to this league', icon: Upload }] : []),
           { href: `/competition/${selectedLeague.slug}`, label: 'View Public League Page', sub: 'Fixtures, results and teams', icon: Eye },
-          { href: `/league-leaders/${selectedLeague.slug}`, label: 'View League Leaders', sub: 'Stat leaders across the league', icon: TrendingUp },
+          { href: `/competition/${selectedLeague.slug}?section=leaders`, label: 'View League Leaders', sub: 'Stat leaders across the league', icon: TrendingUp },
         ].map((a) => (
           <Link key={a.href} href={a.href} className="group flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-[color:var(--ch-surface-2)] transition-colors">
             <span className="w-8 h-8 rounded-lg ch-tile flex items-center justify-center shrink-0">
