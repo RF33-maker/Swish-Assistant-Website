@@ -15,9 +15,9 @@ import { dayLabel, useScores, type ScoreGame } from "@/lib/scores";
  * and the link to share on socials: /scores?league=<slug> opens pre-filtered.
  *
  * There is deliberately no date picker. The server applies the rolling rules
- * (see /api/scores): results stay for 24 hours, and "coming up" rolls forward
- * to the next day with games, so the page is never empty midweek and never
- * asks the visitor to work out which day to look at.
+ * (see /api/scores): results stay for 24 hours, and "coming up" is the rest of
+ * today plus the next six days, grouped by day, so the page is never empty
+ * midweek and never asks the visitor to work out which day to look at.
  */
 
 // The app has no global scroll reset, so arriving here from partway down the
@@ -68,6 +68,10 @@ export default function ScoresPage() {
 
   const live = useMemo(() => pick(data?.live), [data, activeLeague]);
   const upcoming = useMemo(() => pick(data?.upcoming.games), [data, activeLeague]);
+  const upcomingDays = useMemo(
+    () => (data?.upcoming.days ?? []).map((d) => ({ ...d, games: pick(d.games) })).filter((d) => d.games.length > 0),
+    [data, activeLeague],
+  );
   const results = useMemo(() => pick(data?.results), [data, activeLeague]);
   const nothingOn = !isLoading && live.length === 0 && upcoming.length === 0 && results.length === 0;
 
@@ -105,7 +109,7 @@ export default function ScoresPage() {
             Scores &amp; results
           </h1>
           <p className="mt-2 text-sm md:text-[15px] text-[color:var(--ch-text-2)] max-w-2xl">
-            Every game live, what's coming up next, and the last 24 hours of results.
+            Every game live, what's on over the next week, and the last 24 hours of results.
           </p>
         </header>
 
@@ -148,10 +152,30 @@ export default function ScoresPage() {
           </Section>
         )}
 
-        {upcoming.length > 0 && (
-          <Section title="Coming up" meta={dayLabel(data?.upcoming.date ?? null, data?.upcoming.isToday)}>
-            {upcoming.map((g) => <ScoreGameCard key={g.game_key} game={g} kind="upcoming" />)}
-          </Section>
+        {upcomingDays.length > 0 && (
+          <section className="flex flex-col gap-4" aria-label="Coming up">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]">
+                Coming up
+              </h2>
+              <span className="text-xs font-medium text-[color:var(--ch-muted)]">
+                {upcoming.length} {upcoming.length === 1 ? "game" : "games"} · next 7 days
+              </span>
+            </div>
+            {upcomingDays.map((day) => (
+              <div key={day.date} className="flex flex-col gap-2.5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-[color:var(--ch-text)]">{dayLabel(day.date, day.isToday)}</h3>
+                  <span className="text-xs text-[color:var(--ch-muted)]">
+                    {day.games.length} {day.games.length === 1 ? "game" : "games"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {day.games.map((g) => <ScoreGameCard key={g.game_key} game={g} kind="upcoming" />)}
+                </div>
+              </div>
+            ))}
+          </section>
         )}
 
         {results.length > 0 && (
