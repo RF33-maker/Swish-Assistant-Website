@@ -3018,8 +3018,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // The rolling rules live here rather than in the client so every consumer
   // (the page, and later the homepage block) agrees on them:
   //   live      in progress now
-  //   upcoming  the rest of today (UK time); if nothing is left today, the
-  //             next day that has games — so midweek never shows an empty page
+  //   upcoming  the rest of today (UK time) and the next six days, grouped by
+  //             day. It used to be one day only, which on a Friday showed just
+  //             that night's SLB games and hid every league playing Saturday.
   //   results   finished games that tipped off in the last 24 hours
   //
   // Competition scope and feed-child remapping reuse fetchHomeCompetitionScope,
@@ -3031,6 +3032,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // stays in "coming up" for a while rather than vanishing from the page.
   const SCORES_LATE_START_GRACE_MS = 3 * 60 * 60 * 1000;
   const SCORES_LOOKAHEAD_MS = 21 * 24 * 60 * 60 * 1000;
+  // Calendar days of fixtures in "upcoming", today included.
+  const SCORES_UPCOMING_DAYS = 7;
   let scoresCache: { data: any; at: number } | null = null;
   let scoresInFlight: Promise<any> | null = null;
 
@@ -3054,7 +3057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   async function fetchScores() {
     const scope = await fetchHomeCompetitionScope();
-    const empty = { generatedAt: new Date().toISOString(), leagues: [], live: [], upcoming: { date: null, games: [] }, results: [] };
+    const empty = { generatedAt: new Date().toISOString(), leagues: [], live: [], upcoming: { date: null, games: [], days: [] }, results: [] };
     if (scope.sourceIds.length === 0) return empty;
 
     const now = Date.now();
@@ -3144,17 +3147,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       upcomingPool.push(toGame(d, row));
     }
 
-    // Roll forward: today's remaining games, else the next day with games.
+    // Today's remaining games and the next six days', by day.
     const todayKey = ukTodayKey();
-    const byDay = new Map<string, any[]>();
-    for (const g of upcomingPool) {
+    const lastDay = new Date(`${todayKey}T12:00:00Z`);
+    lastDay.setUTCDate(lastDay.getUTCDate() + SCORES_UPCOMING_DAYS - 1);
+    const lastKey = lastDay.toISOString().slice(0, 10);
+    const upcomingGames = upcomingPool.filter((g) => {
       const key = gameDayKey(g.match_time);
-      if (key < todayKey) continue;
-      if (!byDay.has(key)) byDay.set(key, []);
-      byDay.get(key)!.push(g);
-    }
-    const nextDay = Array.from(byDay.keys()).sort()[0] || null;
-    const upcomingGames = nextDay ? byDay.get(nextDay)! : [];
+      return key >= todayKey && key <= lastKey;
+    });
 
     // Games often share a tip-off time (a whole league at 19:30), and the
     // database returns ties in no fixed order — so without a tie-break the
@@ -3164,6 +3165,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     live.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time) || tieBreak(a, b));
     upcomingGames.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time) || tieBreak(a, b));
     results.sort((a, b) => Date.parse(b.match_time) - Date.parse(a.match_time) || tieBreak(a, b));
+
+    const days: Array<{ date: string; isToday: boolean; games: any[] }> = [];
+    for (const g of upcomingGames) {
+      const key = gameDayKey(g.match_time);
+      if (days[days.length - 1]?.date !== key) days.push({ date: key, isToday: key === todayKey, games: [] });
+      days[days.length - 1].games.push(g);
+    }
 
     // Filter chips: only competitions with something to show, in trending order.
     const present = new Set([...live, ...upcomingGames, ...results].map((g) => g.league_id));
@@ -3175,7 +3183,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       generatedAt: new Date(now).toISOString(),
       leagues,
       live,
-      upcoming: { date: nextDay, isToday: nextDay === todayKey, games: upcomingGames },
+      // `date`/`isToday` are the first day with games; `games` is every day's
+      // games in tip-off order, `days` the same games grouped by day.
+      upcoming: { date: days[0]?.date ?? null, isToday: days[0]?.isToday ?? false, games: upcomingGames, days },
       results,
     };
   }
