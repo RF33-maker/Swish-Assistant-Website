@@ -155,7 +155,13 @@ function TeamSide({
   );
 }
 
-/** The team logo, huge and faint, bleeding off the edge of its half. */
+/**
+ * The team logo, huge and faint, bleeding off the edge of its half. It fits
+ * inside a box sized by the hero's width (object-contain), not its height:
+ * sized by height, a phone's tall, narrow hero made each logo wider than the
+ * whole hero, the two piled on top of each other, and Safari — which sizes an
+ * auto-width image from its pixel width there — stretched them out of shape.
+ */
 function Watermark({ teamName, leagueId, side }: { teamName: string; leagueId?: string | null; side: "home" | "away" }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -171,7 +177,7 @@ function Watermark({ teamName, leagueId, side }: { teamName: string; leagueId?: 
       src={url}
       alt=""
       aria-hidden="true"
-      className={`pointer-events-none absolute top-1/2 h-[150%] w-auto max-w-none -translate-y-1/2 select-none ${side === "home" ? "-left-[12%] md:-left-[6%]" : "-right-[12%] md:-right-[6%]"}`}
+      className={`pointer-events-none absolute -top-1/4 h-[150%] w-[62%] md:w-[52%] max-w-none object-contain select-none ${side === "home" ? "-left-[14%] md:-left-[6%]" : "-right-[14%] md:-right-[6%]"}`}
       style={{ filter: "grayscale(1) invert(1)", mixBlendMode: "screen", opacity: 0.1 }}
       onError={() => setUrl(null)}
     />
