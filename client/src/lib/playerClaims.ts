@@ -17,6 +17,8 @@ export interface MyClaim {
   profile_slug: string | null;
   created_at: string;
   approved_at: string | null;
+  /** How many players rows (competitions) the claim covers. */
+  covered_rows: number;
 }
 
 export interface PublicProfile {
@@ -77,6 +79,17 @@ export interface AdminClaimRow {
   approved_at: string | null;
   rejected_at: string | null;
   revoked_at: string | null;
+  /** Every players row the claim covers (one per competition); primary first. */
+  covered_rows: CoveredRow[];
+}
+
+export interface CoveredRow {
+  player_id: string;
+  full_name: string;
+  team_name: string | null;
+  competition_name: string | null;
+  is_primary: boolean;
+  games: number;
 }
 
 export interface AdminPlayerRow {
@@ -85,13 +98,49 @@ export interface AdminPlayerRow {
   team_name: string | null;
   competition_name: string | null;
   slug: string | null;
+  games: number;
   date_of_birth: string | null;
   dob_verified: boolean;
   tier: "adult" | "u18" | "unverified";
   claim_status: "unclaimed" | "pending" | "approved";
   active_claim_id: string | null;
+  /** True when this row is the claim's main row (owns the /p/ profile). */
+  is_primary_row: boolean;
   owner_email: string | null;
   live_code_expires_at: string | null;
+}
+
+/** A row that looks like the same person, for the admin's tick-list. */
+export interface RowCandidate {
+  player_id: string;
+  full_name: string;
+  team_name: string | null;
+  competition_name: string | null;
+  games: number;
+  /** primary: the row itself · covered: already on this claim · exact: same name · variant: same surname + initial */
+  match_kind: "primary" | "covered" | "exact" | "variant";
+  /** False when the row belongs to another active claim. */
+  available: boolean;
+}
+
+/** Per-competition averages across every row a /p/ profile covers. */
+export interface ProfileStatLine {
+  league_id: string;
+  competition_name: string | null;
+  season: string | null;
+  team_name: string | null;
+  games: number;
+  minutes_pg: number | null;
+  points_pg: number | null;
+  rebounds_pg: number | null;
+  assists_pg: number | null;
+  steals_pg: number | null;
+  blocks_pg: number | null;
+  turnovers_pg: number | null;
+  fg_pct: number | null;
+  three_pct: number | null;
+  ft_pct: number | null;
+  last_played: string | null;
 }
 
 export type RedeemResult =
@@ -138,6 +187,12 @@ export async function getPublicProfile(slug: string): Promise<PublicProfile | nu
   const { data, error } = await supabase.rpc("get_public_profile", { p_slug: slug }).maybeSingle();
   if (error) throw new Error(rpcErrorMessage(error));
   return (data as PublicProfile | null) ?? null;
+}
+
+export async function getPublicProfileStats(slug: string): Promise<ProfileStatLine[]> {
+  const { data, error } = await supabase.rpc("get_public_profile_stats", { p_slug: slug });
+  if (error) throw new Error(rpcErrorMessage(error));
+  return (data ?? []) as ProfileStatLine[];
 }
 
 /** Age in whole years from a YYYY-MM-DD date, or null. */

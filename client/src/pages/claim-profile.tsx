@@ -107,7 +107,9 @@ export default function ClaimProfilePage() {
     return (
       <AuthShell
         title="Profile verified"
-        intro={`You own ${claim.player_name}'s profile.`}
+        intro={`You own ${claim.player_name}'s profile${
+          claim.covered_rows > 1 ? `, covering ${claim.covered_rows} competitions` : ""
+        }.`}
         icon={<BadgeCheck className="h-10 w-10 text-emerald-500" />}
       >
         <div className="space-y-3">

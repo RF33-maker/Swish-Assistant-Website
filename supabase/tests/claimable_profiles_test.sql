@@ -15,6 +15,7 @@
 --   E  an approved owner can't edit someone else's profile or change DOB
 --   F  an unverified DOB never produces the 'adult' tier
 --   G  public reads never return DOB, age or socials for u18/unverified
+--   H  one claim covers all of a player's rows (one code, one profile)
 
 BEGIN;
 
@@ -47,7 +48,11 @@ FROM (VALUES
   ('bbbbbbbb-0000-4000-8000-000000000002'::uuid, 'Testtwo Bravo',   'claimtest-p2', NULL,         NULL),
   ('bbbbbbbb-0000-4000-8000-000000000003'::uuid, 'Testthree Charlie','claimtest-p3', '1980-04-04', 'https://instagram.com/p3_roster'),
   ('bbbbbbbb-0000-4000-8000-000000000004'::uuid, 'Testfour Delta',  'claimtest-p4', '2012-06-06', 'https://instagram.com/p4_roster'),
-  ('bbbbbbbb-0000-4000-8000-000000000005'::uuid, 'Testfive Echo',   'claimtest-p5', NULL,         NULL)
+  ('bbbbbbbb-0000-4000-8000-000000000005'::uuid, 'Testfive Echo',   'claimtest-p5', NULL,         NULL),
+  -- P6/P7/P8: one person with three rows (two exact, one "T. Foxtrot" variant)
+  ('bbbbbbbb-0000-4000-8000-000000000006'::uuid, 'Testsix Foxtrot', 'claimtest-p6', NULL,         'https://instagram.com/p6_roster'),
+  ('bbbbbbbb-0000-4000-8000-000000000007'::uuid, 'Testsix Foxtrot', 'claimtest-p7', NULL,         NULL),
+  ('bbbbbbbb-0000-4000-8000-000000000008'::uuid, 'T. Foxtrot',      'claimtest-p8', NULL,         NULL)
 ) AS p(id, fname, slug, dob, ig);
 
 -- ── helpers ────────────────────────────────────────────────────────────────
@@ -102,6 +107,10 @@ DECLARE
   P3 CONSTANT UUID := 'bbbbbbbb-0000-4000-8000-000000000003';
   P4 CONSTANT UUID := 'bbbbbbbb-0000-4000-8000-000000000004';
   P5 CONSTANT UUID := 'bbbbbbbb-0000-4000-8000-000000000005';
+  P6 CONSTANT UUID := 'bbbbbbbb-0000-4000-8000-000000000006';
+  P7 CONSTANT UUID := 'bbbbbbbb-0000-4000-8000-000000000007';
+  P8 CONSTANT UUID := 'bbbbbbbb-0000-4000-8000-000000000008';
+  c6 TEXT;
 BEGIN
   -- ═══ A: can't claim an already-claimed or pending player ═════════════════
   PERFORM pg_temp.as_user(ADMIN);
@@ -284,6 +293,45 @@ BEGIN
   PERFORM pg_temp.check(80, 'G: u18 /p/ slug does not contain the surname', v_slug NOT LIKE '%alpha%', v_slug);
   SELECT count(*) INTO n FROM public.get_public_profile('claimtest-p2');
   PERFORM pg_temp.check(81, 'G: /p/ lookup by the old stats slug returns nothing', n = 0, n || ' rows');
+
+  -- ═══ H: one claim covers all of a player's rows ═════════════════════════
+  PERFORM pg_temp.as_user(ADMIN);
+  SELECT string_agg(match_kind, ',' ORDER BY match_kind) INTO v_slug FROM public.admin_claim_row_candidates(P6);
+  PERFORM pg_temp.check(90, 'H: candidates find the exact-name row and the "T. Foxtrot" variant', v_slug = 'exact,primary,variant', v_slug);
+  SELECT code INTO c6 FROM public.issue_claim_code(P6, 14, ARRAY[P7]);
+  -- UD hit the redeem rate limit in section B; use a fresh account.
+  PERFORM pg_temp.as_user(UB);
+  res := public.redeem_claim_code(c6, '1990-02-02');
+  PERFORM pg_temp.check(91, 'H: one code redeems a claim covering both rows', res->>'status' = 'pending', res::text);
+  PERFORM pg_temp.as_user(ADMIN);
+  PERFORM pg_temp.expect_error(92, 'H: no code can be issued for a row inside a pending multi-row claim', format('SELECT public.issue_claim_code(%L)', P7));
+  SELECT claim_id INTO v_claim FROM public.admin_list_claims('pending') WHERE player_id = P6;
+  SELECT jsonb_array_length(covered_rows) INTO n FROM public.admin_list_claims('pending') WHERE player_id = P6;
+  PERFORM pg_temp.check(93, 'H: admin queue shows both rows on the claim', n = 2, n || ' rows');
+  PERFORM public.approve_claim(v_claim, '1990-02-02', ARRAY[P7, P8]);
+  PERFORM pg_temp.as_postgres();
+  SELECT count(*) INTO n FROM public.players WHERE id IN (P6, P7, P8) AND date_of_birth = '1990-02-02' AND dob_verified_at IS NOT NULL;
+  PERFORM pg_temp.check(94, 'H: approving with the variant ticked verifies all three rows', n = 3, n || ' verified');
+  SELECT count(*) INTO n FROM public.players WHERE id IN (P6, P7, P8) AND profile_slug IS NOT NULL;
+  PERFORM pg_temp.check(95, 'H: only the main row gets a /p/ slug (one profile)', n = 1, n || ' slugs');
+  SELECT profile_slug INTO v_slug FROM public.players WHERE id = P6;
+  PERFORM pg_temp.as_anon();
+  SELECT count(*) INTO n FROM public.get_player_public_details(P8) d WHERE d.is_claimed AND d.profile_slug = v_slug;
+  PERFORM pg_temp.check(96, 'H: a linked row''s player page links to the one /p/ profile', n = 1, v_slug);
+  PERFORM pg_temp.expect_error(97, 'H: signed-out visitors cannot read claim rows', 'SELECT count(*) FROM public.player_claim_rows');
+  PERFORM pg_temp.as_user(UB);
+  PERFORM pg_temp.expect_error(98, 'H: non-admin cannot change which rows a claim covers', format('SELECT public.admin_set_claim_rows(%L, %L)', v_claim, '{}'));
+  PERFORM pg_temp.as_user(ADMIN);
+  PERFORM public.admin_set_claim_rows(v_claim, ARRAY[P7]);
+  PERFORM pg_temp.as_postgres();
+  SELECT count(*) INTO n FROM public.players WHERE id = P8 AND dob_verified_at IS NULL;
+  PERFORM pg_temp.check(99, 'H: removing a row from an approved claim un-verifies it', n = 1, n::text);
+  PERFORM pg_temp.as_user(ADMIN);
+  PERFORM public.revoke_claim(v_claim);
+  PERFORM pg_temp.as_postgres();
+  SELECT count(*) INTO n FROM public.players WHERE id IN (P6, P7, P8) AND (dob_verified_at IS NOT NULL OR profile_slug IS NOT NULL);
+  SELECT n + count(*) INTO n FROM public.player_claim_rows WHERE player_id IN (P6, P7, P8);
+  PERFORM pg_temp.check(100, 'H: revoking releases every row (no verification, slug or link left)', n = 0, n || ' leftovers');
 
   PERFORM pg_temp.as_postgres();
 END $$;
