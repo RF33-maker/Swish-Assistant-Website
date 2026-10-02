@@ -1,12 +1,13 @@
 import type { ReactNode } from "react"
 import { Link, useLocation } from "wouter"
-import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2 } from "lucide-react"
+import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2, BadgeCheck } from "lucide-react"
 import { SheetClose } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import StatsThreadLogo from "@/assets/statsthread-logo.svg"
 import { useAuth } from "@/hooks/use-auth"
 import { useScores } from "@/lib/scores"
 import { useNavLeagues } from "@/lib/navLeagues"
+import { claimEntry, useMyClaim } from "@/lib/playerClaims"
 
 /**
  * The site's navigation list, rendered in two places from one source:
@@ -40,6 +41,8 @@ export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet
   const { user, isAdmin } = useAuth()
   const { data: scores } = useScores()
   const { data: leagues = [] } = useNavLeagues()
+  const { data: myClaim } = useMyClaim(user?.id)
+  const profileEntry = claimEntry(myClaim)
   const liveCount = scores?.live.length ?? 0
 
   const itemClass = (active: boolean) =>
@@ -105,6 +108,16 @@ export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet
             <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden="true" />
             Dashboard
           </>, "dashboard")}
+          {/* Claim → pending → owned: one entry that follows the player's claim. */}
+          {internalLink(
+            profileEntry.href,
+            location.startsWith("/claim") || location.startsWith("/my-profile") || location === profileEntry.href,
+            <>
+              <BadgeCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">{profileEntry.label}</span>
+            </>,
+            "player-profile",
+          )}
           {internalLink("/coaches-hub", location.startsWith("/coaches-hub"), <>
             <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />
             Coaches Hub

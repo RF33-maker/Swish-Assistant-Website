@@ -7,6 +7,7 @@ import { Users, Trophy, Share2, Code, Newspaper, CheckCircle, AlertCircle, Refre
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
+import { type MyClaim, claimEntry, useMyClaim } from "@/lib/playerClaims";
 
 type SuggestedLeague = {
   name: string;
@@ -76,9 +77,78 @@ function ToolCard({ tool }: { tool: Tool }) {
   );
 }
 
+/**
+ * The player's own profile: enter a claim code (or request one), then
+ * "pending", then links to the profile once it's verified. Shown to every
+ * signed-in member — admins can be players too.
+ */
+function PlayerProfileCard({ claim, loading }: { claim: MyClaim | null | undefined; loading: boolean }) {
+  const entry = claimEntry(claim);
+  const primary = "ch-btn ch-btn-primary h-10 px-4 text-sm";
+  const ghost = "ch-btn ch-btn-ghost h-10 px-4 text-sm";
+
+  const body =
+    entry.state === "approved"
+      ? `You own ${claim!.player_name}'s profile${claim!.covered_rows > 1 ? `, covering ${claim!.covered_rows} competitions` : ""}. Add a photo, bio and highlights, and share your link.`
+      : entry.state === "pending"
+        ? `We're verifying your claim for ${claim!.player_name}. You'll be able to edit your profile as soon as it's approved.`
+        : "Got a claim code from us? Enter it with your date of birth to take ownership of your profile across every league you've played in.";
+
+  return (
+    <div className="ch-card flex flex-col p-5 min-h-[196px]" data-testid="card-player-profile">
+      <span className="flex items-start gap-3.5">
+        <span className="h-11 w-11 shrink-0 rounded-xl flex items-center justify-center bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]">
+          <BadgeCheck className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="ch-display uppercase font-bold tracking-tight leading-none text-[1.3rem] text-[color:var(--ch-text)]">
+              {entry.state === "approved" ? "Your player profile" : "Claim your player profile"}
+            </span>
+            {entry.state === "pending" && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                Pending
+              </span>
+            )}
+          </span>
+          <span className="mt-1 block text-[13px] text-[color:var(--ch-muted)]">Own your page on Swish</span>
+        </span>
+      </span>
+      <span className="mt-4 block text-sm text-[color:var(--ch-text-2)]">{loading ? "Checking your profile…" : body}</span>
+      {claim?.status === "rejected" && (
+        <span className="mt-2 block text-[13px] text-red-600 dark:text-red-400">
+          Your last claim wasn't approved{claim.rejection_reason ? `: ${claim.rejection_reason}` : "."} You can try again with a new code.
+        </span>
+      )}
+      <span className="mt-auto pt-4 flex flex-wrap items-center gap-2">
+        {entry.state === "approved" ? (
+          <>
+            <Link href={entry.href} className={primary} data-testid="button-view-player-profile">View profile</Link>
+            <Link href="/my-profile/edit" className={ghost}>Edit profile</Link>
+          </>
+        ) : entry.state === "pending" ? (
+          <Link href="/claim" className={ghost} data-testid="button-claim-status">View claim status</Link>
+        ) : (
+          <>
+            <Link href="/claim" className={primary} data-testid="button-enter-claim-code">Enter your claim code</Link>
+            <Link
+              href="/contact-sales?topic=player-page"
+              className="text-sm font-medium text-[color:var(--ch-accent)] hover:underline underline-offset-2"
+              data-testid="link-request-claim-code"
+            >
+              No code yet? Request one
+            </Link>
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
 export default function DashboardLanding() {
   const [, navigate] = useLocation();
   const { isAdmin, isCoach, emailConfirmed, user, logoutMutation } = useAuth();
+  const { data: myClaim, isLoading: myClaimLoading } = useMyClaim(user?.id);
   // Coach (team) accounts get the Coaches Hub card too — everything else on
   // this dashboard (League Management, Social Tools, API/Widgets) stays
   // admin-only.
@@ -203,17 +273,7 @@ export default function DashboardLanding() {
           cta: "Manage leagues",
           enabled: true,
         }]
-      : [{
-          key: "claim",
-          icon: BadgeCheck,
-          title: "Your player page",
-          description: "Own your page on Swish",
-          body: "Play in one of our leagues? Request your page to update your details, add your own photo and download your cards.",
-          href: "/contact-sales?topic=player-page",
-          cta: "Claim your page",
-          enabled: true,
-          testId: "card-claim-player-page",
-        }]),
+      : []),
     {
       key: "coaches",
       icon: Users,
@@ -335,6 +395,13 @@ export default function DashboardLanding() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+          {user && (
+            <div className="ch-rise flex" style={{ animationDelay: "40ms" }}>
+              <div className="flex-1 flex flex-col [&>*]:flex-1">
+                <PlayerProfileCard claim={myClaim} loading={myClaimLoading} />
+              </div>
+            </div>
+          )}
           {tools.map((tool, i) => (
             <div key={tool.key} className="ch-rise flex" style={{ animationDelay: `${60 + i * 40}ms` }}>
               <div className="flex-1 flex flex-col [&>*]:flex-1">

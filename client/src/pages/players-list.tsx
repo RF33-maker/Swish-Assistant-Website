@@ -308,10 +308,15 @@ export default function PlayersListPage() {
               Claim your player page to keep your details up to date, add your own photo and download your cards.
             </p>
           </div>
-          <Link href="/contact-sales?topic=player-page" className="ch-btn ch-btn-primary h-10 px-5 self-start md:self-auto">
-            Claim your page
-            <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+            <Link href="/contact-sales?topic=player-page" className="ch-btn ch-btn-primary h-10 px-5">
+              Claim your page
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+            <Link href="/claim" className="ch-btn ch-btn-ghost h-10 px-4" data-testid="link-players-have-claim-code">
+              Have a code?
+            </Link>
+          </div>
         </div>
       </section>
     </div>

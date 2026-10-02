@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 
 // Typed wrappers for the claimable-profile RPCs
@@ -175,6 +176,38 @@ export async function getMyClaim(): Promise<MyClaim | null> {
   const { data, error } = await supabase.rpc("get_my_claim").maybeSingle();
   if (error) throw new Error(rpcErrorMessage(error));
   return (data as MyClaim | null) ?? null;
+}
+
+export const MY_CLAIM_QUERY_KEY = ["my-claim"] as const;
+
+/**
+ * The signed-in user's claim, shared by the account menu and the dashboard.
+ * Invalidate MY_CLAIM_QUERY_KEY after redeeming so both update.
+ */
+export function useMyClaim(userId: string | null | undefined) {
+  return useQuery({
+    queryKey: [...MY_CLAIM_QUERY_KEY, userId],
+    queryFn: getMyClaim,
+    enabled: !!userId,
+    staleTime: 60_000,
+  });
+}
+
+/** Where a signed-in player should go for their profile, and what to call it. */
+export function claimEntry(claim: MyClaim | null | undefined): {
+  state: "none" | "pending" | "approved";
+  href: string;
+  label: string;
+} {
+  if (claim?.status === "approved") {
+    return {
+      state: "approved",
+      href: claim.profile_slug ? `/p/${claim.profile_slug}` : "/my-profile/edit",
+      label: "My player profile",
+    };
+  }
+  if (claim?.status === "pending") return { state: "pending", href: "/claim", label: "Profile claim · pending" };
+  return { state: "none", href: "/claim", label: "Claim your player profile" };
 }
 
 export async function redeemClaimCode(code: string, dob: string): Promise<RedeemResult> {
