@@ -2379,8 +2379,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // A verified player's claim covers all of their players rows (one per
+  // competition) — the same "one person, many rows" grouping as an identity.
+  // Only approved claims count, so a pending claim can't merge stats.
+  async function claimIdentityForPlayer(playerId: string) {
+    const { data: link } = await supabaseAdmin
+      .from('player_claim_rows')
+      .select('claim_id')
+      .eq('player_id', playerId)
+      .maybeSingle();
+    if (!link?.claim_id) return null;
+    const { data: claim } = await supabaseAdmin
+      .from('player_claims')
+      .select('id, status, player_id')
+      .eq('id', link.claim_id)
+      .maybeSingle();
+    if (!claim || claim.status !== 'approved') return null;
+    const [{ data: rows }, { data: primary }] = await Promise.all([
+      supabaseAdmin.from('player_claim_rows').select('player_id').eq('claim_id', claim.id),
+      supabaseAdmin.from('players').select('full_name, photo_path, photo_path_bg_removed').eq('id', claim.player_id).maybeSingle(),
+    ]);
+    return {
+      id: `claim:${claim.id}`,
+      canonical_name: primary?.full_name ?? null,
+      photo_path: primary?.photo_path ?? null,
+      photo_path_bg_removed: primary?.photo_path_bg_removed ?? null,
+      playerIds: (rows || []).map((r: any) => r.player_id),
+    };
+  }
+
   // GET /api/player-identities/for-player/:playerId
   // Returns the identity group for a player (if any), including all sibling player_ids.
+  // Falls back to the player's approved claim when there's no identity group.
   app.get('/api/player-identities/for-player/:playerId', async (req: Request, res: Response) => {
     try {
       const { playerId } = req.params;
@@ -2390,10 +2420,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .eq('player_id', playerId)
         .maybeSingle();
       if (mErr) {
-        if ((mErr as any).code === '42P01') return res.json({ identity: null });
+        if ((mErr as any).code === '42P01' || (mErr as any).code === 'PGRST205') {
+          return res.json({ identity: await claimIdentityForPlayer(playerId) });
+        }
         return res.status(500).json({ error: mErr.message });
       }
-      if (!membership) return res.json({ identity: null });
+      if (!membership) return res.json({ identity: await claimIdentityForPlayer(playerId) });
 
       const identityId = membership.identity_id;
       const [idRes, membersRes] = await Promise.all([

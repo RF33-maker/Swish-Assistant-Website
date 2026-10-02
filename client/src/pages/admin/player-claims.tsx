@@ -31,6 +31,7 @@ import { supabase } from "@/lib/supabase";
 import {
   type AdminClaimRow,
   type AdminPlayerRow,
+  type RowCandidate,
   ageFromDob,
   formatDob,
   maxDobInputValue,
@@ -83,6 +84,126 @@ function dobLine(dob: string | null) {
   if (!dob) return "—";
   const age = ageFromDob(dob);
   return `${formatDob(dob)}${age !== null ? ` (${age})` : ""}`;
+}
+
+/**
+ * A player usually has one players row per competition. A claim covers all of
+ * them: this lists rows that look like the same person so the admin can tick
+ * which ones belong to the claim. The main row is always included.
+ *
+ * Starts with: the main row, rows already on the claim, and (for a new claim)
+ * rows with exactly the same name. Name variants ("N. Smith") are listed but
+ * not ticked. Rows owned by another claim can't be ticked.
+ */
+function RowPicker({
+  playerId,
+  claimId,
+  onChange,
+}: {
+  playerId: string;
+  claimId?: string;
+  /** Called with the extra (non-main) rows to include whenever the selection changes. */
+  onChange: (extraIds: string[]) => void;
+}) {
+  const [rows, setRows] = useState<RowCandidate[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .rpc("admin_claim_row_candidates", { p_player_id: playerId, p_claim_id: claimId ?? null })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) return setError(rpcErrorMessage(error, "Couldn't load this player's other rows"));
+        const list = (data ?? []) as RowCandidate[];
+        const initial = new Set(
+          list
+            .filter((r) => r.available && (r.match_kind === "covered" || (!claimId && r.match_kind === "exact")))
+            .map((r) => r.player_id),
+        );
+        setRows(list);
+        setSelected(initial);
+        onChange(Array.from(initial));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerId, claimId]);
+
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+    onChange(Array.from(next));
+  };
+
+  if (error) return <ErrorLine message={error} />;
+  if (!rows) {
+    return (
+      <div className="flex items-center gap-2 text-[13px] text-[color:var(--ch-muted)]">
+        <Loader2 className="h-4 w-4 animate-spin" /> Finding this player's other competitions…
+      </div>
+    );
+  }
+
+  const total = 1 + selected.size;
+  const games = rows.filter((r) => r.match_kind === "primary" || selected.has(r.player_id)).reduce((n, r) => n + r.games, 0);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[12px] font-medium text-[color:var(--ch-text-2)]">
+        Covers {total} {total === 1 ? "competition" : "competitions"} · {games} games
+      </p>
+      <div className="max-h-64 overflow-y-auto rounded-xl border border-[color:var(--ch-border)] divide-y divide-[color:var(--ch-border)]">
+        {rows.map((r) => {
+          const isPrimary = r.match_kind === "primary";
+          const checked = isPrimary || selected.has(r.player_id);
+          const disabled = isPrimary || !r.available;
+          return (
+            <label
+              key={r.player_id}
+              className={`flex items-start gap-3 px-3 py-2.5 text-[13px] ${disabled ? "" : "cursor-pointer hover:bg-[color:var(--ch-surface-3)]"} ${!r.available ? "opacity-50" : ""}`}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-[color:var(--ch-accent)]"
+                checked={checked}
+                disabled={disabled}
+                onChange={() => toggle(r.player_id)}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-medium text-[color:var(--ch-text)]">{r.full_name}</span>
+                  {isPrimary && <Badge tone="blue">Main profile</Badge>}
+                  {r.match_kind === "variant" && <Badge tone="amber">Name variant</Badge>}
+                  {!r.available && <Badge tone="slate">Part of another claim</Badge>}
+                </span>
+                <span className="block text-[12px] text-[color:var(--ch-text-2)] truncate">
+                  {[r.team_name, r.competition_name].filter(Boolean).join(" · ") || "No team"} · {r.games} games
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CoveredSummary({ rows }: { rows: AdminClaimRow["covered_rows"] }) {
+  if (!rows?.length) return null;
+  const games = rows.reduce((n, r) => n + Number(r.games || 0), 0);
+  return (
+    <p className="text-[12px] text-[color:var(--ch-text-2)]">
+      <span className="font-medium text-[color:var(--ch-text)]">
+        {rows.length} {rows.length === 1 ? "competition" : "competitions"} · {games} games:
+      </span>{" "}
+      {rows.map((r) => r.competition_name || r.team_name || "Unknown").join(", ")}
+    </p>
+  );
 }
 
 export default function PlayerClaimsAdminPage() {
@@ -226,11 +347,17 @@ function PendingClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => P
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [extraRows, setExtraRows] = useState<string[] | null>(null);
 
   const approve = async (dob: string) => {
     setBusy(true);
     setError("");
-    const { error } = await supabase.rpc("approve_claim", { p_claim_id: claim.claim_id, p_verified_dob: dob });
+    const { error } = await supabase.rpc("approve_claim", {
+      p_claim_id: claim.claim_id,
+      p_verified_dob: dob,
+      // null keeps the rows from the code; the picker always reports a list once loaded.
+      p_player_ids: extraRows,
+    });
     setBusy(false);
     if (error) return setError(rpcErrorMessage(error, "Couldn't approve"));
     await onDone();
@@ -273,6 +400,11 @@ function PendingClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => P
         </div>
       </div>
 
+      <div>
+        <p className="mb-1.5 text-[11px] uppercase tracking-wide text-[color:var(--ch-muted)]">Rows this claim covers</p>
+        <RowPicker playerId={claim.player_id} claimId={claim.claim_id} onChange={setExtraRows} />
+      </div>
+
       {(claim.dob_mismatch || claim.tier_change) && (
         <div className="flex flex-wrap gap-2">
           {claim.dob_mismatch && (
@@ -303,7 +435,12 @@ function PendingClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => P
               onChange={(e) => setCorrectedDob(e.target.value)}
             />
           </label>
-          <button type="button" className={BTN_PRIMARY} disabled={busy || !correctedDob} onClick={() => void approve(correctedDob)}>
+          <button
+            type="button"
+            className={BTN_PRIMARY}
+            disabled={busy || !correctedDob || extraRows === null}
+            onClick={() => void approve(correctedDob)}
+          >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             Approve with this DOB
           </button>
@@ -345,7 +482,7 @@ function PendingClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => P
           <button
             type="button"
             className={BTN_PRIMARY}
-            disabled={busy || !claim.submitted_dob}
+            disabled={busy || !claim.submitted_dob || extraRows === null}
             onClick={() => claim.submitted_dob && void approve(claim.submitted_dob)}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -367,6 +504,7 @@ function PendingClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => P
 
 function ApprovedClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => Promise<void> }) {
   const [confirming, setConfirming] = useState(false);
+  const [editingRows, setEditingRows] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -390,11 +528,15 @@ function ApprovedClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => 
               <ExternalLink className="h-4 w-4" /> Profile
             </Link>
           )}
+          <button type="button" className={BTN_GHOST} onClick={() => setEditingRows(true)} disabled={busy}>
+            Edit rows
+          </button>
           <button type="button" className={BTN_GHOST} onClick={() => setConfirming(true)} disabled={busy}>
             Revoke
           </button>
         </div>
       </div>
+      <CoveredSummary rows={claim.covered_rows} />
       <p className="text-[13px] text-[color:var(--ch-text-2)]">
         Verified DOB <span className="font-semibold text-[color:var(--ch-text)]">{dobLine(claim.verified_dob)}</span> ·{" "}
         <TierBadge tier={claim.verified_dob ? (ageFromDob(claim.verified_dob)! >= 18 ? "adult" : "u18") : null} />
@@ -407,8 +549,9 @@ function ApprovedClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => 
           <AlertDialogHeader>
             <AlertDialogTitle>Revoke {claim.player_name}'s profile?</AlertDialogTitle>
             <AlertDialogDescription>
-              {claim.user_email ?? "The owner"} loses edit access, the public /p/ link stops working, and the date of birth goes
-              back to unverified (under-18 privacy) until a new claim is approved. Their edited fields are kept.
+              {claim.user_email ?? "The owner"} loses edit access, the public /p/ link stops working, and the date of birth on
+              all {claim.covered_rows?.length ?? 1} of their rows goes back to unverified (under-18 privacy) until a new claim
+              is approved. Their edited fields are kept.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -427,7 +570,61 @@ function ApprovedClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {editingRows && (
+        <EditRowsDialog
+          claim={claim}
+          onClose={() => setEditingRows(false)}
+          onSaved={async () => {
+            setEditingRows(false);
+            await onDone();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function EditRowsDialog({
+  claim,
+  onClose,
+  onSaved,
+}: {
+  claim: AdminClaimRow;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [extraRows, setExtraRows] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (extraRows === null) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.rpc("admin_set_claim_rows", { p_claim_id: claim.claim_id, p_player_ids: extraRows });
+    setBusy(false);
+    if (error) return setError(rpcErrorMessage(error, "Couldn't update the rows"));
+    await onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sa-pro max-h-[90vh] overflow-y-auto bg-[color:var(--ch-surface)] text-[color:var(--ch-text)] border-[color:var(--ch-border)]">
+        <DialogHeader>
+          <DialogTitle>Rows on {claim.player_name}'s profile</DialogTitle>
+          <DialogDescription className="text-[color:var(--ch-text-2)]">
+            Added rows get the verified date of birth and link to their profile. Removed rows go back to unverified.
+          </DialogDescription>
+        </DialogHeader>
+        <RowPicker playerId={claim.player_id} claimId={claim.claim_id} onChange={setExtraRows} />
+        <ErrorLine message={error} />
+        <button type="button" className={`${BTN_PRIMARY} w-full justify-center`} disabled={busy || extraRows === null} onClick={() => void save()}>
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          Save rows
+        </button>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -442,6 +639,7 @@ function HistoryClaim({ claim }: { claim: AdminClaimRow }) {
           {when && ` ${formatDistanceToNow(new Date(when), { addSuffix: true })}`}
         </Badge>
       </div>
+      <CoveredSummary rows={claim.covered_rows} />
       {claim.rejection_reason && (
         <p className="text-[13px] text-[color:var(--ch-text-2)]">Reason: {claim.rejection_reason}</p>
       )}
@@ -512,8 +710,12 @@ function FindPlayers({ onChanged }: { onChanged: () => Promise<void> }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-semibold text-[15px] text-[color:var(--ch-text)]">{p.full_name}</p>
                   <TierBadge tier={p.tier} />
-                  {p.claim_status === "approved" && <Badge tone="green">Claimed</Badge>}
-                  {p.claim_status === "pending" && <Badge tone="amber">Pending</Badge>}
+                  {p.claim_status === "approved" && (
+                    <Badge tone="green">{p.is_primary_row ? "Claimed · main profile" : "Claimed · linked row"}</Badge>
+                  )}
+                  {p.claim_status === "pending" && (
+                    <Badge tone="amber">{p.is_primary_row ? "Pending · main profile" : "Pending · linked row"}</Badge>
+                  )}
                   {p.claim_status === "unclaimed" && p.live_code_expires_at && (
                     <Badge tone="slate">
                       <KeyRound className="h-3 w-3" /> Code expires{" "}
@@ -523,6 +725,7 @@ function FindPlayers({ onChanged }: { onChanged: () => Promise<void> }) {
                 </div>
                 <p className="text-[13px] text-[color:var(--ch-text-2)] truncate">
                   {[p.team_name, p.competition_name].filter(Boolean).join(" · ") || "No team"}
+                  <span className="text-[color:var(--ch-muted)]"> · {p.games} {p.games === 1 ? "game" : "games"}</span>
                 </p>
                 <p className="text-[12px] text-[color:var(--ch-muted)]">
                   DOB {dobLine(p.date_of_birth)}
@@ -563,6 +766,7 @@ function IssueCodeDialog({
   onIssued: () => Promise<void>;
 }) {
   const [days, setDays] = useState(14);
+  const [extraRows, setExtraRows] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [issued, setIssued] = useState<{ code: string; expires_at: string } | null>(null);
@@ -572,7 +776,11 @@ function IssueCodeDialog({
     setBusy(true);
     setError("");
     const { data, error } = await supabase
-      .rpc("issue_claim_code", { p_player_id: player.player_id, p_expires_in_days: days })
+      .rpc("issue_claim_code", {
+        p_player_id: player.player_id,
+        p_expires_in_days: days,
+        p_also_player_ids: extraRows ?? [],
+      })
       .single();
     setBusy(false);
     if (error) return setError(rpcErrorMessage(error, "Couldn't issue a code"));
@@ -593,7 +801,7 @@ function IssueCodeDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sa-pro bg-[color:var(--ch-surface)] text-[color:var(--ch-text)] border-[color:var(--ch-border)]">
+      <DialogContent className="sa-pro max-h-[90vh] overflow-y-auto bg-[color:var(--ch-surface)] text-[color:var(--ch-text)] border-[color:var(--ch-border)]">
         <DialogHeader>
           <DialogTitle>Claim code for {player.full_name}</DialogTitle>
           <DialogDescription className="text-[color:var(--ch-text-2)]">
@@ -615,7 +823,8 @@ function IssueCodeDialog({
               </button>
             </div>
             <p className="text-[13px] text-[color:var(--ch-text-2)]">
-              Expires {formatDob(issued.expires_at.slice(0, 10))}. Single use. Issuing another code for this player cancels this one.
+              Covers {1 + (extraRows?.length ?? 0)} {1 + (extraRows?.length ?? 0) === 1 ? "competition" : "competitions"}.
+              Expires {formatDob(issued.expires_at.slice(0, 10))}. Single use. Issuing another code for any of these rows cancels this one.
             </p>
             <button type="button" className={`${BTN_PRIMARY} w-full justify-center`} onClick={onClose}>
               Done
@@ -629,6 +838,10 @@ function IssueCodeDialog({
                 This player already has an unused code. Issuing a new one cancels it.
               </p>
             )}
+            <div>
+              <span className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">One code, one profile — tick all of this player's rows</span>
+              <RowPicker playerId={player.player_id} onChange={setExtraRows} />
+            </div>
             <label className="block">
               <span className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Valid for</span>
               <select className={INPUT} value={days} onChange={(e) => setDays(Number(e.target.value))}>
@@ -638,7 +851,12 @@ function IssueCodeDialog({
               </select>
             </label>
             <ErrorLine message={error} />
-            <button type="button" className={`${BTN_PRIMARY} w-full justify-center`} disabled={busy} onClick={() => void issue()}>
+            <button
+              type="button"
+              className={`${BTN_PRIMARY} w-full justify-center`}
+              disabled={busy || extraRows === null}
+              onClick={() => void issue()}
+            >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
               Generate code
             </button>
@@ -660,6 +878,7 @@ function AssignDialog({
 }) {
   const [email, setEmail] = useState("");
   const [dob, setDob] = useState(player.date_of_birth ?? "");
+  const [extraRows, setExtraRows] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -671,6 +890,7 @@ function AssignDialog({
       p_player_id: player.player_id,
       p_user_email: email.trim(),
       p_verified_dob: dob,
+      p_also_player_ids: extraRows ?? [],
     });
     setBusy(false);
     if (error) return setError(rpcErrorMessage(error, "Couldn't assign"));
@@ -680,7 +900,7 @@ function AssignDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sa-pro bg-[color:var(--ch-surface)] text-[color:var(--ch-text)] border-[color:var(--ch-border)]">
+      <DialogContent className="sa-pro max-h-[90vh] overflow-y-auto bg-[color:var(--ch-surface)] text-[color:var(--ch-text)] border-[color:var(--ch-border)]">
         <DialogHeader>
           <DialogTitle>Assign {player.full_name} to an account</DialogTitle>
           <DialogDescription className="text-[color:var(--ch-text-2)]">
@@ -734,8 +954,16 @@ function AssignDialog({
                 </span>
               )}
             </label>
+            <div>
+              <span className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Rows on their profile</span>
+              <RowPicker playerId={player.player_id} onChange={setExtraRows} />
+            </div>
             <ErrorLine message={error} />
-            <button type="submit" className={`${BTN_PRIMARY} w-full justify-center`} disabled={busy || !email || !dob}>
+            <button
+              type="submit"
+              className={`${BTN_PRIMARY} w-full justify-center`}
+              disabled={busy || !email || !dob || extraRows === null}
+            >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               Assign and approve
             </button>

@@ -6,7 +6,15 @@ import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { useAuth } from "@/hooks/use-auth";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { normalizeInstagramHandle } from "@/lib/instagram";
-import { type PublicProfile, formatDob, formatHeight, getMyClaim, getPublicProfile } from "@/lib/playerClaims";
+import {
+  type ProfileStatLine,
+  type PublicProfile,
+  formatDob,
+  formatHeight,
+  getMyClaim,
+  getPublicProfile,
+  getPublicProfileStats,
+} from "@/lib/playerClaims";
 
 // /p/:slug — a claimed player's shareable profile. Data comes from
 // get_public_profile, which applies the age tiers server-side: under-18 and
@@ -175,6 +183,169 @@ function ProfileCard({ profile, isOwner }: { profile: PublicProfile; isOwner: bo
           <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-[color:var(--ch-text)]">{profile.bio}</p>
         </section>
       )}
+
+      <ProfileStats slug={profile.profile_slug} statsSlug={profile.stats_slug} />
     </article>
+  );
+}
+
+const fmt = (n: number | null | undefined, digits = 1) => (n === null || n === undefined ? "—" : Number(n).toFixed(digits));
+
+/** Games-weighted averages across competitions. Shooting % can't be rebuilt from averages, so it's left out. */
+function careerLine(lines: ProfileStatLine[]) {
+  const games = lines.reduce((n, l) => n + l.games, 0);
+  const avg = (key: keyof ProfileStatLine) => {
+    const withValue = lines.filter((l) => l[key] !== null);
+    const g = withValue.reduce((n, l) => n + l.games, 0);
+    return g ? withValue.reduce((n, l) => n + Number(l[key]) * l.games, 0) / g : null;
+  };
+  return {
+    games,
+    minutes_pg: avg("minutes_pg"),
+    points_pg: avg("points_pg"),
+    rebounds_pg: avg("rebounds_pg"),
+    assists_pg: avg("assists_pg"),
+  };
+}
+
+/**
+ * Stats across every competition the profile covers (one claim can cover
+ * several players rows — one per competition). "All" lists each competition;
+ * picking one shows its averages.
+ */
+function ProfileStats({ slug, statsSlug }: { slug: string; statsSlug: string | null }) {
+  const [lines, setLines] = useState<ProfileStatLine[] | null>(null);
+  const [selected, setSelected] = useState<string>("all");
+
+  useEffect(() => {
+    let cancelled = false;
+    getPublicProfileStats(slug)
+      .then((l) => !cancelled && setLines(l))
+      .catch(() => !cancelled && setLines([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  if (!lines || lines.length === 0) return null;
+
+  const current = selected === "all" ? null : lines.find((l) => l.league_id === selected) ?? null;
+  const career = careerLine(lines);
+  const label = (l: ProfileStatLine) => l.competition_name || l.team_name || "Competition";
+
+  return (
+    <section className="ch-card ch-rise p-5 md:p-7 space-y-4" style={{ animationDelay: "120ms" }}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-muted)]">Stats</h2>
+        {statsSlug && (
+          <Link href={`/player/${statsSlug}`} className="text-[13px] font-medium text-[color:var(--ch-accent)] hover:underline underline-offset-2">
+            Full game log →
+          </Link>
+        )}
+      </div>
+
+      {lines.length > 1 && (
+        <nav className="flex flex-wrap gap-2" aria-label="Filter by competition">
+          <button
+            type="button"
+            data-active={selected === "all"}
+            onClick={() => setSelected("all")}
+            className="ch-chip inline-flex items-center h-8 px-3 text-[13px]"
+          >
+            All competitions
+          </button>
+          {lines.map((l) => (
+            <button
+              key={l.league_id}
+              type="button"
+              data-active={selected === l.league_id}
+              onClick={() => setSelected(l.league_id)}
+              className="ch-chip inline-flex items-center h-8 px-3 text-[13px] max-w-full"
+            >
+              <span className="truncate">{label(l)}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {current || lines.length === 1 ? (
+        <CompetitionTiles line={current ?? lines[0]} />
+      ) : (
+        <div className="overflow-x-auto -mx-1">
+          <table className="w-full min-w-[560px] text-[13px]">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-[color:var(--ch-muted)]">
+                <th className="px-1 py-2 font-medium">Competition</th>
+                <th className="px-1 py-2 font-medium text-right">GP</th>
+                <th className="px-1 py-2 font-medium text-right">MIN</th>
+                <th className="px-1 py-2 font-medium text-right">PTS</th>
+                <th className="px-1 py-2 font-medium text-right">REB</th>
+                <th className="px-1 py-2 font-medium text-right">AST</th>
+                <th className="px-1 py-2 font-medium text-right">FG%</th>
+                <th className="px-1 py-2 font-medium text-right">3P%</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[color:var(--ch-border)]">
+              {lines.map((l) => (
+                <tr key={l.league_id} className="cursor-pointer hover:bg-[color:var(--ch-surface-3)]" onClick={() => setSelected(l.league_id)}>
+                  <td className="px-1 py-2.5">
+                    <span className="font-medium text-[color:var(--ch-text)]">{label(l)}</span>
+                    {l.team_name && <span className="block text-[12px] text-[color:var(--ch-text-2)]">{l.team_name}</span>}
+                  </td>
+                  <td className="px-1 py-2.5 text-right tabular-nums">{l.games}</td>
+                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.minutes_pg)}</td>
+                  <td className="px-1 py-2.5 text-right tabular-nums font-semibold">{fmt(l.points_pg)}</td>
+                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.rebounds_pg)}</td>
+                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.assists_pg)}</td>
+                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.fg_pct)}</td>
+                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.three_pct)}</td>
+                </tr>
+              ))}
+              <tr className="font-semibold text-[color:var(--ch-text)]">
+                <td className="px-1 py-2.5">Career</td>
+                <td className="px-1 py-2.5 text-right tabular-nums">{career.games}</td>
+                <td className="px-1 py-2.5 text-right tabular-nums">{fmt(career.minutes_pg)}</td>
+                <td className="px-1 py-2.5 text-right tabular-nums">{fmt(career.points_pg)}</td>
+                <td className="px-1 py-2.5 text-right tabular-nums">{fmt(career.rebounds_pg)}</td>
+                <td className="px-1 py-2.5 text-right tabular-nums">{fmt(career.assists_pg)}</td>
+                <td className="px-1 py-2.5 text-right">—</td>
+                <td className="px-1 py-2.5 text-right">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CompetitionTiles({ line }: { line: ProfileStatLine }) {
+  const tiles: { label: string; value: string }[] = [
+    { label: "Points", value: fmt(line.points_pg) },
+    { label: "Rebounds", value: fmt(line.rebounds_pg) },
+    { label: "Assists", value: fmt(line.assists_pg) },
+    { label: "Steals", value: fmt(line.steals_pg) },
+    { label: "Blocks", value: fmt(line.blocks_pg) },
+    { label: "Minutes", value: fmt(line.minutes_pg) },
+  ];
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-[color:var(--ch-text-2)]">
+        {[line.team_name, line.season].filter(Boolean).join(" · ")}
+        {line.team_name || line.season ? " · " : ""}
+        {line.games} {line.games === 1 ? "game" : "games"} · per game
+      </p>
+      <dl className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+        {tiles.map((t) => (
+          <div key={t.label} className="rounded-xl bg-[color:var(--ch-surface-3)] px-3 py-2.5">
+            <dt className="text-[11px] uppercase tracking-wide text-[color:var(--ch-muted)]">{t.label}</dt>
+            <dd className="mt-0.5 text-lg font-semibold tabular-nums text-[color:var(--ch-text)]">{t.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-[13px] text-[color:var(--ch-text-2)] tabular-nums">
+        FG {fmt(line.fg_pct)}% · 3P {fmt(line.three_pct)}% · FT {fmt(line.ft_pct)}%
+      </p>
+    </div>
   );
 }
