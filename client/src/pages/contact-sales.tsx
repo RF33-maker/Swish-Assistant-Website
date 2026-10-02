@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
-import { ArrowRight, BadgeCheck, Building2, CheckCircle2, ClipboardList, Clock, Mail, MessageSquare } from "lucide-react";
+import { ArrowRight, BadgeCheck, Building2, CheckCircle2, ClipboardList, Clock, KeyRound, Mail, MessageSquare } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 
 const CONTACT_EMAIL = "automatedathleteswa@gmail.com";
@@ -173,14 +173,37 @@ export default function ContactSalesPage() {
                 </div>
 
                 {topic === "player-page" && (
-                  <div className="mt-6 ch-tile p-4">
-                    <div className="text-sm font-semibold text-[color:var(--ch-text)]">What happens next</div>
-                    <ol className="mt-2 space-y-1.5 text-sm text-[color:var(--ch-text-2)] list-decimal pl-5">
-                      <li>We check it's really you, usually through your club or coach.</li>
-                      <li>Your page is linked to your Swish account.</li>
-                      <li>You can update your details and photos, and download your cards.</li>
-                    </ol>
-                  </div>
+                  <>
+                    <Link
+                      href="/claim"
+                      className="mt-6 ch-card ch-hover flex items-center gap-3 p-4"
+                      data-testid="link-have-claim-code"
+                    >
+                      <span className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]">
+                        <KeyRound className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-[color:var(--ch-text)]">Already have a claim code?</span>
+                        <span className="block text-xs text-[color:var(--ch-text-2)]">Enter it here to claim your profile</span>
+                      </span>
+                      <ArrowRight className="h-4 w-4 text-[color:var(--ch-accent)]" />
+                    </Link>
+                    <div className="mt-4 ch-tile p-4">
+                      <div className="text-sm font-semibold text-[color:var(--ch-text)]">What happens next</div>
+                      <ol className="mt-2 space-y-1.5 text-sm text-[color:var(--ch-text-2)] list-decimal pl-5">
+                        <li>We check it's really you, usually through your club, coach or social accounts.</li>
+                        <li>We send you a claim code.</li>
+                        <li>
+                          Enter it at{" "}
+                          <Link href="/claim" className="font-medium text-[color:var(--ch-accent)] hover:underline underline-offset-2">
+                            swishassistant.com/claim
+                          </Link>{" "}
+                          with your date of birth, and we approve it.
+                        </li>
+                        <li>You can update your details and photos, and share your profile.</li>
+                      </ol>
+                    </div>
+                  </>
                 )}
               </section>
 

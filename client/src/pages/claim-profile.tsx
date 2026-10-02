@@ -4,7 +4,9 @@ import { AlertCircle, BadgeCheck, Clock, Loader2, ShieldCheck } from "lucide-rea
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import AuthShell, { ERROR, INPUT, LABEL, LINK, SUBMIT } from "@/components/layout/AuthShell";
 import { useAuth } from "@/hooks/use-auth";
+import { queryClient } from "@/lib/queryClient";
 import {
+  MY_CLAIM_QUERY_KEY,
   type MyClaim,
   REDEEM_ERROR_MESSAGES,
   formatDob,
@@ -29,6 +31,8 @@ export default function ClaimProfilePage() {
   const refresh = async () => {
     try {
       setClaim(await getMyClaim());
+      // Keep the account menu and dashboard in step with this page.
+      void queryClient.invalidateQueries({ queryKey: MY_CLAIM_QUERY_KEY });
     } catch (err: any) {
       setLoadError(err.message);
       setClaim(null);
