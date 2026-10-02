@@ -51,7 +51,7 @@ const BTN_GHOST = `${BTN} ch-btn-ghost`;
 
 function Badge({ tone, children }: { tone: "amber" | "red" | "green" | "slate" | "blue"; children: React.ReactNode }) {
   const tones = {
-    amber: "bg-amber-500/12 text-amber-700 dark:text-amber-300 border-amber-500/30",
+    amber: "bg-amber-500/[0.12] text-amber-700 dark:text-amber-300 border-amber-500/30",
     red: "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30",
     green: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
     slate: "bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)] border-[color:var(--ch-border)]",

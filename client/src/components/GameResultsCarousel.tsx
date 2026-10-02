@@ -461,7 +461,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                       isSelected
                         ? ''
                         : game.status === 'LIVE'
-                        ? 'bg-red-50 dark:bg-red-500/8 hover:bg-red-100/60 dark:hover:bg-red-500/15'
+                        ? 'bg-red-50 dark:bg-red-500/[0.08] hover:bg-red-100/60 dark:hover:bg-red-500/15'
                         : 'hover:bg-gray-50 dark:hover:bg-white/10'
                     }`}
                     style={isSelected ? {
