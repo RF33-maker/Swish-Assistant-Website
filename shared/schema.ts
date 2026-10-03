@@ -352,12 +352,21 @@ export const newsArticles = pgTable("news_articles", {
   title: text("title").notNull(),
   slug: text("slug").unique(),
   summary: text("summary"),
+  // Plain-text copy of `content`, kept for descriptions and search. Articles
+  // written before the structured editor only have this.
   body: text("body"),
+  content: jsonb("content"), // ArticleDoc, see shared/newsArticle.ts
+  article_type: text("article_type").default("news").notNull(),
   image_url: text("image_url"),
+  image_alt: text("image_alt"),
+  image_credit: text("image_credit"),
   source_url: text("source_url"),
-  league: text("league"),
+  league: text("league"), // label on news cards; follows the league tag when there is one
   published_at: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
-  is_published: boolean("is_published").default(true).notNull(),
+  first_published_at: timestamp("first_published_at", { withTimezone: true }),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  is_published: boolean("is_published").default(false).notNull(),
+  created_by: uuid("created_by"),
 });
 
 export const insertNewsArticleSchema = createInsertSchema(newsArticles).omit({

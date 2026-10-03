@@ -27,6 +27,8 @@ import LeagueManagement from "@/pages/LeagueManagement";
 import SocialToolsPage from "@/pages/social-tools";
 import WidgetBuilder from "@/pages/widget-builder";
 import NewsManager from "@/pages/NewsManager";
+import NewsEditorPage from "@/pages/NewsEditorPage";
+import NewsPreviewPage from "@/pages/NewsPreviewPage";
 import NewsArticlePage from "@/pages/NewsArticlePage";
 import NewsIndexPage from "@/pages/NewsIndexPage";
 import WidgetPage from "@/pages/widgets/WidgetPage";
@@ -126,6 +128,9 @@ function Router() {
       <AdminRoute path="/league-teams/:slug" component={LeagueTeams} />
       <AdminRoute path="/team-logos/:slug" component={TeamLogoManager} />
       <AdminRoute path="/news-manager" component={NewsManager} />
+      {/* :id is "new" for an article that hasn't been saved yet */}
+      <AdminRoute path="/news-manager/edit/:id" component={NewsEditorPage} />
+      <AdminRoute path="/news-manager/preview" component={NewsPreviewPage} />
       <AdminRoute path="/admin/import-players" component={ImportPlayersPage} />
       <AdminRoute path="/admin/unconfirmed-accounts" component={UnconfirmedAccountsPage} />
       <AdminRoute path="/admin/player-claims" component={PlayerClaimsAdminPage} />

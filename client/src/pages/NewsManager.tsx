@@ -1,43 +1,9 @@
-import { useState, useMemo, useRef, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { supabase } from "@/lib/supabase";
-import { queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { insertNewsArticleSchema, type NewsArticle } from "@shared/schema";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Helmet } from "react-helmet-async";
+import { ArrowLeft, ExternalLink, ImageOff, Loader2, Newspaper, PenLine, Plus, Trash2 } from "lucide-react";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,764 +14,213 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Newspaper,
-  Plus,
-  Pencil,
-  Trash2,
-  Loader2,
-  Upload,
-  X,
-  ImageOff,
-} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
+import { NEWS_QUERY_KEY, deleteArticle, invalidateNewsQueries } from "@/lib/newsArticles";
+import { articleTypeLabel } from "@shared/newsArticle";
+import type { NewsArticle } from "@shared/schema";
 
-const NEWS_BUCKET = "news-images";
-const NEWS_LIST_KEY = ["supabase", "news_articles", "manager-list"] as const;
-const PUBLIC_NEWS_KEY = ["supabase", "news_articles", "latest", 6] as const;
+/**
+ * /news-manager — every article, drafts included, with the way into the
+ * editor (pages/NewsEditorPage) for a new or existing one.
+ */
 
-function generateSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 100);
-}
+type ListArticle = Pick<
+  NewsArticle,
+  "id" | "title" | "slug" | "summary" | "image_url" | "league" | "article_type" | "published_at" | "updated_at" | "is_published"
+>;
 
-const formSchema = insertNewsArticleSchema.extend({
-  title: z.string().min(1, "Title is required").max(200, "Title is too long"),
-  slug: z
-    .string()
-    .max(120, "Slug is too long")
-    .regex(/^[a-z0-9-]*$/, "Slug must only contain lowercase letters, numbers, and hyphens")
-    .optional()
-    .nullable(),
-  summary: z.string().max(500, "Summary is too long").optional().nullable(),
-  body: z.string().optional().nullable(),
-  league: z.string().max(100, "League is too long").optional().nullable(),
-  source_url: z
-    .string()
-    .url("Must be a valid URL")
-    .or(z.literal(""))
-    .optional()
-    .nullable(),
-  image_url: z.string().optional().nullable(),
-  is_published: z.boolean().default(true),
-});
+const LIST_COLUMNS = "id, title, slug, summary, image_url, league, article_type, published_at, updated_at, is_published";
+const NEW_ARTICLE_PATH = "/news-manager/edit/new";
 
-type FormValues = z.infer<typeof formSchema>;
+type Filter = "all" | "draft" | "published";
 
-const DEFAULT_FORM_VALUES: FormValues = {
-  title: "",
-  slug: "",
-  summary: "",
-  body: "",
-  league: "",
-  source_url: "",
-  image_url: "",
-  is_published: true,
-};
-
-function formatDate(value: string | Date | null | undefined) {
-  if (!value) return "—";
-  try {
-    return new Date(value).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return "—";
-  }
-}
-
-function extractStoragePath(publicUrl: string | null | undefined): string | null {
-  if (!publicUrl) return null;
-  const marker = `/storage/v1/object/public/${NEWS_BUCKET}/`;
-  const idx = publicUrl.indexOf(marker);
-  if (idx === -1) return null;
-  return decodeURIComponent(publicUrl.substring(idx + marker.length));
-}
+const formatDay = (value: string | Date | null) =>
+  value ? new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 
 export default function NewsManager() {
-  const [, navigate] = useLocation();
   const { toast } = useToast();
+  const [filter, setFilter] = useState<Filter>("all");
+  const [pendingDelete, setPendingDelete] = useState<ListArticle | null>(null);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingArticle, setEditingArticle] = useState<NewsArticle | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<NewsArticle | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const articlesQuery = useQuery<NewsArticle[]>({
-    queryKey: NEWS_LIST_KEY,
+  const { data: articles = [], isLoading, isError, error, refetch } = useQuery<ListArticle[]>({
+    queryKey: [...NEWS_QUERY_KEY, "manager-list"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("news_articles")
-        .select(
-          "id, title, slug, summary, body, image_url, source_url, league, published_at, is_published",
-        )
-        .order("published_at", { ascending: false });
+      const { data, error } = await supabase.from("news_articles").select(LIST_COLUMNS).order("updated_at", { ascending: false });
       if (error) throw error;
-      return (data || []) as NewsArticle[];
+      return (data || []) as ListArticle[];
     },
   });
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: DEFAULT_FORM_VALUES,
-  });
-
-  // Reset form whenever the dialog opens for a new/edit target
-  useEffect(() => {
-    if (!dialogOpen) return;
-    if (editingArticle) {
-      form.reset({
-        title: editingArticle.title ?? "",
-        slug: (editingArticle as any).slug ?? "",
-        summary: editingArticle.summary ?? "",
-        body: editingArticle.body ?? "",
-        league: editingArticle.league ?? "",
-        source_url: editingArticle.source_url ?? "",
-        image_url: editingArticle.image_url ?? "",
-        is_published: editingArticle.is_published ?? true,
-      });
-      setImagePreview(editingArticle.image_url ?? null);
-    } else {
-      form.reset(DEFAULT_FORM_VALUES);
-      setImagePreview(null);
-    }
-    setImageFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dialogOpen, editingArticle?.id]);
-
-  const invalidateLists = () => {
-    queryClient.invalidateQueries({ queryKey: NEWS_LIST_KEY });
-    queryClient.invalidateQueries({ queryKey: PUBLIC_NEWS_KEY });
-  };
-
-  const uploadImageIfNeeded = async (
-    currentImageUrl: string | null | undefined,
-  ): Promise<string | null> => {
-    if (!imageFile) return currentImageUrl ?? null;
-
-    setUploadingImage(true);
-    try {
-      const ext = (imageFile.name.split(".").pop() || "jpg").toLowerCase();
-      const safeExt = ext.replace(/[^a-z0-9]/g, "") || "jpg";
-      const filePath = `articles/${crypto.randomUUID()}.${safeExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from(NEWS_BUCKET)
-        .upload(filePath, imageFile, {
-          upsert: false,
-          contentType: imageFile.type || undefined,
-        });
-
-      if (uploadError) throw uploadError;
-
-      // If there was a previous image we own, remove it.
-      const previousPath = extractStoragePath(currentImageUrl);
-      if (previousPath) {
-        await supabase.storage.from(NEWS_BUCKET).remove([previousPath]);
-      }
-
-      const { data } = supabase.storage.from(NEWS_BUCKET).getPublicUrl(filePath);
-      return data.publicUrl;
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const saveMutation = useMutation({
-    mutationFn: async (values: FormValues) => {
-      const imageUrl = await uploadImageIfNeeded(editingArticle?.image_url);
-
-      const payload = {
-        title: values.title.trim(),
-        slug: values.slug?.trim() || undefined,
-        summary: values.summary?.trim() || null,
-        body: values.body?.trim() || null,
-        league: values.league?.trim() || null,
-        source_url: values.source_url?.trim() || null,
-        image_url: imageUrl || null,
-        is_published: !!values.is_published,
-      };
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      const authHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      };
-
-      if (editingArticle) {
-        const res = await fetch(`/api/news-articles/${editingArticle.id}`, {
-          method: "PATCH",
-          headers: authHeaders,
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Save failed"); }
-      } else {
-        const res = await fetch("/api/news-articles", {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Save failed"); }
-      }
-    },
-    onSuccess: () => {
-      invalidateLists();
-      toast({
-        title: editingArticle ? "Article updated" : "Article published",
-        description: editingArticle
-          ? "Your changes are live."
-          : "The article was added to the news list.",
-      });
-      setDialogOpen(false);
-      setEditingArticle(null);
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Save failed",
-        description: err?.message || "Could not save the article.",
-        variant: "destructive",
-      });
-    },
-  });
+  const counts = useMemo(
+    () => ({
+      all: articles.length,
+      draft: articles.filter((a) => !a.is_published).length,
+      published: articles.filter((a) => a.is_published).length,
+    }),
+    [articles],
+  );
+  const shown = articles.filter((a) => filter === "all" || (filter === "published") === a.is_published);
 
   const deleteMutation = useMutation({
-    mutationFn: async (article: NewsArticle) => {
-      // Delete the row first: RLS returns no error when it blocks a delete,
-      // so check a row actually went before removing the cover image.
-      const { data, error } = await supabase
-        .from("news_articles")
-        .delete()
-        .eq("id", article.id)
-        .select("id");
-      if (error) throw error;
-      if (!data?.length) throw new Error("The article wasn't deleted. Check you're signed in as an admin.");
-      const path = extractStoragePath(article.image_url);
-      if (path) {
-        await supabase.storage.from(NEWS_BUCKET).remove([path]);
-      }
-    },
+    mutationFn: (article: ListArticle) => deleteArticle(article.id),
     onSuccess: () => {
-      invalidateLists();
-      toast({
-        title: "Article deleted",
-        description: "The article has been removed.",
-      });
+      invalidateNewsQueries();
+      toast({ title: "Article deleted", description: "The article has been removed." });
       setPendingDelete(null);
     },
     onError: (err: any) => {
-      toast({
-        title: "Delete failed",
-        description: err?.message || "Could not delete the article.",
-        variant: "destructive",
-      });
+      toast({ title: "Delete failed", description: err?.message || "Could not delete the article.", variant: "destructive" });
     },
   });
 
-  const articles = articlesQuery.data ?? [];
-  const isLoading = articlesQuery.isLoading;
-  const isError = articlesQuery.isError;
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
-    setImageFile(f);
-    if (f) {
-      const reader = new FileReader();
-      reader.onload = (ev) => setImagePreview(ev.target?.result as string);
-      reader.readAsDataURL(f);
-    } else {
-      setImagePreview(editingArticle?.image_url ?? null);
-    }
-  };
-
-  const handleClearImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
-    form.setValue("image_url", "");
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const onSubmit = (values: FormValues) => {
-    saveMutation.mutate(values);
-  };
-
-  const sortedArticles = useMemo(() => {
-    return [...articles].sort((a, b) => {
-      const ta = a.published_at ? new Date(a.published_at).getTime() : 0;
-      const tb = b.published_at ? new Date(b.published_at).getTime() : 0;
-      return tb - ta;
-    });
-  }, [articles]);
-
-  const submitting = saveMutation.isPending || uploadingImage;
-
   return (
-    <div className="bg-white min-h-screen py-12 sm:py-16">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="flex items-center justify-between w-full mb-6">
-          <Button
-            variant="outline"
-            onClick={() => navigate("/dashboard")}
-            className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300"
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+      <Helmet>
+        <title>News manager | Swish Assistant</title>
+        <meta name="robots" content="noindex" />
+      </Helmet>
+      <SiteHeader />
+      <main className="max-w-4xl mx-auto px-4 md:px-6 pt-6 md:pt-9 pb-16">
+        <header className="ch-rise">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-1.5 text-sm text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
             data-testid="button-back-dashboard"
           >
-            ← Back to Dashboard
-          </Button>
-          <Button
-            className="bg-orange-600 hover:bg-orange-700 text-white"
-            onClick={() => {
-              setEditingArticle(null);
-              setDialogOpen(true);
-            }}
-            data-testid="button-new-article"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Article
-          </Button>
+            <ArrowLeft className="h-4 w-4" /> Dashboard
+          </Link>
+          <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">News manager</div>
+              <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[3rem] text-[color:var(--ch-text)]">
+                Articles
+              </h1>
+              <p className="mt-2 text-sm text-[color:var(--ch-text-2)]">Write, edit and publish the stories on the news page.</p>
+            </div>
+            <Link href={NEW_ARTICLE_PATH} className="ch-btn ch-btn-primary h-10 px-4 text-[14px]" data-testid="button-new-article">
+              <Plus className="h-4 w-4" /> New article
+            </Link>
+          </div>
+        </header>
+
+        <div className="ch-seg mt-7" role="group" aria-label="Filter articles">
+          {(
+            [
+              ["all", "All"],
+              ["draft", "Drafts"],
+              ["published", "Published"],
+            ] as const
+          ).map(([value, label]) => (
+            <button key={value} type="button" data-active={filter === value} onClick={() => setFilter(value)} className="h-8 px-3.5 text-[13px]" data-testid={`filter-${value}`}>
+              {label}
+              {!isLoading && <span className="ml-1.5 text-[color:var(--ch-muted)]">{counts[value]}</span>}
+            </button>
+          ))}
         </div>
 
-        <div className="flex items-center gap-3 mb-2">
-          <div className="h-12 w-12 rounded-full bg-orange-600 flex items-center justify-center">
-            <Newspaper className="h-6 w-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900">
-              News Manager
-            </h1>
-            <p className="text-slate-600 text-sm sm:text-base">
-              Create, edit, and remove articles shown in the public Latest News section.
-            </p>
-          </div>
-        </div>
-
-        <Card className="mt-8 border-orange-100 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-orange-900 text-lg">
-              All Articles
-              {!isLoading && (
-                <span className="ml-2 text-sm font-normal text-slate-500">
-                  ({sortedArticles.length})
-                </span>
-              )}
-            </CardTitle>
-            <CardDescription>Newest first. Drafts are hidden from the public site.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-3" data-testid="news-list-loading">
-                {[0, 1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-4 p-3 rounded-lg border border-orange-100"
-                  >
-                    <Skeleton className="h-16 w-24 rounded-md" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-1/2" />
-                      <Skeleton className="h-3 w-1/3" />
-                    </div>
-                    <Skeleton className="h-9 w-20" />
+        <section className="ch-card ch-rise mt-4 overflow-hidden">
+          {isLoading ? (
+            <div className="divide-y divide-[color:var(--ch-border)]" data-testid="news-list-loading">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-4 p-4">
+                  <div className="ch-skel h-[54px] w-24 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="ch-skel h-4 w-2/3" />
+                    <div className="ch-skel h-3 w-1/3" />
                   </div>
-                ))}
-              </div>
-            ) : isError ? (
-              <div
-                className="rounded-lg border border-red-200 bg-red-50 p-6 text-center"
-                data-testid="news-list-error"
-              >
-                <p className="font-medium text-red-700">Couldn't load articles</p>
-                <p className="text-sm text-red-600 mt-1">
-                  {(articlesQuery.error as any)?.message || "Please try again."}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4"
-                  onClick={() => articlesQuery.refetch()}
-                >
-                  Retry
-                </Button>
-              </div>
-            ) : sortedArticles.length === 0 ? (
-              <div
-                className="rounded-lg border border-dashed border-orange-200 p-10 text-center"
-                data-testid="news-list-empty"
-              >
-                <Newspaper className="h-8 w-8 text-orange-400 mx-auto mb-3" />
-                <p className="font-medium text-slate-700">No articles yet</p>
-                <p className="text-sm text-slate-500 mt-1">
-                  Create your first story to populate the Latest News section.
-                </p>
-                <Button
-                  className="mt-4 bg-orange-600 hover:bg-orange-700 text-white"
-                  onClick={() => {
-                    setEditingArticle(null);
-                    setDialogOpen(true);
-                  }}
-                  data-testid="button-empty-new-article"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Article
-                </Button>
-              </div>
-            ) : (
-              <ul className="divide-y divide-orange-50" data-testid="news-list">
-                {sortedArticles.map((a) => (
-                  <li
-                    key={a.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-4 py-4"
-                    data-testid={`news-item-${a.id}`}
-                  >
-                    <div className="h-16 w-24 flex-shrink-0 rounded-md overflow-hidden bg-orange-50 border border-orange-100 flex items-center justify-center">
-                      {a.image_url ? (
-                        <img
-                          src={a.image_url}
-                          alt={a.title}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <ImageOff className="h-6 w-6 text-orange-300" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        {a.league && (
-                          <Badge
-                            variant="secondary"
-                            className="bg-orange-100 text-orange-700 hover:bg-orange-100"
-                          >
-                            {a.league}
-                          </Badge>
-                        )}
-                        <Badge
-                          variant={a.is_published ? "default" : "outline"}
-                          className={
-                            a.is_published
-                              ? "bg-green-600 hover:bg-green-600 text-white"
-                              : "text-slate-500 border-slate-300"
-                          }
-                        >
-                          {a.is_published ? "Published" : "Draft"}
-                        </Badge>
-                        <span className="text-xs text-slate-500">
-                          {formatDate(a.published_at)}
-                        </span>
-                      </div>
-                      <p className="font-semibold text-slate-900 truncate">
-                        {a.title}
-                      </p>
-                      {a.summary && (
-                        <p className="text-sm text-slate-600 line-clamp-1">
-                          {a.summary}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditingArticle(a);
-                          setDialogOpen(true);
-                        }}
-                        data-testid={`button-edit-${a.id}`}
-                      >
-                        <Pencil className="h-3.5 w-3.5 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                        onClick={() => setPendingDelete(a)}
-                        data-testid={`button-delete-${a.id}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" />
-                        Delete
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Dialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          if (submitting) return;
-          setDialogOpen(open);
-          if (!open) setEditingArticle(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingArticle ? "Edit Article" : "New Article"}
-            </DialogTitle>
-            <DialogDescription>
-              {editingArticle
-                ? "Update the article details and save your changes."
-                : "Add a new story that will appear in the Latest News section."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="space-y-4"
-              data-testid="form-article"
-            >
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Title</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="e.g. Lions clinch the season finale"
-                        {...field}
-                        value={field.value ?? ""}
-                        data-testid="input-title"
-                        onChange={(e) => {
-                          field.onChange(e);
-                          const current = form.getValues("slug") ?? "";
-                          if (!current || current === generateSlug(field.value ?? "")) {
-                            form.setValue("slug", generateSlug(e.target.value), {
-                              shouldValidate: false,
-                            });
-                          }
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>URL Slug</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="lions-clinch-season-finale-2026"
-                        {...field}
-                        value={field.value ?? ""}
-                        data-testid="input-slug"
-                      />
-                    </FormControl>
-                    <FormDescription className="text-xs">
-                      Auto-generated from title. Used in the article URL:{" "}
-                      <span className="font-mono text-orange-700">
-                        /news/{form.watch("slug") || "your-slug-here"}
-                      </span>
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="summary"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Summary</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Short blurb shown on the news cards"
-                        rows={2}
-                        {...field}
-                        value={field.value ?? ""}
-                        data-testid="input-summary"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="body"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Body</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Full article body (plain text)"
-                        rows={6}
-                        {...field}
-                        value={field.value ?? ""}
-                        data-testid="input-body"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="league"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>League</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g. Premier League"
-                          {...field}
-                          value={field.value ?? ""}
-                          data-testid="input-league"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="source_url"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Source URL</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="https://example.com/article"
-                          type="url"
-                          {...field}
-                          value={field.value ?? ""}
-                          data-testid="input-source-url"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="is_published"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border border-orange-100 p-3">
-                    <div>
-                      <FormLabel className="text-base">Published</FormLabel>
-                      <FormDescription>
-                        Show this article on the public site.
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={!!field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="switch-published"
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Image
-                </label>
-                <div className="rounded-lg border border-orange-100 p-3 space-y-3">
-                  {imagePreview ? (
-                    <div className="relative inline-block">
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="h-32 w-auto rounded-md border border-orange-100 object-cover"
-                        data-testid="img-article-preview"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleClearImage}
-                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow"
-                        aria-label="Remove image"
-                        data-testid="button-clear-image"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-slate-500">
-                      No image selected. Upload a file from your device.
-                    </div>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="block w-full text-sm text-gray-600
-                      file:mr-4 file:py-2 file:px-4
-                      file:rounded-md file:border-0
-                      file:text-sm file:font-semibold
-                      file:bg-orange-100 file:text-orange-700
-                      hover:file:bg-orange-200 cursor-pointer"
-                    data-testid="input-image-file"
-                  />
-                  {uploadingImage && (
-                    <p className="text-xs text-orange-700 flex items-center gap-1">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Uploading image…
-                    </p>
-                  )}
                 </div>
-              </div>
-
-              <DialogFooter className="pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setDialogOpen(false)}
-                  disabled={submitting}
-                  data-testid="button-cancel"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  className="bg-orange-600 hover:bg-orange-700 text-white"
-                  disabled={submitting}
-                  data-testid="button-save"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving…
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 mr-2" />
-                      {editingArticle ? "Save Changes" : "Publish Article"}
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+              ))}
+            </div>
+          ) : isError ? (
+            <div className="p-10 text-center" data-testid="news-list-error">
+              <p className="font-semibold text-[color:var(--ch-text)]">Couldn't load articles</p>
+              <p className="mt-1 text-sm text-[color:var(--ch-text-2)]">{(error as any)?.message || "Please try again."}</p>
+              <button type="button" className="ch-btn ch-btn-ghost mt-4" onClick={() => refetch()}>
+                Retry
+              </button>
+            </div>
+          ) : shown.length === 0 ? (
+            <div className="p-10 text-center" data-testid="news-list-empty">
+              <Newspaper className="mx-auto mb-3 h-8 w-8 text-[color:var(--ch-muted)]" />
+              <p className="font-semibold text-[color:var(--ch-text)]">
+                {articles.length === 0 ? "No articles yet" : filter === "draft" ? "No drafts" : "Nothing published yet"}
+              </p>
+              <p className="mt-1 text-sm text-[color:var(--ch-text-2)]">
+                {articles.length === 0 ? "Write your first story to fill the news page." : "Switch the filter to see your other articles."}
+              </p>
+              {articles.length === 0 && (
+                <Link href={NEW_ARTICLE_PATH} className="ch-btn ch-btn-primary mt-4 h-10 px-4" data-testid="button-empty-new-article">
+                  <Plus className="h-4 w-4" /> New article
+                </Link>
+              )}
+            </div>
+          ) : (
+            <ul className="divide-y divide-[color:var(--ch-border)]" data-testid="news-list">
+              {shown.map((a) => (
+                <li key={a.id} className="group relative flex items-center gap-4 p-4 hover:bg-[color:var(--ch-surface-2)]" data-testid={`news-item-${a.id}`}>
+                  <div className="flex h-[54px] w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[color:var(--ch-surface-3)]">
+                    {a.image_url ? (
+                      <img src={a.image_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    ) : (
+                      <ImageOff className="h-5 w-5 text-[color:var(--ch-muted)]" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {/* The whole row opens the editor; the buttons on the right sit above this link. */}
+                    <Link
+                      href={`/news-manager/edit/${a.id}`}
+                      className="block truncate text-[15px] font-semibold text-[color:var(--ch-text)] after:absolute after:inset-0"
+                      data-testid={`button-edit-${a.id}`}
+                    >
+                      {a.title || "Untitled draft"}
+                    </Link>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-[color:var(--ch-muted)]">
+                      <span
+                        className={`inline-flex h-5 items-center rounded-full px-2 text-[10.5px] font-bold uppercase tracking-[0.06em] ${
+                          a.is_published ? "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" : "bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)]"
+                        }`}
+                      >
+                        {a.is_published ? "Published" : "Draft"}
+                      </span>
+                      {a.article_type !== "news" && <span>{articleTypeLabel(a.article_type)}</span>}
+                      {a.league && <span className="truncate">{a.league}</span>}
+                      <span>{a.is_published ? `Published ${formatDay(a.published_at)}` : `Edited ${formatDay(a.updated_at)}`}</span>
+                    </div>
+                  </div>
+                  <div className="relative z-10 flex shrink-0 items-center gap-1">
+                    <span className="mr-1 hidden items-center gap-1.5 text-[13px] font-semibold text-[color:var(--ch-text-2)] group-hover:text-[color:var(--ch-text)] sm:inline-flex pointer-events-none">
+                      <PenLine className="h-3.5 w-3.5" /> Edit
+                    </span>
+                    {a.is_published && (
+                      <a
+                        href={`/news/${a.slug || a.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="View article"
+                        aria-label={`View ${a.title}`}
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-[color:var(--ch-text-2)] hover:bg-[color:var(--ch-surface-3)] hover:text-[color:var(--ch-text)]"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      title="Delete article"
+                      aria-label={`Delete ${a.title || "untitled draft"}`}
+                      onClick={() => setPendingDelete(a)}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg text-[color:var(--ch-text-2)] hover:bg-[color:var(--ch-surface-3)] hover:text-[color:var(--ch-loss)]"
+                      data-testid={`button-delete-${a.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </main>
 
       <AlertDialog
         open={!!pendingDelete}
@@ -813,26 +228,15 @@ export default function NewsManager() {
           if (!open && !deleteMutation.isPending) setPendingDelete(null);
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="sa-pro bg-[color:var(--ch-surface)] text-[color:var(--ch-text)] border-[color:var(--ch-border)]">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this article?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete ? (
-                <>
-                  "{pendingDelete.title}" will be permanently removed
-                  {pendingDelete.image_url ? ", along with its uploaded image" : ""}.
-                  This can't be undone.
-                </>
-              ) : (
-                "This can't be undone."
-              )}
+            <AlertDialogDescription className="text-[color:var(--ch-text-2)]">
+              "{pendingDelete?.title || "Untitled draft"}" will be permanently removed, along with its images. This can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel
-              disabled={deleteMutation.isPending}
-              data-testid="button-cancel-delete"
-            >
+            <AlertDialogCancel disabled={deleteMutation.isPending} data-testid="button-cancel-delete">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
@@ -846,7 +250,7 @@ export default function NewsManager() {
             >
               {deleteMutation.isPending ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Deleting…
                 </>
               ) : (

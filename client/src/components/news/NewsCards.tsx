@@ -9,7 +9,7 @@ import { Newspaper, ExternalLink, ArrowRight } from "lucide-react";
  */
 
 export const NEWS_COLUMNS =
-  "id, title, summary, image_url, source_url, league, published_at, is_published";
+  "id, title, slug, summary, image_url, source_url, league, article_type, published_at, is_published";
 
 export const formatNewsDate = (s: string | Date | null) => {
   if (!s) return "";
@@ -34,7 +34,7 @@ export function ArticleLink({ article, className, children }: { article: NewsArt
     </a>
   ) : (
     <Link
-      href={`/news/${(article as any).slug || article.id}`}
+      href={`/news/${article.slug || article.id}`}
       className={className}
       data-testid={`link-news-detail-${article.id}`}
     >

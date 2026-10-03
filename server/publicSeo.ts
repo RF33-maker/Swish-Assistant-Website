@@ -6,6 +6,7 @@ import { isSameTeam } from "./teamIdentityService";
 import { getSeoIndex, isIndexableGame, playerSegment, resolveClub, slugifyName, type IndexClub, type SeoIndex } from "./seoIndex";
 import { gameRecap, playerBio, teamSeasonSummary } from "@shared/recaps";
 import { clubSlug, teamClubKey } from "@shared/teamIdentity";
+import { articleDocToHtml, articleTagHref, type ArticleDoc, type ArticleTag } from "@shared/newsArticle";
 import { isUnder18, isYouthCompetition } from "@shared/youth";
 import {
   SITE_BASE,
@@ -675,7 +676,7 @@ async function renderNewsArticle(segment: string): Promise<{ page?: SeoPage; red
   const isUuid = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(segment);
   const { data: article } = await supabaseAdmin
     .from("news_articles")
-    .select("id, slug, title, summary, body, image_url, league, published_at, is_published")
+    .select("id, slug, title, summary, body, content, image_url, image_alt, league, published_at, updated_at, is_published")
     .eq(isUuid ? "id" : "slug", segment)
     .eq("is_published", true)
     .maybeSingle();
@@ -684,8 +685,20 @@ async function renderNewsArticle(segment: string): Promise<{ page?: SeoPage; red
   if (canonicalSegment !== segment) return { redirect: `/news/${encodeURIComponent(canonicalSegment)}` };
   const canonicalPath = `/news/${encodeURIComponent(canonicalSegment)}`;
   const description = article.summary || String(article.body || "").replace(/\s+/g, " ").slice(0, 155);
-  const paragraphs = String(article.body || "").split(/\n{2,}|\r?\n/).map((p) => p.trim()).filter(Boolean)
-    .map((p) => `<p>${escapeHtml(p)}</p>`).join("");
+  // Articles from the editor have a structured body; older ones are plain text.
+  const doc = article.content as ArticleDoc | null;
+  const bodyHtml = doc?.content?.length
+    ? articleDocToHtml(doc)
+    : String(article.body || "").split(/\n{2,}|\r?\n/).map((p) => p.trim()).filter(Boolean)
+      .map((p) => `<p>${escapeHtml(p)}</p>`).join("");
+  // The pages the article is tagged with, as links a crawler can follow.
+  const { data: tags } = await supabaseAdmin
+    .from("news_article_tags")
+    .select("kind, key, label, context")
+    .eq("article_id", article.id)
+    .order("sort_order", { ascending: true });
+  const tagLinks = ((tags as ArticleTag[] | null) || []).map((tag) => `<li>${link(articleTagHref(tag), tag.label)}</li>`).join("");
+  const cover = article.image_url ? `<img src="${escapeHtml(article.image_url)}" alt="${escapeHtml(article.image_alt || article.title)}" />` : "";
   const crumbs = [{ name: SITE_NAME, path: "/" }, { name: "News", path: "/news" }, { name: article.title, path: canonicalPath }];
   return {
     page: {
@@ -695,12 +708,14 @@ async function renderNewsArticle(segment: string): Promise<{ page?: SeoPage; red
       image: article.image_url,
       ogType: "article",
       breadcrumbs: crumbs,
-      body: `${breadcrumbNav(crumbs)}<article><h1>${escapeHtml(article.title)}</h1><p>${escapeHtml(formatDate(article.published_at))}</p>${article.summary ? `<p><strong>${escapeHtml(article.summary)}</strong></p>` : ""}${paragraphs}</article>`,
+      body: `${breadcrumbNav(crumbs)}<article><h1>${escapeHtml(article.title)}</h1><p>${escapeHtml(formatDate(article.published_at))}</p>${article.summary ? `<p><strong>${escapeHtml(article.summary)}</strong></p>` : ""}${cover}${bodyHtml}${tagLinks ? `<h2>In this story</h2><ul>${tagLinks}</ul>` : ""}</article>`,
       jsonLd: {
         "@type": "NewsArticle",
         headline: article.title,
         description,
         datePublished: article.published_at || undefined,
+        dateModified: article.updated_at || article.published_at || undefined,
+        articleSection: article.league || undefined,
         image: article.image_url ? [article.image_url] : undefined,
         mainEntityOfPage: canonicalUrl(canonicalPath),
         author: { "@type": "Organization", name: SITE_NAME, url: SITE_BASE },

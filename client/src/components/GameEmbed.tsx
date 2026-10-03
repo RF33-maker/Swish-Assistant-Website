@@ -7,9 +7,14 @@ import { Link } from "wouter";
 import { ExternalLink } from "lucide-react";
 
 interface GameEmbedProps {
-  slug: string;
+  /** The game's key when it is known (embeds placed with the article editor)… */
+  gameKey?: string;
+  /** …or a game URL slug, "home-vs-away-YYYY-MM-DD", matched against the schedule. */
+  slug?: string;
   href: string;
 }
+
+const SCHEDULE_COLUMNS = "game_key, league_id, matchtime, hometeam, awayteam, status, competitionname";
 
 function formatGameDate(dateStr: string): string {
   try {
@@ -52,19 +57,23 @@ function StatusBadge({ status, matchtime }: { status: string | null; matchtime: 
   return null;
 }
 
-export default function GameEmbed({ slug, href }: GameEmbedProps) {
-  const parsed = parseGameSlug(slug);
+export default function GameEmbed({ gameKey, slug, href }: GameEmbedProps) {
+  const parsed = slug ? parseGameSlug(slug) : null;
 
   const { data: scheduleData, isLoading: scheduleLoading } = useQuery({
-    queryKey: ["game-embed-schedule", slug],
+    queryKey: ["game-embed-schedule", gameKey ?? slug],
     queryFn: async () => {
+      if (gameKey) {
+        const { data } = await supabase.from("game_schedule").select(SCHEDULE_COLUMNS).eq("game_key", gameKey).maybeSingle();
+        return data ?? null;
+      }
       if (!parsed) return null;
       const dateStart = `${parsed.date}T00:00:00+00:00`;
       const dateEnd = `${parsed.date}T23:59:59+00:00`;
 
       const { data, error } = await supabase
         .from("game_schedule")
-        .select("game_key, league_id, matchtime, hometeam, awayteam, status, competitionname")
+        .select(SCHEDULE_COLUMNS)
         .gte("matchtime", dateStart)
         .lte("matchtime", dateEnd);
 
@@ -78,7 +87,7 @@ export default function GameEmbed({ slug, href }: GameEmbedProps) {
       );
       return match || null;
     },
-    enabled: !!parsed,
+    enabled: !!gameKey || !!parsed,
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });
@@ -99,7 +108,7 @@ export default function GameEmbed({ slug, href }: GameEmbedProps) {
     retry: 1,
   });
 
-  if (!parsed) {
+  if (!gameKey && !parsed) {
     return (
       <a
         href={href}
