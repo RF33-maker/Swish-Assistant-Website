@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Link } from "wouter";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { HalfCourt, projectShot, CW, CH, COLOR_MADE, COLOR_MISSED } from "@/components/ShotChart";
 import { KEY_MOMENT_IMPORTANCE, keyMoments, type CommentaryItem } from "@/lib/liveCommentary";
 import type { CommentaryPlayer } from "@/hooks/useLiveCommentary";
@@ -25,6 +26,7 @@ interface FeedProps {
   homeColor: string;
   awayColor: string;
   isLive: boolean;
+  leagueId?: string | null;
 }
 
 const ALL_PLAYS_IMPORTANCE = 20;
@@ -96,17 +98,40 @@ function ShotLocation({ item, shots }: { item: CommentaryItem; shots: ChartShot[
 }
 
 /** The play, its player and the shot, in a small overlay over the page. */
-function QuickView({ item, players, shots, teamName, color, onClose }: {
-  item: CommentaryItem | null; players: FeedProps["players"]; shots: ChartShot[]; teamName: string; color: string; onClose: () => void;
+function QuickView({ item, players, shots, teamName, color, homeTeam, awayTeam, leagueId, onClose }: {
+  item: CommentaryItem | null; players: FeedProps["players"]; shots: ChartShot[]; teamName: string; color: string;
+  homeTeam: string; awayTeam: string; leagueId?: string | null; onClose: () => void;
 }) {
+  // Both teams' logos, faded into the card behind the content.
+  const [logos, setLogos] = useState<{ home: string | null; away: string | null }>({ home: null, away: null });
+  useEffect(() => {
+    let cancelled = false;
+    if (!leagueId) return;
+    void Promise.all([
+      getTeamLogoCached({ leagueId, teamName: homeTeam }),
+      getTeamLogoCached({ leagueId, teamName: awayTeam }),
+    ]).then(([home, away]) => { if (!cancelled) setLogos({ home, away }); });
+    return () => { cancelled = true; };
+  }, [leagueId, homeTeam, awayTeam]);
+
   const player = item?.playerId ? players[item.playerId] : undefined;
   const name = item?.playerName || player?.name || "";
   const line = item?.line;
   return (
     <Dialog open={!!item} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent overlayClassName="bg-black/70 backdrop-blur-sm" className="sa-pro max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-[420px] gap-0 overflow-y-auto rounded-2xl border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-0 text-[color:var(--ch-text)]">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+          {logos.home && (
+            <img src={logos.home} alt="" draggable={false} onError={() => setLogos((l) => ({ ...l, home: null }))}
+              className="absolute -left-10 top-1/2 h-72 w-72 -translate-y-1/2 object-contain opacity-[0.16] saturate-50" />
+          )}
+          {logos.away && (
+            <img src={logos.away} alt="" draggable={false} onError={() => setLogos((l) => ({ ...l, away: null }))}
+              className="absolute -right-10 top-1/2 h-72 w-72 -translate-y-1/2 object-contain opacity-[0.16] saturate-50" />
+          )}
+        </div>
         {item && (
-          <>
+          <div className="relative">
             <div className="px-4 pb-3 pt-4" style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${color} 28%, transparent), transparent)` }}>
               <DialogTitle className="sr-only">{name || "Play"}</DialogTitle>
               <DialogDescription className="sr-only">{item.text}</DialogDescription>
@@ -151,7 +176,7 @@ function QuickView({ item, players, shots, teamName, color, onClose }: {
               )}
               <ShotLocation item={item} shots={shots} />
             </div>
-          </>
+          </div>
         )}
       </DialogContent>
     </Dialog>
@@ -164,7 +189,7 @@ function QuickView({ item, players, shots, teamName, color, onClose }: {
  * and where the shot came from. Meant to sit beside (desktop) or inside a
  * sheet over (phones) the game's box score and tabs.
  */
-export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeColor, awayColor, isLive, className = "", inSheet = false }: FeedProps & { className?: string; inSheet?: boolean }) {
+export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeColor, awayColor, isLive, leagueId, className = "", inSheet = false }: FeedProps & { className?: string; inSheet?: boolean }) {
   const [mode, setMode] = useState<"key" | "all">("key");
   const [openId, setOpenId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -277,6 +302,9 @@ export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeC
         shots={shots}
         teamName={open?.teamNo === 1 ? homeTeam : open?.teamNo === 2 ? awayTeam : ""}
         color={open?.teamNo === 2 ? awayColor : homeColor}
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        leagueId={leagueId}
         onClose={() => setOpenId(null)}
       />
     </div>

@@ -722,6 +722,7 @@ export function InlineGameDetail({
                 homeColor={colors.homeFill}
                 awayColor={colors.awayFill}
                 isLive={isLive}
+                leagueId={leagueId}
               />
             </div>
           )}
@@ -802,6 +803,7 @@ export function InlineGameDetail({
                 homeColor={colors.homeFill}
                 awayColor={colors.awayFill}
                 isLive={isLive}
+                leagueId={leagueId}
                 className="max-h-[calc(100vh-7rem)]"
               />
             </aside>

@@ -1242,6 +1242,7 @@ export default function GamePage() {
                     homeColor={colors.homeFill}
                     awayColor={colors.awayFill}
                     isLive={isLive}
+                    leagueId={gameData.league_id}
                   />
                 </div>
               )}
@@ -1357,6 +1358,7 @@ export default function GamePage() {
                     homeColor={colors.homeFill}
                     awayColor={colors.awayFill}
                     isLive={isLive}
+                    leagueId={gameData.league_id}
                     className="max-h-[calc(100vh-7rem)]"
                   />
                 </aside>
