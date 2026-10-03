@@ -29,7 +29,7 @@ interface FeedProps {
   leagueId?: string | null;
 }
 
-const ALL_PLAYS_IMPORTANCE = 20;
+const ALL_PLAYS_IMPORTANCE = 0;
 
 function timeLabel(item: CommentaryItem): string {
   const q = item.period <= 4 ? `Q${item.period}` : `OT${item.period - 4}`;
