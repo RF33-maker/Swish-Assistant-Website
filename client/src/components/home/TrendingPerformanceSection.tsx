@@ -32,6 +32,7 @@ interface PerfRow {
   game_score: number | null;
   opponent_name?: string | null;
   game_result?: string | null;
+  game_live?: boolean;
 }
 
 interface PlayerMetaRow {
@@ -92,6 +93,7 @@ function toCardPerformance(
     gameDate: perf.game_date,
     opponentName: perf.opponent_name,
     gameResult: perf.game_result,
+    isLive: perf.game_live,
     gameScore: perf.game_score,
     pts: perf.pts,
     reb: perf.reb,
@@ -149,7 +151,7 @@ async function fetchTrending(competition: string): Promise<TrendingData> {
   }
 }
 
-const trendingKey = (competition: string) => ["home", "trending-performance", "v17-competitions", competition];
+const trendingKey = (competition: string) => ["home", "trending-performance", "v18-live", competition];
 
 /** A competition's logo in a small tile; a flame for "latest games". */
 function CompetitionMark({ competition }: { competition?: TrendingCompetition }) {
