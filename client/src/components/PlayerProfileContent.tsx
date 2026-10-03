@@ -1666,6 +1666,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     return stats.filter(stat => parseMinutesPlayed(stat) > 0);
   }, [playerStats, expandedCompIds]);
 
+  // Once the log mixes competitions (e.g. SLB and ENBL for the same club), each
+  // game needs a tag saying which one it came from.
+  const showCompetitionColumn = useMemo(
+    () => new Set(filteredStats.map((g) => g.league_id).filter(Boolean)).size > 1,
+    [filteredStats],
+  );
+
   const pinnedGames = useMemo(() => {
     if (filteredStats.length === 0) return [];
     const sorted = [...filteredStats].sort((a, b) => {
@@ -3120,6 +3127,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                   <tr className="border-b border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]">
                     <th className="px-2 py-2 text-left whitespace-nowrap">Date</th>
                     <th className="px-2 py-2 text-left whitespace-nowrap">Opp</th>
+                    {showCompetitionColumn && <th className="px-2 py-2 text-left whitespace-nowrap">Competition</th>}
                     <th className="px-2 py-2 text-center">MIN</th>
                     <th className="px-2 py-2 text-center">FG</th>
                     <th className="px-2 py-2 text-center">3PT</th>
@@ -3161,6 +3169,18 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                             {opponentName}
                           </EntityLink>
                         </td>
+                        {showCompetitionColumn && (
+                          <td className="px-2 py-2 text-xs whitespace-nowrap">
+                            {leagueNames.get(game.league_id || "") ? (
+                              <span
+                                className="inline-block max-w-[9rem] truncate align-middle rounded-md border border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)] px-1.5 py-0.5 text-[10.5px] font-medium text-[color:var(--ch-text-2)]"
+                                title={leagueNames.get(game.league_id || "")}
+                              >
+                                {leagueNames.get(game.league_id || "")}
+                              </span>
+                            ) : '—'}
+                          </td>
+                        )}
                         <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sminutes || '—'}</td>
                         <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sfieldgoalsmade || 0}-{game.sfieldgoalsattempted || 0}</td>
                         <td className="px-2 py-2 text-xs text-center whitespace-nowrap">{game.sthreepointersmade || 0}-{game.sthreepointersattempted || 0}</td>
