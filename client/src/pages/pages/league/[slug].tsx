@@ -5,6 +5,8 @@ import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { normalizeInstagramHandle } from "@/lib/instagram";
 import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
+import { competitionSeoDescription, competitionSeoTitle, gamePath, playerPath, teamPath } from "@shared/seo";
+import EntityLink from "@/components/EntityLink";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
@@ -21,7 +23,7 @@ import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
 import { InstagramFeedSection } from "@/components/InstagramFeedSection";
-import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram } from "lucide-react";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram, ListOrdered, BarChart3, Shield, CalendarDays, Crown, ArrowLeftRight, LayoutDashboard } from "lucide-react";
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -604,7 +606,16 @@ export default function LeaguePage() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isEditingYoutube, setIsEditingYoutube] = useState(false);
   const [updatingYoutube, setUpdatingYoutube] = useState(false);
-  const [activeSection, setActiveSection] = useState(urlPlayerSlug ? 'player' : (urlGameKey ? 'game' : 'overview'));
+  // ?section= opens a section directly, e.g. ?section=leaders from the old
+  // /league-leaders/:slug links.
+  const [activeSection, setActiveSection] = useState(() => {
+    if (urlPlayerSlug) return 'player';
+    if (urlGameKey) return 'game';
+    const section = new URLSearchParams(window.location.search).get('section');
+    return section && ['teams', 'standings', 'stats', 'teamstats', 'schedule', 'leaders', 'comparison', 'overview'].includes(section)
+      ? section
+      : 'overview';
+  });
   const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');
@@ -685,6 +696,9 @@ export default function LeaguePage() {
   const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
+  // About blurb starts clamped so the section tabs stay above the fold;
+  // the full text is always in the DOM for search engines.
+  const [aboutExpanded, setAboutExpanded] = useState(false);
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
   const [selectedStop, setSelectedStop] = useState<string>('all');
   const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean, groupedStandings: {name: string, standings: any[]}[]}[]>([]);
@@ -3880,7 +3894,19 @@ export default function LeaguePage() {
     };
 
     if (!league) {
-      return <div className="p-6 text-slate-600">Loading league...</div>;
+      return (
+        <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+          <SiteHeader />
+          <div className="max-w-7xl mx-auto px-4 md:px-6 pt-6 space-y-4" aria-busy="true" aria-label="Loading league">
+            <div className="ch-skel h-60 sm:h-72 md:h-[21rem] rounded-[14px]" />
+            <div className="ch-skel h-12" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="ch-skel h-80 md:col-span-2" />
+              <div className="ch-skel h-80" />
+            </div>
+          </div>
+        </div>
+      );
     }
 
   <>
@@ -3898,23 +3924,21 @@ export default function LeaguePage() {
         </>
       ) : (
         <>
-          <title>{`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}</title>
+          <title>{competitionSeoTitle(league?.name || formatTitle(slug))}</title>
           <meta
             name="description"
             content={
-              league?.description ||
-              `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+              competitionSeoDescription(league?.name || formatTitle(slug), league?.description)
             }
           />
           <meta
             property="og:title"
-            content={`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}
+            content={competitionSeoTitle(league?.name || formatTitle(slug))}
           />
           <meta
             property="og:description"
             content={
-              league?.description ||
-              `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+              competitionSeoDescription(league?.name || formatTitle(slug), league?.description)
             }
           />
           <meta property="og:type" content="website" />
@@ -3938,25 +3962,10 @@ export default function LeaguePage() {
   
  return (
       
-      <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-700 relative`}>
-        {leagueBrandColors && (
-          <>
-            <div
-              className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out dark:hidden"
-              style={{
-                opacity: brandFadedIn ? 1 : 0,
-                background: `linear-gradient(180deg, transparent 20%, rgba(0, 0, 0, 0.05) 60%, rgba(0, 0, 0, 0.1) 100%)`,
-              }}
-            />
-            <div
-              className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out hidden dark:block"
-              style={{
-                opacity: brandFadedIn ? 1 : 0,
-                background: `linear-gradient(180deg, transparent 20%, rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0.7) 100%)`,
-              }}
-            />
-          </>
-        )}
+      <div
+        className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen relative`}
+        style={{ '--ch-accent': readableBrand.body } as React.CSSProperties}
+      >
         <div className="relative z-10">
         {/* Shared site header (sidebar on desktop, menu on mobile) plus this
             league's own games carousel. Kept sticky together, as the old
@@ -3964,7 +3973,7 @@ export default function LeaguePage() {
             sit here now live in the sidebar's Account section. */}
         <div className="sticky top-0 z-50">
           <SiteHeader />
-          <div className="bg-white dark:bg-neutral-900 shadow-sm px-3 md:px-6">
+          <div className="ch-glass border-b border-[color:var(--ch-border)] px-3 md:px-6">
           {/* Game Results / Live / Upcoming Carousel */}
           {league?.league_id && (
             <div className="-mx-3 md:-mx-6">
@@ -3982,26 +3991,58 @@ export default function LeaguePage() {
           </div>
         </div>
 
-        <section>
-          <div
-            className="rounded-xl overflow-hidden shadow relative h-52 sm:h-64 md:h-80 bg-gray-200"
+        <div className="max-w-7xl mx-auto px-4 md:px-6 pt-4 md:pt-6">
+          {/* Breadcrumb for Sub-Competitions */}
+          {parentLeague && (
+            <Link href={`/competition/${parentLeague.slug}`} className="inline-flex items-center gap-2 text-[13px] text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)] transition-colors group mb-3" data-testid="link-parent-league">
+              {parentLeague.logo_url && (
+                <img
+                  src={parentLeague.logo_url}
+                  alt={parentLeague.name}
+                  className="w-5 h-5 rounded object-contain bg-white ring-1 ring-black/5"
+                />
+              )}
+              <span className="font-medium group-hover:underline underline-offset-2">{parentLeague.name}</span>
+              <ChevronRight className="w-3.5 h-3.5 text-[color:var(--ch-muted)]" />
+              <span className="text-[color:var(--ch-text)] font-medium">{league?.name}</span>
+            </Link>
+          )}
+
+          <section
+            className="ch-hero ch-rise h-60 sm:h-72 md:h-[21rem] bg-[#0b0e13]"
             style={{
               backgroundImage: `url(${displayBannerUrl || LeagueDefaultImage})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
             }}
           >
-            <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
+            {/* Legibility scrim + a wash of the league colour from the left */}
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(8,9,11,0.05) 0%, rgba(8,9,11,0.35) 45%, rgba(8,9,11,0.92) 100%)' }} />
+            <div
+              className="absolute inset-0 transition-opacity duration-1000"
+              style={{ opacity: brandFadedIn ? 1 : 0, background: `linear-gradient(90deg, color-mix(in srgb, ${brandColorHex || brandColor} 55%, transparent) 0%, transparent 62%)` }}
+            />
+
+            <div className="absolute inset-x-0 bottom-0 p-5 md:p-8 flex items-end gap-4 md:gap-5">
+              {displayLogoUrl && (
+                <div className="hidden sm:flex w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-white ring-1 ring-black/5 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] items-center justify-center overflow-hidden shrink-0">
+                  <img src={displayLogoUrl} alt="" className="w-12 h-12 md:w-16 md:h-16 object-contain" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.14em] text-white/65">
+                  {parentLeague ? parentLeague.name : isParentLeague ? 'League' : 'Competition'}
+                </div>
+                <h2 className="ch-display uppercase font-bold leading-[0.95] tracking-tight text-white text-[1.9rem] sm:text-[2.5rem] md:text-[3.25rem] mt-1 line-clamp-2">
                   {(displayLeagueName || "League Name").replace(/\s*FIBA$/i, "")}
                 </h2>
+                <div className="flex items-center gap-2 flex-wrap mt-3">
                 {isBritishChampionship && britishChampionshipSeasons.length > 1 ? (
                   <select
                     value={currentBritishChampionshipSeason}
                     onChange={(e) => navigateToBritishChampionshipSeason(e.target.value)}
                     aria-label="Select British Championship Basketball season"
-                    className="text-xs font-semibold bg-white/20 hover:bg-white/30 border border-white/40 text-white rounded-full px-3 py-1 cursor-pointer backdrop-blur-sm transition-colors focus:outline-none focus:ring-1 focus:ring-white/60"
+                    className="h-8 text-xs font-semibold bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg px-3 cursor-pointer backdrop-blur transition-colors focus:outline-none focus:ring-2 focus:ring-white/40"
                     style={{ WebkitAppearance: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center' }}
                   >
                     {britishChampionshipSeasons.map((season) => (
@@ -4014,7 +4055,7 @@ export default function LeaguePage() {
                   <select
                     value={slug}
                     onChange={(e) => navigate(`/competition/${e.target.value}`)}
-                    className="text-xs font-semibold bg-white/20 hover:bg-white/30 border border-white/40 text-white rounded-full px-3 py-1 cursor-pointer backdrop-blur-sm transition-colors focus:outline-none focus:ring-1 focus:ring-white/60"
+                    className="h-8 text-xs font-semibold bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg px-3 cursor-pointer backdrop-blur transition-colors focus:outline-none focus:ring-2 focus:ring-white/40"
                     style={{ WebkitAppearance: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center' }}
                   >
                     {siblingSeasons.map((s) => (
@@ -4033,10 +4074,10 @@ export default function LeaguePage() {
                         <button
                           key={competition.slug}
                           onClick={() => navigate(`/competition/${competition.slug}`)}
-                          className={`rounded-full border px-3 py-1 text-xs font-semibold backdrop-blur-sm transition-colors ${
+                          className={`h-8 rounded-lg border px-3 text-xs font-semibold backdrop-blur transition-colors ${
                             isSelected
                               ? 'border-white bg-white text-slate-900'
-                              : 'border-white/40 bg-white/20 text-white hover:bg-white/30'
+                              : 'border-white/20 bg-white/10 text-white hover:bg-white/20'
                           }`}
                         >
                           {label}
@@ -4045,23 +4086,23 @@ export default function LeaguePage() {
                     })}
                   </div>
                 )}
-              </div>
               {(league as any)?.instagram_handle && (
                 <a
                   href={`https://www.instagram.com/${normalizeInstagramHandle((league as any).instagram_handle)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-2 self-start inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur transition-colors"
                 >
                   <Instagram className="h-3 w-3" />
                   @{normalizeInstagramHandle((league as any).instagram_handle)}
                 </a>
               )}
+                </div>
+              </div>
             </div>
-            
-            {/* Banner Upload Button for League Owner */}
+
             {isOwner && (
-              <div className="absolute top-4 right-4">
+              <div className="absolute top-3 right-3 md:top-4 md:right-4 z-10 flex flex-wrap justify-end gap-2">
                 <input
                   type="file"
                   accept="image/*"
@@ -4072,13 +4113,14 @@ export default function LeaguePage() {
                 />
                 <label
                   htmlFor="banner-upload"
-                  className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+                  aria-label="Change banner"
+                  className={`inline-flex items-center gap-2 h-9 px-2.5 sm:px-3.5 bg-black/40 hover:bg-black/55 border border-white/15 backdrop-blur text-white text-[13px] font-semibold rounded-lg cursor-pointer transition-colors ${
                     uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
                   {uploadingBanner ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       Uploading...
                     </>
                   ) : (
@@ -4086,7 +4128,7 @@ export default function LeaguePage() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
-                      Change Banner
+                      <span className="hidden sm:inline">Change Banner</span>
                     </>
                   )}
                 </label>
@@ -4102,13 +4144,14 @@ export default function LeaguePage() {
                 />
                 <label
                   htmlFor="logo-upload"
-                  className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+                  aria-label="Change logo"
+                  className={`inline-flex items-center gap-2 h-9 px-2.5 sm:px-3.5 bg-black/40 hover:bg-black/55 border border-white/15 backdrop-blur text-white text-[13px] font-semibold rounded-lg cursor-pointer transition-colors ${
                     uploadingLogo ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
                   {uploadingLogo ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       Uploading...
                     </>
                   ) : (
@@ -4116,53 +4159,27 @@ export default function LeaguePage() {
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      Change Logo
+                      <span className="hidden sm:inline">Change Logo</span>
                     </>
                   )}
                 </label>
 
               </div>
             )}
-            
+          </section>
 
-          </div>
-        </section>
-
-        {/* Breadcrumb for Sub-Competitions */}
-        {parentLeague && (
-          <div className="bg-white dark:bg-neutral-900 border-b border-gray-100 dark:border-neutral-800">
-            <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
-              <Link href={`/competition/${parentLeague.slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-400 dark:hover:text-orange-300 transition-colors group" data-testid="link-parent-league">
-                <div className="flex items-center gap-2">
-                  {parentLeague.logo_url && (
-                    <img
-                      src={parentLeague.logo_url}
-                      alt={parentLeague.name}
-                      className="w-5 h-5 rounded object-cover"
-                    />
-                  )}
-                  <span className="font-medium group-hover:underline">{parentLeague.name}</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-                <span className="text-slate-700 font-medium">{league?.name}</span>
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {/* SEO-Optimized About This League Section */}
-        {league?.description && (
-          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] dark:to-neutral-900 pt-3 pb-5 px-4 animate-fade-in-up">
-            <div className="max-w-4xl mx-auto bg-white dark:bg-neutral-900 rounded-lg shadow-sm p-4 md:p-5 dark:border-neutral-800" style={{ border: `1px solid ${brandBorderLight}` }}>
+          {/* SEO-Optimized About This League Section */}
+          {league?.description && (
+            <div className="ch-card p-5 md:p-6 mt-4 md:mt-5 animate-fade-in-up">
               <div className="flex items-center gap-3 mb-3">
                 {displayLogoUrl && (
                   <img
                     src={displayLogoUrl}
                     alt={`${displayLeagueName || league?.name || ''} logo`}
-                    className="h-8 w-auto drop-shadow-sm"
+                    className="h-8 w-8 object-contain"
                   />
                 )}
-                <h2 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white">
+                <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">
                   About {league?.name}
                 </h2>
               </div>
@@ -4171,59 +4188,53 @@ export default function LeaguePage() {
                 className={`h-0.5 mb-3 rounded-full transition-all duration-1000 ease-out ${
                   isDividerVisible ? 'w-20' : 'w-8'
                 }`}
-                style={{ backgroundColor: brandColor }}
+                style={{ backgroundColor: readableBrand.accent }}
               ></div>
-              <p className="text-slate-600 dark:text-white leading-relaxed text-sm">
+              <p className={`text-[color:var(--ch-text-2)] leading-relaxed text-sm max-w-4xl ${aboutExpanded ? '' : 'line-clamp-3 md:line-clamp-2'}`}>
                 {league?.description}
               </p>
+              {String((league as any)?.description ?? "").length > 180 && (
+                <button
+                  onClick={() => setAboutExpanded((v) => !v)}
+                  className="mt-2 text-[13px] font-semibold hover:underline underline-offset-2"
+                  style={{ color: readableBrand.body }}
+                  aria-expanded={aboutExpanded}
+                >
+                  {aboutExpanded ? 'Show less' : 'Read more'}
+                </button>
+              )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Navigation Tabs - Moved below carousel */}
-        <div className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800">
-          <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <div className="flex flex-col gap-3 py-3 md:py-4">
-              {/* Navigation Links */}
-              <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto pb-1 md:pb-0">
-                <button 
-                  className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teams' ? 'font-semibold border-b-2' : ''}`}
-                  style={activeSection === 'teams' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
-                  onMouseEnter={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = brandColor; }}
-                  onMouseLeave={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = ''; }}
-                  onClick={() => {
+          {/* Section tabs */}
+          <div className="mt-4 md:mt-5 border-b border-[color:var(--ch-border)]">
+            <nav className="flex items-stretch gap-1 overflow-x-auto scrollbar-hide -mx-1" aria-label="League sections">
+              {([
+                  {
+                    key: 'teams', label: 'Teams', icon: Users, show: true,
+                    onClick: () => {
                     setSelectedPlayerSlug(null);
                     setSelectedTeamName(null);
                     setActiveSection('teams');
                     if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
                       calculatePoolStandings(league.league_id, league.parent_league_id ?? league.league_id);
                     }
-                  }}
-                >
-                  Teams
-                </button>
-              {slug?.toUpperCase() !== 'REBA-SL' && <button 
-                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'standings' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'standings' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
-                onMouseEnter={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = brandColor; }}
-                onMouseLeave={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => {
+                  },
+                  },
+                  {
+                    key: 'standings', label: 'Standings', icon: ListOrdered, show: slug?.toUpperCase() !== 'REBA-SL',
+                    onClick: () => {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('standings');
                   if (league?.league_id && fullLeagueStandings.length === 0) {
                     calculatePoolStandings(league.league_id, league.parent_league_id ?? league.league_id);
                   }
-                }}
-              >
-                Standings
-              </button>}
-              <button 
-                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'stats' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'stats' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
-                onMouseEnter={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = brandColor; }}
-                onMouseLeave={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => {
+                },
+                  },
+                  {
+                    key: 'stats', label: 'Player Stats', icon: BarChart3, show: true,
+                    onClick: () => {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('stats');
@@ -4232,57 +4243,37 @@ export default function LeaguePage() {
                   if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
                     fetchAllPlayerAverages();
                   }
-                }}
-              >
-                Player Stats
-              </button>
-              <button 
-                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teamstats' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'teamstats' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
-                onMouseEnter={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = brandColor; }}
-                onMouseLeave={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => {
+                },
+                  },
+                  {
+                    key: 'teamstats', label: 'Team Stats', icon: Shield, show: true,
+                    onClick: () => {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('teamstats');
                   if (teamStatsData.length === 0) {
                     fetchTeamStats();
                   }
-                }}
-              >
-                Team Stats
-              </button>
-              <button 
-                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'schedule' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'schedule' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
-                onMouseEnter={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = brandColor; }}
-                onMouseLeave={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => { setSelectedPlayerSlug(null); setSelectedTeamName(null); setActiveSection('schedule'); }}
-              >
-                Schedule
-              </button>
-              <button 
-                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'leaders' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'leaders' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
-                onMouseEnter={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = brandColor; }}
-                onMouseLeave={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => {
+                },
+                  },
+                  {
+                    key: 'schedule', label: 'Schedule', icon: CalendarDays, show: true,
+                    onClick: () => { setSelectedPlayerSlug(null); setSelectedTeamName(null); setActiveSection('schedule'); },
+                  },
+                  {
+                    key: 'leaders', label: 'Leaders', icon: Crown, show: true,
+                    onClick: () => {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('leaders');
                   if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
                     fetchAllPlayerAverages();
                   }
-                }}
-              >
-                Leaders
-              </button>
-              <button 
-                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'comparison' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'comparison' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
-                onMouseEnter={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = brandColor; }}
-                onMouseLeave={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => {
+                },
+                  },
+                  {
+                    key: 'comparison', label: 'Compare', icon: ArrowLeftRight, show: true,
+                    onClick: () => {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('comparison');
@@ -4292,40 +4283,59 @@ export default function LeaguePage() {
                   if (teamStatsData.length === 0) {
                     fetchTeamStats();
                   }
-                }}
-              >
-                Compare
-              </button>
-              <button 
-                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'overview' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'overview' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
-                onMouseEnter={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = brandColor; }}
-                onMouseLeave={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => {
+                },
+                  },
+                  {
+                    key: 'overview', label: 'Overview', icon: LayoutDashboard, show: true,
+                    onClick: () => {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('overview');
                   if (teamStatsData.length === 0) {
                     fetchTeamStats();
                   }
-                }}
-              >
-                Overview
-              </button>
-              </div>
+                },
+                  },
+              ] as { key: string; label: string; icon: typeof Users; show: boolean; onClick: () => void }[])
+                .filter((tab) => tab.show)
+                .map((tab) => {
+                  const active = activeSection === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      onClick={(e) => {
+                        tab.onClick();
+                        e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                      }}
+                      aria-current={active ? 'page' : undefined}
+                      className={`relative flex items-center gap-2 h-12 px-3 text-[13.5px] font-medium whitespace-nowrap transition-colors ${
+                        active ? 'text-[color:var(--ch-text)]' : 'text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]'
+                      }`}
+                    >
+                      <tab.icon className="w-4 h-4" style={active ? { color: readableBrand.body } : undefined} />
+                      {tab.label}
+                      <span
+                        className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full transition-opacity"
+                        style={{ backgroundColor: readableBrand.accent, opacity: active ? 1 : 0 }}
+                      />
+                    </button>
+                  );
+                })}
+            </nav>
+          </div>
 
               {/* Competition filter pills for parent leagues (gender / age-group) */}
               {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && !(activeSection === 'game' && selectedGameKey) && (
-                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap" data-testid="age-group-tabs">
+                <div className="flex items-center gap-2 flex-wrap py-3 border-t border-[color:var(--ch-border)]" data-testid="age-group-tabs">
                   <div className="flex gap-1.5 flex-wrap">
                     {visibleAgeGroupLabels.map((label) => (
                       <button
                         key={label}
                         onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); setStandingsView('full'); }}
-                        className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-full border-2 transition-colors whitespace-nowrap ${
+                        className={`ch-chip px-3 py-1.5 text-xs md:text-[13px] whitespace-nowrap ${
                           selectedAgeGroup === label
-                            ? 'text-white'
-                            : 'bg-white dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border-gray-200 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-400'
+                            ? '!text-white'
+                            : ''
                         }`}
                         style={selectedAgeGroup === label ? { borderColor: brandColor, backgroundColor: brandColor } : {}}
                       >
@@ -4337,7 +4347,7 @@ export default function LeaguePage() {
                     <select
                       value={selectedStop}
                       onChange={(e) => setSelectedStop(e.target.value)}
-                      className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border-2 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      className="ch-input px-3 h-8 text-xs md:text-[13px] font-medium cursor-pointer border"
                       style={{ borderColor: selectedStop !== 'all' ? brandColor : '#e5e7eb' }}
                     >
                       <option value="all">All Stops</option>
@@ -4349,9 +4359,6 @@ export default function LeaguePage() {
                 </div>
               )}
 
-              
-            </div>
-          </div>
         </div>
 
         <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
@@ -4359,9 +4366,9 @@ export default function LeaguePage() {
             
             {/* Standings Section */}
             {activeSection === 'standings' && slug?.toUpperCase() !== 'REBA-SL' && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+              <div className="ch-card p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Standings</h2>
+                  <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">League Standings</h2>
                   
                   {/* View Toggle - Only show for BCB Trophy */}
                   {slug === 'british-championship-basketball' && (
@@ -4467,7 +4474,7 @@ export default function LeaguePage() {
                     ) : (() => {
                       const renderParentStandingsTable = (rows: any[]) => (
                         <div className="overflow-x-auto -mx-4 md:mx-0 mb-4">
-                          <table className="w-full text-sm min-w-[600px]">
+                          <table className="ch-table w-full text-sm min-w-[600px]">
                             <thead>
                               <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
                                 <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
@@ -4485,9 +4492,9 @@ export default function LeaguePage() {
                               {rows.map((team: any, index: number) => (
                                 <tr
                                   key={`${team.team}-${index}`}
-                                  className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
+                                  className="border-b border-gray-100 dark:border-neutral-700 hover:bg-[color:var(--ch-surface-2)] transition-colors group"
                                 >
-                                  <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
+                                  <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-[color:var(--ch-surface-2)] z-10 transition-colors">
                                     <div className="flex items-center gap-2">
                                       <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
                                       <TeamLogo
@@ -4499,7 +4506,7 @@ export default function LeaguePage() {
                                     </div>
                                   </td>
                                   <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
-                                    <span className="truncate">{team.team}</span>
+                                    <EntityLink href={teamPath(team.originalName || team.team, slug)} className="truncate hover:underline underline-offset-2">{team.team}</EntityLink>
                                   </td>
                                   <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
                                   <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
@@ -4566,7 +4573,7 @@ export default function LeaguePage() {
                 {!isParentLeague && (() => {
                   const renderStandingsTable = (rows: any[]) => (
                     <div className="overflow-x-auto -mx-4 md:mx-0">
-                      <table className="w-full text-sm min-w-[600px]">
+                      <table className="ch-table w-full text-sm min-w-[600px]">
                         <thead>
                           <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
                             <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
@@ -4584,9 +4591,9 @@ export default function LeaguePage() {
                           {rows.map((team, index) => (
                             <tr
                               key={`${team.team}-${index}`}
-                              className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
+                              className="border-b border-gray-100 dark:border-neutral-700 hover:bg-[color:var(--ch-surface-2)] transition-colors group"
                             >
-                              <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
+                              <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-[color:var(--ch-surface-2)] z-10 transition-colors">
                                 <div className="flex items-center gap-2">
                                   <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
                                   <TeamLogo
@@ -4598,7 +4605,7 @@ export default function LeaguePage() {
                                 </div>
                               </td>
                               <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
-                                <span className="truncate">{team.team}</span>
+                                <EntityLink href={teamPath(team.originalName || team.team, slug)} className="truncate hover:underline underline-offset-2">{team.team}</EntityLink>
                               </td>
                               <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
                               <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
@@ -4683,9 +4690,9 @@ export default function LeaguePage() {
             
             {/* Stats Section - Comprehensive Player Averages */}
             {activeSection === 'stats' && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+              <div className="ch-card p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Player Statistics - {league?.name}</h2>
+                  <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Player Statistics - {league?.name}</h2>
                   <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
                     Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
                     {(statsSearch || filterAgeGroup !== 'all' || filterRound !== 'all') && ` (filtered from ${allPlayerAverages.length})`}
@@ -4709,10 +4716,10 @@ export default function LeaguePage() {
                       placeholder="Search players..."
                       value={statsSearch}
                       onChange={(e) => setStatsSearch(e.target.value)}
-                      className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                      className="ch-input w-full pl-10 pr-4 h-10 text-sm"
                     />
                     <svg
-                      className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500"
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[color:var(--ch-muted)] pointer-events-none"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -4731,26 +4738,25 @@ export default function LeaguePage() {
                 <div className="relative mb-4">
                   <button
                     onClick={() => setPlayerCategoryDropdownOpen(!playerCategoryDropdownOpen)}
-                    className="flex items-center justify-between w-full max-w-xs px-4 py-2.5 rounded-xl border bg-white dark:bg-neutral-800 text-left text-base font-semibold text-slate-800 dark:text-white transition-all"
-                    style={{ borderColor: brandBorderLight }}
+                    className="ch-input flex items-center justify-between w-full max-w-xs px-3.5 h-10 text-left text-[14px] font-semibold"
                     data-testid="select-player-category"
                   >
                     <span>{playerStatsCategory}</span>
-                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${playerCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`h-4 w-4 text-[color:var(--ch-muted)] transition-transform ${playerCategoryDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {playerCategoryDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setPlayerCategoryDropdownOpen(false)} />
-                      <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-800 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
+                      <div className="absolute z-20 mt-1.5 w-full max-w-xs ch-card shadow-[var(--ch-shadow-lg)] p-1 overflow-hidden">
                         {(['Traditional', 'Advanced', 'Scoring', 'Misc'] as const).map(cat => (
                           <button
                             key={cat}
                             onClick={() => { setPlayerStatsCategory(cat); setPlayerCategoryDropdownOpen(false); }}
-                            className={`w-full px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                            className={`w-full px-3 py-2 rounded-md text-left text-[13px] font-medium transition-colors ${
                               playerStatsCategory === cat
-                                ? 'bg-gray-100 dark:bg-neutral-700'
-                                : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
-                            } text-slate-800 dark:text-white`}
+                                ? 'bg-[color:var(--ch-surface-3)]'
+                                : 'hover:bg-[color:var(--ch-surface-3)]'
+                            } text-[color:var(--ch-text)]`}
                             data-testid={`option-player-${cat.toLowerCase()}`}
                           >
                             {cat}
@@ -4767,7 +4773,7 @@ export default function LeaguePage() {
                     <select
                       value={filterAgeGroup}
                       onChange={(e) => setFilterAgeGroup(e.target.value)}
-                      className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      className="ch-input px-3 h-8 text-xs md:text-[13px] font-medium cursor-pointer"
                       style={filterAgeGroup !== 'all' ? { borderColor: brandColor } : {}}
                     >
                       <option value="all">All Ages</option>
@@ -4784,7 +4790,7 @@ export default function LeaguePage() {
                     <select
                       value={filterRound}
                       onChange={(e) => setFilterRound(e.target.value)}
-                      className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      className="ch-input px-3 h-8 text-xs md:text-[13px] font-medium cursor-pointer"
                       style={filterRound !== 'all' ? { borderColor: brandColor } : {}}
                     >
                       <option value="all">All Rounds</option>
@@ -4797,17 +4803,13 @@ export default function LeaguePage() {
 
                 {/* Mode Tabs */}
                 <div className="flex items-center gap-2 mb-5">
-                  <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
+                  <div className="ch-seg">
                     {(['Per Game', 'Total', 'Per 40'] as const).map(mode => (
                       <button
                         key={mode}
                         onClick={() => setPlayerStatsView(mode)}
-                        className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
-                          playerStatsView === mode
-                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
-                            : 'hover:bg-white/50 dark:hover:bg-neutral-800'
-                        }`}
-                        style={{ color: readableBrand.body }}
+                        data-active={playerStatsView === mode}
+                        className="px-3 md:px-4 h-8 text-xs md:text-[13px]"
                         data-testid={`option-player-${mode.toLowerCase().replace(/\s/g, '-')}`}
                       >
                         {mode}
@@ -4826,7 +4828,7 @@ export default function LeaguePage() {
                 
                 {isLoadingStats ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="ch-table w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-neutral-700">
                           <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Player</th>
@@ -4866,7 +4868,7 @@ export default function LeaguePage() {
                   </div>
                 ) : filteredPlayerAverages.length > 0 ? (
                   <div className="overflow-x-auto -mx-4 md:mx-0 dark:border-neutral-700 rounded-lg" style={{ border: `1px solid ${brandBorderLight}` }}>
-                    <table className="w-full text-xs md:text-sm">
+                    <table className="ch-table w-full text-xs md:text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
@@ -4922,7 +4924,7 @@ export default function LeaguePage() {
                         {filteredPlayerAverages.slice(0, displayedPlayerCount).map((player, index) => (
                           <tr 
                             key={`${player.name}-${index}`}
-                            className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
+                            className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-[color:var(--ch-surface-2)] transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
                                 handleSelectPlayer(player.slug, activeSection, player.playerIds ? Array.from(player.playerIds as Set<string>) : []);
@@ -4930,18 +4932,19 @@ export default function LeaguePage() {
                             }}
                             data-testid={`player-row-${player.id}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-[color:var(--ch-surface-2)] z-10">
                               <div className="min-w-0">
                                 {player.slug ? (
-                                  <Link
-                                    href={`/competition/${slug}/player/${encodeURIComponent(player.slug)}`}
+                                  <EntityLink
+                                    href={playerPath({ slug: player.slug })}
+                                    onNavigate={() => handleSelectPlayer(player.slug, activeSection, player.playerIds ? Array.from(player.playerIds as Set<string>) : [])}
                                     className="font-medium text-xs md:text-sm truncate hover:underline cursor-pointer"
                                     style={{ color: playerLinkColor }}
                                     onMouseEnter={(e) => { (e.target as HTMLElement).style.color = playerLinkColorHover; }}
                                     onMouseLeave={(e) => { (e.target as HTMLElement).style.color = playerLinkColor; }}
                                   >
                                     {player.name}
-                                  </Link>
+                                  </EntityLink>
                                 ) : (
                                   <div className="font-medium text-xs md:text-sm truncate text-slate-900 dark:text-white">{player.name}</div>
                                 )}
@@ -5093,35 +5096,34 @@ export default function LeaguePage() {
 
             {/* Team Stats Section */}
             {activeSection === 'teamstats' && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+              <div className="ch-card p-4 md:p-6">
                 <div className="mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Team Statistics - {league?.name}</h2>
+                  <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-4">Team Statistics - {league?.name}</h2>
                 </div>
 
                 {/* Category Dropdown */}
                 <div className="relative mb-4">
                   <button
                     onClick={() => setTeamCategoryDropdownOpen(!teamCategoryDropdownOpen)}
-                    className="flex items-center justify-between w-full max-w-xs px-4 py-2.5 rounded-xl border bg-white dark:bg-neutral-800 text-left text-base font-semibold text-slate-800 dark:text-white transition-all"
-                    style={{ borderColor: brandBorderLight }}
+                    className="ch-input flex items-center justify-between w-full max-w-xs px-3.5 h-10 text-left text-[14px] font-semibold"
                     data-testid="select-category"
                   >
                     <span>{teamStatsCategory}</span>
-                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${teamCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`h-4 w-4 text-[color:var(--ch-muted)] transition-transform ${teamCategoryDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {teamCategoryDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setTeamCategoryDropdownOpen(false)} />
-                      <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-800 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
+                      <div className="absolute z-20 mt-1.5 w-full max-w-xs ch-card shadow-[var(--ch-shadow-lg)] p-1 overflow-hidden">
                         {(['Traditional', 'Advanced', 'Four Factors', 'Scoring', 'Misc'] as const).map(cat => (
                           <button
                             key={cat}
                             onClick={() => { setTeamStatsCategory(cat); setTeamCategoryDropdownOpen(false); }}
-                            className={`w-full px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                            className={`w-full px-3 py-2 rounded-md text-left text-[13px] font-medium transition-colors ${
                               teamStatsCategory === cat
-                                ? 'bg-gray-100 dark:bg-neutral-700'
-                                : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
-                            } text-slate-800 dark:text-white`}
+                                ? 'bg-[color:var(--ch-surface-3)]'
+                                : 'hover:bg-[color:var(--ch-surface-3)]'
+                            } text-[color:var(--ch-text)]`}
                             data-testid={`option-${cat.toLowerCase().replace(/\s/g, '-')}`}
                           >
                             {cat}
@@ -5134,17 +5136,13 @@ export default function LeaguePage() {
 
                 {/* Mode Tabs */}
                 <div className="flex items-center gap-2 mb-5">
-                  <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
+                  <div className="ch-seg">
                     {(['Per Game', 'Totals', 'Per 100 Possessions'] as const).map(mode => (
                       <button
                         key={mode}
                         onClick={() => setTeamStatsMode(mode)}
-                        className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
-                          teamStatsMode === mode
-                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
-                            : 'hover:bg-white/50 dark:hover:bg-neutral-800'
-                        }`}
-                        style={{ color: readableBrand.body }}
+                        data-active={teamStatsMode === mode}
+                        className="px-3 md:px-4 h-8 text-xs md:text-[13px]"
                         data-testid={`option-${mode.toLowerCase().replace(/\s/g, '-')}`}
                       >
                         {mode === 'Per 100 Possessions' ? 'Per 100 Poss' : mode}
@@ -5155,7 +5153,7 @@ export default function LeaguePage() {
 
                 {isLoadingTeamStats ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="ch-table w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-neutral-700">
                           <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Team</th>
@@ -5208,7 +5206,7 @@ export default function LeaguePage() {
                   </div>
                 ) : sortedTeamStats.length > 0 ? (
                   <div className="overflow-x-auto -mx-4 md:mx-0 dark:border-neutral-700 rounded-lg" style={{ border: `1px solid ${brandBorderLight}` }}>
-                    <table className="w-full text-xs md:text-sm">
+                    <table className="ch-table w-full text-xs md:text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-800 z-10 w-16">Logo</th>
@@ -5251,7 +5249,7 @@ export default function LeaguePage() {
                         {sortedTeamStats.map((team, index) => (
                           <tr
                             key={`team-stats-${team.teamName}-${index}`}
-                            className="hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer group"
+                            className="hover:bg-[color:var(--ch-surface-2)] transition-colors cursor-pointer group"
                             onClick={() => {
                               setPreviousSection(activeSection);
                               setSelectedTeamName(team.teamName);
@@ -5259,12 +5257,12 @@ export default function LeaguePage() {
                             }}
                             data-testid={`row-team-${team.teamName}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
+                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-[color:var(--ch-surface-2)] z-10 transition-colors">
                               <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(team.teamName)} />
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 text-xs md:text-sm truncate">
                               <Link
-                                href={`/competition/${slug}/team/${encodeURIComponent(team.teamName)}`}
+                                href={teamPath(team.teamName, slug) || `/team/${encodeURIComponent(team.teamName)}`}
                                 className="hover:underline"
                               >
                                 {team.teamName}
@@ -5322,30 +5320,35 @@ export default function LeaguePage() {
 
             {/* Teams Section */}
             {activeSection === 'teams' && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 md:mb-6">Teams</h2>
+              <div className="ch-card p-4 md:p-6">
+                <div className="flex items-baseline justify-between gap-3 mb-4 md:mb-5">
+                  <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Teams</h2>
+                  {standings.length > 0 && <span className="text-xs text-[color:var(--ch-muted)]">{standings.length} teams</span>}
+                </div>
                 {standings.length > 0 ? (
-                  <div className="divide-y divide-gray-200 dark:divide-neutral-700">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 md:gap-3">
                     {standings.map((teamData, index) => (
                       <div
                         key={`team-${teamData.team}-${index}`}
-                        className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer"
+                        className="ch-tile ch-hover p-3 md:p-4 flex items-center justify-between gap-3 group cursor-pointer hover:-translate-y-0.5"
                         onClick={() => {
                           setPreviousSection(activeSection);
                           setSelectedTeamName(teamData.team);
                           setActiveSection('team');
                         }}
                       >
-                        <div className="flex items-center gap-2 md:gap-4">
-                          <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" logoUrl={getTeamLogoUrl(teamData.team)} />
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="w-11 h-11 md:w-12 md:h-12 rounded-xl bg-white ring-1 ring-black/5 flex items-center justify-center overflow-hidden shrink-0">
+                            <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(teamData.team)} />
+                          </span>
                           <Link
-                            href={`/competition/${slug}/team/${encodeURIComponent(teamData.team)}`}
-                            className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg hover:underline"
+                            href={teamPath(teamData.team, slug) || "/teams"}
+                            className="font-semibold text-[color:var(--ch-text)] text-sm md:text-[15px] leading-snug hover:underline underline-offset-2 line-clamp-2"
                           >
                             {teamData.team}
                           </Link>
                         </div>
-                        <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
+                        <ChevronRight className="w-4 h-4 shrink-0 text-[color:var(--ch-muted)] group-hover:text-[color:var(--ch-accent)] group-hover:translate-x-0.5 transition-all" />
                       </div>
                     ))}
                   </div>
@@ -5360,8 +5363,8 @@ export default function LeaguePage() {
 
             {/* Schedule Section */}
             {activeSection === 'schedule' && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4">Game Schedule</h2>
+              <div className="ch-card p-4 md:p-6">
+                <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-3 md:mb-4">Game Schedule</h2>
                 
                 {/* Tabs for Upcoming / Results */}
                 <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-neutral-700">
@@ -5407,7 +5410,7 @@ export default function LeaguePage() {
                           <select
                             value={filterAgeGroup}
                             onChange={(e) => setFilterAgeGroup(e.target.value)}
-                            className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                            className="ch-input px-3 h-8 text-xs md:text-[13px] font-medium cursor-pointer"
                             style={filterAgeGroup !== 'all' ? { borderColor: brandColor } : {}}
                           >
                             <option value="all">All Ages</option>
@@ -5422,7 +5425,7 @@ export default function LeaguePage() {
                           <select
                             value={filterRound}
                             onChange={(e) => setFilterRound(e.target.value)}
-                            className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                            className="ch-input px-3 h-8 text-xs md:text-[13px] font-medium cursor-pointer"
                             style={filterRound !== 'all' ? { borderColor: brandColor } : {}}
                           >
                             <option value="all">All Rounds</option>
@@ -5547,7 +5550,7 @@ export default function LeaguePage() {
                                   return (
                                   <div 
                                     key={`past-${game.game_id}-${index}`} 
-                                    className={`py-2 md:py-3 transition-colors ${isClickable ? 'cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800' : 'cursor-default'}`}
+                                    className={`py-2 md:py-3 transition-colors ${isClickable ? 'cursor-pointer hover:bg-[color:var(--ch-surface-2)]' : 'cursor-default'}`}
                                     onClick={() => {
                                       if (isClickable && game.numeric_id) {
                                         handleGameClick(game.numeric_id);
@@ -5649,7 +5652,7 @@ export default function LeaguePage() {
             {activeSection === 'comparison' && (
               <div className="space-y-4 md:space-y-6">
                 {/* Toggle between Player and Team Comparison */}
-                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-3 md:p-4">
+                <div className="ch-card p-3 md:p-4">
                   <div className="flex items-center justify-center gap-2">
                     <button
                       onClick={() => setComparisonMode('player')}
@@ -5745,10 +5748,10 @@ export default function LeaguePage() {
 
             {activeSection === 'leaders' && (
               <div className="space-y-4 md:space-y-6">
-                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <div className="ch-card p-4 md:p-6">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
+                      <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">League Leaders</h2>
                       {isLoadingMoreStats && (
                         <span className="inline-flex items-center gap-1 text-xs text-orange-500 dark:text-orange-400">
                           <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -5790,7 +5793,7 @@ export default function LeaguePage() {
                           )}
                         </div>
                       )}
-                      <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                      <div className="ch-seg ch-seg-fill">
                         <button
                           onClick={() => setLeagueLeadersView('averages')}
                           className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
@@ -5818,8 +5821,8 @@ export default function LeaguePage() {
                   </div>
 
                   {/* Subject + Category toggles */}
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                  <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mb-4">
+                    <div className="ch-seg ch-seg-fill">
                       <button
                         onClick={() => setLeadersSubject('player')}
                         className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
@@ -5845,7 +5848,7 @@ export default function LeaguePage() {
                         Team Leaders
                       </button>
                     </div>
-                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                    <div className="ch-seg ch-seg-fill">
                       <button
                         onClick={() => setLeadersCategory('Traditional')}
                         className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
@@ -5965,20 +5968,21 @@ export default function LeaguePage() {
                                       <div className="min-w-0 flex-1">
                                         {isTeam && entity.teamName ? (
                                           <Link
-                                            href={`/competition/${slug}/team/${encodeURIComponent(entity.teamName)}`}
+                                            href={teamPath(entity.teamName, slug) || `/team/${encodeURIComponent(entity.teamName)}`}
                                             className="block text-sm font-medium truncate hover:underline"
                                             style={{ color: playerLinkColor }}
                                           >
                                             {displayName}
                                           </Link>
                                         ) : !isTeam && entity.slug ? (
-                                          <Link
-                                            href={`/competition/${slug}/player/${encodeURIComponent(entity.slug)}`}
+                                          <EntityLink
+                                            href={playerPath({ slug: entity.slug })}
+                                            onNavigate={() => handleSelectPlayer(entity.slug, activeSection)}
                                             className="block text-sm font-medium truncate hover:underline"
                                             style={{ color: playerLinkColor }}
                                           >
                                             {displayName}
-                                          </Link>
+                                          </EntityLink>
                                         ) : (
                                           <p className="text-sm font-medium truncate" style={{ color: playerLinkColor }}>{displayName}</p>
                                         )}
@@ -6352,9 +6356,9 @@ export default function LeaguePage() {
                 )}
 
                 {/* League Leaders Quick View */}
-                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <div className="ch-card p-4 md:p-6">
                   <div className="flex justify-between items-center mb-4 md:mb-6">
-                    <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
+                    <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">League Leaders</h2>
                     <button
                       onClick={() => {
                         setActiveSection('leaders');
@@ -6362,7 +6366,7 @@ export default function LeaguePage() {
                           fetchAllPlayerAverages();
                         }
                       }}
-                      className="text-xs md:text-sm font-medium hover:underline"
+                      className="inline-flex items-center min-h-[36px] -my-2 px-1 -mx-1 text-xs md:text-sm font-medium hover:underline underline-offset-2"
                       style={{ color: readableBrand.body }}
                     >
                       View All Leaders →
@@ -6437,15 +6441,16 @@ export default function LeaguePage() {
                                       <div className="flex items-center gap-2 min-w-0">
                                         <span className="text-xs font-bold tabular-nums text-slate-400 dark:text-slate-500 w-4 shrink-0">{i + 1}</span>
                                         {p.slug ? (
-                                          <Link
-                                            href={`/competition/${slug}/player/${encodeURIComponent(p.slug)}`}
+                                          <EntityLink
+                                            href={playerPath({ slug: p.slug })}
+                                            onNavigate={() => handleSelectPlayer(p.slug, activeSection)}
                                             className="text-sm font-medium truncate hover:underline"
                                             style={{ color: playerLinkColor }}
                                             onMouseEnter={(e) => { (e.target as HTMLElement).style.color = playerLinkColorHover; }}
                                             onMouseLeave={(e) => { (e.target as HTMLElement).style.color = playerLinkColor; }}
                                           >
                                             {p.name}
-                                          </Link>
+                                          </EntityLink>
                                         ) : (
                                           <span className="text-sm font-medium text-slate-800 dark:text-white truncate">{p.name}</span>
                                         )}
@@ -6494,12 +6499,12 @@ export default function LeaguePage() {
                 </div>
 
                 {/* Team League Leaders */}
-                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <div className="ch-card p-4 md:p-6">
                   <div className="flex justify-between items-center mb-4 md:mb-6">
-                    <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Team Leaders</h2>
+                    <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Team Leaders</h2>
                     <button
                       onClick={() => setActiveSection('teamstats')}
-                      className="text-xs md:text-sm font-medium hover:underline"
+                      className="inline-flex items-center min-h-[36px] -my-2 px-1 -mx-1 text-xs md:text-sm font-medium hover:underline underline-offset-2"
                       style={{ color: readableBrand.body }}
                     >
                       View All Team Stats →
@@ -6518,7 +6523,7 @@ export default function LeaguePage() {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                       {/* Top Scoring Teams */}
-                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                      <div className="ch-tile p-3 md:p-4">
                         <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Scoring</h3>
                         <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                           {filteredTeamStats
@@ -6540,7 +6545,7 @@ export default function LeaguePage() {
                       </div>
 
                       {/* Top Rebounding Teams */}
-                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                      <div className="ch-tile p-3 md:p-4">
                         <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Rebounding</h3>
                         <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                           {filteredTeamStats
@@ -6562,7 +6567,7 @@ export default function LeaguePage() {
                       </div>
 
                       {/* Top Assists Teams */}
-                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                      <div className="ch-tile p-3 md:p-4">
                         <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Playmaking</h3>
                         <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                           {filteredTeamStats
@@ -6589,8 +6594,8 @@ export default function LeaguePage() {
 
             {/* Tournament Bracket - Only for BCB Trophy */}
             {slug === 'british-championship-basketball' && league?.league_id && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 md:mb-6">Tournament Bracket</h2>
+              <div className="ch-card p-4 md:p-6">
+                <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-4 md:mb-6">Tournament Bracket</h2>
                 <TournamentBracket 
                   leagueId={league.league_id} 
                   onGameClick={handleGameClick}
@@ -6599,11 +6604,11 @@ export default function LeaguePage() {
             )}
 
             {/* League Standings */}
-            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">League Standings</h2>
+            <div className="ch-card p-4 md:p-6">
+              <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-4">League Standings</h2>
               {isLoadingStandings ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="ch-table w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-neutral-700">
                         <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">#</th>
@@ -6628,7 +6633,7 @@ export default function LeaguePage() {
                   : standings).filter((s: any) => s.games > 0);
                 return overviewStandings.length > 0 ? (
                 <div className="overflow-x-auto -mx-4 md:mx-0">
-                  <table className="w-full text-sm min-w-[600px]">
+                  <table className="ch-table w-full text-sm min-w-[600px]">
                     <thead>
                       <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
                         <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12 sticky left-0 bg-white dark:bg-neutral-900 z-10">#</th>
@@ -6656,13 +6661,13 @@ export default function LeaguePage() {
                         return (
                         <tr 
                           key={team.team} 
-                          className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${rowBg}`}
+                          className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-[color:var(--ch-surface-2)] transition-colors ${rowBg}`}
                         >
                           <td className={`py-3 px-3 font-medium text-slate-600 dark:text-slate-400 sticky left-0 z-10 ${stickyBg}`}>{index + 1}</td>
                           <td className={`py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[180px] sticky left-12 md:static z-10 ${stickyBg}`}>
                             <div className="flex items-center gap-2">
                               <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" logoUrl={getTeamLogoUrl(team.team)} />
-                              <span className="truncate">{team.team}</span>
+                              <EntityLink href={teamPath((team as { team: string }).team, slug)} className="truncate hover:underline underline-offset-2">{team.team}</EntityLink>
                             </div>
                           </td>
                           <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
@@ -6702,9 +6707,10 @@ export default function LeaguePage() {
           <aside className={`space-y-6 ${activeSection !== 'overview' ? 'hidden' : ''}`}>
             {/* League Admin Panel */}
             {isOwner && league?.league_id && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-6 border-l-4 border-blue-500">
-                <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="ch-card p-5 relative overflow-hidden">
+                <div className="absolute inset-x-0 top-0 h-[3px]" style={{ backgroundColor: readableBrand.accent }} />
+                <h3 className="text-[15px] font-semibold tracking-tight text-[color:var(--ch-text)] mb-3 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-[color:var(--ch-text-2)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.5 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
@@ -6718,9 +6724,10 @@ export default function LeaguePage() {
                   
                   <button
                     onClick={() => navigate(`/league-admin/${slug}`)}
-                    className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    className="ch-btn ch-btn-primary w-full justify-center h-10"
+                    style={{ backgroundColor: readableBrand.onWhite }}
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
@@ -6739,7 +6746,7 @@ export default function LeaguePage() {
 
             {activeSection === 'overview' && (<>
             {/* Instagram Embed */}
-            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
+            <div className="ch-card p-4">
               {isOwner && (
                 <div className="flex justify-end mb-1">
                   <button
@@ -6854,7 +6861,7 @@ export default function LeaguePage() {
             </div>
 
             {/* YouTube Embed */}
-            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
+            <div className="ch-card p-4">
               <div className="flex justify-between items-center mb-3">
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Latest Highlights</h3>
                 {isOwner && (
@@ -6936,10 +6943,12 @@ export default function LeaguePage() {
             </div>
 
             {/* Comment Section Placeholder */}
-            <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Community Comments</h3>
-              <p className="text-xs text-slate-500">💬 Only logged-in users can post.</p>
-              <div className="text-xs italic text-slate-400 mt-2">Coming soon...</div>
+            <div className="ch-card p-5">
+              <div className="flex items-center gap-2 mb-1.5">
+                <h3 className="text-sm font-semibold text-[color:var(--ch-text)]">Community Comments</h3>
+                <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)]">Coming soon</span>
+              </div>
+              <p className="text-xs text-[color:var(--ch-text-2)]">Only logged-in users can post.</p>
             </div>
             </>)}
           </aside>

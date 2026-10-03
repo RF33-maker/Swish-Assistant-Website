@@ -174,18 +174,18 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
 
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-3">
+      <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px] mb-4">
         <ArrowLeft className="w-3.5 h-3.5" /> Back to rankings
       </button>
 
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 overflow-hidden mb-4">
+      <div className="ch-card overflow-hidden mb-4">
         <div className="p-4 md:p-6" style={{ background: `linear-gradient(135deg, ${brandColor}14, transparent)` }}>
           <div className="flex items-center gap-3 flex-wrap">
             <div className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-semibold shrink-0" style={{ backgroundColor: `${brandColor}22`, color: readableBrand.body }}>
               {player.player_name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-800 dark:text-white">{player.player_name}</h2>
+              <h2 className="ch-display uppercase text-[1.9rem] md:text-[2.5rem] font-bold tracking-tight leading-none text-slate-900 dark:text-white">{player.player_name}</h2>
               {team ? (
                 <button onClick={() => onSelectTeam?.(team)} className="text-sm hover:underline" style={{ color: readableBrand.body }}>
                   {player.team_name}
@@ -199,9 +199,9 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
 
         <div className="grid grid-cols-4 sm:grid-cols-7 border-t border-gray-200 dark:border-neutral-800">
           {headerStats.map((s, i) => (
-            <div key={s.label} className={`text-center py-3 ${i > 0 ? 'border-l border-gray-100 dark:border-neutral-800' : ''}`}>
-              <div className="text-base md:text-lg font-bold text-slate-800 dark:text-white">{s.value}</div>
-              <div className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-neutral-500">{s.label}</div>
+            <div key={s.label} className={`text-center py-3.5 md:py-4 ${i > 0 ? 'border-l border-gray-100 dark:border-neutral-800' : ''}`}>
+              <div className="ch-display ch-num text-xl md:text-2xl font-bold leading-none text-slate-900 dark:text-white">{s.value}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-neutral-500 mt-1">{s.label}</div>
             </div>
           ))}
         </div>
@@ -222,11 +222,11 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
 
       {tab === 'profile' ? (
         <div className="space-y-4">
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+          <div className="ch-card p-4 md:p-6">
             <div className="flex items-baseline justify-between mb-3">
-              <div className="flex items-baseline gap-2">
-                <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color: readableBrand.body }}>01</span>
-                <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League percentile</h3>
+              <div className="flex items-center gap-2.5">
+                <span className="ch-kicker-n" style={{ color: readableBrand.body }}>01</span>
+                <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">League percentile</h3>
               </div>
               <span className="text-xs text-slate-400 dark:text-neutral-500">vs {players.length} players</span>
             </div>
@@ -243,10 +243,10 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
           </div>
 
           {scoringMix.length > 0 && (
-            <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-              <div className="flex items-baseline gap-2 mb-3">
-                <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color: readableBrand.body }}>02</span>
-                <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Scoring distribution</h3>
+            <div className="ch-card p-4 md:p-6">
+              <div className="flex items-center gap-2.5 mb-3">
+                <span className="ch-kicker-n" style={{ color: readableBrand.body }}>02</span>
+                <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Scoring distribution</h3>
               </div>
               <div className="h-3 rounded-full overflow-hidden flex mb-2">
                 {scoringMix.map((s, i) => (
@@ -261,7 +261,7 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
                   <p className="text-[11px] text-slate-400 dark:text-neutral-500 mb-2">Where those points come from — these can overlap (a fast-break basket can also count toward points in the paint), so they won't add up to 100%.</p>
                   <div className="flex flex-wrap gap-2">
                     {scoringContext.map(s => (
-                      <span key={s.label} className="text-xs px-2.5 py-1 rounded-md bg-gray-50 dark:bg-neutral-800/60 border border-gray-200 dark:border-neutral-700 text-slate-600 dark:text-neutral-300">
+                      <span key={s.label} className="text-xs px-2.5 py-1 ch-tile text-slate-600 dark:text-neutral-300">
                         {s.label} <strong>{s.value.toFixed(1)}%</strong>
                       </span>
                     ))}
@@ -271,10 +271,10 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
             </div>
           )}
 
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color: readableBrand.body }}>03</span>
-              <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Shot chart</h3>
+          <div className="ch-card p-4 md:p-6">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="ch-kicker-n" style={{ color: readableBrand.body }}>03</span>
+              <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Shot chart</h3>
             </div>
             {/* Player and team filters are deliberately omitted — this view is
                 already scoped to one player. The rest let a coach isolate a
@@ -293,10 +293,10 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
             />
           </div>
 
-          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color: readableBrand.body }}>04</span>
-              <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Game log</h3>
+          <div className="ch-card p-4 md:p-6">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="ch-kicker-n" style={{ color: readableBrand.body }}>04</span>
+              <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Game log</h3>
             </div>
             {loading ? (
               <p className="text-sm text-slate-400 dark:text-neutral-500 py-4 text-center">Loading…</p>
@@ -346,7 +346,7 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
           </div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-8 text-center">
+        <div className="ch-card p-8 text-center">
           <Video className="w-12 h-12 text-gray-300 dark:text-neutral-700 mx-auto mb-3" />
           <h3 className="text-base font-semibold text-slate-800 dark:text-white mb-1">Video is on the way</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">

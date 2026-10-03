@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Trophy } from "lucide-react";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+import SectionHeader from "@/components/home/SectionHeader";
 
 interface LeagueOption {
   league_id: string;
@@ -257,46 +258,33 @@ export default function TopPlayersSection() {
     (leadersData.scoring.length > 0 || leadersData.rebounding.length > 0 || leadersData.assists.length > 0);
 
   return (
-    <section className="py-16 md:py-20 bg-white dark:bg-neutral-950">
-      <div className="max-w-6xl mx-auto px-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6 md:mb-8">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
-              Top Players
-            </h2>
-            <div className="w-16 h-1 bg-orange-500 rounded-full mt-2" />
-            <p className="mt-3 text-slate-600 dark:text-slate-400 text-sm md:text-base">
-              Leaders across our hosted leagues.
-            </p>
-          </div>
-
-          {/* Averages / Totals toggle */}
-          <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1 self-start sm:self-end">
-            <button
-              onClick={() => setViewMode("averages")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                isAverages
-                  ? "bg-white dark:bg-neutral-700 shadow-sm"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-              }`}
-              style={isAverages ? { color: ORANGE } : {}}
-            >
-              Averages
-            </button>
-            <button
-              onClick={() => setViewMode("totals")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                !isAverages
-                  ? "bg-white dark:bg-neutral-700 shadow-sm"
-                  : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-              }`}
-              style={!isAverages ? { color: ORANGE } : {}}
-            >
-              Totals
-            </button>
-          </div>
-        </div>
+    <section className="py-14 md:py-20" aria-labelledby="top-players-heading">
+      <div className="max-w-7xl mx-auto px-5 md:px-8">
+        <SectionHeader
+          id="top-players-heading"
+          eyebrow="Top players"
+          title="The league leaders"
+          description="Leaders across our hosted leagues."
+          action={
+            /* Averages / Totals toggle */
+            <div className="ch-seg">
+              <button
+                onClick={() => setViewMode("averages")}
+                data-active={isAverages}
+                className="px-3.5 h-8 text-xs font-semibold"
+              >
+                Averages
+              </button>
+              <button
+                onClick={() => setViewMode("totals")}
+                data-active={!isAverages}
+                className="px-3.5 h-8 text-xs font-semibold"
+              >
+                Totals
+              </button>
+            </div>
+          }
+        />
 
         {/* League pills */}
         {leagues.length > 0 && (

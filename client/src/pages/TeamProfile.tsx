@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation, useParams } from "wouter";
+import { Link, useLocation, useParams, useSearch } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -8,6 +8,10 @@ import React from "react";
 import { EditableDescription } from "@/components/EditableDescription";
 import { useAuth } from "@/hooks/use-auth";
 import { Helmet } from "react-helmet-async";
+import { gamePath, teamPath, teamSeoDescription, teamSeoTitle } from "@shared/seo";
+import { clubSlug } from "@shared/teamIdentity";
+import { teamSeasonSummary } from "@shared/recaps";
+import EntityLink from "@/components/EntityLink";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
@@ -31,7 +35,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
-import { Instagram } from "lucide-react";
+import { Instagram, ArrowLeft, LayoutDashboard, BarChart3, Shield, Crosshair, Users, Award } from "lucide-react";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { AccoladeBadges } from "@/components/AccoladeBadges";
 import { ProfileChip } from "@/components/ProfileChip";
 import { PillTabBar } from "@/components/PillTabBar";
@@ -295,11 +300,11 @@ function TeamShotChartSection({
   }, [recentGames]);
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+    <div className="bg-[color:var(--ch-surface)] rounded-xl shadow p-4 md:p-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-        <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Shot Chart - {teamName}</h2>
+        <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)]">Shot Chart - {teamName}</h2>
         <Select value={shotChartRange} onValueChange={setShotChartRange}>
-          <SelectTrigger className="w-full md:w-48 bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600">
+          <SelectTrigger className="w-full md:w-48 bg-[color:var(--ch-surface)] border-slate-200 dark:border-neutral-600">
             <SelectValue placeholder="Select range" />
           </SelectTrigger>
           <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
@@ -368,20 +373,63 @@ function PlayerAvatarThumb({ photoUrl, name, size = "w-6 h-6 md:w-7 md:h-7", fal
   );
 }
 
+/** decodeURIComponent that leaves a literal "%" (e.g. "100% Hoops") alone. */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/** /api/public/team-page/:key — a team side's permanent page and its competitions. */
+interface TeamPageInfo {
+  slug: string;
+  name: string;
+  youth: boolean;
+  competitions: Array<{ slug: string; name: string; teamName: string; lastPlayed: string | null; youth: boolean; leagueIds: string[] }>;
+}
+
 export default function TeamProfile() {
   const {
-    teamName,
+    teamName: routeTeamName,
     leagueSlug: legacyLeagueSlug,
     competitionSlug,
   } = useParams();
-  const leagueSlug = competitionSlug || legacyLeagueSlug;
+  const search = useSearch();
+  const competitionQuery = new URLSearchParams(search).get("competition");
+  // /team/<slug> is the team's permanent page across seasons: the server
+  // resolves the slug to every competition the side has played in, and the
+  // page opens on ?competition=… or the most recent adult one. Everything
+  // below stays scoped to one competition at a time, as before. The older
+  // season-specific routes still work.
+  const isPermanentRoute = !competitionSlug && !legacyLeagueSlug;
+  const { data: teamPage, isLoading: teamPageLoading } = useQuery({
+    queryKey: ["team-page", routeTeamName],
+    queryFn: async (): Promise<TeamPageInfo | null> => {
+      const res = await fetch(`/api/public/team-page/${encodeURIComponent(routeTeamName || "")}`);
+      return res.ok ? res.json() : null;
+    },
+    enabled: isPermanentRoute && !!routeTeamName,
+    staleTime: 5 * 60_000,
+  });
+  const pageCompetition = teamPage
+    ? teamPage.competitions.find((c) => c.slug === competitionQuery)
+      || teamPage.competitions.find((c) => !c.youth)
+      || teamPage.competitions[0]
+      || null
+    : null;
+  const teamName = isPermanentRoute
+    ? teamPage && pageCompetition
+      ? encodeURIComponent(pageCompetition.teamName)
+      : teamPageLoading ? undefined : routeTeamName
+    : routeTeamName;
+  const leagueSlug = competitionSlug || legacyLeagueSlug || pageCompetition?.slug;
   const [location, navigate] = useLocation();
   const [team, setTeam] = useState<Team | null>(null);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
   const [upcomingGames, setUpcomingGames] = useState<UpcomingGame[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [teamDescription, setTeamDescription] = useState<string | null>(null);
   const [teamInstagramUrl, setTeamInstagramUrl] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
@@ -401,12 +449,24 @@ export default function TeamProfile() {
   // National Cup game must not count towards the NBL league record, even
   // though both competitions share a brand and a season.
   const currentCompetition = seasonCompetitions.find(c => c.slug === leagueSlug);
-  const selectedLeagueIds = currentCompetition ? [currentCompetition.league_id] : [];
+  // On the permanent page the server says where the competition's data lives:
+  // itself plus any private child competition that displays under it (e.g.
+  // the BCB Trophy's games are stored in a child) — the parent alone is empty.
+  const selectedLeagueIds = isPermanentRoute && pageCompetition?.leagueIds?.length
+    ? pageCompetition.leagueIds
+    : currentCompetition ? [currentCompetition.league_id] : [];
   const lineupsSlug = leagueSlug || "";
   // Every competition this club has played in (league, cup, trophy, past
   // seasons) — drives the competition switcher and the club-wide accolades.
-  const decodedTeamName = teamName ? decodeURIComponent(teamName) : "";
+  const decodedTeamName = teamName ? safeDecode(teamName) : "";
   const { data: clubCompetitions = [] } = useTeamCompetitions(decodedTeamName);
+  const permanentSlug = teamPage?.slug || clubSlug(decodedTeamName);
+  // An old slug or a team name in the URL: show the canonical one.
+  useEffect(() => {
+    if (isPermanentRoute && teamPage && routeTeamName && teamPage.slug !== routeTeamName) {
+      navigate(`/team/${teamPage.slug}${search ? `?${search}` : ""}`, { replace: true });
+    }
+  }, [isPermanentRoute, teamPage, routeTeamName, search, navigate]);
   // Other competitions of this same club — used as a branding/logo fallback
   // when the current competition's own `teams` row hasn't been populated yet
   // (common for newly-created seasons before data import catches up).
@@ -645,35 +705,6 @@ export default function TeamProfile() {
       perGame: Object.fromEntries(statFields.map(f => [f, totals[f] / gamesPlayed]))
     };
   }, [playerStats]);
-
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (search.trim().length === 0) {
-        setSuggestions([]);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("competitions")
-        .select("name, slug")
-        .ilike("name", `%${search}%`)
-        .eq("is_public", true)
-        .limit(5);
-
-      if (!error) {
-        setSuggestions(data || []);
-      }
-    };
-
-    const delay = setTimeout(fetchSuggestions, 300);
-    return () => clearTimeout(delay);
-  }, [search]);
-
-  const handleSearch = () => {
-    if (search.trim()) {
-      navigate(`/competition/${search}`);
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1262,52 +1293,68 @@ export default function TeamProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600 dark:text-slate-400">Loading team profile...</p>
-        </div>
+      <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+        <SiteHeader />
+        <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-5">
+          <div className="ch-skel h-56 md:h-64 rounded-[14px]" />
+          <div className="ch-skel h-10 w-2/3 rounded-lg" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="ch-skel h-72 rounded-[14px]" />
+            <div className="ch-skel h-72 rounded-[14px] lg:col-span-2" />
+          </div>
+        </main>
       </div>
     );
   }
 
   if (!team) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Team Not Found</h1>
-          <p className="text-slate-600 dark:text-slate-400 mb-4">The team you're looking for doesn't exist or has no data.</p>
-          <button
-            onClick={() => navigate("/")}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg"
-          >
-            Go Home
-          </button>
-        </div>
+      <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+        <SiteHeader />
+        <main className="max-w-xl mx-auto px-4 py-16">
+          <div className="ch-card p-10 text-center">
+            <h1 className="ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2rem] text-[color:var(--ch-text)] mb-2">Team not found</h1>
+            <p className="text-sm text-[color:var(--ch-text-2)] mb-6">The team you're looking for doesn't exist or has no data.</p>
+            <button onClick={() => navigate("/")} className="ch-btn ch-btn-primary h-10 px-5">Go home</button>
+          </div>
+        </main>
       </div>
     );
   }
 
+  // The name people search for ("Gloucester City Kings", not "…Senior Men I")
+  // and a plain-English line about the season — the same text the server
+  // renders for this page (shared/recaps.ts).
+  const teamDisplayName = teamPage?.name || team.name;
+  const scoredGames = team.games.filter((g) => g.opponentScore != null);
+  const seasonSummary = teamSeasonSummary({
+    team: teamDisplayName,
+    competition: team.league?.name || pageCompetition?.name,
+    wins: team.wins,
+    losses: team.losses,
+    ppg: scoredGames.length ? scoredGames.reduce((n, g) => n + g.totalPoints, 0) / scoredGames.length : null,
+    oppPpg: scoredGames.length ? scoredGames.reduce((n, g) => n + (g.opponentScore || 0), 0) / scoredGames.length : null,
+    topScorer: team.topPlayer ? { name: team.topPlayer.name, ppg: team.topPlayer.avgPoints } : null,
+  });
+
   return (
     <>
       <Helmet>
-        <title>{`${team.name} | Team Profile | Swish Assistant`}</title>
+        <title>{teamSeoTitle(teamDisplayName)}</title>
         <meta
           name="description"
           content={
-            teamDescription ||
-            `View ${team.name} team profile, roster, stats, and recent games${team.league ? ` in ${team.league.name}` : ''} on Swish Assistant.`
+            teamDescription || seasonSummary || teamSeoDescription(teamDisplayName, team.league?.name)
           }
         />
         <meta
           property="og:title"
-          content={`${team.name} | Team Profile | Swish Assistant`}
+          content={teamSeoTitle(teamDisplayName)}
         />
         <meta
           property="og:description"
           content={
-            teamDescription ||
-            `View ${team.name} team profile, roster, stats, and recent games${team.league ? ` in ${team.league.name}` : ''} on Swish Assistant.`
+            teamDescription || seasonSummary || teamSeoDescription(teamDisplayName, team.league?.name)
           }
         />
         <meta property="og:type" content="website" />
@@ -1322,175 +1369,165 @@ export default function TeamProfile() {
           content="https://swishassistant.com/og-image.png"
         />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${team.name} | Team Profile | Swish Assistant`} />
+        <meta name="twitter:title" content={teamSeoTitle(teamDisplayName)} />
         <meta
           name="twitter:description"
           content={
-            teamDescription ||
-            `View ${team.name} team profile, roster, stats, and recent games${team.league ? ` in ${team.league.name}` : ''} on Swish Assistant.`
+            teamDescription || seasonSummary || teamSeoDescription(teamDisplayName, team.league?.name)
           }
         />
-        <link rel="canonical" href={leagueSlug 
-          ? `https://swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
-          : `https://swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`} />
+        {/* One permanent page per team side, whichever season is open — the
+            same canonical the server renders (server/publicSeo.ts). */}
+        <link rel="canonical" href={`https://swishassistant.com/team/${permanentSlug}`} />
       </Helmet>
       
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">
-        <header className="bg-white dark:bg-neutral-900 shadow-sm dark:shadow-neutral-800/50 sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4 flex flex-col md:flex-row items-center justify-between gap-3 md:gap-0">
-        <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
-          <img
-            src={SwishLogo}
-            alt="Swish Assistant"
-            className="h-8 md:h-9 cursor-pointer"
-            onClick={() => navigate("/")}
-          />
-        </div>
+      <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`} style={{ '--ch-accent': readablePrimary.body } as React.CSSProperties}>
+      <SiteHeader />
 
-        <div className="relative w-full max-w-md md:mx-6">
-          <input
-            type="text"
-            placeholder="Find your league"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-full text-sm bg-white dark:bg-neutral-800 dark:text-white dark:placeholder-slate-400"
-          />
-          <button
-            onClick={handleSearch}
-            className="absolute right-0 top-0 h-full px-3 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm"
+      <main className="max-w-7xl mx-auto px-4 md:px-6 py-5 md:py-7">
+        {team.league && (
+          <Link
+            href={`/competition/${team.league.slug}`}
+            className="inline-flex items-center gap-1.5 mb-3 text-[13px] font-medium text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)] transition-colors"
           >
-            Go
-          </button>
+            <ArrowLeft className="h-4 w-4" /> {team.league.name}
+          </Link>
+        )}
 
-          {suggestions.length > 0 && (
-            <ul className="absolute z-50 mt-2 w-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
-              {suggestions.map((item, index) => (
-                <li
-                  key={index}
-                  onClick={() => {
-                    setSearch("");
-                    setSuggestions([]);
-                    navigate(`/competition/${item.slug}`);
-                  }}
-                  className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 text-left text-slate-800 dark:text-white"
-                >
-                  {item.name}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="flex gap-3 md:gap-4 text-xs md:text-sm w-full md:w-auto justify-center md:justify-end items-center">
-          <ThemeToggle />
-          <button
-            onClick={() => navigate("/")}
-            className="text-slate-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400"
-          >
-            Home
-          </button>
-          {team?.league && (
-            <button
-              onClick={() => navigate(`/competition/${team.league?.slug}`)}
-              className="text-slate-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400"
+        {/* Team hero, in the team's colours */}
+        {(() => {
+          const heroColor = primaryColor || "#f97316";
+          const heroText = teamBranding?.textContrast || "#ffffff";
+          const onLight = heroText.toLowerCase() === "#000000";
+          const glass = onLight
+            ? "bg-black/[0.07] hover:bg-black/[0.12] border-black/10"
+            : "bg-white/[0.12] hover:bg-white/20 border-white/20";
+          return (
+            <section
+              className="ch-hero ch-rise"
+              style={{
+                background: `radial-gradient(120% 140% at 85% 0%, color-mix(in srgb, ${heroColor} 80%, #fff) 0%, ${heroColor} 45%, color-mix(in srgb, ${heroColor} 50%, #000) 100%)`,
+                color: heroText,
+              }}
+              aria-label={`${team.name} profile`}
             >
-              Back to League
-            </button>
-          )}
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
-        {/* Team Header */}
-        <div 
-          className="rounded-xl p-6 md:p-8 mb-6 md:mb-8"
-          style={{
-            background: teamBranding 
-              ? `linear-gradient(to right, ${primaryColor}, ${adjustOpacity(teamBranding.primaryRgb, 0.8)})`
-              : 'linear-gradient(to right, rgb(251, 146, 60), rgb(249, 115, 22))',
-            color: teamBranding?.textContrast || '#ffffff'
-          }}
-        >
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6">
-            {/* Team Logo Placeholder */}
-            <TeamLogo
-              teamName={team.name}
-              leagueId={team.league?.league_id || ''}
-              extraLeagueIds={siblingLeagueIds}
-              size="xl"
-              className="border-2 border-white/30"
-            />
-            
-            {/* Team Info */}
-            <div className="flex-1 text-center md:text-left">
-              <h1 className="text-2xl md:text-4xl font-bold mb-2">{team.name}</h1>
-              <div className="text-base md:text-lg opacity-90 mb-2">
-                {team.roster.length} Players • {team.totalGames} Games Played
-              </div>
-              <div className="text-base md:text-lg opacity-90">
-                Average Team Score: <span className="font-bold">{team.avgTeamPoints} PPG</span>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {team.league && (
-                  <ProfileChip
-                    label={team.league.name}
-                    onClick={() => navigate(`/competition/${team.league?.slug}`)}
+              <svg aria-hidden="true" viewBox="0 0 200 80" preserveAspectRatio="xMaxYMid slice" className="absolute inset-0 h-full w-full pointer-events-none" fill="none" stroke={onLight ? "black" : "white"} strokeWidth="0.5" style={{ opacity: onLight ? 0.08 : 0.12 }}>
+                <circle cx="150" cy="-4" r="30" />
+                <path d="M 118 0 V 22 A 32 32 0 0 0 182 22 V 0" />
+                <rect x="138" y="0" width="24" height="30" />
+              </svg>
+              <div className="relative p-5 md:p-8 flex flex-col md:flex-row md:items-end gap-5 md:gap-7">
+                <div className="h-24 w-24 md:h-28 md:w-28 rounded-2xl bg-white ring-1 ring-black/5 shadow-[0_10px_28px_-10px_rgba(0,0,0,0.55)] flex items-center justify-center shrink-0 overflow-hidden">
+                  <TeamLogo
+                    teamName={team.name}
+                    leagueId={team.league?.league_id || ''}
+                    extraLeagueIds={siblingLeagueIds}
+                    size="xl"
                   />
-                )}
-                {teamInstagramUrl && (
-                  <a
-                    href={teamInstagramUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
-                  >
-                    <Instagram className="h-3 w-3" />
-                    Instagram
-                  </a>
+                </div>
+                <div className="min-w-0 flex-1">
+                  {team.league && (
+                    <div className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.14em]" style={{ opacity: 0.75 }}>
+                      {team.league.name}
+                    </div>
+                  )}
+                  <h1 className="ch-display uppercase font-bold leading-[0.92] tracking-tight break-words text-[2rem] sm:text-[2.6rem] md:text-[3.4rem] mt-1">
+                    {teamDisplayName}
+                  </h1>
+                  {seasonSummary && (
+                    <p className="mt-2 max-w-2xl text-sm leading-relaxed" style={{ opacity: 0.85 }} data-testid="team-season-summary">
+                      {seasonSummary}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {[
+                      { label: "Players", value: team.roster.length },
+                      { label: "Games", value: team.totalGames },
+                      { label: "PPG", value: team.avgTeamPoints },
+                    ].map((pill) => (
+                      <span key={pill.label} className={`inline-flex items-baseline gap-1.5 h-7 px-2.5 rounded-lg border text-xs ${glass}`}>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ opacity: 0.7 }}>{pill.label}</span>
+                        <span className="font-bold tabular-nums">{pill.value}</span>
+                      </span>
+                    ))}
+                    {teamInstagramUrl && (
+                      <a
+                        href={teamInstagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border text-xs font-semibold transition-colors ${glass}`}
+                      >
+                        <Instagram className="h-3.5 w-3.5" />
+                        Instagram
+                      </a>
+                    )}
+                  </div>
+                </div>
+                {competitionOptions.length > 1 && (
+                  <div className="w-full md:w-[300px] shrink-0">
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ opacity: 0.75 }}>
+                      Competition
+                    </label>
+                    <Select
+                      value={leagueSlug}
+                      onValueChange={(slug) => {
+                        // Stay on the permanent page; the competition is a query parameter.
+                        if (slug !== leagueSlug) navigate(`/team/${permanentSlug}?competition=${encodeURIComponent(slug)}`);
+                      }}
+                    >
+                      <SelectTrigger className="h-10 rounded-lg bg-white/95 border-white/40 text-slate-900" data-testid="select-team-competition">
+                        <SelectValue placeholder="Select competition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {competitionOptions.map(option => (
+                          <SelectItem key={option.slug} value={option.slug}>
+                            {option.name}{option.record ? ` (${option.record})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
               </div>
-              {competitionOptions.length > 1 && (
-                <div className="mt-4 w-full max-w-[320px] mx-auto md:mx-0 text-slate-900">
-                  <label className="mb-1 block text-left text-xs font-semibold uppercase tracking-wide text-white/90">
-                    Competition
-                  </label>
-                  <Select
-                    value={leagueSlug}
-                    onValueChange={(slug) => {
-                      if (slug !== leagueSlug) navigate(`/competition/${slug}/team/${encodeURIComponent(decodedTeamName)}`);
-                    }}
-                  >
-                    <SelectTrigger className="bg-white/95 border-white/40" data-testid="select-team-competition">
-                      <SelectValue placeholder="Select competition" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {competitionOptions.map(option => (
-                        <SelectItem key={option.slug} value={option.slug}>
-                          {option.name}{option.record ? ` (${option.record})` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+            </section>
+          );
+        })()}
 
-        <div className="mb-6">
-          <PillTabBar
-            tabs={[
-              { key: 'overview', label: 'Overview' },
-              { key: 'playerStats', label: 'Player Stats' },
-              { key: 'teamStats', label: 'Team Stats' },
-              { key: 'shotChart', label: 'Shot Chart' },
-              ...(lineupsSlug ? [{ key: 'lineups', label: 'Lineups' }] : []),
-              { key: 'accolades', label: 'Accolades' },
-            ]}
-            active={activeStatsTab}
-            onChange={(key) => setActiveStatsTab(key as typeof activeStatsTab)}
-            accentColor={textOnWhiteColor}
-          />
+        {/* Section tabs, as on league and player pages */}
+        <div className="mt-4 md:mt-5 mb-5 md:mb-6 border-b border-[color:var(--ch-border)]">
+          <nav className="flex items-stretch gap-1 overflow-x-auto scrollbar-hide -mx-1" aria-label="Team sections">
+            {([
+              { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+              { key: 'playerStats', label: 'Player Stats', icon: BarChart3 },
+              { key: 'teamStats', label: 'Team Stats', icon: Shield },
+              { key: 'shotChart', label: 'Shot Chart', icon: Crosshair },
+              ...(lineupsSlug ? [{ key: 'lineups', label: 'Lineups', icon: Users }] : []),
+              { key: 'accolades', label: 'Accolades', icon: Award },
+            ] as { key: typeof activeStatsTab; label: string; icon: typeof LayoutDashboard }[]).map((tab) => {
+              const active = activeStatsTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={(e) => {
+                    setActiveStatsTab(tab.key);
+                    e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                  }}
+                  aria-current={active ? 'page' : undefined}
+                  className={`relative flex items-center gap-2 h-12 px-3 text-[13.5px] font-medium whitespace-nowrap transition-colors ${
+                    active ? 'text-[color:var(--ch-text)]' : 'text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]'
+                  }`}
+                >
+                  <tab.icon className="w-4 h-4" style={active ? { color: readablePrimary.body } : undefined} />
+                  {tab.label}
+                  <span
+                    className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full transition-opacity"
+                    style={{ backgroundColor: readablePrimary.accent, opacity: active ? 1 : 0 }}
+                  />
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
         {/* Overview Tab */}
@@ -1499,9 +1536,9 @@ export default function TeamProfile() {
           {/* Left Column - Team Info */}
           <div className="lg:col-span-1 space-y-4 md:space-y-6">
             {/* Team Description */}
-            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="ch-card p-4 md:p-6">
+              <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)] mb-3 md:mb-4 flex items-center gap-2">
+                <svg className="w-4 h-4 md:w-5 md:h-5 text-[color:var(--ch-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 Team Description
@@ -1531,20 +1568,8 @@ export default function TeamProfile() {
             </div>
 
             {/* Team Stats Summary */}
-            <div 
-              className="rounded-xl shadow-md p-4 md:p-6 border-2 bg-gradient-to-br dark:from-neutral-800 dark:to-neutral-850 dark:border-neutral-700"
-              style={{
-                background: document.documentElement.classList.contains('dark')
-                  ? undefined
-                  : teamBranding 
-                    ? `linear-gradient(to bottom right, ${adjustOpacity(teamBranding.primaryRgb, 0.15)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.15)})`
-                    : 'linear-gradient(to bottom right, rgb(255, 247, 237), rgb(254, 249, 195))',
-                borderColor: teamBranding 
-                  ? adjustOpacity(teamBranding.primaryRgb, 0.3)
-                  : 'rgb(253, 186, 116)'
-              }}
-            >
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
+            <div className="ch-card p-4 md:p-6">
+              <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)] mb-3 md:mb-4 flex items-center gap-2">
                 <svg 
                   className="w-4 h-4 md:w-5 md:h-5" 
                   fill="none" 
@@ -1557,34 +1582,34 @@ export default function TeamProfile() {
                 Team Statistics
               </h2>
               <div className="space-y-3 md:space-y-4">
-                <div className="bg-white dark:bg-neutral-800 rounded-lg p-3 md:p-4">
+                <div className="ch-tile p-3 md:p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: readablePrimary.body }}>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-slate-600 dark:text-slate-300 font-medium">W-L Record</span>
+                      <span className="text-[color:var(--ch-text-2)] font-medium">W-L Record</span>
                     </div>
-                    <span className="text-2xl md:text-3xl font-bold" data-testid="team-record" style={{ color: readablePrimary.body }}>
+                    <span className="ch-display text-[2rem] md:text-[2.4rem] font-bold leading-none tabular-nums" data-testid="team-record" style={{ color: readablePrimary.body }}>
                       {team.wins}-{team.losses}
                     </span>
                   </div>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
-                  <span className="text-slate-600 dark:text-slate-300">Games Played</span>
+                  <span className="text-[color:var(--ch-text-2)]">Games Played</span>
                   <span className="font-semibold" style={{ color: readablePrimary.body }}>{team.totalGames}</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
-                  <span className="text-slate-600 dark:text-slate-300">Avg Points Per Game</span>
+                  <span className="text-[color:var(--ch-text-2)]">Avg Points Per Game</span>
                   <span className="font-semibold" style={{ color: readablePrimary.body }}>{team.avgTeamPoints} PPG</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
-                  <span className="text-slate-600 dark:text-slate-300">Roster Size</span>
+                  <span className="text-[color:var(--ch-text-2)]">Roster Size</span>
                   <span className="font-semibold" style={{ color: readablePrimary.body }}>{team.roster.length} Players</span>
                 </div>
                 {team.topPlayer && (
                   <div className="flex justify-between text-sm md:text-base">
-                    <span className="text-slate-600 dark:text-slate-300">Top Scorer</span>
+                    <span className="text-[color:var(--ch-text-2)]">Top Scorer</span>
                     <span className="font-semibold" style={{ color: readablePrimary.body }}>{team.topPlayer.name}</span>
                   </div>
                 )}
@@ -1592,8 +1617,8 @@ export default function TeamProfile() {
             </div>
 
             {teamAccolades.length > 0 && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4">
+              <div className="ch-card p-4 md:p-6">
+                <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)] mb-3 md:mb-4">
                   Top Accolades
                 </h2>
                 <AccoladeBadges accolades={topAccolades(teamAccolades)} accentColor={readablePrimary.body} />
@@ -1605,27 +1630,15 @@ export default function TeamProfile() {
           <div className="lg:col-span-2 space-y-4 md:space-y-6">
             {/* Top Player Highlight */}
             {team.topPlayer && (
-              <div 
-                className="rounded-xl p-4 md:p-6 border bg-gradient-to-r dark:from-neutral-800 dark:to-neutral-850 dark:border-neutral-700"
-                style={{
-                  background: document.documentElement.classList.contains('dark')
-                    ? undefined
-                    : teamBranding 
-                      ? `linear-gradient(to right, ${adjustOpacity(teamBranding.primaryRgb, 0.15)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.15)})`
-                      : 'linear-gradient(to right, rgb(255, 247, 237), rgb(254, 249, 195))',
-                  borderColor: teamBranding 
-                    ? adjustOpacity(teamBranding.primaryRgb, 0.25)
-                    : 'rgb(254, 215, 170)'
-                }}
-              >
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
+              <div className="ch-card p-4 md:p-6">
+                <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)] mb-3 md:mb-4 flex items-center gap-2">
                   <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: readablePrimary.body }}>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                   </svg>
                   Star Player
                 </h2>
                 <div 
-                  className="bg-white dark:bg-neutral-800 rounded-lg p-3 md:p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  className="ch-tile ch-hover p-3 md:p-4 cursor-pointer"
                   onClick={() => {
                     const identifier = team.topPlayer.player_slug || team.topPlayer.player_id;
                     if (identifier) navigate(`/player/${identifier}`);
@@ -1660,32 +1673,32 @@ export default function TeamProfile() {
                       {(() => {
                         const identifier = team.topPlayer.player_slug || team.topPlayer.player_id;
                         return identifier ? (
-                          <Link href={`/player/${encodeURIComponent(identifier)}`} className="text-lg md:text-xl font-bold text-slate-800 dark:text-white hover:underline">
+                          <Link href={`/player/${encodeURIComponent(identifier)}`} className="text-lg md:text-xl font-bold text-[color:var(--ch-text)] hover:underline">
                             {team.topPlayer.name}
                           </Link>
                         ) : (
-                          <h3 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{team.topPlayer.name}</h3>
+                          <h3 className="text-lg md:text-xl font-bold text-[color:var(--ch-text)]">{team.topPlayer.name}</h3>
                         );
                       })()}
-                      <p className="text-slate-600 dark:text-slate-300 text-sm md:text-base">{team.topPlayer.position}</p>
-                      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">{team.topPlayer.gamesPlayed} games played</p>
+                      <p className="text-[color:var(--ch-text-2)] text-sm md:text-base">{team.topPlayer.position}</p>
+                      <p className="text-xs md:text-sm text-[color:var(--ch-muted)]">{team.topPlayer.gamesPlayed} games played</p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 md:gap-4 text-center w-full md:w-auto">
                       <div>
                         <div className="text-xl md:text-2xl font-bold" style={{ color: readablePrimary.body }}>{team.topPlayer.avgPoints}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">PPG</div>
+                        <div className="text-xs text-[color:var(--ch-muted)]">PPG</div>
                       </div>
                       <div>
                         <div className="text-xl md:text-2xl font-bold" style={{ color: readablePrimary.body }}>{team.topPlayer.avgRebounds}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">RPG</div>
+                        <div className="text-xs text-[color:var(--ch-muted)]">RPG</div>
                       </div>
                       <div>
                         <div className="text-xl md:text-2xl font-bold" style={{ color: readablePrimary.body }}>{team.topPlayer.avgAssists}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">APG</div>
+                        <div className="text-xs text-[color:var(--ch-muted)]">APG</div>
                       </div>
                       <div>
                         <div className="text-xl md:text-2xl font-bold" style={{ color: readablePrimary.body }}>{team.topPlayer.totalPoints}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">Total PTS</div>
+                        <div className="text-xs text-[color:var(--ch-muted)]">Total PTS</div>
                       </div>
                     </div>
                   </div>
@@ -1694,8 +1707,8 @@ export default function TeamProfile() {
             )}
 
             {/* Team Roster */}
-            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
+            <div className="ch-card p-4 md:p-6">
+              <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)] mb-3 md:mb-4 flex items-center gap-2">
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: readablePrimary.body }}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                 </svg>
@@ -1704,12 +1717,12 @@ export default function TeamProfile() {
               <div className="overflow-x-auto -mx-4 md:mx-0">
                 <table className="w-full text-xs md:text-sm">
                   <thead>
-                    <tr className="border-b border-gray-200 dark:border-neutral-700">
-                      <th className="sticky left-0 bg-white dark:bg-neutral-900 text-left py-2 md:py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 z-10">Player</th>
-                      <th className="hidden md:table-cell text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
-                      <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PPG</th>
-                      <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">RPG</th>
-                      <th className="hidden md:table-cell text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">APG</th>
+                    <tr className="border-b border-[color:var(--ch-border)]">
+                      <th className="sticky left-0 bg-[color:var(--ch-surface)] text-left py-2 md:py-3 px-2 font-semibold text-[color:var(--ch-text)] z-10">Player</th>
+                      <th className="hidden md:table-cell text-center py-3 px-2 font-semibold text-[color:var(--ch-text)]">GP</th>
+                      <th className="text-right py-2 md:py-3 px-2 font-semibold text-[color:var(--ch-text)]">PPG</th>
+                      <th className="text-right py-2 md:py-3 px-2 font-semibold text-[color:var(--ch-text)]">RPG</th>
+                      <th className="hidden md:table-cell text-right py-3 px-2 font-semibold text-[color:var(--ch-text)]">APG</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1721,9 +1734,9 @@ export default function TeamProfile() {
                           if (identifier) navigate(`/player/${identifier}`);
                         }}
                         data-testid={`player-card-${player.player_id}`}
-                        className="border-b border-gray-100 dark:border-neutral-800 transition-colors cursor-pointer hover:bg-orange-50/50 dark:hover:bg-neutral-800"
+                        className="border-b border-[color:var(--ch-border)] transition-colors cursor-pointer hover:bg-[color:var(--ch-surface-2)]"
                       >
-                        <td className="sticky left-0 bg-white dark:bg-neutral-900 py-2 md:py-3 px-2 z-10">
+                        <td className="sticky left-0 bg-[color:var(--ch-surface)] py-2 md:py-3 px-2 z-10">
                           <div className="flex items-center gap-2">
                             <PlayerAvatarThumb
                               photoUrl={player.photoUrl}
@@ -1735,19 +1748,19 @@ export default function TeamProfile() {
                             {(() => {
                               const identifier = player.player_slug || player.player_id;
                               return identifier ? (
-                                <Link href={`/player/${encodeURIComponent(identifier)}`} className="font-medium text-slate-800 dark:text-white hover:underline">
+                                <Link href={`/player/${encodeURIComponent(identifier)}`} className="font-medium text-[color:var(--ch-text)] hover:underline">
                                   {player.name}
                                 </Link>
                               ) : (
-                                <span className="font-medium text-slate-800 dark:text-white">{player.name}</span>
+                                <span className="font-medium text-[color:var(--ch-text)]">{player.name}</span>
                               );
                             })()}
                           </div>
                         </td>
-                        <td className="hidden md:table-cell py-3 px-2 text-center text-slate-600 dark:text-slate-400">{player.gamesPlayed}</td>
+                        <td className="hidden md:table-cell py-3 px-2 text-center text-[color:var(--ch-text-2)]">{player.gamesPlayed}</td>
                         <td className="py-2 md:py-3 px-2 text-right font-medium" style={{ color: readablePrimary.body }}>{player.avgPoints}</td>
-                        <td className="py-2 md:py-3 px-2 text-right text-slate-600 dark:text-slate-400">{player.avgRebounds}</td>
-                        <td className="hidden md:table-cell py-3 px-2 text-right text-slate-600 dark:text-slate-400">{player.avgAssists}</td>
+                        <td className="py-2 md:py-3 px-2 text-right text-[color:var(--ch-text-2)]">{player.avgRebounds}</td>
+                        <td className="hidden md:table-cell py-3 px-2 text-right text-[color:var(--ch-text-2)]">{player.avgAssists}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1756,8 +1769,8 @@ export default function TeamProfile() {
             </div>
 
             {/* Recent Games */}
-            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
+            <div className="ch-card p-4 md:p-6">
+              <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)] mb-3 md:mb-4 flex items-center gap-2">
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: readablePrimary.body }}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -1774,14 +1787,23 @@ export default function TeamProfile() {
                       }
                     }}
                     data-testid={`recent-game-${index}`}
-                    className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
+                    className="flex justify-between items-center p-3 bg-[color:var(--ch-surface-2)] rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
                   >
                     <div className="flex-1">
-                      <div className="font-medium text-slate-800 dark:text-white text-sm md:text-base">
-                        {game.isHome ? 'vs' : '@'} {game.opponent}
+                      <div className="font-medium text-[color:var(--ch-text)] text-sm md:text-base">
+                        {game.isHome ? 'vs' : '@'}{' '}
+                        {game.game_key ? (
+                          <EntityLink
+                            href={gamePath(leagueSlug, game.game_key)}
+                            onNavigate={() => { setSelectedGameId(game.game_key!); setIsGameModalOpen(true); }}
+                            className="hover:underline underline-offset-2"
+                          >
+                            {game.opponent}
+                          </EntityLink>
+                        ) : game.opponent}
                       </div>
-                      <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
-                        Final: <span className="font-semibold text-slate-700 dark:text-slate-200">{game.totalPoints} - {game.opponentScore}</span>
+                      <div className="text-xs md:text-sm text-[color:var(--ch-muted)] mt-1">
+                        Final: <span className="font-semibold text-[color:var(--ch-text)]">{game.totalPoints} - {game.opponentScore}</span>
                       </div>
                     </div>
                     <div>
@@ -1798,9 +1820,9 @@ export default function TeamProfile() {
 
             {/* Upcoming Schedule */}
             {upcomingGames.length > 0 && (
-              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
-                  <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="ch-card p-4 md:p-6">
+                <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)] mb-3 md:mb-4 flex items-center gap-2">
+                  <svg className="w-4 h-4 md:w-5 md:h-5 text-[color:var(--ch-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                   Upcoming Schedule ({upcomingGames.length})
@@ -1809,19 +1831,22 @@ export default function TeamProfile() {
                   {upcomingGames.map((game: UpcomingGame, index: number) => (
                     <div 
                       key={index} 
-                      className="flex flex-col md:flex-row justify-between md:items-center p-3 bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-neutral-800 dark:to-neutral-800 border border-orange-200 dark:border-orange-500/30 rounded-lg gap-2 md:gap-0"
+                      className="ch-tile flex flex-col md:flex-row justify-between md:items-center p-3 gap-2 md:gap-0"
                       data-testid={`upcoming-game-${index}`}
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <div className="font-medium text-slate-800 dark:text-white text-sm md:text-base">
-                            {game.isHome ? 'vs' : '@'} {game.opponent}
+                          <div className="font-medium text-[color:var(--ch-text)] text-sm md:text-base">
+                            {game.isHome ? 'vs' : '@'}{' '}
+                            <EntityLink href={teamPath(game.opponent, leagueSlug)} className="hover:underline underline-offset-2">
+                              {game.opponent}
+                            </EntityLink>
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded ${game.isHome ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400'}`}>
+                          <span className={`text-[10px] font-semibold uppercase tracking-[0.1em] px-2 py-1 rounded ${game.isHome ? 'bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]' : 'bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)]'}`}>
                             {game.isHome ? 'HOME' : 'AWAY'}
                           </span>
                         </div>
-                        <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        <div className="text-xs md:text-sm text-[color:var(--ch-muted)] mt-1">
                           {new Date(game.matchtime).toLocaleDateString('en-US', { 
                             weekday: 'short', 
                             month: 'short', 
@@ -1833,7 +1858,7 @@ export default function TeamProfile() {
                         </div>
                       </div>
                       <div className="text-left md:text-right">
-                        <svg className="w-5 h-5 md:w-6 md:h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5 md:w-6 md:h-6 text-[color:var(--ch-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                         </svg>
                       </div>
@@ -1847,10 +1872,10 @@ export default function TeamProfile() {
         )}
 
         {activeStatsTab === 'playerStats' && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+          <div className="bg-[color:var(--ch-surface)] rounded-xl shadow p-4 md:p-6">
             <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Player Statistics - {team.name}</h2>
-              <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
+              <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)]">Player Statistics - {team.name}</h2>
+              <div className="text-xs md:text-sm text-[color:var(--ch-muted)]">
                 {filteredPlayerAverages.length} players
               </div>
             </div>
@@ -1862,7 +1887,7 @@ export default function TeamProfile() {
                   placeholder="Search players..."
                   value={statsSearch}
                   onChange={(e) => setStatsSearch(e.target.value)}
-                  className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400"
+                  className="w-full px-4 py-2 pl-10 border border-[color:var(--ch-border-strong)] rounded-lg focus:ring-2 focus:ring-[color:var(--ch-accent)] focus:border-transparent bg-[color:var(--ch-surface)] text-[color:var(--ch-text)] placeholder:text-[color:var(--ch-muted)]"
                 />
                 <svg className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1872,9 +1897,9 @@ export default function TeamProfile() {
 
             <div className="flex flex-col md:flex-row gap-4 mb-4">
               <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Stat Category</label>
+                <label className="block text-xs font-medium text-[color:var(--ch-text-2)] mb-1.5">Stat Category</label>
                 <Select value={playerStatsCategory} onValueChange={(value) => setPlayerStatsCategory(value as any)}>
-                  <SelectTrigger className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600">
+                  <SelectTrigger className="w-full bg-[color:var(--ch-surface)] border-slate-200 dark:border-neutral-600">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
@@ -1886,9 +1911,9 @@ export default function TeamProfile() {
                 </Select>
               </div>
               <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
+                <label className="block text-xs font-medium text-[color:var(--ch-text-2)] mb-1.5">Mode</label>
                 <Select value={playerStatsView} onValueChange={(value) => setPlayerStatsView(value as any)}>
-                  <SelectTrigger className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600">
+                  <SelectTrigger className="w-full bg-[color:var(--ch-surface)] border-slate-200 dark:border-neutral-600">
                     <SelectValue placeholder="Select mode" />
                   </SelectTrigger>
                   <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
@@ -1901,17 +1926,17 @@ export default function TeamProfile() {
             </div>
 
             {filteredPlayerAverages.length > 0 ? (
-              <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 dark:border-neutral-700 rounded-lg">
+              <div className="overflow-x-auto -mx-4 md:mx-0 border border-[color:var(--ch-border)] rounded-lg">
                 <table className="w-full text-xs md:text-sm">
                   <thead>
-                    <tr className="border-b border-gray-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800">
-                      <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-orange-50 dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
+                    <tr className="border-b border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]">
+                      <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-[color:var(--ch-text)] sticky left-0 bg-[color:var(--ch-surface-2)] z-10 min-w-[100px] md:min-w-[140px]">Player</th>
                       <th
                         onClick={() => {
                           if (statsSortColumn === 'GP') setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
                           else { setStatsSortColumn('GP'); setStatsSortDirection('desc'); }
                         }}
-                        className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${statsSortColumn === 'GP' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'}`}
+                        className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-[color:var(--ch-surface-3)] transition-colors ${statsSortColumn === 'GP' ? 'text-[color:var(--ch-accent)]' : 'text-[color:var(--ch-text)]'}`}
                       >
                         <div className="flex items-center justify-center gap-1">
                           GP {statsSortColumn === 'GP' && <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>}
@@ -1924,8 +1949,8 @@ export default function TeamProfile() {
                             if (statsSortColumn === column.label) setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
                             else { setStatsSortColumn(column.label); setStatsSortDirection('desc'); }
                           }}
-                          className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${
-                            statsSortColumn === column.label ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'
+                          className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-[color:var(--ch-surface-3)] transition-colors ${
+                            statsSortColumn === column.label ? 'text-[color:var(--ch-accent)]' : 'text-[color:var(--ch-text)]'
                           }`}
                         >
                           <div className="flex items-center justify-center gap-1">
@@ -1940,26 +1965,26 @@ export default function TeamProfile() {
                     {filteredPlayerAverages.map((player, index) => (
                       <tr
                         key={`${player.id}-${index}`}
-                        className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
+                        className={`border-b border-[color:var(--ch-border)] hover:bg-[color:var(--ch-surface-2)] transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                         onClick={() => { if (player.slug) navigate(`/player/${player.slug}`); }}
                       >
-                        <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
+                        <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-[color:var(--ch-text)] sticky left-0 bg-[color:var(--ch-surface)] hover:bg-[color:var(--ch-surface-2)] z-10">
                           <div className="flex items-center gap-2 min-w-0">
                             <PlayerAvatarThumb
                               photoUrl={player.photoUrl}
                               name={player.name}
-                              fallbackClassName="text-[10px] md:text-xs bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
+                              fallbackClassName="text-[10px] md:text-xs bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]"
                             />
                             {player.slug ? (
-                              <Link href={`/player/${encodeURIComponent(player.slug)}`} className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate hover:underline">
+                              <Link href={`/player/${encodeURIComponent(player.slug)}`} className="font-medium text-[color:var(--ch-text)] text-xs md:text-sm truncate hover:underline">
                                 {player.name}
                               </Link>
                             ) : (
-                              <div className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate">{player.name}</div>
+                              <div className="font-medium text-[color:var(--ch-text)] text-xs md:text-sm truncate">{player.name}</div>
                             )}
                           </div>
                         </td>
-                        <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300 font-medium">{player.games}</td>
+                        <td className="py-2 md:py-3 px-2 md:px-3 text-center text-[color:var(--ch-text-2)] font-medium">{player.games}</td>
                         {activePlayerStatColumns.map((column) => {
                           const rawStats = player.rawStats || [];
                           const rateStats = [
@@ -1982,7 +2007,7 @@ export default function TeamProfile() {
                           const value = applyPlayerMode(column.key, baseValue, player.games, player.totalMinutes || 0, playerStatsView);
                           const displayValue = value === 0 ? '0.0' : value.toFixed(1);
                           return (
-                            <td key={`${player.id}-${column.key}`} className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300">
+                            <td key={`${player.id}-${column.key}`} className="py-2 md:py-3 px-2 md:px-3 text-center text-[color:var(--ch-text-2)]">
                               {displayValue}
                             </td>
                           );
@@ -1991,18 +2016,18 @@ export default function TeamProfile() {
                     ))}
                   </tbody>
                 </table>
-                <div className="md:hidden bg-orange-50 dark:bg-neutral-800 text-orange-700 dark:text-orange-400 text-center py-2 text-xs border-t border-orange-200 dark:border-neutral-700">
+                <div className="md:hidden bg-[color:var(--ch-surface-2)] text-[color:var(--ch-accent)] text-center py-2 text-xs border-t border-[color:var(--ch-border)]">
                   ← Swipe to see all stats →
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">No player statistics available</div>
+              <div className="text-center py-8 text-[color:var(--ch-muted)]">No player statistics available</div>
             )}
 
             {filteredPlayerAverages.length > 0 && (
-              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
-                <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
-                  <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({playerStatsCategory}):</div>
+              <div className="mt-6 pt-4 border-t border-[color:var(--ch-border)]">
+                <div className="text-xs text-[color:var(--ch-muted)] space-y-1">
+                  <div className="font-semibold text-[color:var(--ch-text-2)] mb-2">Legend ({playerStatsCategory}):</div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {PLAYER_STAT_LEGENDS[playerStatsCategory]?.map((legend, index) => (
                       <span key={`legend-${index}`}>{legend}</span>
@@ -2034,17 +2059,17 @@ export default function TeamProfile() {
         )}
 
         {activeStatsTab === 'teamStats' && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
-            <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Team Statistics - {team.name}</h2>
+          <div className="bg-[color:var(--ch-surface)] rounded-xl shadow p-4 md:p-6">
+            <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)] mb-4">Team Statistics - {team.name}</h2>
             
             {teamAggregateStats ? (
               <div className="space-y-6">
-                <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                <div className="text-sm text-[color:var(--ch-text-2)] mb-4">
                   Based on {teamAggregateStats.gamesPlayed} games played
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 pb-2 border-b border-gray-200 dark:border-neutral-700">Traditional</h3>
+                  <h3 className="text-sm font-semibold text-[color:var(--ch-text)] mb-3 pb-2 border-b border-[color:var(--ch-border)]">Traditional</h3>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
                       { label: 'PPG', value: (teamAggregateStats.perGame.spoints || 0).toFixed(1) },
@@ -2069,8 +2094,8 @@ export default function TeamProfile() {
                       { label: 'PITP', value: (teamAggregateStats.perGame.spointsinthepaint || 0).toFixed(1) },
                       { label: 'FB PTS', value: (teamAggregateStats.perGame.spointsfastbreak || 0).toFixed(1) },
                     ].map((stat) => (
-                      <div key={stat.label} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 text-center">
-                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{stat.label}</div>
+                      <div key={stat.label} className="bg-[color:var(--ch-surface-2)] rounded-lg p-3 text-center">
+                        <div className="text-xs text-[color:var(--ch-muted)] mb-1">{stat.label}</div>
                         <div className="text-lg font-bold" style={{ color: readablePrimary.body }}>{stat.value}</div>
                       </div>
                     ))}
@@ -2078,18 +2103,18 @@ export default function TeamProfile() {
                 </div>
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">No team statistics available</div>
+              <div className="text-center py-8 text-[color:var(--ch-muted)]">No team statistics available</div>
             )}
           </div>
         )}
 
         {activeStatsTab === 'accolades' && (
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
-            <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Accolades - {team.name}</h2>
+          <div className="bg-[color:var(--ch-surface)] rounded-xl shadow p-4 md:p-6">
+            <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.2rem] md:text-[1.35rem] text-[color:var(--ch-text)] mb-4">Accolades - {team.name}</h2>
             {teamAccolades.length > 0 ? (
               <AccoladeBadges accolades={teamAccolades} accentColor={readablePrimary.body} />
             ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">No accolades yet</div>
+              <div className="text-center py-8 text-[color:var(--ch-muted)]">No accolades yet</div>
             )}
           </div>
         )}

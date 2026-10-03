@@ -1,18 +1,13 @@
 import { useEffect, useState } from "react"
-import { useLocation } from "wouter"
+import { Link, useLocation } from "wouter"
+import type { ComponentType } from "react";
+import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/use-auth";
-import { Users, TrendingUp, Trophy, Settings, Share2, Code, Newspaper, FilePenLine, CheckCircle, AlertCircle, RefreshCw, ArrowRight } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Users, Trophy, Share2, Code, Newspaper, CheckCircle, AlertCircle, RefreshCw, ArrowRight, BadgeCheck, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
-import SwishLogo from "@/assets/Swish Assistant Logo.png"
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
+import { type MyClaim, claimEntry, useMyClaim } from "@/lib/playerClaims";
 
 type SuggestedLeague = {
   name: string;
@@ -21,9 +16,139 @@ type SuggestedLeague = {
   type: "league" | "competition";
 };
 
+type Tool = {
+  key: string;
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  body: string;
+  href: string;
+  cta: string;
+  enabled: boolean;
+  lockedNote?: string;
+  testId?: string;
+  ctaTestId?: string;
+};
+
+/** One dashboard destination: the whole card opens it, or it waits with a note. */
+function ToolCard({ tool }: { tool: Tool }) {
+  const Icon = tool.icon;
+  const inner = (
+    <>
+      <span className="flex items-start gap-3.5">
+        <span
+          className={`h-11 w-11 shrink-0 rounded-xl flex items-center justify-center ${
+            tool.enabled ? "bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]" : "bg-[color:var(--ch-surface-3)] text-[color:var(--ch-muted)]"
+          }`}
+        >
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="ch-display uppercase font-bold tracking-tight leading-none text-[1.3rem] text-[color:var(--ch-text)]">{tool.title}</span>
+            {!tool.enabled && (
+              <span className="rounded-full bg-[color:var(--ch-surface-3)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[color:var(--ch-text-2)]">
+                Coming soon
+              </span>
+            )}
+          </span>
+          <span className="mt-1 block text-[13px] text-[color:var(--ch-muted)]">{tool.description}</span>
+        </span>
+      </span>
+      <span className="mt-4 block text-sm text-[color:var(--ch-text-2)]">{tool.body}</span>
+      {tool.enabled ? (
+        <span className="mt-auto pt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-[color:var(--ch-accent)]" data-testid={tool.ctaTestId}>
+          {tool.cta}
+          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+        </span>
+      ) : (
+        <span className="mt-auto pt-4 block text-xs font-medium text-[color:var(--ch-muted)]">{tool.lockedNote}</span>
+      )}
+    </>
+  );
+  return tool.enabled ? (
+    <Link href={tool.href} className="ch-card ch-hover group flex flex-col p-5 min-h-[196px]" data-testid={tool.testId}>
+      {inner}
+    </Link>
+  ) : (
+    <div className="ch-card flex flex-col p-5 min-h-[196px] opacity-80" data-testid={tool.testId}>
+      {inner}
+    </div>
+  );
+}
+
+/**
+ * The player's own profile: enter a claim code (or request one), then
+ * "pending", then links to the profile once it's verified. Shown to every
+ * signed-in member — admins can be players too.
+ */
+function PlayerProfileCard({ claim, loading }: { claim: MyClaim | null | undefined; loading: boolean }) {
+  const entry = claimEntry(claim);
+  const primary = "ch-btn ch-btn-primary h-10 px-4 text-sm";
+  const ghost = "ch-btn ch-btn-ghost h-10 px-4 text-sm";
+
+  const body =
+    entry.state === "approved"
+      ? `You own ${claim!.player_name}'s profile${claim!.covered_rows > 1 ? `, covering ${claim!.covered_rows} competitions` : ""}. Add a photo, bio and highlights, and share your link.`
+      : entry.state === "pending"
+        ? `We're verifying your claim for ${claim!.player_name}. You'll be able to edit your profile as soon as it's approved.`
+        : "Got a claim code from us? Enter it with your date of birth to take ownership of your profile across every league you've played in.";
+
+  return (
+    <div className="ch-card flex flex-col p-5 min-h-[196px]" data-testid="card-player-profile">
+      <span className="flex items-start gap-3.5">
+        <span className="h-11 w-11 shrink-0 rounded-xl flex items-center justify-center bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]">
+          <BadgeCheck className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="ch-display uppercase font-bold tracking-tight leading-none text-[1.3rem] text-[color:var(--ch-text)]">
+              {entry.state === "approved" ? "Your player profile" : "Claim your player profile"}
+            </span>
+            {entry.state === "pending" && (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                Pending
+              </span>
+            )}
+          </span>
+          <span className="mt-1 block text-[13px] text-[color:var(--ch-muted)]">Own your page on Swish</span>
+        </span>
+      </span>
+      <span className="mt-4 block text-sm text-[color:var(--ch-text-2)]">{loading ? "Checking your profile…" : body}</span>
+      {claim?.status === "rejected" && (
+        <span className="mt-2 block text-[13px] text-red-600 dark:text-red-400">
+          Your last claim wasn't approved{claim.rejection_reason ? `: ${claim.rejection_reason}` : "."} You can try again with a new code.
+        </span>
+      )}
+      <span className="mt-auto pt-4 flex flex-wrap items-center gap-2">
+        {entry.state === "approved" ? (
+          <>
+            <Link href={entry.href} className={primary} data-testid="button-view-player-profile">View profile</Link>
+            <Link href="/my-profile/edit" className={ghost}>Edit profile</Link>
+          </>
+        ) : entry.state === "pending" ? (
+          <Link href="/claim" className={ghost} data-testid="button-claim-status">View claim status</Link>
+        ) : (
+          <>
+            <Link href="/claim" className={primary} data-testid="button-enter-claim-code">Enter your claim code</Link>
+            <Link
+              href="/contact-sales?topic=player-page"
+              className="text-sm font-medium text-[color:var(--ch-accent)] hover:underline underline-offset-2"
+              data-testid="link-request-claim-code"
+            >
+              No code yet? Request one
+            </Link>
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
 export default function DashboardLanding() {
   const [, navigate] = useLocation();
   const { isAdmin, isCoach, emailConfirmed, user, logoutMutation } = useAuth();
+  const { data: myClaim, isLoading: myClaimLoading } = useMyClaim(user?.id);
   // Coach (team) accounts get the Coaches Hub card too — everything else on
   // this dashboard (League Management, Social Tools, API/Widgets) stays
   // admin-only.
@@ -136,276 +261,178 @@ export default function DashboardLanding() {
     }
   }
 
+  const tools: Tool[] = [
+    ...(isAdmin
+      ? [{
+          key: "leagues",
+          icon: Trophy,
+          title: "League Management",
+          description: "Create and manage your leagues",
+          body: "Create new leagues, upload game data, manage teams, and customise your league experience.",
+          href: "/league-management",
+          cta: "Manage leagues",
+          enabled: true,
+        }]
+      : []),
+    {
+      key: "coaches",
+      icon: Users,
+      title: "Coaches Hub",
+      description: "Coaching tools and resources",
+      body: "Scouting reports, game analysis and team tools built from your league's data.",
+      href: "/coaches-hub",
+      cta: "Open the hub",
+      enabled: canAccessCoachesHub,
+      lockedNote: "We'll let members know when access opens.",
+      testId: "card-coaches-hub",
+    },
+    {
+      key: "social",
+      icon: Share2,
+      title: "Swish Social",
+      description: "Generate social media graphics",
+      body: "Create performance cards and shareable graphics from your stats database.",
+      href: "/social-tools",
+      cta: "Create graphics",
+      enabled: isAdmin,
+      lockedNote: "Shareable graphics are being prepared for members.",
+      testId: "card-swish-social",
+    },
+    {
+      key: "widgets",
+      icon: Code,
+      title: "API / Widgets",
+      description: "Embed league data anywhere",
+      body: "Create embeddable widgets for standings, player stats, scores and league leaders.",
+      href: "/api-widgets",
+      cta: "Build widgets",
+      enabled: isAdmin,
+      lockedNote: "Embeddable league tools will be available later.",
+      testId: "card-api-widgets",
+    },
+    ...(isAdmin
+      ? [{
+          key: "news",
+          icon: Newspaper,
+          title: "News Manager",
+          description: "Publish stories and updates",
+          body: "Add, edit and remove articles that appear in the Latest News section on the home page.",
+          href: "/news-manager",
+          cta: "Manage news",
+          enabled: true,
+          testId: "card-news-manager",
+          ctaTestId: "button-open-news-manager",
+        }]
+      : []),
+  ];
+
+  const email = (user as { email?: string } | null)?.email;
+
   return (
-    <div className="bg-white py-24 sm:py-32">
-      <div className="mx-auto max-w-6xl px-6">
-        <div className="flex items-center justify-between w-full mb-8">
-          <Button
-            variant="outline"
-            onClick={() => navigate("/")}
-            className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300"
-          >
-            ← Back to Home
-          </Button>
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+      <Helmet>
+        <title>Dashboard | Swish Assistant</title>
+      </Helmet>
+      <SiteHeader />
+
+      <main className="max-w-6xl mx-auto px-4 md:px-6 pt-6 md:pt-9 pb-16">
+        <header className="ch-rise flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Dashboard</div>
+            <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[3rem] text-[color:var(--ch-text)]">
+              {isAdmin ? "Choose your mode" : "Your member dashboard"}
+            </h1>
+            {email && <p className="mt-2 text-sm text-[color:var(--ch-text-2)] truncate">Signed in as {email}</p>}
+          </div>
           {user && (
-            <Button
-              variant="outline"
+            <button
+              type="button"
               onClick={() => logoutMutation.mutate()}
               disabled={logoutMutation.isPending}
-              className="border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
+              className="ch-btn ch-btn-ghost h-10 px-4 self-start sm:self-auto disabled:opacity-60"
               data-testid="button-logout"
             >
+              <LogOut className="h-4 w-4" />
               {logoutMutation.isPending ? "Signing out…" : "Log out"}
-            </Button>
+            </button>
           )}
-        </div>
-        
-        <div className="flex flex-col items-center gap-3 mb-2">
-          <img 
-            src={SwishLogo} 
-            alt="Swish Assistant" 
-            className="h-16 w-auto object-contain"
-          />
-          <h2 className="text-center text-orange-600 font-semibold text-sm uppercase tracking-wide">
-            Swish Assistant
-          </h2>
-        </div>
-        <p className="mt-2 text-center text-4xl sm:text-5xl font-extrabold text-slate-900">
-          {isAdmin ? "Choose your mode" : "Your member dashboard"}
-        </p>
+        </header>
 
         {/* Account status banner for non-admin members */}
         {!isAdmin && user && (
-          <div className={`mt-6 mx-auto max-w-xl rounded-xl border px-4 py-3 flex items-start gap-3 ${emailConfirmed ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+          <div
+            className={`ch-rise mb-6 rounded-[14px] border px-4 py-3.5 flex items-start gap-3 ${
+              emailConfirmed ? "bg-emerald-500/10 border-emerald-500/30" : "bg-amber-500/10 border-amber-500/30"
+            }`}
+          >
             {emailConfirmed ? (
-              <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
             )}
             <div className="flex-1">
-              <p className={`text-sm font-semibold ${emailConfirmed ? "text-emerald-800" : "text-amber-800"}`}>
+              <p className={`text-sm font-semibold ${emailConfirmed ? "text-emerald-800 dark:text-emerald-300" : "text-amber-800 dark:text-amber-300"}`}>
                 {emailConfirmed ? "Verified member" : "Email not yet verified"}
               </p>
-              <p className={`text-xs mt-0.5 ${emailConfirmed ? "text-emerald-700" : "text-amber-700"}`}>
+              <p className="text-[13px] mt-0.5 text-[color:var(--ch-text-2)]">
                 {emailConfirmed
-                  ? "You can download performance, comparison, leader, and trending share cards from any player or league page."
+                  ? "You can download performance, comparison, leader and trending share cards from any player or league page."
                   : "Check your inbox and click the verification link to unlock card downloads and other member features."}
               </p>
               {!emailConfirmed && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 h-7 text-xs border-amber-300 text-amber-800 hover:bg-amber-100 hover:border-amber-400 disabled:opacity-50"
+                <button
+                  type="button"
+                  className="mt-2.5 ch-btn ch-btn-ghost h-8 px-3 text-xs disabled:opacity-50"
                   onClick={handleResendVerification}
                   disabled={resendLoading || resendCooldown}
                 >
-                  <RefreshCw className={`h-3 w-3 mr-1 ${resendLoading ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`h-3 w-3 ${resendLoading ? "animate-spin" : ""}`} />
                   {resendCooldown ? "Email sent — check your inbox" : resendLoading ? "Sending…" : "Resend verification email"}
-                </Button>
+                </button>
               )}
             </div>
           </div>
         )}
 
-        <div className={`mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 ${isAdmin ? "xl:grid-cols-5" : ""}`}>
-          {/* League Management — admin only */}
-          {isAdmin && (
-            <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/league-management")}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
-                    <Trophy className="h-6 w-6 text-white group-hover:animate-pulse" />
-                  </div>
-                  <div className="flex-1">
-                    <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">League Management</CardTitle>
-                    <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Create and manage your leagues</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-orange-700 text-sm mb-4">Create new leagues, upload game data, manage teams, and customize your league experience.</p>
-                <Button 
-                  size="sm" 
-                  className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate("/league-management");
-                  }}
-                >
-                  <Settings className="h-3 w-3 mr-1 group-hover:animate-bounce" />
-                  Manage Leagues
-                </Button>
-              </CardContent>
-            </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+          {user && (
+            <div className="ch-rise flex" style={{ animationDelay: "40ms" }}>
+              <div className="flex-1 flex flex-col [&>*]:flex-1">
+                <PlayerProfileCard claim={myClaim} loading={myClaimLoading} />
+              </div>
+            </div>
           )}
-
-          <Card
-            data-testid="card-coaches-hub"
-            className={canAccessCoachesHub
-              ? "bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group"
-              : "bg-slate-50 border-slate-200 shadow-sm"}
-            onClick={canAccessCoachesHub ? () => navigate("/coaches-hub") : undefined}
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
-                  <Users className="h-6 w-6 text-white group-hover:animate-pulse" />
-                </div>
-                <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">Coaches Hub</CardTitle>
-                      {!canAccessCoachesHub && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">Coming soon</span>}
-                    </div>
-                    <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Coaching tools and resources</CardDescription>
-                </div>
+          {tools.map((tool, i) => (
+            <div key={tool.key} className="ch-rise flex" style={{ animationDelay: `${60 + i * 40}ms` }}>
+              <div className="flex-1 flex flex-col [&>*]:flex-1">
+                <ToolCard tool={tool} />
               </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-orange-700 text-sm mb-4">Access coaching resources, game analysis tools, and team management features.</p>
-              {canAccessCoachesHub ? <Button
-                size="sm"
-                className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate("/coaches-hub");
-                }}
-              >
-                <TrendingUp className="h-3 w-3 mr-1 group-hover:animate-bounce" />
-                Access Hub
-              </Button> : <p className="text-xs font-medium text-slate-500">We’ll let members know when access opens.</p>}
-            </CardContent>
-          </Card>
-
-          <Card
-            data-testid="card-swish-social"
-            className={isAdmin
-              ? "bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group"
-              : "bg-slate-50 border-slate-200 shadow-sm"}
-            onClick={isAdmin ? () => navigate("/social-tools") : undefined}
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
-                  <Share2 className="h-6 w-6 text-white group-hover:animate-pulse" />
-                </div>
-                <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">Swish Social</CardTitle>
-                      {!isAdmin && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">Coming soon</span>}
-                    </div>
-                  <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Generate social media graphics</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-orange-700 text-sm mb-4">Create performance cards and shareable graphics from your stats database.</p>
-              {isAdmin ? <Button
-                size="sm" 
-                className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate("/social-tools");
-                }}
-              >
-                <Share2 className="h-3 w-3 mr-1 group-hover:animate-bounce" />
-                Create Graphics
-              </Button> : <p className="text-xs font-medium text-slate-500">Shareable graphics are being prepared for members.</p>}
-            </CardContent>
-          </Card>
-
-          <Card
-            data-testid="card-api-widgets"
-            className={isAdmin
-              ? "bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group"
-              : "bg-slate-50 border-slate-200 shadow-sm"}
-            onClick={isAdmin ? () => navigate("/api-widgets") : undefined}
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
-                  <Code className="h-6 w-6 text-white group-hover:animate-pulse" />
-                </div>
-                <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">API / Widgets</CardTitle>
-                      {!isAdmin && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">Coming soon</span>}
-                    </div>
-                  <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Embed league data anywhere</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-orange-700 text-sm mb-4">Create embeddable widgets for standings, player stats, scores, and league leaders.</p>
-              {isAdmin ? <Button
-                size="sm" 
-                className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate("/api-widgets");
-                }}
-              >
-                <Code className="h-3 w-3 mr-1 group-hover:animate-bounce" />
-                Build Widgets
-              </Button> : <p className="text-xs font-medium text-slate-500">Embeddable league tools will be available later.</p>}
-            </CardContent>
-          </Card>
-
-          {/* News Manager — admin only */}
-          {isAdmin && (
-            <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/news-manager")} data-testid="card-news-manager">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
-                    <Newspaper className="h-6 w-6 text-white group-hover:animate-pulse" />
-                  </div>
-                  <div className="flex-1">
-                    <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">News Manager</CardTitle>
-                    <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Publish stories and updates</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-orange-700 text-sm mb-4">Add, edit, and remove articles that appear in the public Latest News section on the home page.</p>
-                <Button
-                  size="sm"
-                  className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate("/news-manager");
-                  }}
-                  data-testid="button-open-news-manager"
-                >
-                  <FilePenLine className="h-3 w-3 mr-1 group-hover:animate-bounce" />
-                  Manage News
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+            </div>
+          ))}
         </div>
 
         {!isAdmin && (
-          <section className="mt-14" aria-labelledby="explore-leagues-heading">
-            <div className="mb-5 text-center">
-              <h2 id="explore-leagues-heading" className="text-2xl font-bold text-slate-900">Explore leagues while you wait</h2>
-              <p className="mt-2 text-sm text-slate-600">Follow scores, standings, player stats, and recent performances from public leagues.</p>
+          <section className="mt-12" aria-labelledby="explore-leagues-heading">
+            <div className="mb-4">
+              <h2 id="explore-leagues-heading" className="ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]">
+                Explore leagues
+              </h2>
+              <p className="mt-1.5 text-sm text-[color:var(--ch-text-2)]">Follow scores, standings, player stats and recent performances from public leagues.</p>
             </div>
 
             {leaguesLoading ? (
-              <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-10 text-sm text-slate-500" data-testid="suggested-leagues-loading">
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                Finding leagues…
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="suggested-leagues-loading" aria-busy="true">
+                {[0, 1, 2, 3].map((i) => <div key={i} className="ch-skel h-[88px] rounded-[14px]" />)}
               </div>
             ) : leaguesError ? (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-8 text-center" data-testid="suggested-leagues-error">
-                <p className="font-medium text-amber-900">League suggestions are temporarily unavailable.</p>
-                <Button variant="outline" className="mt-3 border-amber-300 text-amber-900" onClick={() => navigate("/")}>
-                  Browse from the home page
-                </Button>
+              <div className="ch-card px-5 py-8 text-center" data-testid="suggested-leagues-error">
+                <p className="font-medium text-[color:var(--ch-text)]">League suggestions are temporarily unavailable.</p>
+                <Link href="/" className="mt-3 ch-btn ch-btn-ghost h-10 px-4">Browse from the home page</Link>
               </div>
             ) : suggestedLeagues.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-8 text-center" data-testid="suggested-leagues-empty">
-                <p className="font-medium text-slate-700">No featured leagues are available right now.</p>
-                <Button variant="outline" className="mt-3" onClick={() => navigate("/")}>Browse all public content</Button>
+              <div className="ch-card px-5 py-8 text-center" data-testid="suggested-leagues-empty">
+                <p className="font-medium text-[color:var(--ch-text)]">No featured leagues are available right now.</p>
+                <Link href="/" className="mt-3 ch-btn ch-btn-ghost h-10 px-4">Browse all public content</Link>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="suggested-leagues">
@@ -414,18 +441,18 @@ export default function DashboardLanding() {
                     type="button"
                     key={`${league.type}:${league.slug}`}
                     onClick={() => navigate(`/${league.type}/${league.slug}`)}
-                    className="group flex min-h-24 items-center gap-4 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-md"
+                    className="ch-card ch-hover group flex min-h-[88px] items-center gap-3.5 p-4 text-left"
                   >
-                    {league.logoUrl ? (
-                      <img src={league.logoUrl} alt="" className="h-12 w-12 flex-none object-contain" />
-                    ) : (
-                      <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-orange-100">
-                        <Trophy className="h-6 w-6 text-orange-600" />
-                      </div>
-                    )}
+                    <span className="h-12 w-12 flex-none rounded-xl ch-tile flex items-center justify-center overflow-hidden">
+                      {league.logoUrl ? (
+                        <img src={league.logoUrl} alt="" className="h-10 w-10 object-contain" />
+                      ) : (
+                        <Trophy className="h-5 w-5 text-[color:var(--ch-accent)]" />
+                      )}
+                    </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-semibold text-slate-900">{league.name}</span>
-                      <span className="mt-1 flex items-center text-xs font-medium text-orange-700">
+                      <span className="block truncate font-semibold text-[color:var(--ch-text)]">{league.name}</span>
+                      <span className="mt-1 flex items-center text-xs font-medium text-[color:var(--ch-accent)]">
                         View league <ArrowRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                       </span>
                     </span>
@@ -435,7 +462,7 @@ export default function DashboardLanding() {
             )}
           </section>
         )}
-      </div>
+      </main>
     </div>
   )
 }

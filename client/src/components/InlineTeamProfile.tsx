@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { normalizeTeamName } from "@/lib/teamUtils";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, LayoutDashboard, BarChart3, Crosshair, Users } from "lucide-react";
+import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { Link, useLocation } from "wouter";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
@@ -123,7 +124,14 @@ const applyPlayerMode = (
 
 export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, childLeagueIds, seasonCompetitions, onBack, onPlayerClick }: InlineTeamProfileProps) {
   const [, navigate] = useLocation();
-  const readableBrand = useReadableTeamColor(brandColor);
+  // The team's own colour leads (hero, accents), with the league's as the
+  // fallback, as on player profiles.
+  const { colors: teamColors, primaryColor: teamPrimary } = useTeamBranding({
+    teamName,
+    leagueId,
+    enabled: !!teamName && !!leagueId,
+  });
+  const readableBrand = useReadableTeamColor(teamColors?.primary || brandColor);
   const [activeTab, setActiveTab] = useState<'overview' | 'playerStats' | 'shotChart' | 'lineups'>('overview');
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring'>('Traditional');
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game');
@@ -545,7 +553,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
   if (!teamData) {
     return (
       <div className="text-center py-12">
-        <p className="text-slate-500 dark:text-slate-400">Team not found</p>
+        <p className="text-[color:var(--ch-muted)]">Team not found</p>
         <button onClick={onBack} className="mt-3 text-sm font-medium hover:underline" style={{ color: readableBrand.body }}>
           <ArrowLeft className="h-4 w-4 inline mr-1" /> Go back
         </button>
@@ -561,88 +569,119 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
 
   return (
     <div className="space-y-4 md:space-y-5 animate-fade-in-up">
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm font-medium transition-colors hover:underline"
-        style={{ color: readableBrand.body }}
-      >
+      <button onClick={onBack} className="ch-btn ch-btn-ghost">
         <ArrowLeft className="h-4 w-4" />
         Back
       </button>
 
-      <div className="relative rounded-xl overflow-hidden shadow-lg">
-        <div className="relative min-h-[160px] md:min-h-[200px]" style={{ background: `linear-gradient(135deg, ${brandColor}22 0%, ${brandColor}44 100%)` }}>
-          <div className="relative z-10 p-5 md:p-8">
-            <div className="flex items-center gap-4 mb-3">
-              <TeamLogo teamName={teamData.name} leagueId={leagueId} size="xl" className="flex-shrink-0" />
-              <div>
-                <h1 className="text-xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
+      {(() => {
+        const heroColor = teamColors?.primary || teamPrimary || brandColor || "#f97316";
+        const heroText = teamColors?.textContrast || "#ffffff";
+        const onLight = heroText.toLowerCase() === "#000000";
+        const glass = onLight ? "bg-black/[0.07] border-black/10" : "bg-white/[0.12] border-white/20";
+        const pill = `inline-flex items-baseline gap-1.5 h-7 px-2.5 rounded-lg border text-xs ${glass}`;
+        return (
+          <section
+            className="ch-hero ch-rise"
+            style={{
+              background: `radial-gradient(120% 140% at 85% 0%, color-mix(in srgb, ${heroColor} 80%, #fff) 0%, ${heroColor} 45%, color-mix(in srgb, ${heroColor} 50%, #000) 100%)`,
+              color: heroText,
+            }}
+            aria-label={`${teamData.name} profile`}
+          >
+            <svg aria-hidden="true" viewBox="0 0 200 80" preserveAspectRatio="xMaxYMid slice" className="absolute inset-0 h-full w-full pointer-events-none" fill="none" stroke={onLight ? "black" : "white"} strokeWidth="0.5" style={{ opacity: onLight ? 0.08 : 0.12 }}>
+              <circle cx="150" cy="-4" r="30" />
+              <path d="M 118 0 V 22 A 32 32 0 0 0 182 22 V 0" />
+              <rect x="138" y="0" width="24" height="30" />
+            </svg>
+            <div className="relative p-5 md:p-8 flex flex-col md:flex-row md:items-end gap-5 md:gap-7">
+              <div className="h-24 w-24 md:h-28 md:w-28 rounded-2xl bg-white ring-1 ring-black/5 shadow-[0_10px_28px_-10px_rgba(0,0,0,0.55)] flex items-center justify-center shrink-0 overflow-hidden">
+                <TeamLogo teamName={teamData.name} leagueId={leagueId} size="xl" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h1 className="ch-display uppercase font-bold leading-[0.92] tracking-tight break-words text-[2rem] sm:text-[2.6rem] md:text-[3.2rem]">
                   {teamData.name}
                 </h1>
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
-                    {isPreSeason ? teamData.preSeasonRoster.length : teamData.roster.length} Players
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <span className={pill}>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ opacity: 0.7 }}>Players</span>
+                    <span className="font-bold tabular-nums">{isPreSeason ? teamData.preSeasonRoster.length : teamData.roster.length}</span>
                   </span>
                   {isPreSeason ? (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100/90 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 backdrop-blur-sm">
-                      Pre-season
-                    </span>
+                    <span className={pill}><span className="font-bold">Pre-season</span></span>
                   ) : (
                     <>
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 backdrop-blur-sm" style={{ color: readableBrand.body }}>
-                        {teamData.wins}-{teamData.losses}
+                      <span className={pill}>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ opacity: 0.7 }}>Record</span>
+                        <span className="font-bold tabular-nums">{teamData.wins}-{teamData.losses}</span>
                       </span>
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
-                        {teamData.avgTeamPoints} PPG
+                      <span className={pill}>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ opacity: 0.7 }}>PPG</span>
+                        <span className="font-bold tabular-nums">{teamData.avgTeamPoints}</span>
                       </span>
                     </>
                   )}
                 </div>
-                <AccoladeBadges accolades={topAccolades(teamAccolades, 4)} accentColor={readableBrand.body} />
               </div>
+              {seasonOptions.length > 1 && (
+                <div className="w-full md:w-[240px] shrink-0">
+                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ opacity: 0.75 }}>
+                    Season
+                  </label>
+                  <Select value={activeSeason?.key} onValueChange={setSelectedSeason}>
+                    <SelectTrigger className="h-10 rounded-lg bg-white/95 border-white/40 text-slate-900">
+                      <SelectValue placeholder="Select season" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {seasonOptions.map(option => (
+                        <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
-            {seasonOptions.length > 1 && (
-              <div className="w-full max-w-[220px]">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                  Season
-                </label>
-                <Select value={activeSeason?.key} onValueChange={setSelectedSeason}>
-                  <SelectTrigger className="bg-white/90 dark:bg-neutral-900/90">
-                    <SelectValue placeholder="Select season" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {seasonOptions.map(option => (
-                      <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+          </section>
+        );
+      })()}
 
-      <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700 w-fit">
-        {(["overview", "playerStats", "shotChart", "lineups"] as const)
-          .filter(tab => (isPreSeason ? tab === 'overview' : true) && (tab !== 'lineups' || !!lineupsSlug))
-          .map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium transition-colors capitalize ${
-              activeTab === tab ? 'text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-neutral-800'
-            }`}
-            style={activeTab === tab ? { backgroundColor: readableBrand.onWhite } : {}}
-          >
-            {tab === 'playerStats' ? 'Player Stats' : tab === 'shotChart' ? 'Shot Chart' : tab === 'lineups' ? 'Lineups' : 'Overview'}
-          </button>
-        ))}
+      {teamAccolades.length > 0 && (
+        <AccoladeBadges accolades={topAccolades(teamAccolades, 4)} accentColor={readableBrand.body} />
+      )}
+
+      <div className="border-b border-[color:var(--ch-border)]">
+        <nav className="flex items-stretch gap-1 overflow-x-auto scrollbar-hide -mx-1" aria-label="Team sections">
+          {(["overview", "playerStats", "shotChart", "lineups"] as const)
+            .filter(tab => (isPreSeason ? tab === 'overview' : true) && (tab !== 'lineups' || !!lineupsSlug))
+            .map(tab => {
+              const active = activeTab === tab;
+              const Icon = tab === 'playerStats' ? BarChart3 : tab === 'shotChart' ? Crosshair : tab === 'lineups' ? Users : LayoutDashboard;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  aria-current={active ? 'page' : undefined}
+                  className={`relative flex items-center gap-2 h-12 px-3 text-[13.5px] font-medium whitespace-nowrap transition-colors ${
+                    active ? 'text-[color:var(--ch-text)]' : 'text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" style={active ? { color: readableBrand.body } : undefined} />
+                  {tab === 'playerStats' ? 'Player Stats' : tab === 'shotChart' ? 'Shot Chart' : tab === 'lineups' ? 'Lineups' : 'Overview'}
+                  <span
+                    className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full transition-opacity"
+                    style={{ backgroundColor: readableBrand.accent, opacity: active ? 1 : 0 }}
+                  />
+                </button>
+              );
+            })}
+        </nav>
       </div>
 
       {activeTab === 'overview' && isPreSeason && (
-        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
-            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Squad</span>
+        <div className="ch-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-[color:var(--ch-border)] flex items-center justify-between">
+            <span className="text-base md:text-lg font-bold text-[color:var(--ch-text)]">Squad</span>
             <span className="text-xs text-amber-600 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-900/30 px-2.5 py-1 rounded-full">
               No games played yet — showing registered squad
             </span>
@@ -651,7 +690,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             {teamData.preSeasonRoster.map((player: any) => (
               <div
                 key={player.id}
-                className={`flex flex-col items-center gap-2 p-3 rounded-lg border border-gray-100 dark:border-neutral-800 bg-gray-50/50 dark:bg-neutral-800/30 text-center ${player.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors' : ''}`}
+                className={`flex flex-col items-center gap-2 p-3 rounded-lg border border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)] text-center ${player.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors' : ''}`}
                 onClick={() => {
                   if (player.slug && onPlayerClick) onPlayerClick(player.slug);
                   else if (player.slug) navigate(`/player/${player.slug}`);
@@ -672,24 +711,24 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                   </div>
                 )}
                 <div>
-                  <div className="text-xs font-semibold text-slate-800 dark:text-white leading-tight">{player.name}</div>
+                  <div className="text-xs font-semibold text-[color:var(--ch-text)] leading-tight">{player.name}</div>
                   {player.position && (
-                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 uppercase tracking-wide">{player.position}</div>
+                    <div className="text-[10px] text-[color:var(--ch-muted)] mt-0.5 uppercase tracking-wide">{player.position}</div>
                   )}
                 </div>
               </div>
             ))}
           </div>
           {teamData.preSeasonRoster.length === 0 && (
-            <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">No registered players found.</div>
+            <div className="p-8 text-center text-[color:var(--ch-muted)] text-sm">No registered players found.</div>
           )}
         </div>
       )}
 
       {activeTab === 'overview' && !isPreSeason && (
         <>
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Team Averages</span>
+          <div className="ch-card p-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-muted)] mb-3 block">Team Averages</span>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
               {[
                 { value: teamData.perGame.spoints || 0, label: "PTS" },
@@ -700,15 +739,15 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 { value: teamData.perGame.sturnovers || 0, label: "TO" },
               ].map((stat, i) => (
                 <div key={i} className="text-center py-2">
-                  <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">{stat.label}</div>
+                  <div className="text-xs text-[color:var(--ch-muted)] uppercase tracking-wide mb-0.5">{stat.label}</div>
                   <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: readableBrand.body }}>{stat.value.toFixed(1)}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Shooting</span>
+          <div className="ch-card p-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-muted)] mb-3 block">Shooting</span>
             <div className="grid grid-cols-3 gap-4">
               {[
                 { value: teamData.totals.sfieldgoalsattempted > 0 ? (teamData.totals.sfieldgoalsmade / teamData.totals.sfieldgoalsattempted) * 100 : 0, label: "FG%" },
@@ -716,7 +755,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 { value: teamData.totals.sfreethrowsattempted > 0 ? (teamData.totals.sfreethrowsmade / teamData.totals.sfreethrowsattempted) * 100 : 0, label: "FT%" },
               ].map((stat, i) => (
                 <div key={i} className="text-center">
-                  <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">{stat.label}</div>
+                  <div className="text-xs text-[color:var(--ch-muted)] uppercase tracking-wide mb-0.5">{stat.label}</div>
                   <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: readableBrand.body }}>{stat.value.toFixed(1)}%</div>
                   <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
                     <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readableBrand.accent }} />
@@ -726,15 +765,15 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             </div>
           </div>
 
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800">
-              <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Roster</span>
+          <div className="ch-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-[color:var(--ch-border)]">
+              <span className="text-base md:text-lg font-bold text-[color:var(--ch-text)]">Roster</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
-                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap sticky left-0 bg-white dark:bg-neutral-900 z-10">Player</th>
+                  <tr className="border-b border-[color:var(--ch-border)] text-[color:var(--ch-muted)] uppercase text-[10px] tracking-wider">
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap sticky left-0 bg-[color:var(--ch-surface)] z-10">Player</th>
                     <th className="px-2 py-1.5 text-center font-semibold">GP</th>
                     <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
                     <th className="px-2 py-1.5 text-center font-semibold">REB</th>
@@ -748,13 +787,13 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                   {teamData.roster.map((player: any, idx: number) => (
                     <tr
                       key={player.id}
-                      className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${idx % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''} ${player.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700' : ''}`}
+                      className={`border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] ${idx % 2 === 1 ? 'bg-[color:var(--ch-surface-2)]' : ''} ${player.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700' : ''}`}
                       onClick={() => {
                         if (player.slug && onPlayerClick) onPlayerClick(player.slug);
                         else if (player.slug) navigate(`/player/${player.slug}`);
                       }}
                     >
-                      <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-white dark:bg-neutral-900 z-10">
+                      <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-[color:var(--ch-surface)] z-10">
                         {player.slug ? (
                           <Link
                             href={`/competition/${leagueSlug}/player/${encodeURIComponent(player.slug)}`}
@@ -778,17 +817,17 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             </div>
           </div>
 
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800">
-              <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Recent Games</span>
+          <div className="ch-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-[color:var(--ch-border)]">
+              <span className="text-base md:text-lg font-bold text-[color:var(--ch-text)]">Recent Games</span>
             </div>
             {teamData.games.length === 0 ? (
-              <div className="p-6 text-center text-slate-500 dark:text-slate-400 text-sm">No games found.</div>
+              <div className="p-6 text-center text-[color:var(--ch-muted)] text-sm">No games found.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
+                    <tr className="border-b border-[color:var(--ch-border)] text-[color:var(--ch-muted)] uppercase text-[10px] tracking-wider">
                       <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Date</th>
                       <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">OPP</th>
                       <th className="px-2 py-1.5 text-center font-semibold">W/L</th>
@@ -798,15 +837,15 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                   </thead>
                   <tbody>
                     {teamData.games.map((game: any, idx: number) => (
-                      <tr key={idx} className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${idx % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}>
-                        <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDate(game.date)}</td>
+                      <tr key={idx} className={`border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] ${idx % 2 === 1 ? 'bg-[color:var(--ch-surface-2)]' : ''}`}>
+                        <td className="px-2 py-1.5 text-xs text-[color:var(--ch-muted)] whitespace-nowrap">{formatDate(game.date)}</td>
                         <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap">{game.isHome ? 'vs' : '@'} {game.opponent}</td>
                         <td className="px-2 py-1.5 text-xs text-center">
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${game.isWin ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400'}`}>
                             {game.isWin ? 'W' : 'L'}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-center font-bold text-slate-900 dark:text-white">{game.totalPoints}</td>
+                        <td className="px-2 py-1.5 text-xs text-center font-bold text-[color:var(--ch-text)]">{game.totalPoints}</td>
                         <td className="px-2 py-1.5 text-xs text-center">{game.opponentScore}</td>
                       </tr>
                     ))}
@@ -819,14 +858,14 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
       )}
 
       {activeTab === 'playerStats' && (
-        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
+        <div className="ch-card overflow-hidden">
           <div className="p-4 pb-0">
-            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Player Statistics</span>
+            <span className="text-base md:text-lg font-bold text-[color:var(--ch-text)]">Player Statistics</span>
             <div className="flex flex-col md:flex-row gap-3 mt-3">
               <div className="flex-1">
-                <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Category</label>
+                <label className="block text-[10px] font-medium text-[color:var(--ch-muted)] mb-1 uppercase tracking-wider">Category</label>
                 <Select value={playerStatsCategory} onValueChange={(v) => setPlayerStatsCategory(v as any)}>
-                  <SelectTrigger className="w-full h-8 text-xs bg-white dark:bg-neutral-800 border-gray-200 dark:border-neutral-600">
+                  <SelectTrigger className="w-full h-8 text-xs bg-[color:var(--ch-surface)] border-gray-200 dark:border-neutral-600">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
@@ -837,9 +876,9 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 </Select>
               </div>
               <div className="flex-1">
-                <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Mode</label>
+                <label className="block text-[10px] font-medium text-[color:var(--ch-muted)] mb-1 uppercase tracking-wider">Mode</label>
                 <Select value={playerStatsView} onValueChange={(v) => setPlayerStatsView(v as any)}>
-                  <SelectTrigger className="w-full h-8 text-xs bg-white dark:bg-neutral-800 border-gray-200 dark:border-neutral-600">
+                  <SelectTrigger className="w-full h-8 text-xs bg-[color:var(--ch-surface)] border-gray-200 dark:border-neutral-600">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
@@ -855,10 +894,10 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
           <div className="overflow-x-auto mt-3">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-y border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
-                  <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap sticky left-0 bg-white dark:bg-neutral-900 z-10">Player</th>
+                <tr className="border-y border-[color:var(--ch-border)] text-[color:var(--ch-muted)] uppercase text-[10px] tracking-wider">
+                  <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap sticky left-0 bg-[color:var(--ch-surface)] z-10">Player</th>
                   <th
-                    className={`px-2 py-1.5 text-center font-semibold cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 ${statsSortColumn === 'GP' ? '' : ''}`}
+                    className={`px-2 py-1.5 text-center font-semibold cursor-pointer hover:bg-[color:var(--ch-surface-2)] ${statsSortColumn === 'GP' ? '' : ''}`}
                     style={statsSortColumn === 'GP' ? { color: readableBrand.body } : {}}
                     onClick={() => { if (statsSortColumn === 'GP') setStatsSortDirection(d => d === 'desc' ? 'asc' : 'desc'); else { setStatsSortColumn('GP'); setStatsSortDirection('desc'); } }}
                   >
@@ -867,7 +906,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                   {activePlayerStatColumns.map((col) => (
                     <th
                       key={col.key}
-                      className="px-2 py-1.5 text-center font-semibold cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800"
+                      className="px-2 py-1.5 text-center font-semibold cursor-pointer hover:bg-[color:var(--ch-surface-2)]"
                       style={statsSortColumn === col.label ? { color: readableBrand.body } : {}}
                       onClick={() => { if (statsSortColumn === col.label) setStatsSortDirection(d => d === 'desc' ? 'asc' : 'desc'); else { setStatsSortColumn(col.label); setStatsSortDirection('desc'); } }}
                     >
@@ -880,13 +919,13 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 {sortedRoster.map((player: any, idx: number) => (
                   <tr
                     key={player.id}
-                    className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${idx % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''} ${player.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700' : ''}`}
+                    className={`border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] ${idx % 2 === 1 ? 'bg-[color:var(--ch-surface-2)]' : ''} ${player.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700' : ''}`}
                     onClick={() => {
                       if (player.slug && onPlayerClick) onPlayerClick(player.slug);
                       else if (player.slug) navigate(`/player/${player.slug}`);
                     }}
                   >
-                    <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-white dark:bg-neutral-900 z-10">
+                    <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-[color:var(--ch-surface)] z-10">
                       {player.slug ? (
                         <Link
                           href={`/competition/${leagueSlug}/player/${encodeURIComponent(player.slug)}`}
@@ -922,9 +961,9 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
       )}
 
       {activeTab === 'shotChart' && (
-        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+        <div className="ch-card p-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Shot Chart</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-muted)]">Shot Chart</span>
             <Select value={shotChartRange} onValueChange={setShotChartRange}>
               <SelectTrigger className="w-full md:w-48 h-8 text-sm border-gray-200 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white">
                 <SelectValue placeholder="Select range" />

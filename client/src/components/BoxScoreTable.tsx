@@ -1,5 +1,6 @@
 import { TeamLogo } from '@/components/TeamLogo';
 import { abbreviatePlayerName } from '@/lib/playerName';
+import EntityLink from '@/components/EntityLink';
 
 /**
  * Shared box score for a single team.
@@ -48,6 +49,10 @@ export interface BoxScorePlayer {
   sthreepointersattempted?: number | null;
   sfreethrowsmade?: number | null;
   sfreethrowsattempted?: number | null;
+  /** The player's page; their name becomes a real link (search engines follow these). */
+  href?: string | null;
+  /** In-page handler for a plain click (e.g. the league page opening the player inline). */
+  onSelect?: (() => void) | null;
 }
 
 interface Props {
@@ -62,6 +67,8 @@ interface Props {
    * with the same signature, so this matches theirs rather than widening it.
    */
   formatMinutes: (value: string | null | undefined) => string;
+  /** The team's page, linked from the header. */
+  teamHref?: string | null;
 }
 
 function resolveName(player: BoxScorePlayer): string {
@@ -109,6 +116,7 @@ export default function BoxScoreTable({
   leagueId,
   headerColor,
   formatMinutes,
+  teamHref,
 }: Props) {
   // Some competitions arrive with no squad numbers at all. Rather than show a
   // permanently blank column — which costs real width on a phone — drop it.
@@ -121,7 +129,9 @@ export default function BoxScoreTable({
         style={{ backgroundColor: headerColor || 'rgb(249, 115, 22)' }}
       >
         {leagueId && <TeamLogo teamName={teamName} leagueId={leagueId} size="sm" />}
-        <h4 className="font-semibold flex-1 truncate">{teamName}</h4>
+        <h4 className="font-semibold flex-1 truncate">
+          {teamHref ? <EntityLink href={teamHref} className="hover:underline underline-offset-2">{teamName}</EntityLink> : teamName}
+        </h4>
         {score != null && <span className="ml-auto text-2xl font-bold tabular-nums">{score}</span>}
       </div>
 
@@ -189,8 +199,17 @@ export default function BoxScoreTable({
                       className={`${NAME_COL} ${anyNumbers ? NAME_LEFT : 'left-0'} py-2 px-2 sticky z-10 ${rowBg} font-medium border-r border-orange-100 dark:border-neutral-700`}
                       title={name}
                     >
-                      <span className="md:hidden block truncate">{abbreviatePlayerName(name)}</span>
-                      <span className="hidden md:block truncate">{name}</span>
+                      {player.href ? (
+                        <EntityLink href={player.href} onNavigate={player.onSelect || undefined} className="block hover:underline underline-offset-2">
+                          <span className="md:hidden block truncate">{abbreviatePlayerName(name)}</span>
+                          <span className="hidden md:block truncate">{name}</span>
+                        </EntityLink>
+                      ) : (
+                        <>
+                          <span className="md:hidden block truncate">{abbreviatePlayerName(name)}</span>
+                          <span className="hidden md:block truncate">{name}</span>
+                        </>
+                      )}
                     </td>
                     <td className={`${STAT_CELL} whitespace-nowrap`}>{formatMinutes(player.sminutes == null ? null : String(player.sminutes))}</td>
                     <td className="text-center py-2 px-2 font-semibold text-orange-500 tabular-nums">

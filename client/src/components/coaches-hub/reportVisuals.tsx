@@ -298,16 +298,16 @@ export function NarrativeSummary({
 
   if (status === 'loading') {
     return (
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+      <div className="ch-card p-4 md:p-6">
         <p className="text-sm text-gray-400 dark:text-neutral-500 italic">Writing the analysis…</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-      <div className="flex items-baseline gap-2 mb-2">
-        <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color }}>
+    <div className="ch-card p-4 md:p-6">
+      <div className="flex items-center gap-2.5 mb-2">
+        <span className="ch-kicker-n" style={{ color }}>
           ANALYSIS
         </span>
       </div>

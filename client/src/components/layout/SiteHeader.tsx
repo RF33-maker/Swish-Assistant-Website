@@ -17,10 +17,14 @@ import SiteNav from "@/components/layout/SiteNav"
  * Layout contract — the rail is position: fixed, so any page rendering this
  * header must offset its own content by the rail's width with
  * SITE_RAIL_OFFSET on its root element, or the rail will cover it.
+ *
+ * `hideSearch` swaps the header search for the Swish logo, centred. The
+ * homepage uses it because it has its own, bigger search further down; every
+ * other page keeps the search here for navigation.
  */
 export const SITE_RAIL_OFFSET = "lg:pl-60"
 
-export default function SiteHeader() {
+export default function SiteHeader({ hideSearch = false }: { hideSearch?: boolean } = {}) {
   const [, setLocation] = useLocation()
   const { query, setQuery, suggestions, handleSelect, handleSubmit } = useGlobalSearch()
 
@@ -52,6 +56,24 @@ export default function SiteHeader() {
             row border in one continuous line. The rail row is 65px because its
             border is inside its box, while this one sits outside the 64px row. */}
         <div className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 lg:py-0 lg:h-16">
+          {hideSearch ? (
+            <>
+              {/* Mobile: balances the menu button so the logo sits dead centre. */}
+              <span className="lg:hidden h-10 w-10 flex-shrink-0" aria-hidden="true" />
+              <div className="flex-1 flex justify-center">
+                <button
+                  type="button"
+                  aria-label="Swish Assistant home"
+                  onClick={() => setLocation('/')}
+                  className="flex items-center hover:opacity-90 transition-opacity"
+                  data-testid="header-logo-home"
+                >
+                  <img src={SwishLogo} alt="" className="h-9 md:h-10" />
+                </button>
+              </div>
+            </>
+          ) : (
+          <>
           {/* On desktop the logo sits at the top of the rail instead. */}
           <button
             type="button"
@@ -140,6 +162,9 @@ export default function SiteHeader() {
             )}
             </div>
           </div>
+
+          </>
+          )}
 
           <Sheet>
             <SheetTrigger asChild>

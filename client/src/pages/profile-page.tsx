@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
-import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
+import { Link, useLocation } from "wouter";
+import { Helmet } from "react-helmet-async";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +34,8 @@ import {
   BellOff,
   Shield,
 } from "lucide-react";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
+import { CHECKBOX } from "@/components/layout/AuthShell";
 import { PASSWORD_REQUIREMENTS, validatePassword } from "@shared/passwordPolicy";
 
 type Message = { type: "success" | "error"; text: string };
@@ -309,17 +310,17 @@ export default function AccountCentre() {
       <Alert
         className={
           msg.type === "success"
-            ? "border-green-200 bg-green-50"
-            : "border-red-200 bg-red-50"
+            ? "border-emerald-500/30 bg-emerald-500/10"
+            : "border-red-500/30 bg-red-500/10"
         }
       >
         {msg.type === "success" ? (
-          <CheckCircle className="h-4 w-4 text-green-600" />
+          <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
         ) : (
-          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
         )}
         <AlertDescription
-          className={msg.type === "success" ? "text-green-800" : "text-red-700"}
+          className={msg.type === "success" ? "text-emerald-800 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}
         >
           {msg.text}
         </AlertDescription>
@@ -333,38 +334,35 @@ export default function AccountCentre() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-white py-8 px-4">
-      <div className="max-w-2xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/dashboard")}
-            className="text-gray-600 hover:text-gray-800"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" />
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
+      <Helmet>
+        <title>Account | Swish Assistant</title>
+      </Helmet>
+      <SiteHeader />
+      <main className="max-w-2xl mx-auto px-4 md:px-6 pt-6 md:pt-9 pb-16 space-y-5">
+        <header className="ch-rise">
+          <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]">
+            <ArrowLeft className="h-4 w-4" />
             Dashboard
-          </Button>
-          <img src={SwishLogo} alt="Swish" className="h-7" />
-        </div>
-
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Account</h1>
-          <p className="text-sm text-gray-500 mt-1">{email}</p>
-        </div>
+          </Link>
+          <div className="mt-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Your account</div>
+          <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[3rem] text-[color:var(--ch-text)]">
+            Account centre
+          </h1>
+          <p className="mt-2 text-sm text-[color:var(--ch-text-2)] truncate">{email}</p>
+        </header>
 
         {/* Email verification banner */}
         {!emailConfirmed && (
-          <Alert className="border-amber-200 bg-amber-50">
-            <AlertCircle className="h-4 w-4 text-amber-600" />
-            <AlertDescription className="text-amber-800">
+          <Alert className="border-amber-500/30 bg-amber-500/10">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <AlertDescription className="text-amber-800 dark:text-amber-300">
               <strong>Email not verified.</strong> Some features are restricted
               until you verify your address.{" "}
               <button
                 onClick={handleResendVerification}
                 disabled={resendLoading || resendCooldown}
-                className="underline font-medium hover:text-amber-900 disabled:opacity-50 disabled:cursor-default disabled:no-underline"
+                className="underline font-medium hover:opacity-80 disabled:opacity-50 disabled:cursor-default disabled:no-underline"
               >
                 {resendLoading ? "Sending…" : resendCooldown ? "Email sent — check your inbox" : "Resend verification email"}
               </button>
@@ -372,8 +370,8 @@ export default function AccountCentre() {
                 <span
                   className={
                     resendMsg.type === "success"
-                      ? "ml-2 text-green-700"
-                      : "ml-2 text-red-700"
+                      ? "ml-2 text-emerald-700 dark:text-emerald-300"
+                      : "ml-2 text-red-700 dark:text-red-300"
                   }
                 >
                   {resendMsg.text}
@@ -384,52 +382,53 @@ export default function AccountCentre() {
         )}
 
         {/* ── Profile ── */}
-        <Card>
+        <Card className="ch-card ch-rise text-[color:var(--ch-text)]">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <User className="h-4 w-4 text-orange-500" />
+            <CardTitle className="flex items-center gap-2 ch-display uppercase tracking-tight text-[1.35rem] leading-none">
+              <User className="h-4 w-4 text-[color:var(--ch-accent)]" />
               Profile
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-[color:var(--ch-text-2)]">
               Your display name and contact preferences.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-[13px] font-medium text-[color:var(--ch-text)] mb-1.5">
                 Display name
               </label>
               <Input
+                className="ch-input h-11 px-3.5 text-[15px]"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Your name"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-[13px] font-medium text-[color:var(--ch-text)] mb-1.5">
                 Email address (read-only)
               </label>
               <Input
                 value={email}
                 disabled
-                className="bg-gray-50 text-gray-500"
+                className="ch-input h-11 px-3.5 text-[15px] disabled:opacity-70"
               />
               {emailConfirmed && (
-                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5 flex items-center gap-1">
                   <CheckCircle className="h-3 w-3" /> Verified
                 </p>
               )}
             </div>
 
-            <Separator />
+            <Separator className="bg-[color:var(--ch-border)]" />
 
             {/* Marketing consent */}
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[color:var(--ch-text)] mb-2 flex items-center gap-2">
                 {marketingConsent ? (
-                  <Bell className="h-4 w-4 text-orange-500" />
+                  <Bell className="h-4 w-4 text-[color:var(--ch-accent)]" />
                 ) : (
-                  <BellOff className="h-4 w-4 text-gray-400" />
+                  <BellOff className="h-4 w-4 text-[color:var(--ch-muted)]" />
                 )}
                 Email preferences
               </h3>
@@ -438,17 +437,17 @@ export default function AccountCentre() {
                   id="marketingConsent"
                   checked={marketingConsent}
                   onCheckedChange={(v) => setMarketingConsent(!!v)}
-                  className="mt-0.5"
+                  className={`mt-0.5 ${CHECKBOX}`}
                 />
                 <label
                   htmlFor="marketingConsent"
-                  className="text-sm text-gray-600 leading-relaxed cursor-pointer"
+                  className="text-sm text-[color:var(--ch-text-2)] leading-relaxed cursor-pointer"
                 >
                   Send me occasional product news and coaching tips by email.
                   You can change this at any time.
                 </label>
               </div>
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-[color:var(--ch-muted)] mt-2">
                 Essential service emails (security alerts, verification) are
                 always sent regardless of this preference.
               </p>
@@ -456,56 +455,61 @@ export default function AccountCentre() {
 
             <Msg msg={profileMsg} />
 
-            <Button
+            <button
+              type="button"
               onClick={handleSaveProfile}
               disabled={profileSaving}
-              className="bg-orange-500 hover:bg-orange-600 text-white"
+              className="ch-btn ch-btn-primary h-10 px-5 disabled:opacity-60"
             >
               {profileSaving ? "Saving…" : "Save changes"}
-            </Button>
+            </button>
           </CardContent>
         </Card>
 
         {/* ── Change password ── */}
-        <Card>
+        <Card className="ch-card ch-rise text-[color:var(--ch-text)]">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Lock className="h-4 w-4 text-orange-500" />
+            <CardTitle className="flex items-center gap-2 ch-display uppercase tracking-tight text-[1.35rem] leading-none">
+              <Lock className="h-4 w-4 text-[color:var(--ch-accent)]" />
               Change password
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-[color:var(--ch-text-2)]">
               Enter your current password to set a new one.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-[13px] font-medium text-[color:var(--ch-text)] mb-1.5">
                 Current password
               </label>
               <Input
                 type="password"
+                autoComplete="current-password"
+                className="ch-input h-11 px-3.5 text-[15px]"
                 placeholder="••••••••"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-[13px] font-medium text-[color:var(--ch-text)] mb-1.5">
                 New password
               </label>
               <Input
                 type="password"
+                autoComplete="new-password"
+                className="ch-input h-11 px-3.5 text-[15px]"
                 placeholder="At least 8 characters"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
-              <ul className="text-xs text-gray-500 mt-1 space-y-0.5">
+              <ul className="text-xs text-[color:var(--ch-muted)] mt-1.5 space-y-0.5">
                 {PASSWORD_REQUIREMENTS.map((req) => {
                   const met = req.test(newPassword);
                   return (
                     <li
                       key={req.label}
-                      className={met ? "text-green-600 flex items-center gap-1" : "flex items-center gap-1"}
+                      className={met ? "text-emerald-600 dark:text-emerald-400 flex items-center gap-1" : "flex items-center gap-1"}
                     >
                       <CheckCircle className={`h-3 w-3 ${met ? "opacity-100" : "opacity-30"}`} />
                       {req.label}
@@ -515,11 +519,13 @@ export default function AccountCentre() {
               </ul>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-[13px] font-medium text-[color:var(--ch-text)] mb-1.5">
                 Confirm new password
               </label>
               <Input
                 type="password"
+                autoComplete="new-password"
+                className="ch-input h-11 px-3.5 text-[15px]"
                 placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -528,24 +534,25 @@ export default function AccountCentre() {
 
             <Msg msg={passwordMsg} />
 
-            <Button
+            <button
+              type="button"
               onClick={handleChangePassword}
               disabled={passwordSaving}
-              className="bg-orange-500 hover:bg-orange-600 text-white"
+              className="ch-btn ch-btn-primary h-10 px-5 disabled:opacity-60"
             >
               {passwordSaving ? "Updating…" : "Update password"}
-            </Button>
+            </button>
           </CardContent>
         </Card>
 
         {/* ── Data rights ── */}
-        <Card>
+        <Card className="ch-card ch-rise text-[color:var(--ch-text)]">
           <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Shield className="h-4 w-4 text-orange-500" />
+            <CardTitle className="flex items-center gap-2 ch-display uppercase tracking-tight text-[1.35rem] leading-none">
+              <Shield className="h-4 w-4 text-[color:var(--ch-accent)]" />
               Your data rights
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-[color:var(--ch-text-2)]">
               Under UK GDPR you have the right to access and erase your personal
               data. Public basketball statistics are not personal data owned by
               your account.
@@ -554,11 +561,11 @@ export default function AccountCentre() {
           <CardContent className="space-y-6">
             {/* Data export */}
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                <Download className="h-4 w-4 text-gray-500" />
+              <h3 className="text-sm font-semibold text-[color:var(--ch-text)] mb-1 flex items-center gap-2">
+                <Download className="h-4 w-4 text-[color:var(--ch-muted)]" />
                 Request a copy of your data
               </h3>
-              <p className="text-sm text-gray-500 mb-3">
+              <p className="text-sm text-[color:var(--ch-text-2)] mb-3">
                 We'll compile your account details, consent records, and any
                 other personal data we hold about you. Our team will review
                 and email it to your registered address, usually within
@@ -566,8 +573,8 @@ export default function AccountCentre() {
               </p>
 
               {existingExport ? (
-                <Alert className="border-blue-200 bg-blue-50">
-                  <AlertDescription className="text-blue-800">
+                <Alert className="border-sky-500/30 bg-sky-500/10">
+                  <AlertDescription className="text-sky-800 dark:text-sky-300">
                     Export request submitted on{" "}
                     {formatDate(existingExport.requested_at)} — status:{" "}
                     <Badge variant="outline" className="ml-1">
@@ -579,43 +586,43 @@ export default function AccountCentre() {
                 <>
                   <Msg msg={exportMsg} />
                   {!exportMsg && (
-                    <Button
-                      variant="outline"
+                    <button
+                      type="button"
                       onClick={handleExportRequest}
                       disabled={exportLoading}
-                      className="border-orange-200 text-orange-700 hover:bg-orange-50"
+                      className="ch-btn ch-btn-ghost h-10 px-4 disabled:opacity-60"
                     >
-                      <Download className="h-4 w-4 mr-2" />
+                      <Download className="h-4 w-4" />
                       {exportLoading ? "Requesting…" : "Request my data"}
-                    </Button>
+                    </button>
                   )}
                 </>
               )}
             </div>
 
-            <Separator />
+            <Separator className="bg-[color:var(--ch-border)]" />
 
             {/* Account deletion */}
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
-                <Trash2 className="h-4 w-4 text-red-500" />
+              <h3 className="text-sm font-semibold text-[color:var(--ch-text)] mb-1 flex items-center gap-2">
+                <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
                 Delete account
               </h3>
-              <p className="text-sm text-gray-500 mb-3">
+              <p className="text-sm text-[color:var(--ch-text-2)] mb-3">
                 Requesting deletion will sign you out immediately and schedule
                 removal of your personal data within 30 days. Records kept for
                 legal or security reasons (e.g. consent logs, abuse reports) are
                 retained according to our{" "}
-                <a href="/privacy" className="text-orange-600 underline">
+                <a href="/privacy" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2">
                   Privacy Policy
                 </a>{" "}
                 and will be anonymised or deleted on their documented schedule.
               </p>
 
               {existingDeletion ? (
-                <Alert className="border-red-200 bg-red-50">
-                  <Trash2 className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-800">
+                <Alert className="border-red-500/30 bg-red-500/10">
+                  <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <AlertDescription className="text-red-800 dark:text-red-300">
                     Deletion request is{" "}
                     <Badge variant="outline" className="ml-1">
                       {existingDeletion.status}
@@ -637,13 +644,13 @@ export default function AccountCentre() {
                   {!deletionMsg && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                        <button
+                          type="button"
+                          className="ch-btn h-10 px-4 border border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-500/10"
                         >
-                          <Trash2 className="h-4 w-4 mr-2" />
+                          <Trash2 className="h-4 w-4" />
                           Delete my account
-                        </Button>
+                        </button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
@@ -710,16 +717,16 @@ export default function AccountCentre() {
         </Card>
 
         {/* ── Sign out ── */}
-        <div className="flex justify-end pb-8">
-          <Button
-            variant="ghost"
+        <div className="flex justify-end">
+          <button
+            type="button"
             onClick={() => logoutMutation.mutate(undefined)}
-            className="text-gray-500 hover:text-gray-700"
+            className="ch-btn ch-btn-ghost h-10 px-4"
           >
             Sign out
-          </Button>
+          </button>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

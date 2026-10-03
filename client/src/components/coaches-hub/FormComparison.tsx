@@ -113,10 +113,10 @@ function Section({ n, title, subtitle, color, children, narrative }: {
   n: string; title: string; subtitle?: string; color: string; children: React.ReactNode; narrative?: string;
 }) {
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-      <div className="flex items-baseline gap-2 mb-1">
-        <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color }}>{n}</span>
-        <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">{title}</h3>
+    <div className="ch-card p-4 md:p-6">
+      <div className="flex items-center gap-2.5 mb-1">
+        <span className="ch-kicker-n" style={{ color }}>{n}</span>
+        <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h3>
       </div>
       {subtitle && <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">{subtitle}</p>}
       <div className={subtitle ? '' : 'mt-3'}>{children}</div>
@@ -129,7 +129,7 @@ function GapCard({ gap, youColor, themName }: { gap: Gap; youColor: string; them
   const tag = gap.favours === 'you' ? 'Your edge' : gap.favours === 'them' ? 'Their edge' : 'Style difference';
   const tagColor = gap.favours === 'you' ? youColor : gap.favours === 'them' ? '#64748b' : '#a78bfa';
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4">
+    <div className="ch-tile p-3 md:p-4">
       <div className="flex flex-wrap items-center gap-2 mb-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: tagColor }}>
           {tag}
@@ -352,9 +352,9 @@ export default function FormComparison({
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Header + controls */}
-      <div className="rounded-lg p-4 md:p-6 text-white" style={{ backgroundColor: teamColor }}>
+      <div className="ch-hero p-5 md:p-7 text-white" style={{ backgroundColor: teamColor }}>
         <div className="text-[11px] md:text-xs font-semibold uppercase tracking-wide text-white/70 mb-1">Form comparison</div>
-        <h2 className="text-xl md:text-3xl font-bold leading-tight">
+        <h2 className="ch-display uppercase text-3xl md:text-4xl font-bold tracking-tight leading-tight">
           {myTeamName} <span className="text-white/60 font-medium">vs</span> {themName}
         </h2>
         <p className="text-sm text-white/80 mt-1">
@@ -394,15 +394,15 @@ export default function FormComparison({
       </div>
 
       {!opponent ? (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           No other teams in this competition to compare against yet.
         </div>
       ) : loading || !mine || !theirs ? (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           Loading recent games…
         </div>
       ) : !analysis ? (
-        <div className="bg-white dark:bg-neutral-900 rounded-lg border border-gray-200 dark:border-neutral-800 p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           {mine.games.length === 0 ? 'Your team has' : `${themName} have`} no completed games with box scores in this competition yet.
         </div>
       ) : (
@@ -494,13 +494,13 @@ export default function FormComparison({
             color={brandColor}
             narrative={bodyFor('shots')}
           >
-            <div className="inline-flex rounded-md border border-gray-200 dark:border-neutral-700 p-0.5 mb-4" role="group" aria-label="Shot view">
+            <div className="ch-seg mb-4" role="group" aria-label="Shot view">
               {(['taken', 'allowed'] as const).map((view) => (
                 <button
                   key={view}
                   onClick={() => setShotView(view)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded ${shotView === view ? 'text-white' : 'text-gray-600 dark:text-neutral-300'}`}
-                  style={shotView === view ? { backgroundColor: brandColor } : undefined}
+                  data-active={shotView === view}
+                  className="px-3 h-8 text-xs font-semibold"
                 >
                   {view === 'taken' ? 'Shots taken' : 'Shots allowed'}
                 </button>

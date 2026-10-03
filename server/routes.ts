@@ -8,8 +8,11 @@ import { detectDuplicates } from "./playerMergeUtils";
 import { generateReportNarrative, narrativeAvailable } from "./matchNarrative";
 import { computeLineups } from "./lineupsService";
 import type { LineupMetric } from "./lineups";
-import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague } from "./teamIdentityService";
+import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "./teamIdentityService";
 import { getTeamCompetitions } from "./teamCompetitions";
+import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
+import { registerSeoRoutes } from "./seoIndex";
+import { SITE_BASE } from "@shared/seo";
 import multer from 'multer';
 import OpenAI from 'openai';
 import { XMLParser } from 'fast-xml-parser';
@@ -119,6 +122,31 @@ async function fetchPhotoFallbackMap(): Promise<Map<string, string>> {
     }
   }
   photoFallbackCache = { map, at: now };
+  return map;
+}
+
+// The same lookup for players' ordinary profile photos (photo_path), which
+// the homepage's trending cards use when a player has no cut-out.
+let profilePhotoFallbackCache: { map: Map<string, string>; at: number } | null = null;
+
+async function fetchProfilePhotoFallbackMap(): Promise<Map<string, string>> {
+  const now = Date.now();
+  if (profilePhotoFallbackCache && now - profilePhotoFallbackCache.at < PHOTO_FALLBACK_TTL_MS) {
+    return profilePhotoFallbackCache.map;
+  }
+  const { data } = await supabaseAdmin
+    .from('players')
+    .select('full_name, photo_path')
+    .not('photo_path', 'is', null)
+    .neq('photo_path', '');
+  const map = new Map<string, string>();
+  for (const row of (data || []) as { full_name: string; photo_path: string }[]) {
+    if (row.full_name && row.photo_path) {
+      const key = normalisePlayerName(row.full_name);
+      if (key && !map.has(key)) map.set(key, row.photo_path);
+    }
+  }
+  profilePhotoFallbackCache = { map, at: now };
   return map;
 }
 
@@ -395,6 +423,8 @@ async function fetchLatestPodcast(): Promise<PodcastResponse> {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  registerScoutAgentRoutes(app);
+
   // Test endpoint to verify routes are working
   app.get("/api/test", (req, res) => {
     res.json({ message: "API routes are working!", timestamp: new Date().toISOString() });
@@ -1078,6 +1108,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(data || []);
     } catch (err: any) {
       console.error("Error fetching league competitions:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Headline platform numbers for the homepage hero ("7,700+ players").
+  // Head-only counts plus one small team-name read, cached in memory for an
+  // hour — the homepage is the most-visited page, so it must never turn into
+  // a live query per visitor. Clubs are deduped by name because the same
+  // club has one teams row per competition it plays in.
+  let platformStatsCache: { at: number; body: Record<string, number> } | null = null;
+  app.get("/api/public/platform-stats", async (_req: Request, res: Response) => {
+    try {
+      const ONE_HOUR = 60 * 60 * 1000;
+      if (!platformStatsCache || Date.now() - platformStatsCache.at > ONE_HOUR) {
+        const [players, games, competitions, teams] = await Promise.all([
+          supabaseAdmin.from("players").select("*", { count: "exact", head: true }),
+          supabaseAdmin.from("v_game_results").select("*", { count: "exact", head: true }).not("home_score", "is", null),
+          supabaseAdmin.from("competitions").select("*", { count: "exact", head: true }).eq("is_public", true),
+          supabaseAdmin.from("teams").select("name").limit(5000),
+        ]);
+        const firstError = players.error || games.error || competitions.error || teams.error;
+        if (firstError) throw firstError;
+        const clubs = new Set(
+          (teams.data || []).map((t: any) => String(t.name || "").trim().toLowerCase()).filter(Boolean)
+        );
+        platformStatsCache = {
+          at: Date.now(),
+          body: {
+            players: players.count ?? 0,
+            games: games.count ?? 0,
+            competitions: competitions.count ?? 0,
+            teams: clubs.size,
+          },
+        };
+      }
+      res.setHeader("Cache-Control", "public, max-age=900");
+      res.json(platformStatsCache.body);
+    } catch (err: any) {
+      console.error("platform-stats failed:", err?.message || err);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -2310,8 +2379,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // A verified player's claim covers all of their players rows (one per
+  // competition) — the same "one person, many rows" grouping as an identity.
+  // Only approved claims count, so a pending claim can't merge stats.
+  async function claimIdentityForPlayer(playerId: string) {
+    const { data: link } = await supabaseAdmin
+      .from('player_claim_rows')
+      .select('claim_id')
+      .eq('player_id', playerId)
+      .maybeSingle();
+    if (!link?.claim_id) return null;
+    const { data: claim } = await supabaseAdmin
+      .from('player_claims')
+      .select('id, status, player_id')
+      .eq('id', link.claim_id)
+      .maybeSingle();
+    if (!claim || claim.status !== 'approved') return null;
+    const [{ data: rows }, { data: primary }] = await Promise.all([
+      supabaseAdmin.from('player_claim_rows').select('player_id').eq('claim_id', claim.id),
+      supabaseAdmin.from('players').select('full_name, photo_path, photo_path_bg_removed').eq('id', claim.player_id).maybeSingle(),
+    ]);
+    return {
+      id: `claim:${claim.id}`,
+      canonical_name: primary?.full_name ?? null,
+      photo_path: primary?.photo_path ?? null,
+      photo_path_bg_removed: primary?.photo_path_bg_removed ?? null,
+      playerIds: (rows || []).map((r: any) => r.player_id),
+    };
+  }
+
   // GET /api/player-identities/for-player/:playerId
   // Returns the identity group for a player (if any), including all sibling player_ids.
+  // Falls back to the player's approved claim when there's no identity group.
   app.get('/api/player-identities/for-player/:playerId', async (req: Request, res: Response) => {
     try {
       const { playerId } = req.params;
@@ -2321,10 +2420,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .eq('player_id', playerId)
         .maybeSingle();
       if (mErr) {
-        if ((mErr as any).code === '42P01') return res.json({ identity: null });
+        if ((mErr as any).code === '42P01' || (mErr as any).code === 'PGRST205') {
+          return res.json({ identity: await claimIdentityForPlayer(playerId) });
+        }
         return res.status(500).json({ error: mErr.message });
       }
-      if (!membership) return res.json({ identity: null });
+      if (!membership) return res.json({ identity: await claimIdentityForPlayer(playerId) });
 
       const identityId = membership.identity_id;
       const [idRes, membersRes] = await Promise.all([
@@ -2698,207 +2799,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ---- Dynamic sitemap ----
-  // Served at /sitemap.xml — queries Supabase for live data so new articles,
-  // leagues, teams and players are picked up on the next Google crawl without
-  // any manual script run. Cached in memory for 1 hour to avoid hitting the
-  // DB on every bot request.
-  const SITEMAP_TTL_MS = 60 * 60 * 1000;
-  const SITE_BASE = "https://swishassistant.com";
-  const SITEMAP_URL_LIMIT = 40_000; // Below the protocol's 50,000 URL limit.
-  const SITEMAP_BATCH_SIZE = 1_000;
-  let sitemapCache: { documents: string[]; at: number } | null = null;
-  let sitemapBuildInFlight: Promise<string[]> | null = null;
-
-  function xmlEscape(s: string): string {
-    return s
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&apos;");
-  }
-
-  function sitemapUrl(loc: string, lastmod: string, changefreq: string, priority: string) {
-    return `  <url>\n    <loc>${xmlEscape(loc)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`;
-  }
-
-  function sitemapDate(value: unknown, fallback: string): string {
-    if (!value) return fallback;
-    const date = new Date(String(value));
-    return Number.isNaN(date.getTime()) ? fallback : date.toISOString().split("T")[0];
-  }
-
-  function sitemapSegment(value: unknown): string | null {
-    const segment = String(value || "").trim();
-    return segment ? encodeURIComponent(segment) : null;
-  }
-
-  function teamSitemapSegment(name: unknown): string | null {
-    const normalized = String(name || "").trim();
-    return normalized ? encodeURIComponent(normalized) : null;
-  }
-
-  function sitemapIndex(documentCount: number, lastmod: string): string {
-    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xml += '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
-    for (let i = 0; i < documentCount; i++) {
-      xml += `  <sitemap>\n    <loc>${SITE_BASE}/sitemap/${i + 1}.xml</loc>\n    <lastmod>${lastmod}</lastmod>\n  </sitemap>\n`;
-    }
-    return `${xml}</sitemapindex>`;
-  }
-
-  async function buildSitemap(): Promise<string[]> {
-    const today = new Date().toISOString().split("T")[0];
-    const entries: Array<{ loc: string; lastmod: string; changefreq: string; priority: string }> = [];
-    const seenUrls = new Set<string>();
-    const publicCompetitionSlugs = new Map<string, string>();
-    const addUrl = (path: string, lastmod: string, changefreq: string, priority: string) => {
-      const loc = `${SITE_BASE}${path}`;
-      if (seenUrls.has(loc)) return;
-      seenUrls.add(loc);
-      entries.push({ loc, lastmod, changefreq, priority });
-    };
-
-    // Static pages
-    addUrl("/", today, "daily", "1.0");
-    addUrl("/news", today, "daily", "0.9");
-    for (const p of [
-      { path: "/teams", freq: "weekly", pri: "0.7" },
-      { path: "/players", freq: "weekly", pri: "0.7" },
-      { path: "/privacy", freq: "monthly", pri: "0.3" },
-      { path: "/terms", freq: "monthly", pri: "0.3" },
-      { path: "/cookies", freq: "monthly", pri: "0.3" },
-    ]) {
-      addUrl(p.path, today, p.freq, p.pri);
-    }
-
-    // Published news articles (slug-based URLs)
-    try {
-      for (let offset = 0; ; offset += SITEMAP_BATCH_SIZE) {
-        const { data: articles, error } = await supabaseAdmin
-          .from("news_articles")
-          .select("id, slug, published_at")
-          .eq("is_published", true)
-          .order("id")
-          .range(offset, offset + SITEMAP_BATCH_SIZE - 1);
-        if (error) throw error;
-        for (const article of articles || []) {
-          const slug = sitemapSegment(article.slug || article.id);
-          if (slug) addUrl(`/news/${slug}`, sitemapDate(article.published_at, today), "weekly", "0.8");
-        }
-        if (!articles || articles.length < SITEMAP_BATCH_SIZE) break;
-      }
-    } catch (err: any) {
-      console.error("Sitemap: error fetching articles:", err.message);
-    }
-
-    // Public leagues
-    try {
-      const { data: leagues, error } = await supabaseAdmin
-        .from("competitions")
-        .select("league_id, slug, is_public, parent_league_id");
-      if (error) throw error;
-      const directPublic = new Map<string, string>();
-      for (const l of leagues || []) {
-        const slug = sitemapSegment(l.slug);
-        if (!slug || !l.league_id || !l.is_public) continue;
-        directPublic.set(l.league_id, slug);
-        publicCompetitionSlugs.set(l.league_id, slug);
-        addUrl(`/competition/${slug}`, today, "daily", "0.9");
-      }
-      for (const l of leagues || []) {
-        if (!l.league_id || !l.parent_league_id || publicCompetitionSlugs.has(l.league_id)) continue;
-        const parentSlug = directPublic.get(l.parent_league_id);
-        if (parentSlug) publicCompetitionSlugs.set(l.league_id, parentSlug);
-      }
-    } catch (err: any) {
-      console.error("Sitemap: error fetching leagues:", err.message);
-    }
-
-    // Team detail pages are scoped to a public competition. The unscoped
-    // /team/:name route is an alias, so it is deliberately not indexed.
-    try {
-      for (let offset = 0; ; offset += SITEMAP_BATCH_SIZE) {
-        const { data: teams, error } = await supabaseAdmin
-          .from("teams")
-          .select("name, league_id, created_at")
-          .order("team_id")
-          .range(offset, offset + SITEMAP_BATCH_SIZE - 1);
-        if (error) throw error;
-        for (const team of teams || []) {
-          const competitionSlug = publicCompetitionSlugs.get(team.league_id);
-          const teamSlug = teamSitemapSegment(team.name);
-          if (competitionSlug && teamSlug) {
-            addUrl(`/competition/${competitionSlug}/team/${teamSlug}`, sitemapDate(team.created_at, today), "weekly", "0.6");
-          }
-        }
-        if (!teams || teams.length < SITEMAP_BATCH_SIZE) break;
-      }
-    } catch (err: any) {
-      console.error("Sitemap: error fetching teams:", err.message);
-    }
-
-    // Every public player gets a stable canonical URL. Prefer an imported slug,
-    // then an exact-name canonical slug, and finally a descriptive ID-backed URL.
-    try {
-      const allPlayers: any[] = [];
-      for (let offset = 0; ; offset += SITEMAP_BATCH_SIZE) {
-        const { data: players, error } = await supabaseAdmin
-          .from("players")
-          .select("id, slug, full_name, league_id, created_at")
-          .order("id")
-          .range(offset, offset + SITEMAP_BATCH_SIZE - 1);
-        if (error) throw error;
-        allPlayers.push(...(players || []));
-        if (!players || players.length < SITEMAP_BATCH_SIZE) break;
-      }
-      for (const player of allPlayers) {
-        if (!player.id || !publicCompetitionSlugs.has(player.league_id)) continue;
-        const generatedName = String(player.full_name || "player").trim().toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "player";
-        const canonicalSegment = player.slug
-          || `${generatedName}--${player.id}`;
-        const slug = sitemapSegment(canonicalSegment);
-        if (slug) addUrl(`/player/${slug}`, sitemapDate(player.created_at, today), "weekly", "0.5");
-      }
-    } catch (err: any) {
-      console.error("Sitemap: error fetching players:", err.message);
-    }
-
-    // game_schedule is the canonical source for both completed and upcoming
-    // public game pages. Legacy /game and /league game paths are aliases.
-    try {
-      for (let offset = 0; ; offset += SITEMAP_BATCH_SIZE) {
-        const { data: games, error } = await supabaseAdmin
-          .from("game_schedule")
-          .select("game_key, league_id, matchtime")
-          .order("game_key")
-          .range(offset, offset + SITEMAP_BATCH_SIZE - 1);
-        if (error) throw error;
-        for (const game of games || []) {
-          const competitionSlug = publicCompetitionSlugs.get(game.league_id);
-          const gameKey = sitemapSegment(game.game_key);
-          if (competitionSlug && gameKey) {
-            addUrl(`/competition/${competitionSlug}/game/${gameKey}`, sitemapDate(game.matchtime, today), "weekly", "0.7");
-          }
-        }
-        if (!games || games.length < SITEMAP_BATCH_SIZE) break;
-      }
-    } catch (err: any) {
-      console.error("Sitemap: error fetching games:", err.message);
-    }
-
-    const documents: string[] = [];
-    for (let start = 0; start < entries.length; start += SITEMAP_URL_LIMIT) {
-      const urls = entries.slice(start, start + SITEMAP_URL_LIMIT)
-        .map((entry) => sitemapUrl(entry.loc, entry.lastmod, entry.changefreq, entry.priority))
-        .join("");
-      documents.push(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`);
-    }
-    return documents;
-  }
-
   // ── Home competition activity scope ─────────────────────────────────────────
   // Parser-managed feeds can write games and performances to private child
   // competitions. Home feeds must include those rows while displaying and
@@ -3118,8 +3018,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // The rolling rules live here rather than in the client so every consumer
   // (the page, and later the homepage block) agrees on them:
   //   live      in progress now
-  //   upcoming  the rest of today (UK time); if nothing is left today, the
-  //             next day that has games — so midweek never shows an empty page
+  //   upcoming  the rest of today (UK time) and the next six days, grouped by
+  //             day. It used to be one day only, which on a Friday showed just
+  //             that night's SLB games and hid every league playing Saturday.
   //   results   finished games that tipped off in the last 24 hours
   //
   // Competition scope and feed-child remapping reuse fetchHomeCompetitionScope,
@@ -3131,6 +3032,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // stays in "coming up" for a while rather than vanishing from the page.
   const SCORES_LATE_START_GRACE_MS = 3 * 60 * 60 * 1000;
   const SCORES_LOOKAHEAD_MS = 21 * 24 * 60 * 60 * 1000;
+  // Calendar days of fixtures in "upcoming", today included.
+  const SCORES_UPCOMING_DAYS = 7;
   let scoresCache: { data: any; at: number } | null = null;
   let scoresInFlight: Promise<any> | null = null;
 
@@ -3154,7 +3057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   async function fetchScores() {
     const scope = await fetchHomeCompetitionScope();
-    const empty = { generatedAt: new Date().toISOString(), leagues: [], live: [], upcoming: { date: null, games: [] }, results: [] };
+    const empty = { generatedAt: new Date().toISOString(), leagues: [], live: [], upcoming: { date: null, games: [], days: [] }, results: [] };
     if (scope.sourceIds.length === 0) return empty;
 
     const now = Date.now();
@@ -3244,17 +3147,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       upcomingPool.push(toGame(d, row));
     }
 
-    // Roll forward: today's remaining games, else the next day with games.
+    // Today's remaining games and the next six days', by day.
     const todayKey = ukTodayKey();
-    const byDay = new Map<string, any[]>();
-    for (const g of upcomingPool) {
+    const lastDay = new Date(`${todayKey}T12:00:00Z`);
+    lastDay.setUTCDate(lastDay.getUTCDate() + SCORES_UPCOMING_DAYS - 1);
+    const lastKey = lastDay.toISOString().slice(0, 10);
+    const upcomingGames = upcomingPool.filter((g) => {
       const key = gameDayKey(g.match_time);
-      if (key < todayKey) continue;
-      if (!byDay.has(key)) byDay.set(key, []);
-      byDay.get(key)!.push(g);
-    }
-    const nextDay = Array.from(byDay.keys()).sort()[0] || null;
-    const upcomingGames = nextDay ? byDay.get(nextDay)! : [];
+      return key >= todayKey && key <= lastKey;
+    });
 
     // Games often share a tip-off time (a whole league at 19:30), and the
     // database returns ties in no fixed order — so without a tie-break the
@@ -3264,6 +3165,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     live.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time) || tieBreak(a, b));
     upcomingGames.sort((a, b) => Date.parse(a.match_time) - Date.parse(b.match_time) || tieBreak(a, b));
     results.sort((a, b) => Date.parse(b.match_time) - Date.parse(a.match_time) || tieBreak(a, b));
+
+    const days: Array<{ date: string; isToday: boolean; games: any[] }> = [];
+    for (const g of upcomingGames) {
+      const key = gameDayKey(g.match_time);
+      if (days[days.length - 1]?.date !== key) days.push({ date: key, isToday: key === todayKey, games: [] });
+      days[days.length - 1].games.push(g);
+    }
 
     // Filter chips: only competitions with something to show, in trending order.
     const present = new Set([...live, ...upcomingGames, ...results].map((g) => g.league_id));
@@ -3275,7 +3183,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       generatedAt: new Date(now).toISOString(),
       leagues,
       live,
-      upcoming: { date: nextDay, isToday: nextDay === todayKey, games: upcomingGames },
+      // `date`/`isToday` are the first day with games; `games` is every day's
+      // games in tip-off order, `days` the same games grouped by day.
+      upcoming: { date: days[0]?.date ?? null, isToday: days[0]?.isToday ?? false, games: upcomingGames, days },
       results,
     };
   }
@@ -3340,6 +3250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     stl: number | null; blk: number | null; tov: number | null;
     fga: number | null; fta: number | null;
     fgm?: number | null; ftm?: number | null;
+    tpm?: number | null; tpa?: number | null;
     game_score: number | null; ts_pct: number | null;
     opponent_name?: string | null;
     game_result?: string | null;
@@ -3351,20 +3262,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // readable when its own league (or any ancestor via parent_league_id) is
     // public. `scope.sourceToDisplay` already only contains leagues with a
     // resolvable public ancestor, so membership there is the same check.
-    playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null; profileAvailable: boolean }>;
+    playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null; photo_path?: string | null; profileAvailable: boolean }>;
+    // Each display league's logo: its own, else a parent competition's, else
+    // its league brand's (the brands carry most of the logos).
+    leagueLogos?: Record<string, string | null>;
+    // The homepage picker's competitions, and the one these perfs come from
+    // (null for the default "latest" pick).
+    competitions?: TrendingCompetitionOption[];
+    competitionId?: string | null;
+  }
+  interface TrendingCompetitionOption {
+    league_id: string;
+    name: string;
+    logo_url: string | null;
   }
   const TRENDING_TTL_MS = 60 * 1000;
   let trendingCache: { data: TrendingApiPayload; at: number } | null = null;
   let trendingInFlight: Promise<TrendingApiPayload> | null = null;
 
-  async function fetchTrendingPerformances(): Promise<TrendingApiPayload> {
-    const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {} };
-    const scope = await fetchHomeCompetitionScope();
-    if (scope.sourceIds.length === 0) return empty;
-    const leagueNames: Record<string, string> = {};
-    for (const [sourceId, display] of scope.sourceToDisplay.entries()) {
-      if (display.name) leagueNames[sourceId] = display.name;
-    }
+  const TRENDING_PERF_COLUMNS = "league_id,game_date,game_key,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,game_score,ts_pct";
+
+  /**
+   * The default homepage pick: live games first, else the newest completed
+   * competition's latest game day, else the newest rows anywhere in scope.
+   */
+  async function selectLatestTrendingRows(scope: HomeCompetitionScope): Promise<TrendingPerfRow[]> {
     const recentStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
     const nearFuture = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
     const liveWindowStart = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
@@ -3411,7 +3333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .sort((a, b) => String(b.matchtime || "").localeCompare(String(a.matchtime || "")));
     const liveRows = activity.filter((row) => isHomeCurrentLive(row.status, row.matchtime));
     const completedRows = activity.filter((row) => isHomeFinalStatus(row.status));
-    const perfColumns = "league_id,game_date,game_key,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,game_score,ts_pct";
+    const perfColumns = TRENDING_PERF_COLUMNS;
 
     let perfs: TrendingPerfRow[] = [];
     if (liveRows.length > 0) {
@@ -3468,6 +3390,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
+    return perfs;
+  }
+
+  /**
+   * One competition's pick for the homepage picker: its best lines from its
+   * most recent game week (Mon–Sun), across every source league that rolls up
+   * into it, so a Friday–Sunday round shows as a whole.
+   */
+  async function selectCompetitionTrendingRows(scope: HomeCompetitionScope, competitionId: string): Promise<TrendingPerfRow[]> {
+    const sourceIds = Array.from(scope.sourceToDisplay.entries())
+      .filter(([, display]) => display.league_id === competitionId)
+      .map(([sourceId]) => sourceId);
+    if (sourceIds.length === 0) return [];
+
+    const { data: latestWeek, error: weekError } = await supabaseAdmin
+      .from("vw_player_game_scores")
+      .select("week_start")
+      .in("league_id", sourceIds)
+      .order("week_start", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .returns<{ week_start: string | null }[]>();
+    if (weekError) {
+      console.error("[TrendingPerf] competition week lookup error", competitionId, weekError.message);
+    }
+
+    let query = supabaseAdmin
+      .from("vw_player_game_scores")
+      .select(TRENDING_PERF_COLUMNS)
+      .in("league_id", sourceIds)
+      .order("game_score", { ascending: false });
+    const weekStart = latestWeek?.[0]?.week_start;
+    if (weekStart) query = query.eq("week_start", weekStart);
+    const { data, error } = await query.limit(8).returns<TrendingPerfRow[]>();
+    if (error) {
+      console.error("[TrendingPerf] competition query error", competitionId, error.message);
+      return [];
+    }
+    return data || [];
+  }
+
+  /**
+   * Each competition's logo: its own, else the nearest parent competition's,
+   * else its league brand's (leagues.logo_url, where most logos live).
+   */
+  async function resolveTrendingLeagueLogos(displayIds: string[]): Promise<Record<string, string | null>> {
+    const leagueLogos: Record<string, string | null> = {};
+    if (displayIds.length === 0) return leagueLogos;
+
+    // Walk up from the display competitions through their parents.
+    type LogoCompRow = { league_id: string; logo_url: string | null; parent_league_id: string | null; competition_id: string | null };
+    const comps = new Map<string, LogoCompRow>();
+    let pending = displayIds;
+    for (let depth = 0; pending.length > 0 && depth < 4; depth++) {
+      const { data: compRows } = await supabaseAdmin
+        .from("competitions")
+        .select("league_id,logo_url,parent_league_id,competition_id")
+        .in("league_id", pending);
+      const parents: string[] = [];
+      for (const c of (compRows || []) as LogoCompRow[]) {
+        comps.set(c.league_id, c);
+        if (c.parent_league_id) parents.push(c.parent_league_id);
+      }
+      pending = Array.from(new Set(parents)).filter((id) => !comps.has(id));
+    }
+
+    const chain = (id: string): LogoCompRow[] => {
+      const rows: LogoCompRow[] = [];
+      const seen = new Set<string>();
+      for (let c = comps.get(id); c && !seen.has(c.league_id); c = c.parent_league_id ? comps.get(c.parent_league_id) : undefined) {
+        seen.add(c.league_id);
+        rows.push(c);
+      }
+      return rows;
+    };
+
+    const brandIds = Array.from(new Set(
+      displayIds.flatMap((id) => chain(id).map((c) => c.competition_id).filter((b): b is string => !!b)),
+    ));
+    const brandLogo = new Map<string, string | null>();
+    if (brandIds.length > 0) {
+      const { data: brandRows } = await supabaseAdmin
+        .from("leagues")
+        .select("id,logo_url")
+        .in("id", brandIds);
+      for (const b of (brandRows || []) as { id: string; logo_url: string | null }[]) brandLogo.set(b.id, b.logo_url);
+    }
+
+    for (const id of displayIds) {
+      let logo: string | null = null;
+      for (const c of chain(id)) {
+        logo = c.logo_url || (c.competition_id ? brandLogo.get(c.competition_id) ?? null : null);
+        if (logo) break;
+      }
+      leagueLogos[id] = logo;
+    }
+    return leagueLogos;
+  }
+
+  const TRENDING_OPTIONS_TTL_MS = 5 * 60 * 1000;
+  let trendingOptionsCache: { data: TrendingCompetitionOption[]; at: number } | null = null;
+
+  /**
+   * The homepage trending picker's list: public competitions with a finished
+   * or live game in the last 30 days, in the curated home order.
+   */
+  async function fetchTrendingCompetitionOptions(scope: HomeCompetitionScope): Promise<TrendingCompetitionOption[]> {
+    if (trendingOptionsCache && Date.now() - trendingOptionsCache.at < TRENDING_OPTIONS_TTL_MS) {
+      return trendingOptionsCache.data;
+    }
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const until = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabaseAdmin
+      .from("game_schedule")
+      .select("league_id,matchtime,status")
+      .in("league_id", scope.sourceIds)
+      .gte("matchtime", since)
+      .lte("matchtime", until)
+      .order("matchtime", { ascending: false })
+      .limit(1000);
+    if (error) {
+      console.error("[TrendingPerf] competition options lookup error", error.message);
+      return trendingOptionsCache?.data ?? [];
+    }
+
+    const lastPlayed = new Map<string, string>();
+    for (const row of (data || []) as { league_id: string; matchtime: string | null; status: string | null }[]) {
+      if (!isHomeFinalStatus(row.status) && !isHomeCurrentLive(row.status, row.matchtime)) continue;
+      const display = scope.sourceToDisplay.get(row.league_id);
+      if (display && !lastPlayed.has(display.league_id)) lastPlayed.set(display.league_id, row.matchtime || "");
+    }
+
+    const logos = await resolveTrendingLeagueLogos(Array.from(lastPlayed.keys()));
+    const options = scope.displayRows
+      .filter((row) => lastPlayed.has(row.league_id))
+      .sort((a, b) =>
+        (a.trending_position ?? Number.MAX_SAFE_INTEGER) - (b.trending_position ?? Number.MAX_SAFE_INTEGER)
+        || (lastPlayed.get(b.league_id) || "").localeCompare(lastPlayed.get(a.league_id) || ""),
+      )
+      .map((row) => ({ league_id: row.league_id, name: row.name, logo_url: logos[row.league_id] ?? null }));
+    trendingOptionsCache = { data: options, at: Date.now() };
+    return options;
+  }
+
+  async function fetchTrendingPerformances(competitionId?: string): Promise<TrendingApiPayload> {
+    const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {} };
+    const scope = await fetchHomeCompetitionScope();
+    if (scope.sourceIds.length === 0) return empty;
+    const leagueNames: Record<string, string> = {};
+    for (const [sourceId, display] of scope.sourceToDisplay.entries()) {
+      if (display.name) leagueNames[sourceId] = display.name;
+    }
+    const [perfs, competitions] = await Promise.all([
+      competitionId ? selectCompetitionTrendingRows(scope, competitionId) : selectLatestTrendingRows(scope),
+      fetchTrendingCompetitionOptions(scope),
+    ]);
+
     for (const perf of perfs) {
       const display = scope.sourceToDisplay.get(perf.league_id);
       if (display) {
@@ -3482,14 +3560,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (playerIds.length > 0) {
       const { data: metaRows, error: pErr } = await supabaseAdmin
         .from("players")
-        .select("id, full_name, league_id, slug, photo_path_bg_removed")
+        .select("id, full_name, league_id, slug, photo_path_bg_removed, photo_path")
         .in("id", playerIds);
       if (!pErr) {
-        for (const p of (metaRows || []) as { id: string; full_name: string | null; league_id: string | null; slug: string | null; photo_path_bg_removed: string | null }[]) {
+        for (const p of (metaRows || []) as { id: string; full_name: string | null; league_id: string | null; slug: string | null; photo_path_bg_removed: string | null; photo_path: string | null }[]) {
           // A player's own league_id is public exactly when it maps to itself as
           // its display target (findPublicDisplay returns the source unchanged).
           const profileAvailable = !!p.league_id && scope.sourceToDisplay.has(p.league_id);
-          playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed, profileAvailable };
+          playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed, photo_path: p.photo_path, profileAvailable };
           // `perf.league_id` was already remapped to the display league above, so
           // match on player id alone (globally unique) rather than re-checking
           // league_id equality against the now-remapped value.
@@ -3502,35 +3580,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
       }
-      // Fallback: fill missing photos by normalised name across all leagues
-      const fallbackMap = await fetchPhotoFallbackMap();
+      // Fallback: fill missing photos by normalised name across all leagues —
+      // a cut-out first, then an ordinary profile photo.
+      const [fallbackMap, profileFallbackMap] = await Promise.all([
+        fetchPhotoFallbackMap(),
+        fetchProfilePhotoFallbackMap(),
+      ]);
       for (const perf of perfs) {
         const meta = playerMeta[perf.player_id];
         if (!meta?.photo_path_bg_removed && perf.full_name) {
           const key = normalisePlayerName(perf.full_name);
           const fallback = fallbackMap.get(key);
-          if (fallback) {
-            playerMeta[perf.player_id] = { slug: meta?.slug ?? null, photo_path_bg_removed: fallback, profileAvailable: meta?.profileAvailable ?? false };
+          const profileFallback = meta?.photo_path ? null : profileFallbackMap.get(key);
+          if (fallback || profileFallback) {
+            playerMeta[perf.player_id] = {
+              slug: meta?.slug ?? null,
+              photo_path_bg_removed: fallback ?? null,
+              photo_path: meta?.photo_path ?? profileFallback ?? null,
+              profileAvailable: meta?.profileAvailable ?? false,
+            };
           }
         }
       }
     }
 
-    // Fetch FGM/FTM from player_stats so the card can show "makes/attempts" (e.g. 8/12).
+    // Fetch FGM/FTM and threes from player_stats so the card can show
+    // "makes/attempts" for FG, 3PT and FT (e.g. 8/12).
     const gameKeys = [...new Set(perfs.filter(p => p.game_key).map(p => p.game_key!))];
     if (gameKeys.length > 0 && playerIds.length > 0) {
       const { data: shootingRows } = await supabaseAdmin
         .from("player_stats")
-        .select("game_key,player_id,sfieldgoalsmade,sfreethrowsmade")
+        .select("game_key,player_id,sfieldgoalsmade,sfreethrowsmade,sthreepointersmade,sthreepointersattempted")
         .in("game_key", gameKeys)
         .in("player_id", playerIds);
-      const shootingMap: Record<string, { fgm: number | null; ftm: number | null }> = {};
-      for (const row of (shootingRows || []) as { game_key: string; player_id: string; sfieldgoalsmade: number | null; sfreethrowsmade: number | null }[]) {
-        shootingMap[`${row.game_key}_${row.player_id}`] = { fgm: row.sfieldgoalsmade, ftm: row.sfreethrowsmade };
+      const shootingMap: Record<string, { fgm: number | null; ftm: number | null; tpm: number | null; tpa: number | null }> = {};
+      for (const row of (shootingRows || []) as { game_key: string; player_id: string; sfieldgoalsmade: number | null; sfreethrowsmade: number | null; sthreepointersmade: number | null; sthreepointersattempted: number | null }[]) {
+        shootingMap[`${row.game_key}_${row.player_id}`] = {
+          fgm: row.sfieldgoalsmade,
+          ftm: row.sfreethrowsmade,
+          tpm: row.sthreepointersmade,
+          tpa: row.sthreepointersattempted,
+        };
       }
       for (const perf of perfs) {
         const s = shootingMap[`${perf.game_key}_${perf.player_id}`];
-        if (s) { perf.fgm = s.fgm; perf.ftm = s.ftm; }
+        if (s) { perf.fgm = s.fgm; perf.ftm = s.ftm; perf.tpm = s.tpm; perf.tpa = s.tpa; }
       }
     }
 
@@ -3560,7 +3654,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
-    return { perfs, leagueNames, playerMeta };
+    const leagueLogos = await resolveTrendingLeagueLogos(Array.from(new Set(perfs.map((p) => p.league_id))));
+
+    return { perfs, leagueNames, playerMeta, leagueLogos, competitions, competitionId: competitionId ?? null };
   }
 
   // ─── Helpers for player-leaders name deduplication (mirrors fuzzyMatch.ts) ────
@@ -4495,8 +4591,338 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // How a competition appears on trading cards outside the homepage (player
+  // profiles): ?ids=<league_id>,… → { [league_id]: { name, logo } }. The name
+  // is the public competition it shows under (as on the homepage cards); the
+  // logo is that competition's own, else its parent's, else its brand's.
+  const COMPETITION_DISPLAY_TTL_MS = 10 * 60 * 1000;
+  const competitionDisplayCache = new Map<string, { value: { name: string | null; logo: string | null }; at: number }>();
+  app.get("/api/competition-display", async (req: Request, res: Response) => {
+    const raw = typeof req.query.ids === "string" ? req.query.ids : "";
+    const ids = Array.from(new Set(raw.split(",").map((id) => id.trim())))
+      .filter((id) => /^[0-9a-f-]{36}$/i.test(id))
+      .slice(0, 20);
+    const now = Date.now();
+    const result: Record<string, { name: string | null; logo: string | null }> = {};
+    const missing: string[] = [];
+    for (const id of ids) {
+      const hit = competitionDisplayCache.get(id);
+      if (hit && now - hit.at < COMPETITION_DISPLAY_TTL_MS) result[id] = hit.value;
+      else missing.push(id);
+    }
+    if (missing.length > 0) {
+      try {
+        const scope = await fetchHomeCompetitionScope();
+        const displayIdFor = (id: string) => scope.sourceToDisplay.get(id)?.league_id ?? id;
+        const logos = await resolveTrendingLeagueLogos(Array.from(new Set(missing.map(displayIdFor))));
+        for (const id of missing) {
+          const value = { name: scope.sourceToDisplay.get(id)?.name ?? null, logo: logos[displayIdFor(id)] ?? null };
+          result[id] = value;
+          competitionDisplayCache.set(id, { value, at: now });
+        }
+      } catch (err: any) {
+        console.error("[CompetitionDisplay] lookup error", err.message);
+        for (const id of missing) result[id] = { name: null, logo: null };
+      }
+    }
+    return res.json(result);
+  });
+
+  // ── /teams directory ────────────────────────────────────────────────────────
+  // Every club in the competitions the site shows publicly, once per club side
+  // however many competitions it has played in (NBL's "… Senior Men I" and
+  // BCB's plain name are the same club). Each club opens its team page in the
+  // competition it played most recently. A few table reads, cached, since it
+  // only changes when fixtures do.
+  interface TeamsDirectoryCompetition {
+    id: string;           // the public competition it's listed under
+    name: string;
+    slug: string;         // the competition its team page opens in
+    teamName: string;     // the club's name in that competition
+    lastPlayed: string | null;
+    nextGame: string | null;
+    games: number;
+  }
+  interface TeamsDirectoryClub {
+    key: string;
+    name: string;
+    logo: string | null;
+    competitions: TeamsDirectoryCompetition[];
+    lastPlayed: string | null;
+    nextGame: string | null;
+    games: number;
+  }
+  interface TeamsDirectoryPayload {
+    clubs: TeamsDirectoryClub[];
+    competitions: Array<{ id: string; name: string; slug: string; logo: string | null; clubs: number }>;
+  }
+
+  const TEAMS_DIRECTORY_TTL_MS = 10 * 60 * 1000;
+  let teamsDirectoryCache: { data: TeamsDirectoryPayload; at: number } | null = null;
+  let teamsDirectoryInFlight: Promise<TeamsDirectoryPayload> | null = null;
+
+  // Placeholder sides from exhibitions and parse slips ("Team White",
+  // "14U Team 2", "Coach: …") aren't clubs anyone would look up.
+  const isDirectoryClubName = (name: string) => {
+    const n = name.trim();
+    if (n.length < 3 || /^\d+$/.test(n) || n.includes(":")) return false;
+    if (/^team(\s+\d+)?$/i.test(n) || /^(team\s+)?(black|white|red|blue|green|gold|diamond)$/i.test(n)) return false;
+    if (/^(u\d{1,2}|\d{1,2}u|\d{1,2}\+)\s+team\b/i.test(n)) return false;
+    return true;
+  };
+
+  // "Worcester Wolves Senior Men I" → "Worcester Wolves", "… Senior Women" → "… Women".
+  const directoryClubName = (name: string) =>
+    name
+      .replace(/\s+Senior\s+Men\b/i, "")
+      .replace(/\s+Senior\s+Women\b/i, " Women")
+      .replace(/\s+I$/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  // PostgREST caps a response at 1,000 rows, so read in pages.
+  async function selectPaged(
+    page: (from: number, to: number) => PromiseLike<{ data: any[] | null; error: { message: string } | null }>,
+  ): Promise<any[]> {
+    const rows: any[] = [];
+    for (let from = 0; from < 50000; from += 1000) {
+      const { data, error } = await page(from, from + 999);
+      if (error) throw new Error(error.message);
+      rows.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+    return rows;
+  }
+
+  async function buildTeamsDirectory(): Promise<TeamsDirectoryPayload> {
+    const scope = await fetchHomeCompetitionScope();
+    if (scope.sourceIds.length === 0) return { clubs: [], competitions: [] };
+
+    const [teams, boxScores, schedule, { data: comps, error: compsError }, logoIndex] = await Promise.all([
+      selectPaged((from, to) =>
+        supabaseAdmin.from("teams").select("team_id, name, league_id, logo_url")
+          .in("league_id", scope.sourceIds).order("team_id").range(from, to)),
+      selectPaged((from, to) =>
+        supabaseAdmin.from("team_stats").select("league_id, game_key, name, created_at")
+          .in("league_id", scope.sourceIds).eq("is_public", true).not("game_key", "is", null)
+          .order("id").range(from, to)),
+      selectPaged((from, to) =>
+        supabaseAdmin.from("game_schedule").select("league_id, game_key, matchtime, hometeam, awayteam")
+          .in("league_id", scope.sourceIds).order("game_key").range(from, to)),
+      supabaseAdmin.from("competitions").select("league_id, slug").in("league_id", scope.sourceIds),
+      getLogoIndex(),
+    ]);
+    if (compsError) throw new Error(compsError.message);
+    const slugById = new Map((comps || []).map((c: any) => [c.league_id as string, c.slug as string | null]));
+
+    // Games each club side has played (box scores) and its next fixture, per
+    // competition. Plenty of fixtures have no tip-off time and some
+    // competitions have box scores but no schedule, so a played game takes
+    // its date from the schedule when it's there, else from its import.
+    type Activity = { last: number | null; next: number | null; games: number };
+    const activity = new Map<string, Activity>();
+    const touch = (leagueId: string, side: string) => {
+      const id = `${leagueId}|${teamClubKey(side)}`;
+      let a = activity.get(id);
+      if (!a) activity.set(id, (a = { last: null, next: null, games: 0 }));
+      return a;
+    };
+    const now = Date.now();
+    const tipOff = new Map<string, number>();
+    for (const game of schedule) {
+      const at = game.matchtime ? Date.parse(game.matchtime) : NaN;
+      if (Number.isFinite(at) && game.game_key) tipOff.set(`${game.league_id}|${game.game_key}`, at);
+      for (const side of [game.hometeam, game.awayteam]) {
+        if (!side) continue;
+        const a = touch(game.league_id, side);
+        if (Number.isFinite(at) && at > now && (a.next === null || at < a.next)) a.next = at;
+      }
+    }
+    const counted = new Set<string>();
+    for (const row of boxScores) {
+      if (!row.name) continue;
+      const id = `${row.league_id}|${row.game_key}|${teamClubKey(row.name)}`;
+      if (counted.has(id)) continue;
+      counted.add(id);
+      const a = touch(row.league_id, row.name);
+      a.games += 1;
+      const at = tipOff.get(`${row.league_id}|${row.game_key}`) ?? Date.parse(row.created_at);
+      if (Number.isFinite(at) && (a.last === null || at > a.last)) a.last = at;
+    }
+
+    type Entry = { team: any; displayId: string; displayName: string; slug: string; act: Activity };
+    const byClub = new Map<string, Entry[]>();
+    for (const team of teams) {
+      if (!team.name || !isDirectoryClubName(team.name)) continue;
+      const display = scope.sourceToDisplay.get(team.league_id);
+      const slug = slugById.get(team.league_id) || display?.slug;
+      if (!display?.name || !slug) continue;
+      const key = teamClubKey(team.name);
+      // A side with no fixtures has nothing to show on its page yet.
+      const act = activity.get(`${team.league_id}|${key}`);
+      if (!act) continue;
+      const list = byClub.get(key) || [];
+      list.push({ team, displayId: display.league_id, displayName: display.name, slug, act });
+      byClub.set(key, list);
+    }
+
+    const recency = (a: Activity) => Math.max(a.last ?? 0, a.next ?? 0);
+    const iso = (t: number | null) => (t === null ? null : new Date(t).toISOString());
+    const logoUrl = (file: string) => supabaseAdmin.storage.from("team-logos").getPublicUrl(file).data.publicUrl;
+
+    const clubs: TeamsDirectoryClub[] = [];
+    for (const [key, entries] of Array.from(byClub.entries())) {
+      entries.sort((a, b) => recency(b.act) - recency(a.act));
+
+      // One row per public competition, opening its most recent side, with
+      // the games of every side it lists (a feed can split one competition).
+      const competitions: TeamsDirectoryCompetition[] = [];
+      const byDisplay = new Map<string, { row: TeamsDirectoryCompetition; last: number | null; next: number | null }>();
+      for (const e of entries) {
+        const existing = byDisplay.get(e.displayId);
+        if (existing) {
+          existing.row.games += e.act.games;
+          if (e.act.last !== null && (existing.last === null || e.act.last > existing.last)) existing.last = e.act.last;
+          if (e.act.next !== null && (existing.next === null || e.act.next < existing.next)) existing.next = e.act.next;
+          continue;
+        }
+        const row: TeamsDirectoryCompetition = {
+          id: e.displayId,
+          name: e.displayName,
+          slug: e.slug,
+          teamName: e.team.name,
+          lastPlayed: null,
+          nextGame: null,
+          games: e.act.games,
+        };
+        competitions.push(row);
+        byDisplay.set(e.displayId, { row, last: e.act.last, next: e.act.next });
+      }
+      for (const { row, last, next } of Array.from(byDisplay.values())) {
+        row.lastPlayed = iso(last);
+        row.nextGame = iso(next);
+      }
+
+      // The name it goes by most, preferring its latest spelling on a tie.
+      const tally = new Map<string, number>();
+      for (const e of entries) {
+        const n = directoryClubName(e.team.name);
+        tally.set(n, (tally.get(n) || 0) + 1);
+      }
+      const name = Array.from(tally.entries()).sort((a, b) => b[1] - a[1])[0][0];
+
+      // Its own logo in its latest competition first, then any it has elsewhere.
+      let logo: string | null = null;
+      for (const e of entries) {
+        const own = (logoIndex.storage.get(logoNameKey(e.team.name)) || []).find((c) => c.leagueId === e.team.league_id);
+        logo = own ? logoUrl(own.file) : e.team.logo_url || null;
+        if (logo) break;
+      }
+      if (!logo) {
+        for (const e of entries) {
+          const k = logoNameKey(e.team.name);
+          const any = (logoIndex.storage.get(k) || [])[0];
+          logo = any ? logoUrl(any.file) : logoIndex.db.get(k) || null;
+          if (logo) break;
+        }
+      }
+
+      const last = entries.reduce<number | null>((m, e) => (e.act.last !== null && (m === null || e.act.last > m) ? e.act.last : m), null);
+      const next = entries.reduce<number | null>((m, e) => (e.act.next !== null && (m === null || e.act.next < m) ? e.act.next : m), null);
+      clubs.push({
+        key,
+        name,
+        logo,
+        competitions,
+        lastPlayed: iso(last),
+        nextGame: iso(next),
+        games: entries.reduce((sum, e) => sum + e.act.games, 0),
+      });
+    }
+    clubs.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+
+    // The filter's list: curated home order first, then whoever played last.
+    const clubCount = new Map<string, number>();
+    const latest = new Map<string, number>();
+    for (const club of clubs) {
+      for (const c of club.competitions) {
+        clubCount.set(c.id, (clubCount.get(c.id) || 0) + 1);
+        const t = Math.max(c.lastPlayed ? Date.parse(c.lastPlayed) : 0, c.nextGame ? Date.parse(c.nextGame) : 0);
+        latest.set(c.id, Math.max(latest.get(c.id) || 0, t));
+      }
+    }
+    const logos = await resolveTrendingLeagueLogos(Array.from(clubCount.keys()));
+    const competitions = scope.displayRows
+      .filter((row) => clubCount.has(row.league_id))
+      .sort((a, b) =>
+        (a.trending_position ?? Number.MAX_SAFE_INTEGER) - (b.trending_position ?? Number.MAX_SAFE_INTEGER)
+        || (latest.get(b.league_id) || 0) - (latest.get(a.league_id) || 0),
+      )
+      .map((row) => ({ id: row.league_id, name: row.name, slug: row.slug, logo: logos[row.league_id] ?? null, clubs: clubCount.get(row.league_id) || 0 }));
+
+    return { clubs, competitions };
+  }
+
+  app.get("/api/public/teams-directory", async (_req: Request, res: Response) => {
+    try {
+      if (!teamsDirectoryCache || Date.now() - teamsDirectoryCache.at > TEAMS_DIRECTORY_TTL_MS) {
+        if (!teamsDirectoryInFlight) {
+          teamsDirectoryInFlight = buildTeamsDirectory().finally(() => { teamsDirectoryInFlight = null; });
+        }
+        teamsDirectoryCache = { data: await teamsDirectoryInFlight, at: Date.now() };
+      }
+      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
+      res.json(teamsDirectoryCache.data);
+    } catch (err: any) {
+      console.error("[TeamsDirectory] build failed:", err?.message || err);
+      if (teamsDirectoryCache) return res.json(teamsDirectoryCache.data);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // A single competition's pick changes less often than the live default.
+  const TRENDING_COMPETITION_TTL_MS = 3 * 60 * 1000;
+  const trendingCompetitionCache = new Map<string, { data: TrendingApiPayload; at: number }>();
+  const trendingCompetitionInFlight = new Map<string, Promise<TrendingApiPayload>>();
+
   app.get("/api/home/trending-performances", async (req: Request, res: Response) => {
     const now = Date.now();
+
+    // ?competition=<league_id> picks one competition for the homepage picker.
+    // Only competitions the homepage shows are accepted, which also keeps the
+    // cache bounded.
+    const competitionId = typeof req.query.competition === "string" ? req.query.competition : "";
+    if (competitionId) {
+      const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {}, competitionId };
+      try {
+        const scope = await fetchHomeCompetitionScope();
+        if (!scope.displayRows.some((row) => row.league_id === competitionId)) {
+          return res.status(404).json(empty);
+        }
+      } catch (err: any) {
+        console.error("[TrendingPerf] scope lookup error", err.message);
+        return res.json(empty);
+      }
+      const cached = trendingCompetitionCache.get(competitionId);
+      if (cached && now - cached.at < TRENDING_COMPETITION_TTL_MS) return res.json(cached.data);
+      let inFlight = trendingCompetitionInFlight.get(competitionId);
+      if (!inFlight) {
+        inFlight = fetchTrendingPerformances(competitionId).finally(() => {
+          trendingCompetitionInFlight.delete(competitionId);
+        });
+        trendingCompetitionInFlight.set(competitionId, inFlight);
+      }
+      try {
+        const data = await inFlight;
+        trendingCompetitionCache.set(competitionId, { data, at: Date.now() });
+        return res.json(data);
+      } catch (err: any) {
+        console.error("[TrendingPerf] competition fetch error", competitionId, err.message);
+        if (cached) return res.json(cached.data);
+        return res.json(empty);
+      }
+    }
+
     if (trendingCache && now - trendingCache.at < TRENDING_TTL_MS) {
       return res.json(trendingCache.data);
     }
@@ -4722,61 +5148,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/sitemap.xml", async (req: Request, res: Response) => {
-    const now = Date.now();
-    const forceRefresh = req.query.refresh === "1";
-    if (!forceRefresh && sitemapCache && now - sitemapCache.at < SITEMAP_TTL_MS) {
-      res.setHeader("Content-Type", "application/xml; charset=utf-8");
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      return res.send(sitemapCache.documents.length === 1
-        ? sitemapCache.documents[0]
-        : sitemapIndex(sitemapCache.documents.length, sitemapDate(sitemapCache.at, new Date().toISOString().split("T")[0])));
-    }
-    try {
-      if (!sitemapBuildInFlight) {
-        sitemapBuildInFlight = buildSitemap().finally(() => {
-          sitemapBuildInFlight = null;
-        });
-      }
-      const documents = await sitemapBuildInFlight;
-      sitemapCache = { documents, at: now };
-      res.setHeader("Content-Type", "application/xml; charset=utf-8");
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      res.send(documents.length === 1 ? documents[0] : sitemapIndex(documents.length, sitemapDate(now, new Date().toISOString().split("T")[0])));
-    } catch (err: any) {
-      console.error("Sitemap generation error:", err.message);
-      if (sitemapCache) {
-        res.setHeader("Content-Type", "application/xml; charset=utf-8");
-        return res.send(sitemapCache.documents.length === 1
-          ? sitemapCache.documents[0]
-          : sitemapIndex(sitemapCache.documents.length, sitemapDate(sitemapCache.at, new Date().toISOString().split("T")[0])));
-      }
-      res.status(500).send("Failed to generate sitemap");
-    }
-  });
-
-  app.get(/^\/sitemap\/(\d+)\.xml$/, async (req: Request, res: Response) => {
-    const now = Date.now();
-    try {
-      if (!sitemapCache || now - sitemapCache.at >= SITEMAP_TTL_MS) {
-        if (!sitemapBuildInFlight) {
-          sitemapBuildInFlight = buildSitemap().finally(() => {
-            sitemapBuildInFlight = null;
-          });
-        }
-        sitemapCache = { documents: await sitemapBuildInFlight, at: now };
-      }
-      const page = Number(req.params[0]);
-      const document = sitemapCache.documents[page - 1];
-      if (!Number.isInteger(page) || page < 1 || !document) return res.status(404).send("Sitemap not found");
-      res.setHeader("Content-Type", "application/xml; charset=utf-8");
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      return res.send(document);
-    } catch (err: any) {
-      console.error("Sitemap page generation error:", err.message);
-      return res.status(500).send("Failed to generate sitemap");
-    }
-  });
+  // /sitemap.xml, /sitemap/N.xml and /api/public/team-page/:key — built from
+  // the shared SEO index (see seoIndex.ts).
+  registerSeoRoutes(app);
 
   // ─── Admin owner provisioning ────────────────────────────────────────────────
   // POST /api/admin/provision-owner

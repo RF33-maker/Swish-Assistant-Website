@@ -363,3 +363,507 @@
 .dark [data-share-body="true"] .dark\:to-slate-600 {
   --tw-gradient-to: #ffffff !important;
 }
+
+/* ==========================================================================
+   "Pro" design system — Coaches Hub and the league pages
+   Scoped to .sa-pro so the rest of the site keeps its own look. The
+   accent (--ch-accent) is set inline from the league/team brand colour.
+   ========================================================================== */
+.sa-pro {
+  --ch-bg: #f5f6f8;
+  --ch-surface: #ffffff;
+  --ch-surface-2: #f8f9fb;
+  --ch-surface-3: #f1f3f6;
+  --ch-border: rgba(15, 23, 42, 0.08);
+  --ch-border-strong: rgba(15, 23, 42, 0.14);
+  --ch-text: #0b1220;
+  --ch-text-2: #475467;
+  --ch-muted: #8a94a6;
+  --ch-accent: #f97316;
+  --ch-accent-soft: color-mix(in srgb, var(--ch-accent) 10%, transparent);
+  --ch-win: #16a34a;
+  --ch-loss: #e11d48;
+  --ch-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --ch-shadow-lg: 0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 32px -12px rgba(16, 24, 40, 0.18);
+  --ch-radius: 14px;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  letter-spacing: -0.006em;
+  background: var(--ch-bg);
+  color: var(--ch-text);
+}
+.dark .sa-pro,
+.sa-pro .ch-force-dark {
+  --ch-bg: #08090b;
+  --ch-surface: #111317;
+  --ch-surface-2: #16191e;
+  --ch-surface-3: #1c2026;
+  --ch-border: rgba(255, 255, 255, 0.07);
+  --ch-border-strong: rgba(255, 255, 255, 0.12);
+  --ch-text: #f3f4f6;
+  --ch-text-2: #a3abb8;
+  --ch-muted: #6b7280;
+  --ch-accent-soft: color-mix(in srgb, var(--ch-accent) 16%, transparent);
+  --ch-win: #22c55e;
+  --ch-loss: #fb7185;
+  --ch-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --ch-shadow-lg: 0 0 0 1px rgba(255, 255, 255, 0.02), 0 16px 40px -16px rgba(0, 0, 0, 0.7);
+}
+
+.sa-pro .ch-display {
+  font-family: 'Barlow Condensed', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.005em;
+}
+.sa-pro .ch-num { font-variant-numeric: tabular-nums; }
+
+/* Surfaces */
+.sa-pro .ch-card {
+  background: var(--ch-surface);
+  border: 1px solid var(--ch-border);
+  border-radius: var(--ch-radius);
+  box-shadow: var(--ch-shadow);
+}
+.sa-pro .ch-tile {
+  background: var(--ch-surface-2);
+  border: 1px solid var(--ch-border);
+  border-radius: 10px;
+}
+.sa-pro .ch-hover { transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.sa-pro .ch-hover:hover { border-color: var(--ch-border-strong); box-shadow: var(--ch-shadow-lg); }
+
+/* Hero surfaces — solid team colour banners get depth + a soft sheen */
+.sa-pro .ch-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--ch-radius);
+  box-shadow: var(--ch-shadow-lg);
+  isolation: isolate;
+}
+.sa-pro .ch-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 255, 255, 0.16) 0%, transparent 55%),
+    linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.22) 100%);
+  pointer-events: none;
+}
+
+/* Section eyebrow number — replaces the old monospace "01" */
+.sa-pro .ch-kicker-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.375rem;
+  padding: 0 0.35rem;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent);
+  transform: translateY(-1px);
+}
+.sa-pro .ch-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ch-muted);
+}
+
+/* Controls */
+.sa-pro .ch-seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--ch-surface-3);
+  border: 1px solid var(--ch-border);
+}
+.sa-pro .ch-seg > button {
+  border-radius: 7px;
+  font-weight: 500;
+  color: var(--ch-text-2);
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.sa-pro .ch-seg > button:hover { color: var(--ch-text); }
+.sa-pro .ch-seg > button[data-active='true'],
+.sa-pro .ch-seg > button[data-state='active'] {
+  background: var(--ch-surface);
+  color: var(--ch-text);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08), 0 0 0 1px var(--ch-border);
+}
+.sa-pro .ch-chip {
+  border-radius: 999px;
+  border: 1px solid var(--ch-border);
+  background: var(--ch-surface);
+  color: var(--ch-text-2);
+  font-weight: 500;
+  transition: all .15s ease;
+}
+.sa-pro .ch-chip:hover { border-color: var(--ch-border-strong); color: var(--ch-text); }
+.sa-pro .ch-chip[data-active='true'] {
+  background: var(--ch-text);
+  border-color: var(--ch-text);
+  color: var(--ch-surface);
+}
+.sa-pro .ch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 2.125rem;
+  padding: 0 0.85rem;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all .15s ease;
+  white-space: nowrap;
+}
+.sa-pro .ch-btn-primary { background: var(--ch-accent); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.14); }
+.sa-pro .ch-btn-primary:hover { filter: brightness(1.08); }
+.sa-pro .ch-btn-ghost { border: 1px solid var(--ch-border-strong); color: var(--ch-text); background: var(--ch-surface); }
+.sa-pro .ch-btn-ghost:hover { background: var(--ch-surface-3); }
+.sa-pro .ch-input {
+  background: var(--ch-surface-3);
+  border: 1px solid transparent;
+  color: var(--ch-text);
+  border-radius: 10px;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.sa-pro .ch-input::placeholder { color: var(--ch-muted); }
+.sa-pro .ch-input:focus {
+  outline: none;
+  background: var(--ch-surface);
+  border-color: var(--ch-border-strong);
+  box-shadow: 0 0 0 4px var(--ch-accent-soft);
+}
+
+/* A team with no logo: a quiet monogram on the redesigned pages instead of
+   the old orange block (embeds and widgets keep theirs). */
+.sa-pro .team-logo-fallback {
+  background: #eef0f3;
+  border-color: transparent;
+  color: #4b5563;
+  font-family: 'Barlow Condensed', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+.sa-pro .team-logo-fallback-label { display: none; }
+.sa-pro .team-logo-fallback[data-size='md'] .team-logo-fallback-letter { font-size: 1.25rem; line-height: 1; }
+.sa-pro .team-logo-fallback[data-size='lg'] .team-logo-fallback-letter { font-size: 1.75rem; line-height: 1; }
+.sa-pro .team-logo-fallback[data-size='xl'] .team-logo-fallback-letter { font-size: 2.75rem; line-height: 1; }
+
+/* Tables */
+.sa-pro .ch-table thead th {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ch-muted);
+}
+.sa-pro .ch-table tbody tr { transition: background .12s ease; }
+.sa-pro .ch-table tbody tr:hover { background: var(--ch-surface-2); }
+
+/* Motion */
+@keyframes ch-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.sa-pro .ch-rise { animation: ch-rise .38s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes ch-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.sa-pro .ch-skel {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--ch-surface-3) 0%, var(--ch-surface-2) 50%, var(--ch-surface-3) 100%);
+  background-size: 800px 100%;
+  animation: ch-shimmer 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sa-pro .ch-rise, .sa-pro .ch-skel { animation: none; }
+}
+
+/* Harmonise shared (non-hub) components rendered inside the hub — they keep
+   their markup, but drop the orange-tinted borders and flat corners. */
+.sa-pro .rounded-lg.shadow-sm,
+.sa-pro .rounded-xl.shadow-sm {
+  border-radius: var(--ch-radius);
+  box-shadow: var(--ch-shadow);
+}
+.sa-pro .border-orange-200,
+.sa-pro .border-orange-100 { border-color: var(--ch-border); }
+.sa-pro .bg-white.dark\:bg-neutral-900 { background-color: var(--ch-surface); }
+.sa-pro .dark\:border-neutral-800 { border-color: var(--ch-border); }
+.sa-pro .dark\:border-neutral-700 { border-color: var(--ch-border); }
+.sa-pro .ch-glass {
+  background: color-mix(in srgb, var(--ch-bg) 82%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  backdrop-filter: saturate(180%) blur(16px);
+}
+@keyframes ch-load { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@keyframes ch-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ch-slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Shared components drawn in the site's orange — inside the hub they take
+   the hub accent instead, so every view carries the league/team brand. */
+.sa-pro .text-orange-600,
+.sa-pro .dark\:text-orange-400 { color: var(--ch-accent); }
+.sa-pro .bg-orange-50 { background-color: var(--ch-accent-soft); }
+.dark .sa-pro .dark\:bg-orange-900\/20 { background-color: var(--ch-accent-soft); }
+.sa-pro .border-orange-300,
+.dark .sa-pro .dark\:border-orange-700,
+.dark .sa-pro .dark\:border-orange-900\/40 { border-color: color-mix(in srgb, var(--ch-accent) 40%, transparent); }
+
+/* Phones: comfortable tap targets for segmented toggles, and rows of
+   filters that span the card instead of leaving ragged gaps. */
+@media (max-width: 639px) {
+  .sa-pro .ch-seg > button { min-height: 36px; }
+  .sa-pro .ch-seg.ch-seg-fill { display: flex; width: 100%; }
+  .sa-pro .ch-seg.ch-seg-fill > button { flex: 1 1 0; justify-content: center; }
+}
+
+/* ── Motion (homepage) ─────────────────────────────────────────────────────
+   Transform/opacity only, so it stays smooth on phones. Everything here is
+   switched off under prefers-reduced-motion at the end of this block. */
+
+/* Scroll reveal */
+.sa-pro .ch-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity .65s cubic-bezier(.2,.7,.2,1), transform .65s cubic-bezier(.2,.7,.2,1);
+}
+.sa-pro .ch-reveal.is-in { opacity: 1; transform: none; }
+
+/* Section eyebrow line draws in with its header */
+.sa-pro .ch-eyebrow-line {
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform .7s cubic-bezier(.2,.7,.2,1) .15s;
+}
+.sa-pro .is-in .ch-eyebrow-line { transform: scaleX(1); }
+
+/* A dribble: two bounces, the second smaller */
+@keyframes ch-dribble {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-6px); }
+  50% { transform: translateY(0); }
+  68% { transform: translateY(-2.5px); }
+  82% { transform: translateY(0); }
+}
+.sa-pro .ch-dribble-on-hover:hover .ch-dribble-target,
+.sa-pro .ch-dribble-on-hover:focus-visible .ch-dribble-target { animation: ch-dribble .7s ease-out; }
+
+/* Card sheen on hover */
+.sa-pro .ch-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.16) 46%, transparent 62%);
+  transform: translateX(-120%);
+  transition: transform .9s cubic-bezier(.2,.7,.2,1);
+  pointer-events: none;
+}
+.sa-pro .ch-shine:hover::after { transform: translateX(120%); }
+
+/* Podcast equalizer */
+@keyframes ch-eq { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+.sa-pro .ch-eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.sa-pro .ch-eq > span { width: 3px; height: 100%; border-radius: 1px; background: currentColor; transform-origin: bottom; animation: ch-eq 1.1s ease-in-out infinite; }
+.sa-pro .ch-eq > span:nth-child(2) { animation-delay: -.35s; animation-duration: .9s; }
+.sa-pro .ch-eq > span:nth-child(3) { animation-delay: -.6s; animation-duration: 1.3s; }
+.sa-pro .ch-eq > span:nth-child(4) { animation-delay: -.2s; animation-duration: 1s; }
+
+/* Marquee pauses under the pointer */
+.sa-pro .ch-marquee:hover .animate-infinite-scroll { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sa-pro .ch-reveal, .sa-pro .ch-reveal.is-in { opacity: 1; transform: none; transition: none; }
+  .sa-pro .ch-eyebrow-line { transform: none; transition: none; }
+  .sa-pro .ch-dribble-target, .sa-pro .ch-eq > span { animation: none !important; }
+  .sa-pro .ch-shine::after { display: none; }
+  .sa-pro .animate-infinite-scroll { animation: none; }
+}
+
+/* ── Homepage scroll story: frosted-glass surfaces ─────────────────────────
+   The homepage paints a moving background (ScrollStory) behind the content,
+   so its cards and bands become frosted glass and the story shows through,
+   blurred. Phones keep them near-solid with no blur: re-blurring on every
+   scroll frame is too costly there. Scoped to .ch-story-page only. */
+.sa-pro.ch-story-page .ch-card {
+  background: color-mix(in srgb, var(--ch-surface) 80%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+.sa-pro.ch-story-page .ch-glass-band {
+  background: color-mix(in srgb, var(--ch-surface) 68%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+.sa-pro.ch-story-page .ch-podcast-band {
+  background: rgba(7, 8, 10, 0.78);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+@media (max-width: 767px) {
+  .sa-pro.ch-story-page .ch-card { background: color-mix(in srgb, var(--ch-surface) 94%, transparent); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .sa-pro.ch-story-page .ch-glass-band { background: color-mix(in srgb, var(--ch-surface) 90%, transparent); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .sa-pro.ch-story-page .ch-podcast-band { background: rgba(7, 8, 10, 0.92); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* The story's fixed layer is sized to the large viewport (toolbars hidden),
+   so a phone's toolbar sliding in and out mid-scroll doesn't resize it. */
+.ch-story-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100lvh;
+}
+
+/* ── Homepage search: entrance + travelling glow ──────────────────────────
+   The homepage's main search sweeps in, then carries the orange glow that
+   circles the header search on other pages (same --border-angle spin). The
+   ring is a pseudo-element of the form itself, so when the scroll story
+   fades the form out, the glow goes with it. */
+@keyframes ch-search-in {
+  0% { opacity: 0; transform: translateY(16px) scale(0.94); }
+  55% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+.sa-pro .ch-search-in { animation: ch-search-in .8s cubic-bezier(.2,.8,.2,1) .12s both; }
+.sa-pro .ch-search-glow { position: relative; isolation: isolate; }
+.sa-pro .ch-search-glow::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--border-angle),
+    transparent 0deg,
+    #f97316 50deg,
+    #fb923c 100deg,
+    #fdba74 140deg,
+    #fbbf24 180deg,
+    transparent 235deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: border-spin 4s linear infinite;
+  filter: blur(1px);
+  opacity: .9;
+  pointer-events: none;
+  z-index: -1;
+}
+/* Once the scroll story has faded the bar into the hoop, the glow stops
+   rather than repainting every frame unseen. */
+.sa-pro .ch-search-glow.is-story-hidden::before { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .sa-pro .ch-search-in { animation: none; }
+  .sa-pro .ch-search-glow::before { animation: none; }
+}
+
+/* ── Card fan carousel (components/ui/card-fan-carousel.tsx) ───────────────
+   Card sizes per breakpoint live here as variables; the component reads
+   them to fit the fan's spread to its container. */
+/* Trading card sizes (components/cards/TradingCard) — shared by the fan
+   and anywhere else the card appears (.tc-sizes on a container). */
+.fan-layout,
+.tc-sizes {
+  --fan-card-w: 12.5rem;
+  --fan-card-h: 20rem;
+}
+.fan-layout {
+  position: relative;
+  width: 100%;
+  max-width: 80rem;
+  margin: 0 auto;
+  outline: none;
+  touch-action: pan-y; /* horizontal swipes cycle; vertical still scrolls */
+}
+@media (min-width: 480px) { .fan-layout, .tc-sizes { --fan-card-w: 14rem; --fan-card-h: 21.25rem; } }
+@media (min-width: 640px) { .fan-layout, .tc-sizes { --fan-card-w: 15rem; --fan-card-h: 22.75rem; } }
+@media (min-width: 768px) { .fan-layout, .tc-sizes { --fan-card-w: 16rem; --fan-card-h: 24.25rem; } }
+@media (min-width: 1024px) { .fan-layout, .tc-sizes { --fan-card-w: 17rem; --fan-card-h: 25.75rem; } }
+.fan-layout:focus-visible { box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.5); border-radius: 16px; }
+.fan-card {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  width: var(--fan-card-w);
+  height: var(--fan-card-h);
+  margin-left: calc(var(--fan-card-w) / -2);
+  transform-origin: 50% 60%;
+  opacity: 0;
+  will-change: transform, opacity;
+  cursor: pointer;
+}
+/* Side cards in the fan aren't focused — only the centre card can share. */
+.fan-card:not(.is-center) button[aria-label^="Download"] { opacity: 0 !important; pointer-events: none; }
+
+/* Player profile overview (components/PlayerProfileContent): the Latest and
+   Best cards with the season numbers beside them whenever the profile is wide
+   enough. It also renders inside league pages, so this keys off its own
+   width rather than the viewport's. */
+.pp-overview { container-type: inline-size; }
+.pp-overview-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+@container (min-width: 560px) {
+  .pp-overview .pp-tiles-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@container (min-width: 880px) {
+  .pp-overview-grid { grid-template-columns: auto minmax(0, 1fr); }
+  .pp-overview-grid > :only-child { grid-column: 1 / -1; }
+  .pp-overview-grid > :not(:only-child) .pp-tiles-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Collectible accolade cards (components/cards/AccoladeCard): a card that
+   flips over to its details, a slowly shifting foil frame and a sheen across
+   the art. Each season's cards sit in a holder like a binder page. */
+.acc-flip { position: relative; perspective: 1400px; }
+.acc-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform .7s cubic-bezier(.2, .7, .2, 1);
+}
+.acc-flip[data-flipped="true"] .acc-flip-inner { transform: rotateY(180deg); }
+.acc-face {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+.acc-face-back { transform: rotateY(180deg); }
+.acc-foil { animation: acc-foil 9s ease-in-out infinite alternate; }
+@keyframes acc-foil { from { background-position: 0% 0%; } to { background-position: 100% 100%; } }
+.acc-sheen {
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 45%, rgba(255, 255, 255, 0.05) 52%, transparent 60%);
+  background-size: 250% 100%;
+  animation: acc-sheen 7s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes acc-sheen { 0% { background-position: 130% 0; } 55%, 100% { background-position: -30% 0; } }
+.sa-pro .acc-binder {
+  background-color: var(--ch-surface-2);
+  background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ch-text) 8%, transparent) 1px, transparent 0);
+  background-size: 14px 14px;
+}
+.acc-sleeve { position: relative; }
+.acc-sleeve::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  pointer-events: none;
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 26%, rgba(255, 255, 255, 0) 74%, rgba(255, 255, 255, 0.07) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+@media (prefers-reduced-motion: reduce) {
+  .acc-flip-inner { transition: none; }
+  .acc-foil, .acc-sheen { animation: none; }
+}

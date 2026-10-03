@@ -2,13 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Clock3, MapPin, RefreshCw } from "lucide-react";
+import GameScoreHero, { StatCompareRow, useMatchupColors } from "@/components/game/GameScoreHero";
+import GameStorylines, { StorylinePlayerLink } from "@/components/game/GameStorylines";
+import TicketsCard from "@/components/game/TicketsCard";
+import { buildGameStorylines } from "@/lib/gameStorylines";
+import { fetchAndMergePlayerRankings } from "@/lib/playerRankings";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { parseScheduleTime } from "@/lib/scheduleTime";
 import { aggregateTeamStats } from "@/lib/teamStatsAggregate";
-import { useTeamBranding } from "@/hooks/useTeamBranding";
-import { adjustOpacity } from "@/lib/colorExtractor";
-import { useTheme } from "@/components/ThemeProvider";
+import { playerPath, teamPath } from "@shared/seo";
+import EntityLink from "@/components/EntityLink";
 
 export type PreviewGame = {
   league_id: string;
@@ -19,6 +23,9 @@ export type PreviewGame = {
   venue?: string | null;
   home_team_id?: string | null;
   away_team_id?: string | null;
+  /** Where to buy tickets. Not stored anywhere yet, so the tickets card shows
+   *  its "coming soon" placeholder until a source is added. */
+  ticket_url?: string | null;
 };
 
 type ContextRow = {
@@ -87,12 +94,10 @@ function computeStreak(form: FormResult[]): { count: number; type: "W" | "L" } |
 }
 
 export default function UpcomingGamePreview({ game, onRefresh, embedded = false, leagueSlug, onSelectPlayer }: { game: PreviewGame; onRefresh?: () => void; embedded?: boolean; leagueSlug?: string; onSelectPlayer?: (playerSlug: string) => void }) {
-  const teamHref = (teamName: string) => leagueSlug
-    ? `/competition/${leagueSlug}/team/${encodeURIComponent(teamName)}`
-    : `/team/${encodeURIComponent(teamName)}`;
-  const playerHref = (slug: string) => leagueSlug
-    ? `/competition/${leagueSlug}/player/${encodeURIComponent(slug)}`
-    : `/player/${encodeURIComponent(slug)}`;
+  // The team's permanent page, opened on this competition.
+  const teamHref = (teamName: string) => teamPath(teamName, leagueSlug) || `/team/${encodeURIComponent(teamName)}`;
+  // The canonical player page (inside the league page a click still opens it inline).
+  const playerHref = (slug: string) => playerPath({ slug }) || `/player/${encodeURIComponent(slug)}`;
 
   const [left, setLeft] = useState(() => countdown(game.matchtime));
   const arrived = left.days + left.hours + left.minutes + left.seconds === 0;
@@ -108,22 +113,7 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
     [game.home_team_id, game.away_team_id],
   );
 
-  const { theme } = useTheme();
-  const homeBranding = useTeamBranding({ teamName: game.hometeam, leagueId: game.league_id });
-  const awayBranding = useTeamBranding({ teamName: game.awayteam, leagueId: game.league_id });
-  const homeRgb = homeBranding.colors?.primaryRgb;
-  const awayRgb = awayBranding.colors?.primaryRgb;
-  // Team-colour wash sits on a white (light) / near-black (dark) card rather
-  // than a saturated fill, so it stays a subtle tint instead of dominating —
-  // dark mode can afford a touch more opacity since colours read more muted
-  // against a near-black base.
-  const edgeOpacity = theme === "dark" ? 0.32 : 0.14;
-  const midOpacity = theme === "dark" ? 0.12 : 0.05;
-  const heroBackgroundStyle = homeRgb && awayRgb
-    ? {
-        backgroundImage: `linear-gradient(90deg, ${adjustOpacity(homeRgb, edgeOpacity)} 0%, ${adjustOpacity(homeRgb, midOpacity)} 38%, ${adjustOpacity(awayRgb, midOpacity)} 62%, ${adjustOpacity(awayRgb, edgeOpacity)} 100%)`,
-      }
-    : undefined;
+  const colors = useMatchupColors(game.hometeam, game.awayteam, game.league_id);
 
   const { data: context, isLoading: contextLoading } = useQuery({
     queryKey: ["upcoming-context", game.league_id, ...teamIds],
@@ -275,6 +265,41 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
     enabled: !!context?.leagueId && (!!context?.homeId || !!context?.awayId),
   });
 
+  // League-wide player ranks for the storylines, merged the same way as the
+  // Coaches Hub and League Leaders so "leads the league" agrees with them.
+  const { data: rankings, isLoading: rankingsLoading } = useQuery({
+    queryKey: ["player-rankings", context?.leagueId],
+    queryFn: () => fetchAndMergePlayerRankings(context!.leagueId),
+    enabled: !!context?.leagueId,
+    staleTime: 5 * 60_000,
+  });
+
+  const storylines = useMemo(() => {
+    if (!context) return [];
+    return buildGameStorylines({
+      homeTeam: game.hometeam,
+      awayTeam: game.awayteam,
+      homeId: context.homeId,
+      awayId: context.awayId,
+      teamRows: context.rows,
+      players: rankings || [],
+      seasonLabel: context.previous ? "last season" : "this season",
+    });
+  }, [context, rankings, game.hometeam, game.awayteam]);
+
+  const storyPlayerIds = useMemo(
+    () => storylines.flatMap((s) => s.player?.playerIds ?? []),
+    [storylines],
+  );
+  const { data: storySlugs } = useQuery({
+    queryKey: ["storyline-player-slugs", ...storyPlayerIds],
+    queryFn: async () => {
+      const { data } = await supabase.from("players").select("id,slug").in("id", storyPlayerIds);
+      return new Map((data || []).filter((r: any) => r.slug).map((r: any) => [r.id as string, r.slug as string]));
+    },
+    enabled: storyPlayerIds.length > 0,
+  });
+
   const summaries = useMemo(() => {
     const summarize = (teamId?: string | null) => {
       if (!teamId) return { form: [] as FormResult[], wins: 0, losses: 0 };
@@ -350,9 +375,9 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
   const fmtDate = date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const fmtTime = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
   const unit = (value: number, label: string) => (
-    <div className="min-w-[50px] rounded-lg bg-slate-100 px-2 py-2 text-center dark:bg-black/40 sm:min-w-[58px]">
-      <strong className="block text-lg tabular-nums text-slate-800 dark:text-white sm:text-xl">{String(value).padStart(2, "0")}</strong>
-      <span className="text-[9px] uppercase tracking-[.18em] text-slate-500 dark:text-slate-400">{label}</span>
+    <div className="min-w-[46px] rounded-lg bg-black/30 px-1.5 py-1.5 text-center ring-1 ring-white/15 backdrop-blur-sm sm:min-w-[60px] sm:py-2">
+      <strong className="ch-display block text-2xl font-bold leading-none tabular-nums text-white sm:text-[2rem]">{String(value).padStart(2, "0")}</strong>
+      <span className="mt-1 block text-[8.5px] font-semibold uppercase tracking-[.16em] text-white/70 sm:text-[9.5px]">{label}</span>
     </div>
   );
 
@@ -360,7 +385,8 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
     ? `Previous season${context.season ? ` · ${context.season}` : ""}`
     : "This season";
 
-  const hasAdvancedStats = (parseFloat(seasonStats.home?.pace || "0") > 0) || (parseFloat(seasonStats.away?.pace || "0") > 0);
+  // Both sides need the advanced numbers; one team's 0.0 pace would read as a real (and "better") rating.
+  const hasAdvancedStats = (parseFloat(seasonStats.home?.pace || "0") > 0) && (parseFloat(seasonStats.away?.pace || "0") > 0);
   const snapshotRows = seasonStats.home && seasonStats.away ? [
     { label: "PPG", a: parseFloat(seasonStats.home.ppg), b: parseFloat(seasonStats.away.ppg), decimals: 1 },
     { label: "RPG", a: parseFloat(seasonStats.home.rpg), b: parseFloat(seasonStats.away.rpg), decimals: 1 },
@@ -375,48 +401,70 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
   ] : [];
 
   return (
-    <main className={`${embedded ? "bg-transparent px-1 py-2" : "min-h-[100dvh] bg-[#f7f3eb] px-4 py-8 dark:bg-neutral-950 sm:px-6"} text-slate-900 dark:text-white`}>
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-orange-600">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-orange-500" />
+    <main className={`${embedded ? "px-0 py-0" : "sa-pro min-h-[100dvh] px-4 py-6 sm:px-6"}`}>
+      <div className={embedded ? "" : "mx-auto max-w-5xl"}>
+        <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-[color:var(--ch-accent)]">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[color:var(--ch-accent)]" />
           Game preview
         </div>
-        <section className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
-          {heroBackgroundStyle && <div className="absolute inset-0" style={heroBackgroundStyle} />}
-          <div className="relative p-5 sm:p-10">
-            <div className="relative flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500 dark:text-slate-400">
-              <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4" />{fmtDate}</span>
-              <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4" />{fmtTime}</span>
-            </div>
-            <div className="relative mt-8 grid grid-cols-2 items-start gap-5 sm:mt-10 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-8">
-              <Team name={game.hometeam} league={game.league_id} summary={summaries.home} streak={homeStreak} href={teamHref(game.hometeam)} />
-              <div className="col-span-2 row-start-2 text-center sm:col-span-1 sm:row-start-auto">
-                <div className="text-xs font-bold tracking-[.3em] text-orange-600 dark:text-orange-400">{arrived ? "TIP-OFF TIME" : "TIP-OFF IN"}</div>
-                <div className="mt-3 flex justify-center gap-1.5">{unit(left.days, "days")}{unit(left.hours, "hrs")}{unit(left.minutes, "min")}{unit(left.seconds, "sec")}</div>
+        <GameScoreHero
+          leagueId={game.league_id}
+          homeTeam={game.hometeam}
+          awayTeam={game.awayteam}
+          state="upcoming"
+          colors={colors}
+          homeHref={teamHref(game.hometeam)}
+          awayHref={teamHref(game.awayteam)}
+          homeSub={recordLabel(summaries.home, homeStreak)}
+          awaySub={recordLabel(summaries.away, awayStreak)}
+          homeExtra={<FormDots form={summaries.home.form} />}
+          awayExtra={<FormDots form={summaries.away.form} />}
+          center={
+            <div className="text-center">
+              <div className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[.28em] text-white/80">{arrived ? "Tip-off time" : "Tip-off in"}</div>
+              <div className="mt-2 flex justify-center gap-1 sm:gap-1.5">
+                {left.days > 0 && unit(left.days, "days")}{unit(left.hours, "hrs")}{unit(left.minutes, "min")}{unit(left.seconds, "sec")}
               </div>
-              <Team name={game.awayteam} league={game.league_id} summary={summaries.away} streak={awayStreak} href={teamHref(game.awayteam)} />
             </div>
-            <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3 border-t border-slate-100 pt-5 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
-              {game.venue
-                ? <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-orange-500 dark:text-orange-400" />{game.venue}</span>
-                : <span>Venue details will be added when available</span>}
-            </div>
-          </div>
-        </section>
+          }
+          meta={[
+            { icon: <CalendarDays />, label: fmtDate },
+            { icon: <Clock3 />, label: fmtTime },
+            ...(game.venue ? [{ icon: <MapPin />, label: game.venue }] : []),
+          ]}
+        />
 
         {arrived && (
-          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900 dark:border-orange-900/50 dark:bg-orange-950/30 dark:text-orange-200 sm:flex-row sm:items-center sm:justify-between">
+          <div className="ch-card mt-4 flex flex-col gap-3 px-4 py-3 text-sm text-[color:var(--ch-text)] sm:flex-row sm:items-center sm:justify-between" style={{ boxShadow: "0 0 0 1px var(--ch-accent-soft), var(--ch-shadow)" }}>
             <span>Tip-off time has arrived. Live coverage will appear when the official game feed starts.</span>
-            <button onClick={onRefresh} className="inline-flex items-center gap-2 font-semibold"><RefreshCw className="h-4 w-4" />Check for live coverage</button>
+            <button onClick={onRefresh} className="ch-btn ch-btn-ghost h-9 px-3 text-sm"><RefreshCw className="h-4 w-4" />Check for live coverage</button>
           </div>
         )}
 
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-neutral-800 dark:bg-neutral-900/60">
+        <TicketsCard homeTeam={game.hometeam} awayTeam={game.awayteam} ticketUrl={game.ticket_url} colors={colors} />
+
+        <GameStorylines
+          storylines={storylines}
+          loading={contextLoading || (!!context?.leagueId && rankingsLoading)}
+          colors={colors}
+          seasonNote={context?.previous ? `Ranks from ${contextLabel.toLowerCase()}` : null}
+          playerLink={(story, children) => {
+            const ids = story.player?.playerIds ?? [];
+            // The profile resolves a raw player id when there's no slug yet.
+            const slug = ids.map((id) => storySlugs?.get(id)).find(Boolean) || ids[0];
+            if (!slug) return children;
+            return onSelectPlayer
+              ? <StorylinePlayerLink href={playerHref(slug)} onClick={() => onSelectPlayer(slug)}>{children}</StorylinePlayerLink>
+              : <StorylinePlayerLink href={playerHref(slug)}>{children}</StorylinePlayerLink>;
+          }}
+        />
+
+        <section className="ch-card mt-4 p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-semibold">Matchup context</h2>
-            {!contextLoading && context?.rows.length ? <span className="text-xs font-medium text-orange-700 dark:text-orange-300">{contextLabel}</span> : null}
+            <h2 className="ch-eyebrow">Matchup context</h2>
+            {!contextLoading && context?.rows.length ? <span className="text-xs font-medium text-[color:var(--ch-text-2)]">{contextLabel}</span> : null}
           </div>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-2 text-sm text-[color:var(--ch-text-2)]">
             {contextLoading
               ? "Loading team context…"
               : summaries.home.form.length || summaries.away.form.length
@@ -425,8 +473,8 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
           </p>
 
           {(leaders.home.length > 0 || leaders.away.length > 0) && (
-            <div className="mt-5 border-t border-slate-200 pt-4 dark:border-neutral-800">
-              <h3 className="text-xs font-semibold uppercase tracking-[.16em] text-slate-500">Team leaders · {contextLabel}</h3>
+            <div className="mt-4 border-t border-[color:var(--ch-border)] pt-4">
+              <h3 className="ch-eyebrow">Team leaders · {contextLabel}</h3>
               <div className="mt-3 grid grid-cols-2 gap-4">
                 <LeaderColumn teamName={game.hometeam} teamHref={teamHref(game.hometeam)} players={leaders.home} playerHref={playerHref} onSelectPlayer={onSelectPlayer} />
                 <LeaderColumn teamName={game.awayteam} teamHref={teamHref(game.awayteam)} players={leaders.away} playerHref={playerHref} onSelectPlayer={onSelectPlayer} />
@@ -436,54 +484,43 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
         </section>
 
         {snapshotRows.length > 0 && (
-          <section className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-neutral-800 dark:bg-neutral-900/60">
+          <section className="ch-card mt-4 p-4 md:p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-semibold">Season snapshot</h2>
-              <span className="text-xs font-medium text-orange-700 dark:text-orange-300">{contextLabel}</span>
+              <h2 className="ch-eyebrow">Season snapshot</h2>
+              <span className="text-xs font-medium text-[color:var(--ch-text-2)]">{contextLabel}</span>
             </div>
-            <div className="mt-4 space-y-3">
-              {snapshotRows.map((row) => {
-                const total = row.a + row.b;
-                const aPct = total > 0 ? (row.a / total) * 100 : 50;
-                const aBetter = row.lowerIsBetter ? row.a < row.b : row.a > row.b;
-                const bBetter = row.lowerIsBetter ? row.b < row.a : row.b > row.a;
-                return (
-                  <div key={row.label}>
-                    <div className="flex items-center justify-between text-sm mb-1">
-                      <span className={`font-semibold ${aBetter ? "" : "text-slate-500 dark:text-slate-400"}`} style={aBetter ? { color: homeBranding.primaryColor } : undefined}>
-                        {row.a.toFixed(row.decimals)}{row.suffix || ""}
-                      </span>
-                      <span className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{row.label}</span>
-                      <span className={`font-semibold ${bBetter ? "" : "text-slate-500 dark:text-slate-400"}`} style={bBetter ? { color: awayBranding.primaryColor } : undefined}>
-                        {row.b.toFixed(row.decimals)}{row.suffix || ""}
-                      </span>
-                    </div>
-                    <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 dark:bg-neutral-700">
-                      <div className="transition-all duration-500" style={{ width: `${aPct}%`, backgroundColor: homeBranding.primaryColor }} />
-                      <div className="transition-all duration-500" style={{ width: `${100 - aPct}%`, backgroundColor: awayBranding.primaryColor }} />
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="mt-4 grid gap-x-8 gap-y-3.5 md:grid-cols-2">
+              {snapshotRows.map((row) => (
+                <StatCompareRow
+                  key={row.label}
+                  label={row.label}
+                  home={row.a}
+                  away={row.b}
+                  homeDisplay={`${row.a.toFixed(row.decimals)}${row.suffix || ""}`}
+                  awayDisplay={`${row.b.toFixed(row.decimals)}${row.suffix || ""}`}
+                  lowerIsBetter={row.lowerIsBetter}
+                  colors={colors}
+                />
+              ))}
             </div>
           </section>
         )}
 
         {!contextLoading && (
-          <section className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-neutral-800 dark:bg-neutral-900/60">
-            <h2 className="font-semibold">Head-to-head</h2>
+          <section className="ch-card mt-4 p-4 md:p-5">
+            <h2 className="ch-eyebrow">Head-to-head</h2>
             {headToHead.meetings.length > 0 ? (
               <div className="mt-3">
-                <div className="text-sm text-slate-600 dark:text-slate-300">
-                  <span className="font-semibold text-slate-800 dark:text-white">{game.hometeam}</span> lead the series{" "}
-                  <span className="font-semibold text-orange-600 dark:text-orange-400">{headToHead.homeWins}-{headToHead.awayWins}</span>{" "}
-                  <span className="font-semibold text-slate-800 dark:text-white">{game.awayteam}</span> {contextLabel.toLowerCase()}.
+                <div className="text-sm text-[color:var(--ch-text-2)]">
+                  <span className="font-semibold text-[color:var(--ch-text)]">{game.hometeam}</span> lead the series{" "}
+                  <span className="ch-display ch-num text-base font-bold text-[color:var(--ch-text)]">{headToHead.homeWins}-{headToHead.awayWins}</span>{" "}
+                  <span className="font-semibold text-[color:var(--ch-text)]">{game.awayteam}</span> {contextLabel.toLowerCase()}.
                 </div>
                 <div className="mt-3 space-y-1.5 text-sm">
                   {headToHead.meetings.slice(0, 5).map((meeting) => (
-                    <div key={meeting.gameKey} className="flex items-center justify-between rounded-lg bg-slate-100 px-3 py-1.5 dark:bg-neutral-800">
-                      <span className="text-slate-500 dark:text-slate-400">Meeting</span>
-                      <span className="font-semibold text-slate-800 dark:text-white">
+                    <div key={meeting.gameKey} className="ch-tile flex items-center justify-between px-3 py-1.5">
+                      <span className="text-[color:var(--ch-muted)]">Meeting</span>
+                      <span className="ch-num font-semibold text-[color:var(--ch-text)]">
                         {game.hometeam} {meeting.homeScore} – {meeting.awayScore} {game.awayteam}
                       </span>
                     </div>
@@ -491,7 +528,7 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
                 </div>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No previous meetings between these two teams yet.</p>
+              <p className="mt-2 text-sm text-[color:var(--ch-text-2)]">No previous meetings between these two teams yet.</p>
             )}
           </section>
         )}
@@ -515,81 +552,53 @@ function LeaderColumn({
 }) {
   return (
     <div>
-      <Link href={teamHref} className="block truncate text-xs font-semibold text-slate-500 hover:underline dark:text-slate-400">
+      <Link href={teamHref} className="block truncate text-xs font-semibold text-[color:var(--ch-text-2)] hover:underline">
         {teamName}
       </Link>
       <div className="mt-2 space-y-1.5">
         {players.length ? players.map((player) => (
-          <div key={player.name} className="rounded-lg bg-slate-100 px-3 py-2 dark:bg-neutral-800">
+          <div key={player.name} className="ch-tile px-3 py-2">
             {player.slug ? (
-              onSelectPlayer ? (
-                <button
-                  type="button"
-                  onClick={() => onSelectPlayer(player.slug as string)}
-                  className="truncate text-sm font-semibold hover:underline text-left"
-                >
-                  {player.name}
-                </button>
-              ) : (
-                <Link href={playerHref(player.slug)} className="truncate text-sm font-semibold hover:underline">
-                  {player.name}
-                </Link>
-              )
+              <EntityLink
+                href={playerHref(player.slug)}
+                onNavigate={onSelectPlayer ? () => onSelectPlayer(player.slug as string) : undefined}
+                className="block truncate text-sm font-semibold hover:underline"
+              >
+                {player.name}
+              </EntityLink>
             ) : (
               <div className="truncate text-sm font-semibold">{player.name}</div>
             )}
-            <div className="mt-0.5 text-xs text-orange-600">{(player.points / player.games).toFixed(1)} PPG</div>
+            <div className="ch-num mt-0.5 text-xs font-semibold text-[color:var(--ch-text-2)]">{(player.points / player.games).toFixed(1)} PPG</div>
           </div>
-        )) : <div className="text-xs italic text-slate-500 dark:text-slate-400">No data yet</div>}
+        )) : <div className="text-xs text-[color:var(--ch-muted)]">No data yet</div>}
       </div>
     </div>
   );
 }
 
-function Team({
-  name,
-  league,
-  summary,
-  streak,
-  href,
-}: {
-  name: string;
-  league: string;
-  summary: { form: FormResult[]; wins: number; losses: number };
-  streak: { count: number; type: "W" | "L" } | null;
-  href: string;
-}) {
+function recordLabel(
+  summary: { wins: number; losses: number },
+  streak: { count: number; type: "W" | "L" } | null,
+) {
+  if (summary.wins + summary.losses === 0) return undefined;
+  return `${summary.wins}-${summary.losses}${streak ? ` · ${streak.type}${streak.count}` : ""}`;
+}
+
+/** Last five results as small W/L chips, sat on the team colour in the hero. */
+function FormDots({ form }: { form: FormResult[] }) {
+  if (!form.length) return <span className="text-[11px] text-white/60">No recent form</span>;
   return (
-    <div className="text-center">
-      <Link href={href} className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 p-2 transition-opacity hover:opacity-80 dark:bg-white/10 sm:h-24 sm:w-24">
-        <TeamLogo teamName={name} leagueId={league} size="lg" />
-      </Link>
-      <Link href={href}>
-        <h1 className="text-base font-bold text-slate-800 hover:underline dark:text-white sm:text-xl">{name}</h1>
-      </Link>
-      {summary.wins + summary.losses > 0 && (
-        <div className="mt-1 flex items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-          <span>{summary.wins}-{summary.losses}</span>
-          {streak && (
-            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold text-white ${streak.type === "W" ? "bg-emerald-500" : "bg-rose-500"}`}>
-              {streak.type}{streak.count}
-            </span>
-          )}
-        </div>
-      )}
-      <div className="mt-2 flex justify-center gap-1">
-        {summary.form.length
-          ? summary.form.map((result, index) => (
-              <span
-                key={`${result.teamScore}-${result.opponentScore}-${index}`}
-                title={`${result.won ? "Won" : "Lost"} ${result.teamScore}-${result.opponentScore}`}
-                className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white ${result.won ? "bg-emerald-500" : "bg-rose-500"}`}
-              >
-                {result.won ? "W" : "L"}
-              </span>
-            ))
-          : <span className="text-xs text-slate-500 dark:text-slate-400">No recent form</span>}
-      </div>
+    <div className="flex justify-center gap-1">
+      {form.map((result, index) => (
+        <span
+          key={`${result.teamScore}-${result.opponentScore}-${index}`}
+          title={`${result.won ? "Won" : "Lost"} ${result.teamScore}-${result.opponentScore}`}
+          className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold ring-1 ${result.won ? "bg-emerald-500 text-white ring-white/30" : "bg-black/35 text-white/85 ring-white/20"}`}
+        >
+          {result.won ? "W" : "L"}
+        </span>
+      ))}
     </div>
   );
 }

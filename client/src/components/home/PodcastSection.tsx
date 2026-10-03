@@ -116,23 +116,22 @@ export default function PodcastSection() {
 
   return (
     <section
-      className="relative overflow-hidden bg-neutral-950 py-14 text-white md:py-18"
+      className="ch-podcast-band relative overflow-hidden bg-[#07080a] py-14 text-white md:py-20"
       aria-labelledby="latest-podcast-heading"
     >
       <div className="absolute -right-24 -top-28 h-80 w-80 rounded-full bg-orange-500/15 blur-3xl" aria-hidden="true" />
       <div className="absolute -bottom-40 -left-24 h-80 w-80 rounded-full bg-amber-400/10 blur-3xl" aria-hidden="true" />
 
-      <div className="relative mx-auto max-w-6xl px-6">
+      <div className="relative mx-auto max-w-7xl px-5 md:px-8">
         <div className="mb-7 flex items-end justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">
-              <Podcast className="h-4 w-4" aria-hidden="true" />
+              <span className="ch-eq" aria-hidden="true"><span /><span /><span /><span /></span>
               The Swish Roundup
             </div>
-            <h2 id="latest-podcast-heading" className="text-2xl font-bold md:text-3xl">
+            <h2 id="latest-podcast-heading" className="ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2rem] md:text-[2.75rem]">
               Latest Podcast
             </h2>
-            <div className="mt-2 h-1 w-16 rounded-full bg-orange-500" />
           </div>
           <Headphones className="hidden h-10 w-10 text-orange-300/40 sm:block" aria-hidden="true" />
         </div>

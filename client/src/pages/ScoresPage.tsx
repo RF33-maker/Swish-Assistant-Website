@@ -15,9 +15,9 @@ import { dayLabel, useScores, type ScoreGame } from "@/lib/scores";
  * and the link to share on socials: /scores?league=<slug> opens pre-filtered.
  *
  * There is deliberately no date picker. The server applies the rolling rules
- * (see /api/scores): results stay for 24 hours, and "coming up" rolls forward
- * to the next day with games, so the page is never empty midweek and never
- * asks the visitor to work out which day to look at.
+ * (see /api/scores): results stay for 24 hours, and "coming up" is the rest of
+ * today plus the next six days, grouped by day, so the page is never empty
+ * midweek and never asks the visitor to work out which day to look at.
  */
 
 // The app has no global scroll reset, so arriving here from partway down the
@@ -35,14 +35,17 @@ const CANONICAL = "https://swishassistant.com/scores";
 const META_DESCRIPTION =
   "Live scores, upcoming fixtures and the latest results from British basketball, updated as games happen.";
 
-function Section({ title, meta, children }: { title: string; meta?: string; children: React.ReactNode }) {
+function Section({ title, meta, live = false, children }: { title: string; meta?: string; live?: boolean; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-baseline justify-between px-1">
-        <h2 className="text-base font-bold text-slate-900 dark:text-white">{title}</h2>
-        {meta && <span className="text-xs text-slate-500 dark:text-neutral-400">{meta}</span>}
+    <section className="flex flex-col gap-3" aria-label={title}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="flex items-center gap-2 ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]">
+          {live && <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />}
+          {title}
+        </h2>
+        {meta && <span className="text-xs font-medium text-[color:var(--ch-muted)]">{meta}</span>}
       </div>
-      {children}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{children}</div>
     </section>
   );
 }
@@ -65,6 +68,10 @@ export default function ScoresPage() {
 
   const live = useMemo(() => pick(data?.live), [data, activeLeague]);
   const upcoming = useMemo(() => pick(data?.upcoming.games), [data, activeLeague]);
+  const upcomingDays = useMemo(
+    () => (data?.upcoming.days ?? []).map((d) => ({ ...d, games: pick(d.games) })).filter((d) => d.games.length > 0),
+    [data, activeLeague],
+  );
   const results = useMemo(() => pick(data?.results), [data, activeLeague]);
   const nothingOn = !isLoading && live.length === 0 && upcoming.length === 0 && results.length === 0;
 
@@ -73,7 +80,7 @@ export default function ScoresPage() {
   };
 
   return (
-    <div className={`${SITE_RAIL_OFFSET} min-h-screen bg-slate-50 dark:bg-neutral-950 text-slate-900 dark:text-slate-100`}>
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
       {/* Managed through Helmet rather than document.title so the title is
           released when you navigate on to a game, instead of sticking. */}
       <Helmet>
@@ -87,52 +94,88 @@ export default function ScoresPage() {
       </Helmet>
       <SiteHeader />
 
-      <main className="max-w-xl mx-auto px-4 pt-4 pb-16 flex flex-col gap-6">
+      <main className="max-w-6xl mx-auto px-4 md:px-6 pt-6 md:pt-9 pb-16 flex flex-col gap-7 md:gap-9">
+        <header className="ch-rise">
+          <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-muted)]">
+            <span>{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</span>
+            {live.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 normal-case tracking-normal text-[12px] font-semibold text-red-600 dark:text-red-400">
+                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+                {live.length} live now
+              </span>
+            )}
+          </div>
+          <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[3.25rem] text-[color:var(--ch-text)]">
+            Scores &amp; results
+          </h1>
+          <p className="mt-2 text-sm md:text-[15px] text-[color:var(--ch-text-2)] max-w-2xl">
+            Every game live, what's on over the next week, and the last 24 hours of results.
+          </p>
+        </header>
+
         {data && data.leagues.length > 1 && (
-          <div className="-mx-4 px-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-            {[{ slug: "", name: "All" }, ...data.leagues].map((l) => {
+          <nav aria-label="Filter by league" className="-mx-4 px-4 md:mx-0 md:px-0 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {[{ slug: "", name: "All leagues" }, ...data.leagues].map((l) => {
               const active = activeLeague === l.slug;
               return (
                 <button
                   key={l.slug || "all"}
                   onClick={() => selectLeague(l.slug)}
-                  className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium border transition ${
-                    active
-                      ? "bg-orange-500 border-orange-500 text-white"
-                      : "bg-white dark:bg-neutral-900 border-slate-200 dark:border-neutral-700 text-slate-700 dark:text-neutral-300"
-                  }`}
+                  data-active={active}
+                  aria-pressed={active}
+                  className="ch-chip shrink-0 whitespace-nowrap h-9 px-4 text-[13px]"
                 >
                   {l.name}
                 </button>
               );
             })}
-          </div>
+          </nav>
         )}
 
         {isLoading && (
-          <div className="flex flex-col gap-3">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-[104px] rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 animate-pulse" />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="ch-skel h-[104px] rounded-2xl" />
             ))}
           </div>
         )}
 
         {isError && !data && (
-          <p className="text-center text-sm text-slate-500 dark:text-neutral-400 py-12">
+          <div className="ch-card p-8 text-center text-sm text-[color:var(--ch-text-2)]">
             Scores couldn't load. They'll retry automatically.
-          </p>
+          </div>
         )}
 
         {live.length > 0 && (
-          <Section title="Live now" meta={`${live.length} ${live.length === 1 ? "game" : "games"}`}>
+          <Section title="Live now" live meta={`${live.length} ${live.length === 1 ? "game" : "games"}`}>
             {live.map((g) => <ScoreGameCard key={g.game_key} game={g} kind="live" />)}
           </Section>
         )}
 
-        {upcoming.length > 0 && (
-          <Section title="Coming up" meta={dayLabel(data?.upcoming.date ?? null, data?.upcoming.isToday)}>
-            {upcoming.map((g) => <ScoreGameCard key={g.game_key} game={g} kind="upcoming" />)}
-          </Section>
+        {upcomingDays.length > 0 && (
+          <section className="flex flex-col gap-4" aria-label="Coming up">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]">
+                Coming up
+              </h2>
+              <span className="text-xs font-medium text-[color:var(--ch-muted)]">
+                {upcoming.length} {upcoming.length === 1 ? "game" : "games"} · next 7 days
+              </span>
+            </div>
+            {upcomingDays.map((day) => (
+              <div key={day.date} className="flex flex-col gap-2.5">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-[color:var(--ch-text)]">{dayLabel(day.date, day.isToday)}</h3>
+                  <span className="text-xs text-[color:var(--ch-muted)]">
+                    {day.games.length} {day.games.length === 1 ? "game" : "games"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {day.games.map((g) => <ScoreGameCard key={g.game_key} game={g} kind="upcoming" />)}
+                </div>
+              </div>
+            ))}
+          </section>
         )}
 
         {results.length > 0 && (
@@ -142,10 +185,10 @@ export default function ScoresPage() {
         )}
 
         {nothingOn && !isError && (
-          <div className="flex flex-col items-center text-center gap-2 py-16">
-            <CalendarClock className="w-10 h-10 text-orange-400" />
-            <p className="font-semibold">No games scheduled right now</p>
-            <p className="text-sm text-slate-500 dark:text-neutral-400">New fixtures appear here as soon as they're published.</p>
+          <div className="ch-card flex flex-col items-center text-center gap-2 py-14 px-6">
+            <CalendarClock className="w-9 h-9 text-[color:var(--ch-accent)]" />
+            <p className="font-semibold text-[color:var(--ch-text)]">No games scheduled right now</p>
+            <p className="text-sm text-[color:var(--ch-text-2)]">New fixtures appear here as soon as they're published.</p>
           </div>
         )}
       </main>

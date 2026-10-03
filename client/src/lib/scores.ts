@@ -5,8 +5,8 @@ import { useQuery } from "@tanstack/react-query";
  * homepage block, and the live dot in the site nav. They all read the same
  * query key, so a visit that shows more than one of them makes one request.
  *
- * The rolling rules (24h results, "coming up" rolling forward to the next day
- * with games) live on the server in GET /api/scores — see server/routes.ts.
+ * The rolling rules (24h results, "coming up" covering today and the next six
+ * days) live on the server in GET /api/scores — see server/routes.ts.
  */
 
 export interface ScoreGame {
@@ -22,12 +22,48 @@ export interface ScoreGame {
   status: string | null;
 }
 
+export interface ScoreDay {
+  date: string; // YYYY-MM-DD
+  isToday: boolean;
+  games: ScoreGame[];
+}
+
 export interface ScoresPayload {
   generatedAt: string;
   leagues: Array<{ league_id: string; name: string; slug: string }>;
   live: ScoreGame[];
-  upcoming: { date: string | null; isToday?: boolean; games: ScoreGame[] };
+  /** `games` is every upcoming game in tip-off order; `days` the same, by day. */
+  upcoming: { date: string | null; isToday?: boolean; games: ScoreGame[]; days: ScoreDay[] };
   results: ScoreGame[];
+}
+
+/**
+ * Up to `max` of the upcoming games, earliest days first, for a panel too
+ * small to show them all. Within a day it takes one game per league in turn
+ * (leagues in order of their first tip-off), so a busy league can't crowd the
+ * others out. Each day's picks come back in tip-off order; days left with no
+ * picks keep their full game list so callers can still mention them.
+ */
+export function pickAcrossLeagues(days: ScoreDay[], max: number): Array<ScoreDay & { shown: ScoreGame[] }> {
+  let room = max;
+  return days.map((day) => {
+    const queues = new Map<string, ScoreGame[]>();
+    for (const g of day.games) {
+      if (!queues.has(g.league_id)) queues.set(g.league_id, []);
+      queues.get(g.league_id)!.push(g);
+    }
+    const leagueQueues = Array.from(queues.values());
+    const picked = new Set<ScoreGame>();
+    while (room > 0 && picked.size < day.games.length) {
+      for (const queue of leagueQueues) {
+        const next = queue.shift();
+        if (!next) continue;
+        picked.add(next);
+        if (--room === 0) break;
+      }
+    }
+    return { ...day, shown: day.games.filter((g) => picked.has(g)) };
+  });
 }
 
 export function useScores() {

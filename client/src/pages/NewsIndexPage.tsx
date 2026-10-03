@@ -1,43 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/lib/supabase";
 import type { NewsArticle } from "@shared/schema";
-import { Newspaper, ExternalLink, ArrowRight, ArrowLeft } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
-
-const NEWS_COLUMNS =
-  "id, title, summary, image_url, source_url, league, published_at, is_published";
+import { Newspaper } from "lucide-react";
+import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
+import { FeatureStory, HeadlineRow, NewsCard, NEWS_COLUMNS } from "@/components/news/NewsCards";
 
 const SITE_URL = "https://swishassistant.com";
 
-function formatDate(s: string | Date | null) {
-  if (!s) return "";
-  try {
-    return new Date(s).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return "";
-  }
-}
-
-function ArticleSkeleton() {
-  return (
-    <div className="rounded-2xl bg-white dark:bg-neutral-900 border border-orange-100 dark:border-neutral-800 overflow-hidden animate-pulse">
-      <div className="h-44 w-full bg-orange-100 dark:bg-neutral-800" />
-      <div className="p-4 space-y-3">
-        <div className="h-3 w-20 bg-orange-100 dark:bg-neutral-800 rounded" />
-        <div className="h-4 w-full bg-orange-100 dark:bg-neutral-800 rounded" />
-        <div className="h-3 w-3/4 bg-orange-100 dark:bg-neutral-800 rounded" />
-      </div>
-    </div>
-  );
-}
-
+/**
+ * /news — every published story, laid out like the homepage's news: the
+ * newest as the lead with the next few as headlines beside it, then the rest
+ * as a grid.
+ */
 export default function NewsIndexPage() {
   const { data: articles = [], isLoading } = useQuery<NewsArticle[]>({
     queryKey: ["supabase", "news_articles", "index"],
@@ -56,8 +31,12 @@ export default function NewsIndexPage() {
   const description =
     "Basketball news, league updates, and stories from competitions on Swish Assistant.";
 
+  const [lead, ...rest] = articles;
+  const headlines = rest.slice(0, 4);
+  const more = rest.slice(4);
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-orange-50/40 to-white dark:from-neutral-950 dark:to-neutral-950 flex flex-col">
+    <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
       <Helmet>
         <title>Latest News | Swish Assistant</title>
         <meta name="description" content={description} />
@@ -67,134 +46,68 @@ export default function NewsIndexPage() {
         <meta property="og:type" content="website" />
         <link rel="canonical" href={canonical} />
       </Helmet>
+      <SiteHeader />
 
-      <header className="bg-white dark:bg-neutral-900 border-b border-orange-100 dark:border-neutral-800">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <img src={SwishLogo} alt="Swish Assistant" className="h-8" />
-            <span className="font-bold text-lg text-orange-600">
-              Swish Assistant
-            </span>
-          </Link>
-          <Link
-            href="/"
-            className="text-sm font-medium text-slate-600 hover:text-orange-600 dark:text-slate-300 dark:hover:text-orange-400 inline-flex items-center gap-1"
-          >
-            <ArrowLeft className="h-4 w-4" /> Home
-          </Link>
-        </div>
-      </header>
+      <main className="max-w-6xl mx-auto px-4 md:px-6 pt-6 md:pt-9 pb-16">
+        <header className="ch-rise mb-6 md:mb-8">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">News</div>
+          <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.25rem] md:text-[3.25rem] text-[color:var(--ch-text)]">
+            Latest news
+          </h1>
+          <p className="mt-2 text-sm md:text-[15px] text-[color:var(--ch-text-2)] max-w-2xl">
+            Stories, updates and headlines across the leagues we host.
+          </p>
+        </header>
 
-      <main className="flex-1">
-        <div className="max-w-6xl mx-auto px-6 py-12 md:py-16">
-          <div className="mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white">
-              Latest News
-            </h1>
-            <div className="w-16 h-1 bg-orange-500 rounded-full mt-3" />
-            <p className="mt-3 text-slate-600 dark:text-slate-400">
-              Stories, updates and headlines across the leagues we host.
-            </p>
+        {isLoading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
+            <div className="ch-skel lg:col-span-2 h-[420px] lg:h-[520px] rounded-[14px]" />
+            <div className="ch-card p-4 space-y-4">
+              {[0, 1, 2, 3].map((i) => <div key={i} className="ch-skel h-[68px]" />)}
+            </div>
           </div>
-
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {[0, 1, 2, 3, 4, 5].map((i) => <ArticleSkeleton key={i} />)}
+        ) : !lead ? (
+          <div className="ch-card border-dashed p-12 text-center">
+            <Newspaper className="h-9 w-9 text-[color:var(--ch-muted)] mx-auto mb-3" />
+            <p className="font-medium text-[color:var(--ch-text)] text-lg">No news yet</p>
+            <p className="text-sm text-[color:var(--ch-text-2)] mt-1">Check back soon — fresh stories will land here.</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
+              <div className={headlines.length > 0 ? "lg:col-span-2" : "lg:col-span-3"}>
+                <FeatureStory article={lead} />
+              </div>
+              {headlines.length > 0 && (
+                <div className="ch-card px-4 py-2 md:px-5 md:py-3 flex flex-col">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-muted)] pt-2 pb-1">More headlines</div>
+                  <div className="divide-y divide-[color:var(--ch-border)] flex-1">
+                    {headlines.map((a) => (
+                      <div key={a.id} className="py-1">
+                        <HeadlineRow article={a} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          ) : articles.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-orange-200 dark:border-neutral-800 p-16 text-center">
-              <Newspaper className="h-10 w-10 text-orange-400 mx-auto mb-3" />
-              <p className="text-slate-700 dark:text-slate-200 font-medium text-lg">No news yet</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Check back soon — fresh stories will land here.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {articles.map((a, i) => {
-                const articleUrl = `/news/${a.slug || a.id}`;
-                const card = (
-                  <article
-                    className="group h-full rounded-2xl bg-white dark:bg-neutral-900 border border-orange-100 dark:border-neutral-800 overflow-hidden hover:border-orange-300 dark:hover:border-orange-500/40 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 flex flex-col"
-                    style={{ animationDelay: `${i * 0.04}s` }}
-                  >
-                    {a.image_url ? (
-                      <div className="h-44 w-full overflow-hidden bg-orange-50 dark:bg-neutral-800">
-                        <img
-                          src={a.image_url}
-                          alt={a.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          loading="lazy"
-                        />
-                      </div>
-                    ) : (
-                      <div className="h-44 w-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center">
-                        <Newspaper className="h-10 w-10 text-white/80" />
-                      </div>
-                    )}
 
-                    <div className="p-4 flex-1 flex flex-col">
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        {a.league ? (
-                          <span className="text-[10px] font-semibold text-orange-700 dark:text-orange-300 bg-orange-100 dark:bg-orange-900/40 px-2 py-0.5 rounded-full uppercase tracking-wide truncate">
-                            {a.league}
-                          </span>
-                        ) : <span />}
-                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
-                          {formatDate(a.published_at)}
-                        </span>
-                      </div>
-                      <h2 className="text-base font-semibold text-slate-900 dark:text-white leading-snug mb-2 line-clamp-2">
-                        {a.title}
-                      </h2>
-                      {a.summary && (
-                        <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-3 flex-1">
-                          {a.summary}
-                        </p>
-                      )}
-                      <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
-                        {a.source_url ? (
-                          <>Read more <ExternalLink className="h-3 w-3" /></>
-                        ) : (
-                          <>Read article <ArrowRight className="h-3 w-3" /></>
-                        )}
-                      </div>
-                    </div>
-                  </article>
-                );
-
-                return a.source_url ? (
-                  <a
-                    key={a.id}
-                    href={a.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block h-full"
-                    data-testid={`link-news-external-${a.id}`}
-                  >
-                    {card}
-                  </a>
-                ) : (
-                  <Link
-                    key={a.id}
-                    href={articleUrl}
-                    className="block h-full"
-                    data-testid={`link-news-${a.id}`}
-                  >
-                    {card}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+            {more.length > 0 && (
+              <section className="mt-10 md:mt-12" aria-labelledby="more-stories-heading">
+                <h2
+                  id="more-stories-heading"
+                  className="ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)] mb-4"
+                >
+                  More stories
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+                  {more.map((a) => <NewsCard key={a.id} article={a} />)}
+                </div>
+              </section>
+            )}
+          </>
+        )}
       </main>
-
-      <footer className="border-t border-orange-100 dark:border-neutral-800 mt-8 py-6">
-        <div className="max-w-6xl mx-auto px-6 text-xs text-slate-500 dark:text-slate-400 text-center">
-          &copy; {new Date().getFullYear()} Swish Assistant. All rights reserved.
-        </div>
-      </footer>
     </div>
   );
 }

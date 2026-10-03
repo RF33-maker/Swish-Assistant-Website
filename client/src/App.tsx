@@ -1,4 +1,4 @@
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,7 +13,7 @@ import AuthPage from "@/pages/auth";
 import LandingPage from "@/pages/landing-page";
 import LeaguePage from "./pages/pages/league/[slug]";
 import CompetitionPage from "./pages/pages/competition/[slug]";
-import LeagueLeadersPage from "./pages/pages/league-leaders/[slug]";
+
 import PlayerStatsPage from "./pages/pages/player/[id]";
 import PlayersListPage from "./pages/players-list";
 import PostLoginDashboard from "@/pages/post-login-dashboard";
@@ -30,7 +30,6 @@ import NewsManager from "@/pages/NewsManager";
 import NewsArticlePage from "@/pages/NewsArticlePage";
 import NewsIndexPage from "@/pages/NewsIndexPage";
 import WidgetPage from "@/pages/widgets/WidgetPage";
-import WidgetDemo from "@/pages/widget-demo";
 import EmbedGuide from "@/pages/embed-guide";
 import GamePage from "@/pages/GamePage";
 import ScoresPage from "@/pages/ScoresPage";
@@ -42,7 +41,10 @@ import SettingsPage from "@/pages/settings-page";
 import ProfilePage from "./pages/profile-page";
 import ImportPlayersPage from "@/pages/admin/import-players";
 import UnconfirmedAccountsPage from "@/pages/admin/unconfirmed-accounts";
-import TestConnections from "./components/test-connections";
+import PlayerClaimsAdminPage from "@/pages/admin/player-claims";
+import ClaimProfilePage from "@/pages/claim-profile";
+import PublicProfilePage from "@/pages/public-profile";
+import EditMyProfilePage from "@/pages/edit-my-profile";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
 import PrivacyPolicyPage from "@/pages/privacy";
@@ -51,23 +53,32 @@ import CookiePolicyPage from "@/pages/cookies";
 import { CookieBanner } from "@/components/CookieBanner";
 
 
+// The old league-leaders pages now live in each league page's Leaders section.
+function LeadersRedirect({ params }: { params: { slug: string } }) {
+  return <Redirect to={`/competition/${params.slug}?section=leaders`} replace />;
+}
+
+// The old per-competition teams list is now the league page's Teams tab.
+function TeamsSectionRedirect({ params }: { params: { slug: string } }) {
+  return <Redirect to={`/competition/${params.slug}?section=teams`} replace />;
+}
+
 function Router() {
   return (
     <Switch>
       {/* Public */}
       <Route path="/" component={LandingPage} />
       <Route path="/auth" component={AuthPage} />
-      <Route path="/test" component={TestConnections} />
       {/* /league/:slug  = league brand page (series hub) */}
       <Route path="/league/:slug" component={CompetitionPage} />
       {/* /competition/:slug = individual season/tournament page */}
       <Route path="/competition/:slug" component={LeaguePage} />
       <Route path="/competition/:slug/player/:playerSlug" component={LeaguePage} />
-      <Route path="/competition/:slug/teams" component={LeagueTeams} />
+      <Route path="/competition/:slug/teams" component={TeamsSectionRedirect} />
       <Route path="/competition/:slug/team-logos" component={TeamLogoManager} />
-      <Route path="/competition-leaders/:slug" component={LeagueLeadersPage} />
+      <Route path="/competition-leaders/:slug" component={LeadersRedirect} />
       {/* Legacy /league-leaders redirect handled by keeping old route */}
-      <Route path="/league-leaders/:slug" component={LeagueLeadersPage} />
+      <Route path="/league-leaders/:slug" component={LeadersRedirect} />
       <Route path="/players" component={PlayersListPage} />
       <Route path="/player/:slug" component={PlayerStatsPage} />
       <Route path="/player/:slug/games/page/:page" component={PlayerStatsPage} />
@@ -79,7 +90,7 @@ function Router() {
       <Route path="/league/:slug/game/:gameKey" component={LeaguePage} />
       {/* Legacy redirects: old /league/:slug season URLs → /competition/:slug */}
       <Route path="/league/:slug/player/:playerSlug" component={LeaguePage} />
-      <Route path="/league/:slug/teams" component={LeagueTeams} />
+      <Route path="/league/:slug/teams" component={TeamsSectionRedirect} />
       <Route path="/league/:slug/team-logos" component={TeamLogoManager} />
       <Route path="/league/:leagueSlug/team/:teamName" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />
@@ -91,10 +102,12 @@ function Router() {
       <Route path="/game/:gameKey" component={GamePage} />
       <Route path="/scores" component={ScoresPage} />
       <Route path="/widget/:type" component={WidgetPage} />
-      <Route path="/widget-demo" component={WidgetDemo} />
       <Route path="/embed" component={EmbedGuide} />
       <Route path="/news" component={NewsIndexPage} />
       <Route path="/news/:slug" component={NewsArticlePage} />
+      <Route path="/p/:slug" component={PublicProfilePage} />
+      {/* Handles signed-out and unconfirmed visitors itself, so it can send them back here after sign-in. */}
+      <Route path="/claim" component={ClaimProfilePage} />
 
       {/* Member routes — any authenticated user */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
@@ -102,6 +115,7 @@ function Router() {
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/payment" component={PaymentPage} />
+      <ProtectedRoute path="/my-profile/edit" component={EditMyProfilePage} />
       <AdminRoute path="/social-tools" component={SocialToolsPage} />
       <AdminRoute path="/api-widgets" component={WidgetBuilder} />
 
@@ -114,6 +128,7 @@ function Router() {
       <AdminRoute path="/news-manager" component={NewsManager} />
       <AdminRoute path="/admin/import-players" component={ImportPlayersPage} />
       <AdminRoute path="/admin/unconfirmed-accounts" component={UnconfirmedAccountsPage} />
+      <AdminRoute path="/admin/player-claims" component={PlayerClaimsAdminPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />

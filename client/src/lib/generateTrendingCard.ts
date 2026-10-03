@@ -24,6 +24,9 @@ export interface TrendingCardOptions {
   fga: number | null;
   ftm: number | null;
   fta: number | null;
+  /** Three-pointers; the card adds a 3PT column when these are passed. */
+  tpm?: number | null;
+  tpa?: number | null;
   photoUrl: string | null;
   teamLogoUrl: string | null;
   leagueName: string | undefined;
@@ -89,7 +92,7 @@ export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promi
   const {
     playerName, teamName, gameDate, opponentName, gameResult, tsPct,
     gmSc, pts, reb, ast, stl, blk, tov,
-    fgm, fga, ftm, fta,
+    fgm, fga, ftm, fta, tpm, tpa,
     photoUrl, teamLogoUrl, leagueName, isDark,
     cardWidth = 560,
   } = opts;
@@ -252,8 +255,6 @@ export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promi
   ctx.stroke();
   y += 1 + DIV_POST;
 
-  const colW = (W - PAD * 2) / 5;
-
   // Row 1: primary stats
   const row1 = [
     { label: "GmSc", value: String(gmSc ?? 0) },
@@ -262,16 +263,18 @@ export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promi
     { label: "AST",  value: String(ast ?? 0) },
     { label: "STL",  value: String(stl ?? 0) },
   ];
-  // Row 2: secondary stats — FG and FT shown as "makes/attempts" (e.g. 8/12)
+  // Row 2: secondary stats — FG, 3PT and FT shown as "makes/attempts" (e.g. 8/12)
   const row2 = [
     { label: "BLK", value: String(blk ?? 0) },
     { label: "TOV", value: String(tov ?? 0) },
     { label: "FG",  value: `${fgm ?? 0}/${fga ?? 0}` },
+    ...(tpm != null || tpa != null ? [{ label: "3PT", value: `${tpm ?? 0}/${tpa ?? 0}` }] : []),
     { label: "FT",  value: `${ftm ?? 0}/${fta ?? 0}` },
     { label: "TS%", value: tsPct },
   ];
 
   const drawRow = (row: { label: string; value: string }[], rowY: number) => {
+    const colW = (W - PAD * 2) / row.length;
     row.forEach((s, i) => {
       const cx = PAD + colW * i + colW / 2;
       ctx.textAlign    = "center";

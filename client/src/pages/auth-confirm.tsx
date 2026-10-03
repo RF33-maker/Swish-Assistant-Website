@@ -2,11 +2,10 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/queryClient";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, AlertCircle, MailCheck, Loader2 } from "lucide-react";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import AuthShell, { ERROR, INPUT, LINK, SUBMIT } from "@/components/layout/AuthShell";
 
 type EmailOtpType = "signup" | "invite" | "magiclink" | "recovery" | "email_change";
 
@@ -87,98 +86,94 @@ export default function AuthConfirm() {
     }
   };
 
+  const success = status === "success";
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 md:p-6 bg-gradient-to-br from-orange-100 via-white to-white">
-      <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-6">
-          <img src={SwishLogo} alt="Swish Assistant" className="h-12 mb-2" />
-          <h1 className="text-lg font-bold text-gray-800">Swish Assistant</h1>
-        </div>
-
-        <div className="bg-white p-6 md:p-8 rounded-xl shadow-md border border-gray-200">
-          {status === "success" ? (
-            <>
-              <div className="flex justify-center mb-4">
-                <CheckCircle className="h-14 w-14 text-green-500" />
-              </div>
-              <h2 className="text-xl font-semibold mb-1 text-gray-800 text-center">Email confirmed</h2>
-              <p className="text-sm text-gray-500 text-center">Taking you to your dashboard…</p>
-            </>
-          ) : (
-            <>
-              <div className="flex justify-center mb-4">
-                <MailCheck className="h-14 w-14 text-orange-300" />
-              </div>
-              <h2 className="text-xl font-semibold mb-1 text-gray-800 text-center">Confirm your email</h2>
-              <p className="text-sm text-gray-500 mb-6 text-center">
-                {status === "error" ? "" : "Tap the button below to finish verifying your account."}
-              </p>
-
-              {error && (
-                <Alert className="border-red-200 bg-red-50 mb-4">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-700">{error}</AlertDescription>
-                </Alert>
-              )}
-
-              {status !== "error" && (
-                <Button
-                  onClick={confirm}
-                  disabled={status === "verifying"}
-                  className="w-full bg-[#FFC285] hover:bg-[#ffb76c] text-white font-medium"
-                  data-testid="button-confirm-email"
-                >
-                  {status === "verifying" ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Confirming…
-                    </>
-                  ) : (
-                    "Confirm my email"
-                  )}
-                </Button>
-              )}
-
-              {status === "error" && (
-                <div className="space-y-3 pt-2 border-t border-gray-100 mt-2">
-                  <p className="text-sm text-gray-600 pt-3">Enter your email and we'll send a fresh link.</p>
-                  {resendState === "sent" ? (
-                    <p className="text-sm text-green-600 font-medium">
-                      Sent — check your inbox (and spam folder) for a new link.
-                    </p>
-                  ) : (
-                    <>
-                      <Input
-                        type="email"
-                        placeholder="you@example.com"
-                        value={resendEmail}
-                        onChange={(e) => setResendEmail(e.target.value)}
-                        data-testid="input-resend-email"
-                      />
-                      {resendError && <p className="text-sm text-red-600">{resendError}</p>}
-                      <Button
-                        onClick={resend}
-                        disabled={resendState === "sending" || !resendEmail.trim()}
-                        variant="outline"
-                        className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
-                        data-testid="button-resend-confirmation"
-                      >
-                        {resendState === "sending" ? "Sending…" : "Send new confirmation link"}
-                      </Button>
-                    </>
-                  )}
-                </div>
-              )}
-
-              <div className="text-center pt-4">
-                <a href="/auth" className="text-sm text-orange-600 hover:text-orange-700 hover:underline">
-                  Back to sign in
-                </a>
-              </div>
-            </>
+    <AuthShell
+      title={success ? "Email confirmed" : "Confirm your email"}
+      intro={success ? "Taking you to your dashboard…" : status === "error" ? undefined : "Tap the button below to finish verifying your account."}
+      icon={
+        <span
+          className={`h-14 w-14 rounded-2xl flex items-center justify-center ${
+            success ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]"
+          }`}
+        >
+          {success ? <CheckCircle className="h-7 w-7" /> : <MailCheck className="h-7 w-7" />}
+        </span>
+      }
+    >
+      {success ? (
+        <p className="text-sm text-[color:var(--ch-text-2)] text-center">
+          You're verified. If nothing happens, <a href="/dashboard" className={LINK}>go to your dashboard</a>.
+        </p>
+      ) : (
+        <>
+          {error && (
+            <Alert className={`${ERROR} mb-4`}>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
-        </div>
-      </div>
-    </div>
+
+          {status !== "error" && (
+            <button
+              type="button"
+              onClick={confirm}
+              disabled={status === "verifying"}
+              className={SUBMIT}
+              data-testid="button-confirm-email"
+            >
+              {status === "verifying" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Confirming…
+                </>
+              ) : (
+                "Confirm my email"
+              )}
+            </button>
+          )}
+
+          {status === "error" && (
+            <div className="space-y-3">
+              <p className="text-sm text-[color:var(--ch-text-2)]">Enter your email and we'll send a fresh link.</p>
+              {resendState === "sent" ? (
+                <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                  Sent — check your inbox (and spam folder) for a new link.
+                </p>
+              ) : (
+                <>
+                  <Input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={resendEmail}
+                    onChange={(e) => setResendEmail(e.target.value)}
+                    className={INPUT}
+                    data-testid="input-resend-email"
+                  />
+                  {resendError && <p className="text-sm text-red-600 dark:text-red-400">{resendError}</p>}
+                  <button
+                    type="button"
+                    onClick={resend}
+                    disabled={resendState === "sending" || !resendEmail.trim()}
+                    className="ch-btn ch-btn-ghost w-full h-11 justify-center text-[15px] disabled:opacity-50"
+                    data-testid="button-resend-confirmation"
+                  >
+                    {resendState === "sending" ? "Sending…" : "Send new confirmation link"}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="text-center pt-4">
+            <a href="/auth" className={`text-sm ${LINK}`}>
+              Back to sign in
+            </a>
+          </div>
+        </>
+      )}
+    </AuthShell>
   );
 }
