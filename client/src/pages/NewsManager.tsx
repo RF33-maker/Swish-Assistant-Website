@@ -281,15 +281,19 @@ export default function NewsManager() {
 
   const deleteMutation = useMutation({
     mutationFn: async (article: NewsArticle) => {
+      // Delete the row first: RLS returns no error when it blocks a delete,
+      // so check a row actually went before removing the cover image.
+      const { data, error } = await supabase
+        .from("news_articles")
+        .delete()
+        .eq("id", article.id)
+        .select("id");
+      if (error) throw error;
+      if (!data?.length) throw new Error("The article wasn't deleted. Check you're signed in as an admin.");
       const path = extractStoragePath(article.image_url);
       if (path) {
         await supabase.storage.from(NEWS_BUCKET).remove([path]);
       }
-      const { error } = await supabase
-        .from("news_articles")
-        .delete()
-        .eq("id", article.id);
-      if (error) throw error;
     },
     onSuccess: () => {
       invalidateLists();

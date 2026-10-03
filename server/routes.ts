@@ -2732,8 +2732,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/news-articles — create article with server-enforced slug
   app.post("/api/news-articles", async (req: Request, res: Response) => {
     try {
-      const userId = await authenticateSupabaseUser(req);
-      if (!userId) return res.status(401).json({ error: "Authentication required" });
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
 
       const { title, slug: requestedSlug, summary, body, league, source_url, image_url, is_published } = req.body;
       if (!title?.trim()) return res.status(400).json({ error: "title is required" });
@@ -2766,8 +2766,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PATCH /api/news-articles/:id — update article with server-enforced slug
   app.patch("/api/news-articles/:id", async (req: Request, res: Response) => {
     try {
-      const userId = await authenticateSupabaseUser(req);
-      if (!userId) return res.status(401).json({ error: "Authentication required" });
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
 
       const { id } = req.params;
       const { title, slug: requestedSlug, summary, body, league, source_url, image_url, is_published } = req.body;
