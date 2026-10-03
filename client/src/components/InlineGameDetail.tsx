@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowLeft, Calendar, Clock, Trophy, Link as LinkIcon, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { LiveFeedPanel, LiveFeedStrip } from "@/components/game/LiveFeed";
+import { useLiveCommentary } from "@/hooks/useLiveCommentary";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import SharedBoxScore from "@/components/BoxScoreTable";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
@@ -473,7 +475,7 @@ export function InlineGameDetail({
     try {
       const [{ data: events }, { data: shots }] = await Promise.all([
         supabase.from("live_events").select("*").eq("game_key", gameKey).order("action_number", { ascending: true }),
-        supabase.from("shot_chart").select("id, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key").eq("game_key", gameKey),
+        supabase.from("shot_chart").select("id, action_number, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key").eq("game_key", gameKey),
       ]);
       if (events) { setLiveEvents(events); setEventsLoaded(true); }
       if (shots) setShotData(shots as ShotData[]);
@@ -534,7 +536,7 @@ export function InlineGameDetail({
     const refreshFeed = async () => {
       const [{ data: events }, { data: shots }] = await Promise.all([
         supabase.from("live_events").select("*").eq("game_key", gameKey).order("action_number", { ascending: true }),
-        supabase.from("shot_chart").select("id, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key").eq("game_key", gameKey),
+        supabase.from("shot_chart").select("id, action_number, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key").eq("game_key", gameKey),
       ]);
       if (!active) return;
       if (events) setLiveEvents(events);
@@ -576,6 +578,21 @@ export function InlineGameDetail({
     ];
     return qs.filter((q) => q.home > 0 || q.away > 0);
   })();
+
+  // Live text commentary (kept above the early returns so hook order is stable).
+  const feedStatus = (gameInfo?.status || "").toLowerCase();
+  const feedLive = feedStatus.includes("live") || feedStatus === "in_progress";
+  const { items: feedItems, players: feedPlayers, shots: feedShots } = useLiveCommentary({
+    gameKey,
+    leagueId,
+    homeTeam: gameInfo?.hometeam ?? "",
+    awayTeam: gameInfo?.awayteam ?? "",
+    events: liveEvents as any,
+    shots: shotData as any,
+    isFinal: ["final", "finished", "complete", "completed", "ft"].includes(feedStatus),
+    isLive: feedLive,
+    knownNames: [...homePlayerStats, ...awayPlayerStats].map((p) => fullName(p)),
+  });
 
   if (loading) {
     return (
@@ -692,6 +709,23 @@ export function InlineGameDetail({
 
       <div className="mt-4 md:mt-5">
         {isGamePlayed ? (
+          <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-5">
+          <div className="min-w-0">
+          {feedItems.length > 0 && (
+            <div className="mb-4 xl:hidden">
+              <LiveFeedStrip
+                items={feedItems}
+                players={feedPlayers}
+                shots={feedShots}
+                homeTeam={hometeam}
+                awayTeam={awayteam}
+                homeColor={colors.homeFill}
+                awayColor={colors.awayFill}
+                isLive={isLive}
+                leagueId={leagueId}
+              />
+            </div>
+          )}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             {/* Scrolls on a phone, where five labels don't fit; a fixed grid from md up. */}
             <TabsList className={GAME_TAB_LIST_CLASS}>
@@ -757,6 +791,24 @@ export function InlineGameDetail({
               />
             </TabsContent>
           </Tabs>
+          </div>
+          {feedItems.length > 0 && (
+            <aside className="hidden xl:block xl:sticky xl:top-20" aria-label="Game feed">
+              <LiveFeedPanel
+                items={feedItems}
+                players={feedPlayers}
+                shots={feedShots}
+                homeTeam={hometeam}
+                awayTeam={awayteam}
+                homeColor={colors.homeFill}
+                awayColor={colors.awayFill}
+                isLive={isLive}
+                leagueId={leagueId}
+                className="max-h-[calc(100vh-7rem)]"
+              />
+            </aside>
+          )}
+          </div>
         ) : (
           <div className="ch-card p-5 text-center">
             <p className="text-sm text-[color:var(--ch-text-2)]">

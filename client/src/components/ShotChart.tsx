@@ -41,8 +41,8 @@ interface ShotChartProps {
   shareMode?: boolean;
 }
 
-const CW = 500;
-const CH = 470;
+export const CW = 500;
+export const CH = 470;
 
 // Court geometry. The half-court SVG is 500x470 and shots come in as fx,fy
 // in 0-100 (folded so fx<=50 = our half). BASKET_CY/TP_R/CORNER_LINE_X_L
@@ -68,9 +68,9 @@ const CORNER_END_Y =
 
 const PPP_BASELINE_KEY = "shot-chart-ppp-baseline";
 
-const COLOR_MADE = "#f59e3b";
+export const COLOR_MADE = "#f59e3b";
 const COLOR_AVG = "#7a8b9c";
-const COLOR_MISSED = "#5b9fbf";
+export const COLOR_MISSED = "#5b9fbf";
 
 // Court line/paint colors are CSS custom properties defined in index.css
 // (`--court-line`, `--court-line-soft`, `--court-paint`,
@@ -81,9 +81,9 @@ const COLOR_MISSED = "#5b9fbf";
 const LINE = "var(--court-line)";
 const LINE_SOFT = "var(--court-line-soft)";
 const PAINT_FILL = "var(--court-paint)";
-const MADE_STROKE = "var(--court-made-stroke)";
+export const MADE_STROKE = "var(--court-made-stroke)";
 
-function HalfCourt() {
+export function HalfCourt() {
   const halfCourtY = CH;
   const lw = 1.5;
 
@@ -242,7 +242,7 @@ const SUB_TYPE_LABELS: Record<string, string> = {
  * 0-100 vertical, two baskets at x≈5 and x≈95) into a vertical half-court
  * view (basket at top center). Returns x/y in viewBox units plus zone key.
  */
-function projectShot(shot: ShotData): { sx: number; sy: number; zone: string } {
+export function projectShot(shot: ShotData): { sx: number; sy: number; zone: string } {
   let fx = shot.x;
   if (fx > 50) fx = 100 - fx;
 

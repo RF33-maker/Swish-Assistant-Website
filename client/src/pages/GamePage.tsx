@@ -15,6 +15,8 @@ import type { ShotData } from "@/components/ShotChart";
 import TeamSplitShotChart from "@/components/TeamSplitShotChart";
 import PlayByPlay from "@/components/PlayByPlay";
 import UpcomingGamePreview from "@/components/UpcomingGamePreview";
+import { LiveFeedPanel, LiveFeedStrip } from "@/components/game/LiveFeed";
+import { useLiveCommentary } from "@/hooks/useLiveCommentary";
 import GameScoreHero, { useMatchupColors, type GameHeroState } from "@/components/game/GameScoreHero";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "@/components/game/GameOverview";
 import { gameRecap } from "@shared/recaps";
@@ -414,7 +416,7 @@ export default function GamePage() {
     queryFn: async () => {
       const { data, error } = await db
         .from('shot_chart')
-        .select('id, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key')
+        .select('id, action_number, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key')
         .eq('game_key', gameKey);
       if (error) { console.error('[GamePage] shot_chart error:', error); return []; }
       return (data || []) as ShotData[];
@@ -831,6 +833,23 @@ export default function GamePage() {
     : playerStats?.filter(p => p.team_name === gameData?.awayteam)
   )?.sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
 
+  // Live text commentary, built from the play-by-play (above the early returns
+  // so hook order stays stable).
+  const feedStatus = normalizeGameStatus(gameData?.status);
+  const feedLive = isLiveGameStatus(feedStatus);
+  const feedFinal = isFinalGameStatus(feedStatus);
+  const { items: feedItems, players: feedPlayers, shots: feedShots } = useLiveCommentary({
+    gameKey,
+    leagueId: gameData?.league_id,
+    homeTeam: gameData?.hometeam ?? '',
+    awayTeam: gameData?.awayteam ?? '',
+    events: liveEvents as any,
+    shots: shotChartData as any,
+    isFinal: feedFinal,
+    isLive: feedLive,
+    knownNames: [...homePlayerStats, ...awayPlayerStats].map(leaderName),
+  });
+
   const gameSuggestions = useMemo(() => {
     const home = gameData?.hometeam || 'home team';
     const away = gameData?.awayteam || 'away team';
@@ -1210,6 +1229,23 @@ export default function GamePage() {
                 </div>
               </div>
             ) : (
+              <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start lg:gap-5">
+              <div className="min-w-0">
+              {feedItems.length > 0 && (
+                <div className="mb-4 lg:hidden">
+                  <LiveFeedStrip
+                    items={feedItems}
+                    players={feedPlayers}
+                    shots={feedShots}
+                    homeTeam={gameData.hometeam}
+                    awayTeam={gameData.awayteam}
+                    homeColor={colors.homeFill}
+                    awayColor={colors.awayFill}
+                    isLive={isLive}
+                    leagueId={gameData.league_id}
+                  />
+                </div>
+              )}
               <Tabs defaultValue={initialTab} className="w-full">
                 <TabsList className={GAME_TAB_LIST_CLASS}>
                   <TabsTrigger value="game" className={GAME_TAB_TRIGGER_CLASS}>Game</TabsTrigger>
@@ -1310,6 +1346,24 @@ export default function GamePage() {
                   />
                 </TabsContent>
               </Tabs>
+              </div>
+              {feedItems.length > 0 && (
+                <aside className="hidden lg:block lg:sticky lg:top-20" aria-label="Game feed">
+                  <LiveFeedPanel
+                    items={feedItems}
+                    players={feedPlayers}
+                    shots={feedShots}
+                    homeTeam={gameData.hometeam}
+                    awayTeam={gameData.awayteam}
+                    homeColor={colors.homeFill}
+                    awayColor={colors.awayFill}
+                    isLive={isLive}
+                    leagueId={gameData.league_id}
+                    className="max-h-[calc(100vh-7rem)]"
+                  />
+                </aside>
+              )}
+              </div>
             )}
           </div>
         </div>
