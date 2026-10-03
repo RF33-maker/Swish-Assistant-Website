@@ -420,6 +420,9 @@ export default function GamePage() {
       return (data || []) as ShotData[];
     },
     enabled: !!gameKey && !!gameData,
+    // Shots keep arriving while the game is on, like the play-by-play.
+    refetchInterval: isLiveGameStatus(normalizeGameStatus(gameData?.status)) ? 15000 : false,
+    refetchIntervalInBackground: false,
   });
 
   const [lastUpdatedText, setLastUpdatedText] = useState('');
