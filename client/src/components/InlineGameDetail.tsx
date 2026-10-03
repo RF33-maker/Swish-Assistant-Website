@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowLeft, Calendar, Clock, Trophy, Link as LinkIcon, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -161,25 +161,34 @@ export function InlineGameDetail({
   const [shotData, setShotData] = useState<ShotData[]>([]);
   const [shotLoading, setShotLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("game");
+  // Bumped to quietly reload the box score while the game is on.
+  const [refreshTick, setRefreshTick] = useState(0);
+  const loadedKeyRef = useRef<string | null>(null);
   const [copied, setCopied] = useState(false);
   const colors = useMatchupColors(gameInfo?.hometeam ?? "", gameInfo?.awayteam ?? "", leagueId);
 
   useEffect(() => {
     if (!gameKey) return;
-    setLoading(true);
-    setScheduledGame(null);
-    setActiveTab("game");
-    setEventsLoaded(false);
-    setLiveEvents([]);
-    setLiveClock(null);
-    setShotData([]);
-    setGameInfo(null);
-    setLeagueId(null);
-    setCompetitionName(null);
-    setHomeTeamStats(null);
-    setAwayTeamStats(null);
-    setHomePlayerStats([]);
-    setAwayPlayerStats([]);
+    // A refresh of the game already on screen keeps what's shown and swaps in
+    // the new numbers; only a different game starts from a blank slate.
+    const isRefresh = loadedKeyRef.current === gameKey;
+    loadedKeyRef.current = gameKey;
+    if (!isRefresh) {
+      setLoading(true);
+      setScheduledGame(null);
+      setActiveTab("game");
+      setEventsLoaded(false);
+      setLiveEvents([]);
+      setLiveClock(null);
+      setShotData([]);
+      setGameInfo(null);
+      setLeagueId(null);
+      setCompetitionName(null);
+      setHomeTeamStats(null);
+      setAwayTeamStats(null);
+      setHomePlayerStats([]);
+      setAwayPlayerStats([]);
+    }
 
     (async () => {
       try {
@@ -455,7 +464,7 @@ export function InlineGameDetail({
         setLoading(false);
       }
     })();
-  }, [gameKey]);
+  }, [gameKey, refreshTick]);
 
   const fetchEventsAndShots = useCallback(async () => {
     if (eventsLoaded || !gameKey) return;
@@ -509,6 +518,41 @@ export function InlineGameDetail({
       window.clearInterval(interval);
     };
   }, [gameKey, gameInfo?.status]);
+
+  // Keep a game that's in progress (or about to start) up to date without the
+  // viewer reloading: the box score and score, and the play-by-play and shots.
+  const statusLower = (gameInfo?.status || (scheduledGame as { status?: string | null } | null)?.status || "").toLowerCase();
+  const scheduledTip = scheduledGame?.matchtime ? Date.parse(scheduledGame.matchtime) : NaN;
+  const shouldPoll =
+    statusLower.includes("live") || statusLower === "in_progress" ||
+    (!gameInfo && !!scheduledGame && statusLower !== "final" && Number.isFinite(scheduledTip) &&
+      scheduledTip <= Date.now() + 30 * 60 * 1000 && scheduledTip >= Date.now() - 12 * 60 * 60 * 1000);
+
+  useEffect(() => {
+    if (!shouldPoll || !gameKey) return;
+    let active = true;
+    const refreshFeed = async () => {
+      const [{ data: events }, { data: shots }] = await Promise.all([
+        supabase.from("live_events").select("*").eq("game_key", gameKey).order("action_number", { ascending: true }),
+        supabase.from("shot_chart").select("id, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key").eq("game_key", gameKey),
+      ]);
+      if (!active) return;
+      if (events) setLiveEvents(events);
+      if (shots) setShotData(shots as ShotData[]);
+    };
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      setRefreshTick((n) => n + 1);
+      if (eventsLoaded) void refreshFeed();
+    };
+    const interval = window.setInterval(tick, 15_000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [shouldPoll, gameKey, eventsLoaded]);
 
   const handleCopyLink = useCallback(() => {
     navigator.clipboard.writeText(window.location.href).then(() => {
