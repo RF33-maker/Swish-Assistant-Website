@@ -85,6 +85,12 @@ function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors }: {
     .filter((q) => q.home > 0 || q.away > 0);
   if (quarters.length === 0) return null;
 
+  // Only quarters 1-4 are stored, so any overtime shows up as the gap between the
+  // final score and the four-quarter sum. Show that gap as one OT column.
+  const regulation = (side: "home" | "away") => quarters.reduce((s, q) => s + q[side], 0);
+  const ot = { home: Math.max(0, n(home.tot_spoints) - regulation("home")), away: Math.max(0, n(away.tot_spoints) - regulation("away")) };
+  const hasOt = n(home.tot_spoints) > 0 && n(away.tot_spoints) > 0 && (ot.home > 0 || ot.away > 0);
+
   return (
     <GameSection title="Quarter by quarter">
       <div className="overflow-x-auto">
@@ -92,24 +98,24 @@ function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors }: {
           <thead>
             <tr className="border-b border-[color:var(--ch-border)]">
               <th className="text-left py-2 pr-2">Team</th>
-              {quarters.map((q) => <th key={q.p} className="text-center py-2 px-1.5 w-11">Q{q.p}</th>)}
-              <th className="text-center py-2 pl-1.5 w-12">T</th>
+              {quarters.map((q) => <th key={q.p} className="text-center py-2 px-1 sm:px-1.5 w-9 sm:w-11">Q{q.p}</th>)}
+              {hasOt && <th className="text-center py-2 px-1 sm:px-1.5 w-9 sm:w-11">OT</th>}
+              <th className="text-center py-2 pl-1 sm:pl-1.5 w-10 sm:w-12">T</th>
             </tr>
           </thead>
           <tbody>
             {([{ team: homeTeam, side: "home" as const }, { team: awayTeam, side: "away" as const }]).map(({ team, side }) => {
-              const tot = quarters.reduce((s, q) => s + q[side], 0);
-              const oppTot = quarters.reduce((s, q) => s + q[side === "home" ? "away" : "home"], 0);
+              const tot = hasOt ? n((side === "home" ? home : away).tot_spoints) : regulation(side);
+              const oppTot = hasOt ? n((side === "home" ? away : home).tot_spoints) : regulation(side === "home" ? "away" : "home");
               const teamColor = colors[side];
               return (
                 <tr key={side} className={side === "home" ? "border-b border-[color:var(--ch-border)]" : ""}>
                   <td className="py-2.5 pr-2">
                     <span className="flex items-center gap-2 min-w-0">
                       <span className="h-6 w-1 shrink-0 rounded-full" style={{ backgroundColor: teamColor }} />
-                      {leagueId && <TeamLogo teamName={team} leagueId={leagueId} size="xs" />}
-                      <span className="truncate font-medium text-[color:var(--ch-text)]">
-                        <span className="hidden sm:inline">{team}</span>
-                        <span className="sm:hidden">{team.split(/\s+/).slice(-1)[0]}</span>
+                      {leagueId && <span className="hidden shrink-0 sm:inline-flex"><TeamLogo teamName={team} leagueId={leagueId} size="xs" /></span>}
+                      <span className="min-w-0 break-words text-xs leading-tight font-medium text-[color:var(--ch-text)] line-clamp-3 sm:line-clamp-none sm:truncate sm:text-sm">
+                        {team}
                       </span>
                     </span>
                   </td>
@@ -117,12 +123,17 @@ function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors }: {
                     const val = q[side];
                     const opp = q[side === "home" ? "away" : "home"];
                     return (
-                      <td key={q.p} className={`ch-num text-center py-2.5 px-1.5 ${val > opp ? "font-bold text-[color:var(--ch-text)]" : "text-[color:var(--ch-text-2)]"}`}>
+                      <td key={q.p} className={`ch-num text-center py-2.5 px-1 sm:px-1.5 ${val > opp ? "font-bold text-[color:var(--ch-text)]" : "text-[color:var(--ch-text-2)]"}`}>
                         {val}
                       </td>
                     );
                   })}
-                  <td className="ch-display ch-num text-center py-2.5 pl-1.5 text-lg font-bold" style={{ color: tot > oppTot ? teamColor : "var(--ch-text-2)" }}>
+                  {hasOt && (
+                    <td className={`ch-num text-center py-2.5 px-1 sm:px-1.5 ${ot[side] > ot[side === "home" ? "away" : "home"] ? "font-bold text-[color:var(--ch-text)]" : "text-[color:var(--ch-text-2)]"}`}>
+                      {ot[side]}
+                    </td>
+                  )}
+                  <td className="ch-display ch-num text-center py-2.5 pl-1 sm:pl-1.5 text-lg font-bold" style={{ color: tot > oppTot ? teamColor : "var(--ch-text-2)" }}>
                     {tot}
                   </td>
                 </tr>
