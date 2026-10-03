@@ -3254,6 +3254,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     game_score: number | null; ts_pct: number | null;
     opponent_name?: string | null;
     game_result?: string | null;
+    /** True while the game is still being played, so the card can say so. */
+    game_live?: boolean;
   }
   interface TrendingApiPayload {
     perfs: TrendingPerfRow[];
@@ -3651,6 +3653,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const wl = myScore > oppScore ? "W" : myScore < oppScore ? "L" : "T";
           perf.game_result = `${wl} ${myScore}-${oppScore}`;
         }
+      }
+    }
+
+    // Cards for a game still in progress carry a live marker; the stat lines
+    // and score on them are partial until the game ends.
+    if (gameKeys.length > 0) {
+      const { data: scheduleRows } = await supabaseAdmin
+        .from("game_schedule")
+        .select("game_key,status,matchtime")
+        .in("game_key", gameKeys);
+      const liveKeys = new Set<string>();
+      for (const s of (scheduleRows || []) as { game_key: string | null; status: string | null; matchtime: string | null }[]) {
+        if (s.game_key && isHomeCurrentLive(s.status, s.matchtime)) liveKeys.add(s.game_key);
+      }
+      for (const perf of perfs) {
+        if (perf.game_key && liveKeys.has(perf.game_key)) perf.game_live = true;
       }
     }
 

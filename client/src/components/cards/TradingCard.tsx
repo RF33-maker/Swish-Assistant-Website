@@ -21,6 +21,8 @@ export interface TradingCardPerformance {
   opponentName?: string | null;
   /** e.g. "W 89-66". */
   gameResult?: string | null;
+  /** The game is still being played: the line and score so far aren't final. */
+  isLive?: boolean;
   gameScore: number | null;
   pts: number | null;
   reb: number | null;
@@ -239,7 +241,7 @@ export default function TradingCard({
           ref={articleRef}
           role={onOpen ? "link" : undefined}
           tabIndex={onOpen ? 0 : -1}
-          aria-label={`${perf.playerName}: ${perf.pts ?? 0} points, ${perf.reb ?? 0} rebounds, ${perf.ast ?? 0} assists`}
+          aria-label={`${perf.isLive ? "Live: " : ""}${perf.playerName}: ${perf.pts ?? 0} points, ${perf.reb ?? 0} rebounds, ${perf.ast ?? 0} assists`}
           onKeyDown={onOpen ? (e) => {
             if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); }
           } : undefined}
@@ -336,7 +338,19 @@ export default function TradingCard({
                 </span>
               </span>
             )}
-            {perf.gameResult && (
+            {perf.isLive && (
+              <span
+                className="absolute left-[5cqw] bottom-[4.5cqw] flex items-center gap-[1.8cqw] rounded-md bg-red-600 px-[2.4cqw] py-[0.9cqw] text-[max(10px,3.5cqw)] font-bold uppercase tracking-[0.1em] text-white"
+                data-testid="trading-card-live"
+              >
+                <span className="relative flex h-[max(6px,2cqw)] w-[max(6px,2cqw)]" aria-hidden="true">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75 motion-reduce:animate-none" />
+                  <span className="relative inline-flex h-full w-full rounded-full bg-white" />
+                </span>
+                Live
+              </span>
+            )}
+            {perf.gameResult && !perf.isLive && (
               <span
                 className="absolute left-[5cqw] bottom-[4.5cqw] rounded-md px-[2.2cqw] py-[0.9cqw] text-[max(10px,3.5cqw)] font-bold text-white tabular-nums"
                 style={{ backgroundColor: won ? "#16a34a" : lost ? "#e11d48" : "rgba(0,0,0,0.45)" }}
