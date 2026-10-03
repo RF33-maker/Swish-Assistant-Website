@@ -104,7 +104,7 @@ function QuickView({ item, players, shots, teamName, color, onClose }: {
   const line = item?.line;
   return (
     <Dialog open={!!item} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sa-pro max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-[420px] gap-0 overflow-y-auto rounded-2xl border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-0 text-[color:var(--ch-text)]">
+      <DialogContent overlayClassName="bg-black/70 backdrop-blur-sm" className="sa-pro max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-[420px] gap-0 overflow-y-auto rounded-2xl border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-0 text-[color:var(--ch-text)]">
         {item && (
           <>
             <div className="px-4 pb-3 pt-4" style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${color} 28%, transparent), transparent)` }}>
