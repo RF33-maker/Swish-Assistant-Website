@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ChevronRight, Maximize2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Link } from "wouter";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
@@ -71,7 +72,7 @@ function ShotLocation({ item, shots }: { item: CommentaryItem; shots: ChartShot[
   const focus = projectShot({ x: item.shot.x, y: item.shot.y, success: true });
   return (
     <div>
-      <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-auto block" role="img" aria-label="Where the shot was taken">
+      <svg viewBox={`0 0 ${CW} ${CH}`} className="mx-auto block h-auto w-full max-w-[250px]" role="img" aria-label="Where the shot was taken">
         <HalfCourt />
         {others.map((s, i) => {
           const p = projectShot({ x: s.x, y: s.y, success: s.success });
@@ -86,7 +87,7 @@ function ShotLocation({ item, shots }: { item: CommentaryItem; shots: ChartShot[
           <rect x={-9} y={-9} width={18} height={18} fill={COLOR_MADE} stroke="#fff" strokeWidth={2} />
         </g>
       </svg>
-      <p className="mt-1.5 text-xs text-[color:var(--ch-muted)]">
+      <p className="mt-1.5 text-center text-xs text-[color:var(--ch-muted)]">
         {item.shot.distanceFt != null ? `${item.shot.distanceFt}ft · ` : ""}Made · {timeLabel(item)}
         {others.length > 0 ? " · their other shots faded" : ""}
       </p>
@@ -94,53 +95,66 @@ function ShotLocation({ item, shots }: { item: CommentaryItem; shots: ChartShot[
   );
 }
 
-function Detail({ item, players, shots, teamName, color, onBack }: {
-  item: CommentaryItem; players: FeedProps["players"]; shots: ChartShot[]; teamName: string; color: string; onBack: () => void;
+/** The play, its player and the shot, in a small overlay over the page. */
+function QuickView({ item, players, shots, teamName, color, onClose }: {
+  item: CommentaryItem | null; players: FeedProps["players"]; shots: ChartShot[]; teamName: string; color: string; onClose: () => void;
 }) {
-  const player = item.playerId ? players[item.playerId] : undefined;
-  const name = item.playerName || player?.name || "";
-  const line = item.line;
+  const player = item?.playerId ? players[item.playerId] : undefined;
+  const name = item?.playerName || player?.name || "";
+  const line = item?.line;
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <button type="button" onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-sm self-start -ml-1">
-        <ArrowLeft className="h-4 w-4" /> All plays
-      </button>
-      <p className="text-[15px] leading-snug text-[color:var(--ch-text)]">
-        <span aria-hidden="true">{item.emoji} </span>{item.text}
-      </p>
-      <p className="text-xs text-[color:var(--ch-muted)] tabular-nums">{timeLabel(item)} · {item.homeScore}–{item.awayScore}</p>
-
-      {name && line && (
-        <div className="ch-tile p-3">
-          <div className="flex items-center gap-3">
-            <Headshot player={player} name={name} color={color} />
-            <div className="min-w-0">
-              {player?.slug ? (
-                <Link href={`/player/${player.slug}`} className="font-semibold text-[color:var(--ch-text)] hover:underline truncate block">{name}</Link>
+    <Dialog open={!!item} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="sa-pro max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-[420px] gap-0 overflow-y-auto rounded-2xl border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-0 text-[color:var(--ch-text)]">
+        {item && (
+          <>
+            <div className="px-4 pb-3 pt-4" style={{ background: `linear-gradient(180deg, color-mix(in srgb, ${color} 28%, transparent), transparent)` }}>
+              <DialogTitle className="sr-only">{name || "Play"}</DialogTitle>
+              <DialogDescription className="sr-only">{item.text}</DialogDescription>
+              {name && line ? (
+                <div className="flex items-center gap-3 pr-6">
+                  <Headshot player={player} name={name} color={color} />
+                  <div className="min-w-0">
+                    {player?.slug ? (
+                      <Link href={`/player/${player.slug}`} className="block truncate font-semibold text-[color:var(--ch-text)] hover:underline">{name}</Link>
+                    ) : (
+                      <span className="block truncate font-semibold text-[color:var(--ch-text)]">{name}</span>
+                    )}
+                    <span className="block truncate text-xs text-[color:var(--ch-muted)]">{teamName}</span>
+                    <span className="block text-xs text-[color:var(--ch-muted)] tabular-nums">{timeLabel(item)} · {item.homeScore}–{item.awayScore}</span>
+                  </div>
+                </div>
               ) : (
-                <span className="font-semibold text-[color:var(--ch-text)] truncate block">{name}</span>
+                <p className="pr-6 text-xs text-[color:var(--ch-muted)] tabular-nums">{timeLabel(item)} · {item.homeScore}–{item.awayScore}</p>
               )}
-              <span className="text-xs text-[color:var(--ch-muted)] truncate block">{teamName}</span>
+              <p className="mt-3 text-[14px] leading-snug text-[color:var(--ch-text)]">
+                <span aria-hidden="true">{item.emoji} </span>{item.text}
+              </p>
             </div>
-          </div>
-          <div className="mt-3 grid grid-cols-5 gap-1">
-            <StatBox label="PTS" value={line.pts} />
-            <StatBox label="REB" value={line.reb} />
-            <StatBox label="AST" value={line.ast} />
-            <StatBox label="STL" value={line.stl} />
-            <StatBox label="BLK" value={line.blk} />
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-1 border-t border-[color:var(--ch-border)] pt-2.5 text-center text-xs text-[color:var(--ch-text-2)] tabular-nums">
-            <span>FG {line.fgm}/{line.fga}</span>
-            <span>3PT {line.tpm}/{line.tpa}</span>
-            <span>FT {line.ftm}/{line.fta}</span>
-          </div>
-          <p className="mt-2 text-[10.5px] text-[color:var(--ch-muted)]">Line as it stood after this play.</p>
-        </div>
-      )}
 
-      <ShotLocation item={item} shots={shots} />
-    </div>
+            <div className="flex flex-col gap-3 px-4 pb-4">
+              {line && (
+                <div className="rounded-xl bg-[color:var(--ch-surface-2)] p-3 ring-1 ring-inset ring-[color:var(--ch-border)]">
+                  <div className="grid grid-cols-5 gap-1">
+                    <StatBox label="PTS" value={line.pts} />
+                    <StatBox label="REB" value={line.reb} />
+                    <StatBox label="AST" value={line.ast} />
+                    <StatBox label="STL" value={line.stl} />
+                    <StatBox label="BLK" value={line.blk} />
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-3 gap-1 border-t border-[color:var(--ch-border)] pt-2 text-center text-[11px] text-[color:var(--ch-text-2)] tabular-nums">
+                    <span>FG {line.fgm}/{line.fga}</span>
+                    <span>3PT {line.tpm}/{line.tpa}</span>
+                    <span>FT {line.ftm}/{line.fta}</span>
+                  </div>
+                  <p className="mt-1.5 text-center text-[10px] text-[color:var(--ch-muted)]">Line as it stood after this play</p>
+                </div>
+              )}
+              <ShotLocation item={item} shots={shots} />
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -185,7 +199,7 @@ export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeC
           )}
           {isLive ? "Live feed" : "Game feed"}
         </h3>
-        {!open && (
+        {(
           <div className="flex rounded-lg bg-[color:var(--ch-surface-2)] p-0.5 text-xs font-semibold" role="group" aria-label="Feed detail">
             {(["key", "all"] as const).map((m) => (
               <button
@@ -202,18 +216,7 @@ export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeC
         )}
       </div>
 
-      {open ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <Detail
-            item={open}
-            players={players}
-            shots={shots}
-            teamName={open.teamNo === 1 ? homeTeam : open.teamNo === 2 ? awayTeam : ""}
-            color={open.teamNo === 2 ? awayColor : homeColor}
-            onBack={() => setOpenId(null)}
-          />
-        </div>
-      ) : (
+      {(
         <div className="relative min-h-0 flex-1">
           {fresh > 0 && (
             <button
@@ -244,7 +247,11 @@ export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeC
                           <span aria-hidden="true">{item.emoji} </span>{item.text}
                         </span>
                       </span>
-                      {tappable && <ChevronRight className="h-4 w-4 shrink-0 self-center text-[color:var(--ch-muted)]" aria-hidden="true" />}
+                      {tappable && (
+                        <span className="inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-[color:var(--ch-surface-2)] px-2.5 py-1 text-[11px] font-semibold text-[color:var(--ch-text-2)] ring-1 ring-inset ring-[color:var(--ch-border)]">
+                          <Maximize2 className="h-3 w-3" aria-hidden="true" /> Expand
+                        </span>
+                      )}
                     </>
                   );
                   return (
@@ -264,6 +271,14 @@ export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeC
           </div>
         </div>
       )}
+      <QuickView
+        item={open}
+        players={players}
+        shots={shots}
+        teamName={open?.teamNo === 1 ? homeTeam : open?.teamNo === 2 ? awayTeam : ""}
+        color={open?.teamNo === 2 ? awayColor : homeColor}
+        onClose={() => setOpenId(null)}
+      />
     </div>
   );
 }
