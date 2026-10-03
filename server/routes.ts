@@ -11,6 +11,7 @@ import type { LineupMetric } from "./lineups";
 import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "./teamIdentityService";
 import { getTeamCompetitions } from "./teamCompetitions";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
+import { registerNewsArticleRoutes } from "./newsArticles";
 import { registerSeoRoutes } from "./seoIndex";
 import { SITE_BASE } from "@shared/seo";
 import multer from 'multer';
@@ -2665,139 +2666,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ---- News Articles CRUD API ----
-  // Routes through Express so slugs are always generated/validated server-side.
-
-  function buildArticleSlug(title: string): string {
-    return (title || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 100);
-  }
-
-  async function resolveUniqueSlug(base: string, excludeId?: string): Promise<string> {
-    if (!base) base = "article";
-    let slug = base;
-    let suffix = 2;
-    while (true) {
-      let q = supabaseAdmin
-        .from("news_articles")
-        .select("id")
-        .eq("slug", slug);
-      if (excludeId) q = q.neq("id", excludeId);
-      const { data } = await q;
-      if (!data || data.length === 0) break;
-      slug = `${base}-${suffix++}`;
-    }
-    return slug;
-  }
-
-  // Startup slug backfill — fire and forget; gracefully handles missing column
-  (async () => {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from("news_articles")
-        .select("id, title")
-        .is("slug", null);
-      if (error) {
-        if ((error as any).code !== "42703") console.warn("Slug backfill: column may not exist yet —", error.message);
-        return;
-      }
-      if (!data || data.length === 0) return;
-      const { data: existing } = await supabaseAdmin
-        .from("news_articles")
-        .select("slug")
-        .not("slug", "is", null);
-      const taken = new Set<string>((existing || []).map((r: any) => r.slug).filter(Boolean));
-      let count = 0;
-      for (const a of data) {
-        let base = buildArticleSlug(a.title);
-        if (!base) base = a.id.slice(0, 8);
-        let slug = base;
-        let sfx = 2;
-        while (taken.has(slug)) slug = `${base}-${sfx++}`;
-        taken.add(slug);
-        await supabaseAdmin.from("news_articles").update({ slug }).eq("id", a.id);
-        count++;
-      }
-      if (count > 0) console.log(`[news] Backfilled slugs for ${count} article(s)`);
-    } catch (err: any) {
-      console.warn("[news] Slug backfill skipped:", err?.message);
-    }
-  })();
-
-  // POST /api/news-articles — create article with server-enforced slug
-  app.post("/api/news-articles", async (req: Request, res: Response) => {
-    try {
-      const userId = await requireAdmin(req, res);
-      if (!userId) return;
-
-      const { title, slug: requestedSlug, summary, body, league, source_url, image_url, is_published } = req.body;
-      if (!title?.trim()) return res.status(400).json({ error: "title is required" });
-
-      const base = requestedSlug?.trim() || buildArticleSlug(title.trim());
-      const slug = await resolveUniqueSlug(base);
-
-      const { data, error } = await supabaseAdmin
-        .from("news_articles")
-        .insert({
-          title: title.trim(),
-          slug,
-          summary: summary?.trim() || null,
-          body: body?.trim() || null,
-          league: league?.trim() || null,
-          source_url: source_url?.trim() || null,
-          image_url: image_url || null,
-          is_published: !!is_published,
-        })
-        .select()
-        .single();
-
-      if (error) return res.status(500).json({ error: error.message });
-      res.json(data);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-
-  // PATCH /api/news-articles/:id — update article with server-enforced slug
-  app.patch("/api/news-articles/:id", async (req: Request, res: Response) => {
-    try {
-      const userId = await requireAdmin(req, res);
-      if (!userId) return;
-
-      const { id } = req.params;
-      const { title, slug: requestedSlug, summary, body, league, source_url, image_url, is_published } = req.body;
-
-      const base = requestedSlug?.trim() || (title ? buildArticleSlug(title.trim()) : undefined);
-      const slug = base ? await resolveUniqueSlug(base, id) : undefined;
-
-      const payload: Record<string, any> = {};
-      if (title !== undefined) payload.title = title.trim();
-      if (slug !== undefined) payload.slug = slug;
-      if (summary !== undefined) payload.summary = summary?.trim() || null;
-      if (body !== undefined) payload.body = body?.trim() || null;
-      if (league !== undefined) payload.league = league?.trim() || null;
-      if (source_url !== undefined) payload.source_url = source_url?.trim() || null;
-      if (image_url !== undefined) payload.image_url = image_url || null;
-      if (is_published !== undefined) payload.is_published = !!is_published;
-
-      const { data, error } = await supabaseAdmin
-        .from("news_articles")
-        .update(payload)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) return res.status(500).json({ error: error.message });
-      res.json(data);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+  // News article create/update API
+  registerNewsArticleRoutes(app, requireAdmin);
 
   // ── Home competition activity scope ─────────────────────────────────────────
   // Parser-managed feeds can write games and performances to private child

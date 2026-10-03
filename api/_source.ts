@@ -3,12 +3,15 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { registerRoutes } from "../server/routes";
 import { config } from "dotenv";
 import { servePublicSeo, serveSpaShellFallback } from "../server/publicSeo";
+import { newsArticleBodyParser } from "../server/newsArticles";
 
 config();
 
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || "keyboard_cat";
 
 const app = express();
+// Article saves carry the whole document, which can pass the 100kb default.
+app.use("/api/news-articles", newsArticleBodyParser);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

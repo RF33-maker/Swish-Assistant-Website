@@ -289,27 +289,29 @@
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
-.ProseMirror {
+/* Scouting report editor. The news article editor is a ProseMirror too, but
+   styles its own body (.sa-article, further down), so it's left out here. */
+.ProseMirror:not(.sa-article) {
   outline: none;
   padding: 1rem;
   min-height: 600px;
 }
 
-.ProseMirror h1 {
+.ProseMirror:not(.sa-article) h1 {
   font-size: 2rem;
   font-weight: 700;
   margin: 1.5rem 0 1rem 0;
   color: #1e293b;
 }
 
-.ProseMirror h2 {
+.ProseMirror:not(.sa-article) h2 {
   font-size: 1.5rem;
   font-weight: 600;
   margin: 1.25rem 0 0.75rem 0;
   color: #334155;
 }
 
-.ProseMirror p {
+.ProseMirror:not(.sa-article) p {
   margin: 0.75rem 0;
   line-height: 1.7;
   color: #374151;
@@ -540,6 +542,91 @@
   background: var(--ch-surface);
   border-color: var(--ch-border-strong);
   box-shadow: 0 0 0 4px var(--ch-accent-soft);
+}
+
+/* Article body — shared by the public article page and the news editor, so
+   what a writer sees while typing is what readers get. */
+.sa-pro .sa-article {
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--ch-text);
+  overflow-wrap: break-word;
+}
+@media (min-width: 768px) {
+  .sa-pro .sa-article { font-size: 17px; }
+}
+.sa-pro .sa-article > * + * { margin-top: 1.1em; }
+.sa-pro .sa-article h2 {
+  margin-top: 1.9em;
+  font-size: 1.45em;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+.sa-pro .sa-article h3 {
+  margin-top: 1.7em;
+  font-size: 1.18em;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.sa-pro .sa-article > :first-child { margin-top: 0; }
+.sa-pro .sa-article ul { list-style: disc; padding-left: 1.4em; }
+.sa-pro .sa-article ol { list-style: decimal; padding-left: 1.4em; }
+.sa-pro .sa-article li + li,
+.sa-pro .sa-article li > * + * { margin-top: 0.4em; }
+.sa-pro .sa-article blockquote {
+  padding: 0.15em 0 0.15em 1.1em;
+  border-left: 3px solid var(--ch-accent);
+  font-size: 1.1em;
+  line-height: 1.6;
+  font-style: italic;
+  color: var(--ch-text-2);
+}
+.sa-pro .sa-article blockquote > * + * { margin-top: 0.7em; }
+.sa-pro .sa-article hr {
+  margin: 2.2em auto;
+  width: 4rem;
+  border: 0;
+  border-top: 2px solid var(--ch-border-strong);
+}
+.sa-pro .sa-article-link {
+  color: var(--ch-accent);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sa-pro .sa-article-link:hover { opacity: 0.8; }
+.sa-pro .sa-article figure { margin: 1.8em 0; }
+.sa-pro .sa-article figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid var(--ch-border);
+  background: var(--ch-surface-3);
+}
+.sa-pro .sa-article figcaption {
+  margin-top: 0.55em;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ch-text-2);
+}
+.sa-pro .sa-article-credit { color: var(--ch-muted); }
+
+/* The same body while it's being edited */
+.sa-pro .sa-article.ProseMirror { outline: none; min-height: 20rem; }
+.sa-pro .sa-article.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--ch-muted);
+}
+.sa-pro .sa-article .ProseMirror-selectednode {
+  outline: 2px solid var(--ch-accent);
+  outline-offset: 4px;
+  border-radius: 12px;
 }
 
 /* A team with no logo: a quiet monogram on the redesigned pages instead of
