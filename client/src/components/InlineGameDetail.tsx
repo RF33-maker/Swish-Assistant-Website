@@ -592,6 +592,10 @@ export function InlineGameDetail({
     isFinal: ["final", "finished", "complete", "completed", "ft"].includes(feedStatus),
     isLive: feedLive,
     knownNames: [...homePlayerStats, ...awayPlayerStats].map((p) => fullName(p)),
+    roster: [
+      ...homePlayerStats.map((p) => ({ playerId: p.playerId ?? null, name: fullName(p), shirt: p.jersey_number, teamNo: 1 as const, points: p.spoints })),
+      ...awayPlayerStats.map((p) => ({ playerId: p.playerId ?? null, name: fullName(p), shirt: p.jersey_number, teamNo: 2 as const, points: p.spoints })),
+    ],
   });
 
   if (loading) {

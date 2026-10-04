@@ -15,6 +15,7 @@ export interface CommentaryEvent {
   team_no: number | null;
   player_name: string | null;
   player_id?: string | null;
+  shirt_number?: string | number | null;
   action_type: string | null;
   sub_type: string | null;
   success: boolean | null;
@@ -50,6 +51,12 @@ export interface CommentaryInput {
   seasonBests?: Record<string, SeasonBest>;
   /** Adds the closing "Final" line. */
   isFinal?: boolean;
+  /**
+   * Players (by player_id) whose running totals can't be trusted, e.g. the
+   * play-by-play credits them differently from the final box score. Their
+   * "N for the night", milestone and season-high lines are left out.
+   */
+  suppressTallies?: Set<string>;
 }
 
 export type CommentaryKind =
@@ -182,7 +189,10 @@ export function buildCommentary(input: CommentaryInput): CommentaryItem[] {
     commentaryTeamName(n === 1 ? input.homeTeam : n === 2 ? input.awayTeam : "") || (n === 1 ? "Home" : "Away");
   const nameOf = (e: CommentaryEvent) =>
     (e.player_id && input.playerNames?.[e.player_id]) || e.player_name || "Unknown player";
-  const keyOf = (e: CommentaryEvent) => e.player_id || e.player_name || null;
+  // Same-surname teammates can arrive with one shared player_id, so a player is
+  // told apart by side, shirt and name — never by the id alone.
+  const keyOf = (e: CommentaryEvent) =>
+    e.player_name || e.player_id ? `${e.team_no}|${e.shirt_number ?? ""}|${e.player_name ?? e.player_id}` : null;
 
   const lines = new Map<string, PlayerLine>();
   const lineOf = (key: string) => {
@@ -262,14 +272,15 @@ export function buildCommentary(input: CommentaryInput): CommentaryItem[] {
 
     if (type === "rebound") {
       line.reb++;
-      const notes = rebAstMilestones(line, key, nameOf(e), "reb");
+      const trustedReb = !input.suppressTallies?.has(e.player_id ?? "");
+      const notes = trustedReb ? rebAstMilestones(line, key, nameOf(e), "reb") : null;
       if (notes) {
         moments.push({ event: e, kind: "milestone", importance: notes.importance, emoji: "⭐", notes: [],
           headline: notes.text, line: snapshot(key), shot: null, homeScore: home, awayScore: away, playerKey: key });
       }
       // A season-high rebound mark.
       const sb = input.seasonBests?.[e.player_id ?? ""];
-      if (sb && sb.games >= 3 && sb.rebounds > 0 && line.reb >= 8 && line.reb > sb.rebounds && !passed.has(`${key}:reb`)) {
+      if (trustedReb && sb && sb.games >= 3 && sb.rebounds > 0 && line.reb >= 8 && line.reb > sb.rebounds && !passed.has(`${key}:reb`)) {
         passed.add(`${key}:reb`);
         moments.push({ event: e, kind: "season-high", importance: 52, emoji: "📈", notes: [],
           headline: `${nameOf(e)} reaches ${line.reb} rebounds — a season high (previous best ${sb.rebounds}).`,
@@ -400,24 +411,25 @@ export function buildCommentary(input: CommentaryInput): CommentaryItem[] {
     }
 
     // Player tally.
-    const sb = input.seasonBests?.[e.player_id ?? ""];
+    const trusted = !input.suppressTallies?.has(e.player_id ?? "");
+    const sb = trusted ? input.seasonBests?.[e.player_id ?? ""] : undefined;
     const isSeasonHighPts = !!sb && sb.games >= 3 && sb.points > 0 && line.pts >= 10 && line.pts > sb.points && !passed.has(`${key}:pts`);
     if (isSeasonHighPts) passed.add(`${key}:pts`);
-    const crossed = [10, 20, 30, 40, 50].find((m) => line.pts - pts < m && line.pts >= m);
+    const crossed = !trusted ? undefined : [10, 20, 30, 40, 50].find((m) => line.pts - pts < m && line.pts >= m);
     if (isSeasonHighPts) {
       notes.push(`That's ${line.pts} — a season high, passing their previous best of ${sb!.points}.`);
       importance += 34;
     } else if (crossed) {
       notes.push(`${crossed} points for ${who}.`);
       importance += crossed >= 30 ? 36 : crossed >= 20 ? 26 : 14;
-    } else if (line.pts >= 8 && (type === "3pt" || tookLead || tiedIt || late)) {
+    } else if (trusted && line.pts >= 8 && (type === "3pt" || tookLead || tiedIt || late)) {
       notes.push(`That's ${line.pts} for the night.`);
     }
     if (type === "3pt") {
       if (isSeasonHighThrees(sb, line, key, passed)) {
         notes.push(`${line.tpm} threes is a season high.`);
         importance += 30;
-      } else if (line.tpm >= 3) {
+      } else if (trusted && line.tpm >= 3) {
         notes.push(`${who} has ${line.tpm} threes tonight.`);
         importance += line.tpm >= 5 ? 24 : 12;
       }
@@ -505,4 +517,69 @@ function rebAstMilestones(line: PlayerLine, _key: string, who: string, _trigger:
 /** The moments worth reading in a short feed, newest first. */
 export function keyMoments(items: CommentaryItem[], minImportance = KEY_MOMENT_IMPORTANCE): CommentaryItem[] {
   return items.filter((i) => i.importance >= minImportance).slice().reverse();
+}
+
+/** A player from the box score, whose id and name are reliable. */
+export interface RosterEntry {
+  playerId: string | null;
+  name: string;
+  shirt: string | number | null | undefined;
+  teamNo: 1 | 2;
+  /** Their points in the box score, to check the feed's running totals. */
+  points?: number | null;
+}
+
+const normName = (n: string) => n.toLowerCase().replace(/[^a-z\s-]/g, " ").replace(/\s+/g, " ").trim();
+
+/** "H. Ibrahim" and "Hamza Ibrahim" → "h|ibrahim". */
+function initialSurname(name: string): string | null {
+  const parts = normName(name).split(" ").filter(Boolean);
+  if (parts.length < 2) return null;
+  return `${parts[0][0]}|${parts[parts.length - 1]}`;
+}
+
+/**
+ * The play-by-play can give two teammates with the same surname one player_id
+ * (about one game in five). Match each play to the box score by side and shirt,
+ * falling back to initial + surname, so every play lands on the right person.
+ * A play that can't be matched and carries a shared id loses the id rather than
+ * borrowing someone else's name, photo or season bests.
+ */
+export function attachRoster(events: CommentaryEvent[], roster: RosterEntry[]): CommentaryEvent[] {
+  const namesById = new Map<string, Set<string>>();
+  for (const e of events) {
+    if (!e.player_id || !e.player_name) continue;
+    const set = namesById.get(e.player_id) ?? new Set<string>();
+    set.add(`${e.team_no}|${e.shirt_number ?? ""}|${e.player_name}`);
+    namesById.set(e.player_id, set);
+  }
+  return events.map((e) => {
+    if (!e.player_name || (e.team_no !== 1 && e.team_no !== 2)) return e;
+    const side = roster.filter((r) => r.teamNo === e.team_no);
+    let match = e.shirt_number != null && e.shirt_number !== ""
+      ? side.find((r) => r.shirt != null && String(r.shirt) === String(e.shirt_number))
+      : undefined;
+    if (!match) {
+      const key = initialSurname(e.player_name);
+      const named = key ? side.filter((r) => initialSurname(r.name) === key) : [];
+      if (named.length === 1) match = named[0];
+    }
+    if (match) return { ...e, player_id: match.playerId ?? null, player_name: match.name };
+    const shared = e.player_id ? (namesById.get(e.player_id)?.size ?? 0) > 1 : false;
+    return shared ? { ...e, player_id: null } : e;
+  });
+}
+
+/**
+ * Players whose points in the feed differ from the box score. Run the engine
+ * once, compare, and pass the result back as `suppressTallies`.
+ */
+export function tallyMismatches(items: CommentaryItem[], boxPoints: Record<string, number>): Set<string> {
+  const last = new Map<string, number>();
+  for (const i of items) if (i.playerId && i.line) last.set(i.playerId, i.line.pts);
+  const out = new Set<string>();
+  for (const [id, pts] of last) if (id in boxPoints && boxPoints[id] !== pts) out.add(id);
+  // A player with box-score points who never scores in the feed is also off.
+  for (const [id, pts] of Object.entries(boxPoints)) if (pts > 0 && !last.has(id)) out.add(id);
+  return out;
 }
