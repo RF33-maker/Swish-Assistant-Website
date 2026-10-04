@@ -28,6 +28,7 @@ import { withAlpha } from "@/lib/colorContrast";
 import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
+import { selectProfileMatches } from "@/lib/profileMatches";
 import TradingCard, { type TradingCardPerformance } from "@/components/cards/TradingCard";
 import { requestTiltPermission } from "@/components/cards/TiltCard";
 import { computeGmSc } from "@/lib/performanceCardUtils";
@@ -49,7 +50,7 @@ const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0
 // `team_name`, `shirtNumber`, and `height_cm` when alias fields are
 // absent.
 const PLAYER_PROFILE_COLUMNS =
-  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, current_team";
+  "id, slug, full_name, team_id, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, current_team";
 // date_of_birth / social_instagram aren't publicly readable on `players`; they
 // come from get_player_public_details, which only returns them for verified adults.
 
@@ -1055,8 +1056,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         // surname), and we cap the fetch at 20 rows + only the columns
         // PLAYER_PROFILE_COLUMNS exposes — the previous `.limit(100)` with
         // `select('*')` was wasteful for what is essentially a dedupe loop.
+        const surnameLike = `${searchQuery.replace(/[,()*%\\]/g, '')}%`;
         const allPlayersResult = await supabase
-          .from('players').select(PLAYER_PROFILE_COLUMNS).ilike('full_name', `%${searchQuery}%`).limit(20);
+          .from('players').select(PLAYER_PROFILE_COLUMNS)
+          // The surname as a word, not any substring: "%Saa%" also catches every
+          // "Isaac" and the 20-row cap then drops real matches at random.
+          .or(`full_name.ilike.${surnameLike},full_name.ilike.% ${surnameLike}`)
+          .limit(40);
         const { data: allPlayersData, error: allPlayersError } = allPlayersResult;
 
         const identityPlayersRes = identityLinkedIds.length > 0
@@ -1094,9 +1100,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
         // Filter by fuzzy name match OR explicit identity link
         const identityIdSet = new Set(identityLinkedIds);
-        const matchingPlayers = allPlayers.filter(player =>
-          namesMatch(player.full_name, initialPlayer.full_name) || identityIdSet.has(player.id)
-        );
+        const matchingPlayers = selectProfileMatches(allPlayers, initialPlayer, identityIdSet);
 
         const matches: PlayerMatch[] = matchingPlayers.map(p => ({
           id: p.id,
