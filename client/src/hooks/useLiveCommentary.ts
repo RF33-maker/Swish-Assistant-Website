@@ -2,7 +2,10 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import {
+  attachRoster,
   buildCommentary,
+  tallyMismatches,
+  type RosterEntry,
   type CommentaryEvent,
   type CommentaryItem,
   type CommentaryShot,
@@ -28,6 +31,8 @@ interface Options {
   isLive: boolean;
   /** Full names known from the box score, to expand initials like "T. Fairbairn". */
   knownNames?: Array<string | null | undefined>;
+  /** The box score's players, to pin each play to the right person. */
+  roster?: RosterEntry[];
 }
 
 /**
@@ -36,13 +41,20 @@ interface Options {
  * Rebuilt from the rows on every refresh, so scorer corrections show up.
  */
 export function useLiveCommentary({
-  gameKey, leagueId, homeTeam, awayTeam, events, shots, isFinal, isLive, knownNames = [],
+  gameKey, leagueId, homeTeam, awayTeam, events: rawEvents, shots, isFinal, isLive, knownNames = [], roster = [],
 }: Options): {
   items: CommentaryItem[];
   players: Record<string, CommentaryPlayer>;
   /** The shots, each tagged with the same player id the play-by-play uses. */
   shots: Array<CommentaryShot & { player_id?: string | null; success: boolean }>;
 } {
+  const rosterKey = roster.map((r) => `${r.teamNo}:${r.shirt}:${r.playerId}:${r.name}:${r.points ?? ""}`).join("|");
+  const events = useMemo(
+    () => (rawEvents ? (roster.length ? attachRoster(rawEvents, roster) : rawEvents) : rawEvents),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawEvents, rosterKey],
+  );
+
   const playerIds = useMemo(
     () => Array.from(new Set((events ?? []).map((e) => e.player_id).filter((id): id is string => !!id))).sort(),
     [events],
@@ -102,18 +114,30 @@ export function useLiveCommentary({
     for (const [id, p] of Object.entries(players ?? {})) {
       if (p.name) out[id] = expandUnambiguousPlayerName(p.name, aliases);
     }
+    // The box score's own name for a player is the most reliable one.
+    for (const r of roster) if (r.playerId && r.name) out[r.playerId] = r.name;
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [players, namesKey]);
+  }, [players, namesKey, rosterKey]);
 
   const items = useMemo(
-    () =>
-      events && events.length > 0
-        ? buildCommentary({ events, shots: shots ?? [], homeTeam, awayTeam, playerNames, seasonBests, isFinal })
-        : [],
+    () => {
+      if (!events || events.length === 0) return [];
+      const input = { events, shots: shots ?? [], homeTeam, awayTeam, playerNames, seasonBests, isFinal };
+      const first = buildCommentary(input);
+      // Once the game is over the box score is the truth: where the feed's
+      // running total for a player doesn't match it, drop that player's
+      // "for the night" style lines rather than state a wrong number.
+      if (!isFinal) return first;
+      const boxPoints: Record<string, number> = {};
+      for (const r of roster) if (r.playerId && r.points != null) boxPoints[r.playerId] = r.points;
+      if (Object.keys(boxPoints).length === 0) return first;
+      const off = tallyMismatches(first, boxPoints);
+      return off.size ? buildCommentary({ ...input, suppressTallies: off }) : first;
+    },
     // isLive is part of the key so a status flip re-renders promptly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [events, shots, homeTeam, awayTeam, playerNames, seasonBests, isFinal, isLive],
+    [events, shots, homeTeam, awayTeam, playerNames, seasonBests, isFinal, isLive, rosterKey],
   );
 
   const resolvedPlayers = useMemo(() => {

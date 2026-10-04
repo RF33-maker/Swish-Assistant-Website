@@ -848,6 +848,10 @@ export default function GamePage() {
     isFinal: feedFinal,
     isLive: feedLive,
     knownNames: [...homePlayerStats, ...awayPlayerStats].map(leaderName),
+    roster: [
+      ...homePlayerStats.map((p) => ({ playerId: ((p as any).player_id as string | undefined) ?? null, name: leaderName(p), shirt: p.shirtnumber, teamNo: 1 as const, points: p.spoints })),
+      ...awayPlayerStats.map((p) => ({ playerId: ((p as any).player_id as string | undefined) ?? null, name: leaderName(p), shirt: p.shirtnumber, teamNo: 2 as const, points: p.spoints })),
+    ],
   });
 
   const gameSuggestions = useMemo(() => {

@@ -60,3 +60,43 @@ test("helpers", () => {
   assert.ok(shotDistanceFt(32, 50) > 22); // a top-of-the-key three is beyond the arc
   assert.ok(shotDistanceFt(8, 50) < 4);   // at the rim
 });
+
+test("two teammates sharing a player_id are kept apart", async () => {
+  const { attachRoster } = await import("../client/src/lib/liveCommentary");
+  n = 0;
+  const shared = "same-id";
+  const mk = (name: string, shirt: number, score: string) =>
+    ev({ team_no: 2, player_id: shared, player_name: name, shirt_number: shirt, period: 2, clock: "05:00:00", action_type: "2pt", sub_type: "layup", score });
+  // Hamza (#25) scores 10, Mahamud (#44) scores 6 — all under one player_id.
+  const events = [
+    ...Array.from({ length: 5 }, (_, i) => mk("H. Ibrahim", 25, `0-${(i + 1) * 2}`)),
+    ...Array.from({ length: 3 }, (_, i) => mk("M. Ibrahim", 44, `0-${10 + (i + 1) * 2}`)),
+  ];
+  const roster = [
+    { playerId: "id-hamza", name: "Hamza Ibrahim", shirt: "25", teamNo: 2 as const },
+    { playerId: "id-mahamud", name: "Mahamud Ibrahim", shirt: 44, teamNo: 2 as const },
+  ];
+  const items = buildCommentary({ ...base, events: attachRoster(events, roster), playerNames: {} });
+  const last = items[items.length - 1];
+  assert.equal(last.playerName, "Mahamud Ibrahim");
+  assert.equal(last.line?.pts, 6); // not 16: Hamza's points are not added in
+  const hamzaLast = items.filter((i) => i.playerName === "Hamza Ibrahim").pop()!;
+  assert.equal(hamzaLast.line?.pts, 10);
+  // Without the roster, the engine still keeps them separate by shirt and name.
+  const bare = buildCommentary({ ...base, events });
+  assert.equal(bare[bare.length - 1].line?.pts, 6);
+});
+
+test("running totals are dropped for a player whose total doesn't match the box score", async () => {
+  const { tallyMismatches } = await import("../client/src/lib/liveCommentary");
+  n = 0;
+  const mk = (score: string) => ev({ period: 2, clock: "05:00:00", action_type: "2pt", sub_type: "layup", score });
+  const events = Array.from({ length: 6 }, (_, i) => mk(`${(i + 1) * 2}-0`)); // 12 points
+  const first = buildCommentary({ ...base, events });
+  assert.match(first.map((i) => i.text).join(" "), /for the night|points for/);
+  const off = tallyMismatches(first, { p1: 10 }); // box says 10
+  assert.ok(off.has("p1"));
+  const after = buildCommentary({ ...base, events, suppressTallies: off });
+  assert.doesNotMatch(after.map((i) => i.text).join(" "), /for the night|points for|season high/);
+  assert.equal(tallyMismatches(first, { p1: 12 }).size, 0);
+});
