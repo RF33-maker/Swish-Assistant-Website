@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { Trophy, ArrowLeft, Users } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import BCBLogo from "@/assets/BCB Logo.jpg";
-import LeagueDefaultImage from "@/assets/league-default.png";
+import LeagueDefaultImage from "@/assets/league-default.jpg";
 
 interface League {
   id: string;

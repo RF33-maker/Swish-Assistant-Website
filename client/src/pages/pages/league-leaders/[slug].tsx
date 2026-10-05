@@ -9,7 +9,7 @@ import { namesMatch, strictNamesMatch, getMostCompleteName } from "@/lib/fuzzyMa
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
-import LeagueDefaultImage from "@/assets/league-default.png";
+import LeagueDefaultImage from "@/assets/league-default.jpg";
 import {
   accumulateAdvancedRow,
   makeAdvancedAggregator,
