@@ -8,7 +8,7 @@ import type { League } from "@shared/schema";
 import { competitionSeoDescription, competitionSeoTitle, gamePath, playerPath, teamPath } from "@shared/seo";
 import EntityLink from "@/components/EntityLink";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
-import LeagueDefaultImage from "@/assets/league-default.png";
+import LeagueDefaultImage from "@/assets/league-default.jpg";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { Helmet } from "react-helmet-async";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
