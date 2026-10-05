@@ -16,6 +16,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
+import NameRequestsAdmin from "@/components/NameRequestsAdmin";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -42,7 +43,7 @@ import {
 // also checked server-side by is_app_admin(), so an admin who isn't in
 // app_admins sees "Admin only" errors rather than gaining access.
 
-type Tab = "pending" | "find" | "approved" | "history";
+type Tab = "pending" | "find" | "approved" | "history" | "names";
 
 const INPUT = "ch-input h-10 px-3 text-sm w-full";
 const BTN = "ch-btn h-9 px-3.5 text-[13px] disabled:opacity-50";
@@ -238,6 +239,7 @@ export default function PlayerClaimsAdminPage() {
     { id: "find", label: "Find a player" },
     { id: "approved", label: `Approved${claims ? ` (${approved.length})` : ""}` },
     { id: "history", label: "Rejected & revoked" },
+    { id: "names", label: "Name requests" },
   ];
 
   return (
@@ -285,7 +287,9 @@ export default function PlayerClaimsAdminPage() {
           </div>
         )}
 
-        {tab === "find" ? (
+        {tab === "names" ? (
+          <NameRequestsAdmin />
+        ) : tab === "find" ? (
           <FindPlayers onChanged={loadClaims} />
         ) : !claims && loading ? (
           <div className="flex justify-center py-16">

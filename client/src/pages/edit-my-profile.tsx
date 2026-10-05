@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
 import { AlertCircle, ArrowLeft, CheckCircle, ExternalLink, ImageUp, Loader2, UserRound } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
+import PreferredNameControl from "@/components/PreferredNameControl";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ERROR, SUCCESS } from "@/components/layout/AuthShell";
 import { supabase } from "@/lib/supabase";
@@ -214,6 +215,7 @@ export default function EditMyProfilePage() {
             </Link>
           </div>
         ) : (
+          <>
           <form onSubmit={save} className="ch-card ch-rise p-5 md:p-7 space-y-5">
             <div>
               <span className={LABEL}>Photo</span>
@@ -348,6 +350,9 @@ export default function EditMyProfilePage() {
               Your date of birth can't be changed here. If it's wrong, contact us and we'll correct it.
             </p>
           </form>
+
+          <PreferredNameControl variant="card" playerId={claim.player_id} currentName={claim.player_name} />
+          </>
         )}
       </main>
     </div>

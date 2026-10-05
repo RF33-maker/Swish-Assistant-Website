@@ -29,6 +29,7 @@ import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { selectProfileMatches } from "@/lib/profileMatches";
+import PreferredNameControl from "@/components/PreferredNameControl";
 import TradingCard, { type TradingCardPerformance } from "@/components/cards/TradingCard";
 import { requestTiltPermission } from "@/components/cards/TiltCard";
 import { computeGmSc } from "@/lib/performanceCardUtils";
@@ -2408,6 +2409,17 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           teamChip={bannerTeamChip}
           bio={seoInput ? playerBio({ ...seoInput, position: playerInfo?.position, team: playerInfo?.team || null }) : null}
         />
+      )}
+
+      {/* Only admins and the player who claimed this profile see this. */}
+      {playerInfo?.playerId && (
+        <div className="mt-3 flex justify-end empty:hidden">
+          <PreferredNameControl
+            playerId={playerInfo.playerId}
+            currentName={playerInfo.name}
+            relatedPlayerIds={playerMatches.map((m) => m.id)}
+          />
+        </div>
       )}
 
       {/* Section tabs, with the league filter alongside on wide screens */}
