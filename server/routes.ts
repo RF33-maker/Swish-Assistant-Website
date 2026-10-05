@@ -12,6 +12,7 @@ import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "
 import { getTeamCompetitions } from "./teamCompetitions";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerNewsArticleRoutes } from "./newsArticles";
+import { registerPreferredNameRoutes } from "./preferredNames";
 import { registerSeoRoutes } from "./seoIndex";
 import { SITE_BASE } from "@shared/seo";
 import multer from 'multer';
@@ -2668,6 +2669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // News article create/update API
   registerNewsArticleRoutes(app, requireAdmin);
+  registerPreferredNameRoutes(app, { requireAdmin, authenticate: authenticateSupabaseUser, withAliases, formatName: formatCanonicalPlayerName });
 
   // ── Home competition activity scope ─────────────────────────────────────────
   // Parser-managed feeds can write games and performances to private child
