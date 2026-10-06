@@ -193,6 +193,58 @@ export function useMyClaim(userId: string | null | undefined) {
   });
 }
 
+/** The approval-email outcome for an approved claim (from /api/admin/claims/email-status). */
+export interface ClaimEmailStatus {
+  sentAt: string | null;
+  error: string | null;
+}
+
+/**
+ * Calls one of the admin claim routes on the server with the signed-in admin's
+ * token. Throws an Error carrying the server's message so callers can show it.
+ */
+export async function adminClaimRequest<T>(path: string, init: { method?: "GET" | "POST"; body?: unknown } = {}): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`/api/admin/claims${path}`, {
+    method: init.method ?? "GET",
+    headers: {
+      ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.error || "Something went wrong");
+  return json as T;
+}
+
+export interface EmailOutcome {
+  emailSent: boolean;
+  emailError: string | null;
+}
+
+export const PENDING_CLAIMS_QUERY_KEY = ["admin", "pending-claims"] as const;
+
+/**
+ * How many claims are waiting for an admin, for the sidebar badge. Only runs
+ * for admins; the RPC itself refuses anyone who isn't in app_admins. The
+ * claims page invalidates PENDING_CLAIMS_QUERY_KEY after each action.
+ */
+export function usePendingClaimCount(enabled: boolean) {
+  return useQuery({
+    queryKey: PENDING_CLAIMS_QUERY_KEY,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("admin_list_claims");
+      if (error) throw error;
+      return ((data ?? []) as AdminClaimRow[]).filter((c) => c.status === "pending").length;
+    },
+    enabled,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    retry: false,
+  });
+}
+
 /** Where a signed-in player should go for their profile, and what to call it. */
 export function claimEntry(claim: MyClaim | null | undefined): {
   state: "none" | "pending" | "approved";

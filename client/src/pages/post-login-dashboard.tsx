@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter"
 import type { ComponentType } from "react";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/use-auth";
-import { Users, Trophy, Share2, Code, Newspaper, CheckCircle, AlertCircle, RefreshCw, ArrowRight, BadgeCheck, LogOut } from "lucide-react";
+import { Users, Trophy, Share2, Code, Newspaper, CheckCircle, AlertCircle, RefreshCw, ArrowRight, BadgeCheck, LogOut, UserCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
@@ -310,6 +310,19 @@ export default function DashboardLanding() {
       lockedNote: "Embeddable league tools will be available later.",
       testId: "card-api-widgets",
     },
+    ...(isAdmin
+      ? [{
+          key: "claims",
+          icon: UserCheck,
+          title: "Player Claims",
+          description: "Verify and manage player profiles",
+          body: "Approve or reject claims, issue claim codes, check dates of birth and review name requests.",
+          href: "/admin/player-claims",
+          cta: "Review claims",
+          enabled: true,
+          testId: "card-player-claims",
+        }]
+      : []),
     ...(isAdmin
       ? [{
           key: "news",
