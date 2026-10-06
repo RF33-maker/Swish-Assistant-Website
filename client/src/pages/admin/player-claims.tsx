@@ -38,6 +38,8 @@ import {
   type RowCandidate,
   PENDING_CLAIMS_QUERY_KEY,
   type ClaimEmailStatus,
+  type ContactRequest,
+  adminContactRequest,
   type EmailOutcome,
   adminClaimRequest,
   ageFromDob,
@@ -50,7 +52,15 @@ import {
 // also checked server-side by is_app_admin(), so an admin who isn't in
 // app_admins sees "Admin only" errors rather than gaining access.
 
-type Tab = "pending" | "find" | "approved" | "history" | "names";
+type Tab = "requests" | "pending" | "find" | "approved" | "history" | "names";
+
+/** A claim request being answered from the Find tab: pre-fills the search and the account email. */
+interface RequestPrefill {
+  requestId: string;
+  name: string;
+  email: string;
+  playerName: string;
+}
 
 type SortKey = "oldest" | "newest" | "name" | "team" | "flagged";
 
@@ -302,6 +312,10 @@ function CoveredSummary({ rows }: { rows: AdminClaimRow["covered_rows"] }) {
 
 export default function PlayerClaimsAdminPage() {
   const [tab, setTab] = useState<Tab>("pending");
+  const [requests, setRequests] = useState<ContactRequest[] | null>(null);
+  const [requestsError, setRequestsError] = useState("");
+  const [prefill, setPrefill] = useState<RequestPrefill | null>(null);
+  const [pickedTab, setPickedTab] = useState(false);
   const [claims, setClaims] = useState<AdminClaimRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -320,6 +334,12 @@ export default function PlayerClaimsAdminPage() {
     } else {
       setClaims((data ?? []) as AdminClaimRow[]);
     }
+    adminContactRequest<ContactRequest[]>("?topic=player-page")
+      .then((rows) => {
+        setRequests(rows);
+        setRequestsError("");
+      })
+      .catch((e) => setRequestsError(e instanceof Error ? e.message : "Couldn't load requests"));
     // The list works without this; it only adds the Emailed / Not emailed badges.
     adminClaimRequest<Record<string, ClaimEmailStatus>>("/email-status")
       .then(setEmailStatus)
@@ -332,6 +352,16 @@ export default function PlayerClaimsAdminPage() {
   useEffect(() => {
     void loadClaims();
   }, [loadClaims]);
+
+  const newRequests = useMemo(() => requests?.filter((r) => r.status === "new") ?? [], [requests]);
+
+  // Land on the work: requests waiting for an answer, otherwise pending claims. Once only,
+  // so loading in the background never moves someone who has already chosen a tab.
+  useEffect(() => {
+    if (pickedTab || !claims || !requests) return;
+    setPickedTab(true);
+    if (requests.some((r) => r.status === "new")) setTab("requests");
+  }, [claims, requests, pickedTab]);
 
   const pending = useMemo(() => claims?.filter((c) => c.status === "pending") ?? [], [claims]);
   const approved = useMemo(() => claims?.filter((c) => c.status === "approved") ?? [], [claims]);
@@ -350,6 +380,7 @@ export default function PlayerClaimsAdminPage() {
         : "Nothing rejected or revoked.";
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: "requests", label: `Requests${requests ? ` (${newRequests.length})` : ""}` },
     { id: "pending", label: `Pending${claims ? ` (${pending.length})` : ""}` },
     { id: "find", label: "Find a player" },
     { id: "approved", label: `Approved${claims ? ` (${approved.length})` : ""}` },
@@ -388,7 +419,10 @@ export default function PlayerClaimsAdminPage() {
               type="button"
               data-active={tab === t.id}
               aria-current={tab === t.id ? "page" : undefined}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                setPickedTab(true);
+                setTab(t.id);
+              }}
               className="ch-chip inline-flex items-center h-8 px-3.5 text-[13px]"
             >
               {t.label}
@@ -404,8 +438,18 @@ export default function PlayerClaimsAdminPage() {
 
         {tab === "names" ? (
           <NameRequestsAdmin />
+        ) : tab === "requests" ? (
+          <RequestsTab
+            requests={requests}
+            error={requestsError}
+            onChanged={loadClaims}
+            onFind={(r) => {
+              setPrefill({ requestId: r.id, name: r.name, email: r.email, playerName: r.player_name ?? "" });
+              setTab("find");
+            }}
+          />
         ) : tab === "find" ? (
-          <FindPlayers onChanged={loadClaims} />
+          <FindPlayers onChanged={loadClaims} prefill={prefill} onClearPrefill={() => setPrefill(null)} />
         ) : !claims && loading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-muted)]" />
@@ -437,6 +481,135 @@ export default function PlayerClaimsAdminPage() {
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+function RequestsTab({
+  requests,
+  error,
+  onChanged,
+  onFind,
+}: {
+  requests: ContactRequest[] | null;
+  error: string;
+  onChanged: () => Promise<void>;
+  onFind: (r: ContactRequest) => void;
+}) {
+  const [showHandled, setShowHandled] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
+
+  const setStatus = async (r: ContactRequest, status: "new" | "handled") => {
+    setBusyId(r.id);
+    setActionError("");
+    try {
+      await adminContactRequest(`/${r.id}`, { method: "PATCH", body: { status } });
+      await onChanged();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Couldn't update the request");
+    }
+    setBusyId(null);
+  };
+
+  if (error && !requests) {
+    return (
+      <div className="ch-card p-4">
+        <ErrorLine message={error} />
+      </div>
+    );
+  }
+  if (!requests) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-muted)]" />
+      </div>
+    );
+  }
+
+  const fresh = requests.filter((r) => r.status === "new");
+  const handled = requests.filter((r) => r.status === "handled");
+
+  const card = (r: ContactRequest) => (
+    <div key={r.id} className={`ch-card p-4 md:p-5 space-y-3 ${r.status === "handled" ? "opacity-70" : ""}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-[15px] text-[color:var(--ch-text)] truncate">{r.name}</p>
+          <p className="text-[13px] text-[color:var(--ch-text-2)] truncate">
+            <a className="hover:underline" href={`mailto:${r.email}`}>{r.email}</a> ·{" "}
+            {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
+          </p>
+        </div>
+        {r.status === "handled" && (
+          <Badge tone="green">
+            <Check className="h-3 w-3" /> Handled
+          </Badge>
+        )}
+      </div>
+
+      {(r.player_name || r.page_url) && (
+        <p className="text-[13px] text-[color:var(--ch-text-2)]">
+          Wants to claim{" "}
+          <span className="font-semibold text-[color:var(--ch-text)]">{r.player_name || "a player page"}</span>
+          {r.page_url && (
+            <>
+              {" · "}
+              <a className="inline-flex items-center gap-1 text-[color:var(--ch-accent)] hover:underline" href={r.page_url} target="_blank" rel="noopener noreferrer">
+                their page <ExternalLink className="h-3 w-3" />
+              </a>
+            </>
+          )}
+        </p>
+      )}
+
+      <p className="whitespace-pre-wrap rounded-xl bg-[color:var(--ch-surface-3)] p-3 text-[13px] leading-relaxed text-[color:var(--ch-text)]">
+        {r.message}
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        {r.status === "new" ? (
+          <>
+            <button type="button" className={BTN_PRIMARY} onClick={() => onFind(r)}>
+              <KeyRound className="h-4 w-4" /> Find player &amp; answer
+            </button>
+            <a
+              className={BTN_GHOST}
+              href={`mailto:${r.email}?subject=${encodeURIComponent("Your Swish Assistant claim request")}`}
+            >
+              <Mail className="h-4 w-4" /> Reply
+            </a>
+            <button type="button" className={BTN_GHOST} disabled={busyId === r.id} onClick={() => void setStatus(r, "handled")}>
+              {busyId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Mark handled
+            </button>
+          </>
+        ) : (
+          <button type="button" className={BTN_GHOST} disabled={busyId === r.id} onClick={() => void setStatus(r, "new")}>
+            Reopen
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <ErrorLine message={actionError} />
+      {fresh.length === 0 ? (
+        <div className="ch-card p-8 text-center text-sm text-[color:var(--ch-text-2)]">
+          No claim requests waiting. New ones from the “Claim this page” form show up here.
+        </div>
+      ) : (
+        fresh.map(card)
+      )}
+      {handled.length > 0 && (
+        <>
+          <button type="button" className={BTN_GHOST} onClick={() => setShowHandled((v) => !v)}>
+            {showHandled ? "Hide" : "Show"} handled ({handled.length})
+          </button>
+          {showHandled && handled.map(card)}
+        </>
+      )}
     </div>
   );
 }
@@ -840,8 +1013,16 @@ function HistoryClaim({ claim }: { claim: AdminClaimRow }) {
   );
 }
 
-function FindPlayers({ onChanged }: { onChanged: () => Promise<void> }) {
-  const [query, setQuery] = useState("");
+function FindPlayers({
+  onChanged,
+  prefill,
+  onClearPrefill,
+}: {
+  onChanged: () => Promise<void>;
+  prefill: RequestPrefill | null;
+  onClearPrefill: () => void;
+}) {
+  const [query, setQuery] = useState(prefill?.playerName ?? "");
   const [rows, setRows] = useState<AdminPlayerRow[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
@@ -870,12 +1051,28 @@ function FindPlayers({ onChanged }: { onChanged: () => Promise<void> }) {
     return () => clearTimeout(t);
   }, [query, search]);
 
+  // Answering a request (issuing a code or assigning) is what closes it, so
+  // it leaves the queue without a separate click.
   const refresh = async () => {
+    if (prefill) {
+      await adminContactRequest(`/${prefill.requestId}`, { method: "PATCH", body: { status: "handled" } }).catch(() => undefined);
+    }
     await Promise.all([search(query), onChanged()]);
   };
 
   return (
     <div className="space-y-4">
+      {prefill && (
+        <div className="ch-card p-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[13px] text-[color:var(--ch-text-2)]">
+            Answering <span className="font-semibold text-[color:var(--ch-text)]">{prefill.name}</span> ({prefill.email}). Issue a
+            code or assign the right player below and the request closes itself.
+          </p>
+          <button type="button" className={BTN_GHOST} onClick={onClearPrefill}>
+            Clear
+          </button>
+        </div>
+      )}
       <div className="ch-card p-3 flex items-center gap-2">
         <Search className="h-4 w-4 text-[color:var(--ch-muted)] shrink-0 ml-1" />
         <input
@@ -943,18 +1140,21 @@ function FindPlayers({ onChanged }: { onChanged: () => Promise<void> }) {
         </div>
       )}
 
-      {issueFor && <IssueCodeDialog player={issueFor} onClose={() => setIssueFor(null)} onIssued={refresh} />}
-      {assignFor && <AssignDialog player={assignFor} onClose={() => setAssignFor(null)} onAssigned={refresh} />}
+      {issueFor && <IssueCodeDialog player={issueFor} requesterEmail={prefill?.email} onClose={() => setIssueFor(null)} onIssued={refresh} />}
+      {assignFor && <AssignDialog player={assignFor} defaultEmail={prefill?.email} onClose={() => setAssignFor(null)} onAssigned={refresh} />}
     </div>
   );
 }
 
 function IssueCodeDialog({
   player,
+  requesterEmail,
   onClose,
   onIssued,
 }: {
   player: AdminPlayerRow;
+  /** Set when answering a claim request: adds an "Email this code" button. */
+  requesterEmail?: string;
   onClose: () => void;
   onIssued: () => Promise<void>;
 }) {
@@ -1019,6 +1219,16 @@ function IssueCodeDialog({
               Covers {1 + (extraRows?.length ?? 0)} {1 + (extraRows?.length ?? 0) === 1 ? "competition" : "competitions"}.
               Expires {formatDob(issued.expires_at.slice(0, 10))}. Single use. Issuing another code for any of these rows cancels this one.
             </p>
+            {requesterEmail && (
+              <a
+                className={`${BTN_GHOST} w-full justify-center`}
+                href={`mailto:${requesterEmail}?subject=${encodeURIComponent("Your Swish Assistant claim code")}&body=${encodeURIComponent(
+                  `Hi,\n\nThanks for your request. Your claim code for ${player.full_name} is:\n\n${issued.code}\n\nGo to https://swishassistant.com/claim, sign in, and enter the code with your date of birth. The code is single use and expires on ${formatDob(issued.expires_at.slice(0, 10))}.\n\nSwish Assistant`,
+                )}`}
+              >
+                <Mail className="h-4 w-4" /> Email this code to {requesterEmail}
+              </a>
+            )}
             <button type="button" className={`${BTN_PRIMARY} w-full justify-center`} onClick={onClose}>
               Done
             </button>
@@ -1062,14 +1272,17 @@ function IssueCodeDialog({
 
 function AssignDialog({
   player,
+  defaultEmail,
   onClose,
   onAssigned,
 }: {
   player: AdminPlayerRow;
+  /** The requester's email when answering a claim request. */
+  defaultEmail?: string;
   onClose: () => void;
   onAssigned: () => Promise<void>;
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(defaultEmail ?? "");
   const [dob, setDob] = useState(player.date_of_birth ?? "");
   const [extraRows, setExtraRows] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);

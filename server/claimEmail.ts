@@ -55,10 +55,11 @@ export function approvalEmailContent(playerName: string, profileUrl: string | nu
   return { subject, text: lines.join("\n\n"), html };
 }
 
-async function sendViaResend(
+export async function sendViaResend(
   to: string,
   content: { subject: string; text: string; html: string },
   idempotencyKey?: string,
+  replyTo: string = REPLY_TO,
 ): Promise<EmailResult> {
   const key = process.env.RESEND_API_KEY;
   if (!key) return { sent: false, reason: "Email isn't set up yet (RESEND_API_KEY is missing)" };
