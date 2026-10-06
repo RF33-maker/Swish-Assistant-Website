@@ -20,39 +20,107 @@ type AdminGuard = (req: Request, res: Response) => Promise<string | null>;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SITE_URL = (process.env.SITE_URL || "https://swishassistant.com").replace(/\/$/, "");
 const FROM = process.env.CLAIM_EMAIL_FROM || "Swish Assistant <noreply@swishassistant.com>";
+// Where a player's reply goes. Unset, the email doesn't invite a reply, since noreply@ goes nowhere.
+const REPLY_TO = process.env.CLAIM_EMAIL_REPLY_TO || "";
 
 export type EmailResult = { sent: true } | { sent: false; reason: string };
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+/**
+ * The approval email, as a table-based layout with inline styles: the only
+ * kind of HTML that renders the same in Gmail, Outlook and Apple Mail (none of
+ * them reliably support <style> blocks, flexbox or external CSS). Every value
+ * interpolated into it is escaped. Images must be absolute URLs, so the logo
+ * is the one served from the site itself.
+ */
 export function approvalEmailContent(playerName: string, profileUrl: string | null, editUrl: string) {
   const first = playerName.trim().split(/\s+/)[0] || "there";
   const subject = "Your Swish Assistant player profile is approved";
-  const lines = [
-    `Hi ${first},`,
-    `Good news: your claim for the ${playerName} profile on Swish Assistant has been approved. It is now yours, and your stats across your competitions are linked to it.`,
-    profileUrl ? `View your profile: ${profileUrl}` : null,
-    `Add a photo, your height, position and other details: ${editUrl}`,
-    `If you didn't make this request, reply to this email and we'll sort it out.`,
-    `Swish Assistant`,
-  ].filter((l): l is string => !!l);
+  const preheader = "Your claim has been approved. Your stats are now linked to your profile.";
+  const h = escapeHtml;
+  const steps = [
+    "Your games and stats from your competitions are now linked to your profile.",
+    "Add a photo, your height, position and other details on your edit page.",
+    "If the name on your stats isn't how you're known, you can request a preferred name.",
+  ];
+  const help = REPLY_TO
+    ? `If you didn't make this request, just reply to this email and we'll sort it out.`
+    : `If you didn't make this request, let us know through swishassistant.com and we'll sort it out.`;
 
-  const p = (t: string) => `<p style="margin:0 0 14px;line-height:1.5">${t}</p>`;
-  const button = (href: string, label: string) =>
-    `<p style="margin:0 0 14px"><a href="${escapeHtml(href)}" style="display:inline-block;background:#f97316;color:#fff;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:8px">${escapeHtml(label)}</a></p>`;
-  const html =
-    `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;color:#1f2937;max-width:520px">` +
-    p(`Hi ${escapeHtml(first)},`) +
-    p(
-      `Good news: your claim for the <strong>${escapeHtml(playerName)}</strong> profile on Swish Assistant has been approved. It is now yours, and your stats across your competitions are linked to it.`,
-    ) +
-    (profileUrl ? button(profileUrl, "View your profile") : "") +
-    p(`Add a photo, your height, position and other details on <a href="${escapeHtml(editUrl)}">your edit page</a>.`) +
-    p(`If you didn't make this request, reply to this email and we'll sort it out.`) +
-    p(`Swish Assistant`) +
-    `</div>`;
-  return { subject, text: lines.join("\n\n"), html };
+  const text = [
+    `Hi ${first},`,
+    `Good news: your claim for the ${playerName} profile on Swish Assistant has been approved. It's now yours.`,
+    steps.map((t) => `- ${t}`).join("\n"),
+    profileUrl ? `View your profile: ${profileUrl}` : null,
+    `Edit your profile: ${editUrl}`,
+    help,
+    `Swish Assistant\n${SITE_URL}`,
+  ]
+    .filter((l): l is string => !!l)
+    .join("\n\n");
+
+  const font = `-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`;
+  const button = (href: string, label: string, primary: boolean) =>
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-table;margin:0 5px 10px"><tr>` +
+    `<td align="center" bgcolor="${primary ? "#f97316" : "#ffffff"}" style="border-radius:8px;${primary ? "" : "border:1px solid #d4d4d8;"}">` +
+    `<a href="${h(href)}" target="_blank" style="display:inline-block;padding:13px 24px;font-family:${font};font-size:15px;font-weight:600;line-height:20px;color:${primary ? "#ffffff" : "#27272a"};text-decoration:none;border-radius:8px">${h(label)}</a>` +
+    `</td></tr></table>`;
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>${h(subject)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;-webkit-text-size-adjust:100%">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px">${h(preheader)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f5" style="background-color:#f4f4f5">
+<tr><td align="center" style="padding:28px 12px">
+  <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
+    <tr><td align="center" style="padding:0 4px 18px">
+      <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td style="vertical-align:middle"><img src="${h(SITE_URL)}/icon-192.png" width="36" height="36" alt="" style="display:block;border:0;width:36px;height:36px"></td>
+        <td style="vertical-align:middle;padding-left:10px;font-family:${font};font-size:15px;font-weight:700;letter-spacing:1.5px;color:#18181b">SWISH ASSISTANT</td>
+      </tr></table>
+    </td></tr>
+    <tr><td bgcolor="#ffffff" style="background-color:#ffffff;border-radius:14px;border:1px solid #e4e4e7;overflow:hidden">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr><td height="6" bgcolor="#f97316" style="background-color:#f97316;height:6px;line-height:6px;font-size:0">&nbsp;</td></tr>
+        <tr><td align="center" style="padding:34px 36px 30px;font-family:${font};color:#27272a;text-align:center">
+          <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#ea580c">Profile approved</p>
+          <h1 style="margin:0 0 18px;font-size:26px;line-height:32px;font-weight:700;color:#18181b">Welcome aboard, ${h(first)}</h1>
+          <p style="margin:0 0 22px;font-size:16px;line-height:25px;color:#3f3f46">Good news: your claim for the <strong style="color:#18181b">${h(playerName)}</strong> profile has been approved. It's now yours.</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff7ed" style="background-color:#fff7ed;border:1px solid #fed7aa;border-radius:10px;margin:0 0 26px;text-align:center">
+            <tr><td align="center" style="padding:16px 20px 8px;font-size:13px;font-weight:700;color:#9a3412">What happens next</td></tr>
+            ${steps
+              .map(
+                (t) =>
+                  `<tr><td align="center" style="padding:0 22px 12px;font-size:15px;line-height:22px;color:#3f3f46"><span style="color:#f97316;font-weight:700">&#10003;</span>&nbsp; ${h(t)}</td></tr>`,
+              )
+              .join("\n            ")}
+            <tr><td height="6" style="font-size:0;line-height:6px">&nbsp;</td></tr>
+          </table>
+          <div align="center" style="margin:0 0 6px;text-align:center">
+            ${profileUrl ? button(profileUrl, "View your profile", true) : ""}${button(editUrl, "Edit your profile", !profileUrl)}
+          </div>
+        </td></tr>
+      </table>
+    </td></tr>
+    <tr><td align="center" style="padding:20px 12px 0;font-family:${font};font-size:12px;line-height:19px;color:#71717a">
+      ${h(help)}<br>
+      You're receiving this because you claimed a player profile on <a href="${h(SITE_URL)}" style="color:#71717a;text-decoration:underline">Swish Assistant</a>.
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body>
+</html>`;
+  return { subject, text, html };
 }
 
 export async function sendViaResend(
@@ -71,7 +139,7 @@ export async function sendViaResend(
         "Content-Type": "application/json",
         ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
       },
-      body: JSON.stringify({ from: FROM, to: [to], ...content }),
+      body: JSON.stringify({ from: FROM, to: [to], ...(REPLY_TO ? { reply_to: REPLY_TO } : {}), ...content }),
       signal: AbortSignal.timeout(10_000),
     });
     if (res.ok) return { sent: true };
