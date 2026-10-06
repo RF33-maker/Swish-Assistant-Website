@@ -63,7 +63,7 @@ export function approvalEmailContent(playerName: string, profileUrl: string | nu
 
   const font = `-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`;
   const button = (href: string, label: string, primary: boolean) =>
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-table;margin:0 6px 10px 0"><tr>` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-table;margin:0 5px 10px"><tr>` +
     `<td align="center" bgcolor="${primary ? "#f97316" : "#ffffff"}" style="border-radius:8px;${primary ? "" : "border:1px solid #d4d4d8;"}">` +
     `<a href="${h(href)}" target="_blank" style="display:inline-block;padding:13px 24px;font-family:${font};font-size:15px;font-weight:600;line-height:20px;color:${primary ? "#ffffff" : "#27272a"};text-decoration:none;border-radius:8px">${h(label)}</a>` +
     `</td></tr></table>`;
@@ -82,8 +82,8 @@ export function approvalEmailContent(playerName: string, profileUrl: string | nu
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f4f5" style="background-color:#f4f4f5">
 <tr><td align="center" style="padding:28px 12px">
   <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
-    <tr><td align="left" style="padding:0 4px 16px">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+    <tr><td align="center" style="padding:0 4px 18px">
+      <table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0"><tr>
         <td style="vertical-align:middle"><img src="${h(SITE_URL)}/icon-192.png" width="36" height="36" alt="" style="display:block;border:0;width:36px;height:36px"></td>
         <td style="vertical-align:middle;padding-left:10px;font-family:${font};font-size:15px;font-weight:700;letter-spacing:1.5px;color:#18181b">SWISH ASSISTANT</td>
       </tr></table>
@@ -91,21 +91,21 @@ export function approvalEmailContent(playerName: string, profileUrl: string | nu
     <tr><td bgcolor="#ffffff" style="background-color:#ffffff;border-radius:14px;border:1px solid #e4e4e7;overflow:hidden">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr><td height="6" bgcolor="#f97316" style="background-color:#f97316;height:6px;line-height:6px;font-size:0">&nbsp;</td></tr>
-        <tr><td style="padding:34px 36px 30px;font-family:${font};color:#27272a">
+        <tr><td align="center" style="padding:34px 36px 30px;font-family:${font};color:#27272a;text-align:center">
           <p style="margin:0 0 6px;font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#ea580c">Profile approved</p>
           <h1 style="margin:0 0 18px;font-size:26px;line-height:32px;font-weight:700;color:#18181b">Welcome aboard, ${h(first)}</h1>
           <p style="margin:0 0 22px;font-size:16px;line-height:25px;color:#3f3f46">Good news: your claim for the <strong style="color:#18181b">${h(playerName)}</strong> profile has been approved. It's now yours.</p>
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff7ed" style="background-color:#fff7ed;border:1px solid #fed7aa;border-radius:10px;margin:0 0 26px">
-            <tr><td style="padding:16px 20px 6px;font-size:13px;font-weight:700;color:#9a3412">What happens next</td></tr>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#fff7ed" style="background-color:#fff7ed;border:1px solid #fed7aa;border-radius:10px;margin:0 0 26px;text-align:center">
+            <tr><td align="center" style="padding:16px 20px 8px;font-size:13px;font-weight:700;color:#9a3412">What happens next</td></tr>
             ${steps
               .map(
                 (t) =>
-                  `<tr><td style="padding:0 20px 10px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td valign="top" style="padding:1px 10px 0 0;font-size:15px;line-height:22px;color:#f97316">&#10003;</td><td style="font-size:15px;line-height:22px;color:#3f3f46">${h(t)}</td></tr></table></td></tr>`,
+                  `<tr><td align="center" style="padding:0 22px 12px;font-size:15px;line-height:22px;color:#3f3f46"><span style="color:#f97316;font-weight:700">&#10003;</span>&nbsp; ${h(t)}</td></tr>`,
               )
               .join("\n            ")}
             <tr><td height="6" style="font-size:0;line-height:6px">&nbsp;</td></tr>
           </table>
-          <div style="margin:0 0 6px">
+          <div align="center" style="margin:0 0 6px;text-align:center">
             ${profileUrl ? button(profileUrl, "View your profile", true) : ""}${button(editUrl, "Edit your profile", !profileUrl)}
           </div>
         </td></tr>
