@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { Users } from "lucide-react";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 export function PlayerSearchAvatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
   const [imgError, setImgError] = useState(false);
 
   if (photoUrl && !imgError) {
     return (
-      <img
+      <PlayerHeadshot
         src={photoUrl}
         alt={name}
-        className="h-8 w-8 rounded-full object-cover flex-shrink-0 border border-orange-200 dark:border-neutral-600"
+        className="h-8 w-8 rounded-full object-cover flex-shrink-0 border border-orange-200 dark:border-neutral-600 bg-slate-200 dark:bg-neutral-700"
+        fallbackClassName="object-top"
         onError={() => setImgError(true)}
       />
     );

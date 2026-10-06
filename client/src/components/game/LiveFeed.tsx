@@ -8,6 +8,7 @@ import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { HalfCourt, projectShot, CW, CH, COLOR_MADE, COLOR_MISSED } from "@/components/ShotChart";
 import { KEY_MOMENT_IMPORTANCE, keyMoments, type CommentaryItem } from "@/lib/liveCommentary";
 import type { CommentaryPlayer } from "@/hooks/useLiveCommentary";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 interface ChartShot {
   x: number;
@@ -50,7 +51,7 @@ function Headshot({ player, name, color }: { player?: CommentaryPlayer; name: st
       style={{ background: `color-mix(in srgb, ${color} 80%, #000)` }}
     >
       {url && !failed ? (
-        <img src={url} alt="" draggable={false} onError={() => setFailed(true)} className="h-full w-full object-cover object-top" />
+        <PlayerHeadshot src={url} alt="" draggable={false} onError={() => setFailed(true)} className="h-full w-full object-cover" fallbackClassName="object-top" />
       ) : (
         <span className="self-center ch-display font-bold text-white text-lg">{initials(name)}</span>
       )}

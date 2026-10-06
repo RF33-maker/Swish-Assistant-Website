@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 interface PlayerComparisonProps {
   leagueId: string;
@@ -631,11 +632,12 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerCom
           className={`rounded-full overflow-hidden shadow border-4 ${ringClass} bg-white`}
           style={{ width: 140, height: 140 }}
         >
-          <img
+          <PlayerHeadshot
             src={photoUrl}
             alt={name}
             crossOrigin="anonymous"
             className="w-full h-full object-cover"
+            fallbackClassName="object-top"
           />
         </div>
       );

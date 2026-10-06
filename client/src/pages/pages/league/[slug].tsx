@@ -55,6 +55,7 @@ import {
 } from "@/lib/advancedStats";
 import LeagueTrendingPerformances from "@/components/league/LeagueTrendingPerformances";
 import { getImportedPlayerName, resolvePlayerDisplayName } from "@/lib/playerName";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 type CanonicalPlayerName = {
   name: string;
@@ -5950,10 +5951,12 @@ export default function LeaguePage() {
                                       <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
                                       {!isTeam && (
                                         photoUrl ? (
-                                          <img
+                                          <PlayerHeadshot
                                             src={photoUrl}
                                             alt={displayName || ''}
-                                            className="w-8 h-8 rounded-full object-cover object-top flex-shrink-0 bg-gray-100 dark:bg-neutral-800"
+                                            loading="lazy"
+                                            className="w-8 h-8 rounded-full object-cover flex-shrink-0 bg-gray-100 dark:bg-neutral-800"
+                                            fallbackClassName="object-top"
                                             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                                           />
                                         ) : (
