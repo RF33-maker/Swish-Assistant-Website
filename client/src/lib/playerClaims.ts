@@ -218,6 +218,36 @@ export async function adminClaimRequest<T>(path: string, init: { method?: "GET" 
   return json as T;
 }
 
+/** A "Claim this page" (or other) message from the public contact form. */
+export interface ContactRequest {
+  id: string;
+  topic: "general" | "player-page" | "coach" | "league";
+  name: string;
+  email: string;
+  message: string;
+  player_name: string | null;
+  page_url: string | null;
+  status: "new" | "handled";
+  handled_at: string | null;
+  created_at: string;
+}
+
+/** Same as adminClaimRequest, for the contact-request routes. */
+export async function adminContactRequest<T>(path: string, init: { method?: "GET" | "PATCH"; body?: unknown } = {}): Promise<T> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`/api/admin/contact-requests${path}`, {
+    method: init.method ?? "GET",
+    headers: {
+      ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json?.error || "Something went wrong");
+  return json as T;
+}
+
 export interface EmailOutcome {
   emailSent: boolean;
   emailError: string | null;
@@ -226,7 +256,8 @@ export interface EmailOutcome {
 export const PENDING_CLAIMS_QUERY_KEY = ["admin", "pending-claims"] as const;
 
 /**
- * How many claims are waiting for an admin, for the sidebar badge. Only runs
+ * How many things are waiting for an admin (pending claims plus new claim
+ * requests), for the sidebar badge. Only runs
  * for admins; the RPC itself refuses anyone who isn't in app_admins. The
  * claims page invalidates PENDING_CLAIMS_QUERY_KEY after each action.
  */
@@ -234,9 +265,17 @@ export function usePendingClaimCount(enabled: boolean) {
   return useQuery({
     queryKey: PENDING_CLAIMS_QUERY_KEY,
     queryFn: async () => {
-      const { data, error } = await supabase.rpc("admin_list_claims");
-      if (error) throw error;
-      return ((data ?? []) as AdminClaimRow[]).filter((c) => c.status === "pending").length;
+      const claims = supabase.rpc("admin_list_claims").then(({ data, error }) => {
+        if (error) throw error;
+        return ((data ?? []) as AdminClaimRow[]).filter((c) => c.status === "pending").length;
+      });
+      // Unanswered claim requests count too. If they can't be loaded (e.g. the
+      // table isn't there yet) the badge still shows the pending claims.
+      const requests = adminContactRequest<ContactRequest[]>("?topic=player-page")
+        .then((rows) => rows.filter((r) => r.status === "new").length)
+        .catch(() => 0);
+      const [a, b] = await Promise.all([claims, requests]);
+      return a + b;
     },
     enabled,
     staleTime: 60_000,

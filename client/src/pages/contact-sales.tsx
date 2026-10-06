@@ -70,6 +70,8 @@ export default function ContactSalesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [sentByEmail, setSentByEmail] = useState(false);
+  // Hidden from people, filled in by bots; the server ignores requests where it has a value.
+  const [honeypot, setHoneypot] = useState("");
 
   const current = TOPICS[topic];
 
@@ -99,7 +101,7 @@ export default function ContactSalesPage() {
       const response = await fetch("/api/contact-sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, topic }),
+        body: JSON.stringify({ ...formData, topic, player, pageUrl, website: honeypot }),
       });
       if (response.ok) setSubmitted(true);
       else sendByEmail();
@@ -232,6 +234,15 @@ export default function ContactSalesPage() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                  <input
+                    tabIndex={-1}
+                    autoComplete="off"
+                    aria-hidden="true"
+                    className="absolute -left-[9999px] h-0 w-0 opacity-0"
+                    name="website"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                  />
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <label className="block">
                       <span className="block text-[13px] font-medium text-[color:var(--ch-text)] mb-1.5">Full name</span>
