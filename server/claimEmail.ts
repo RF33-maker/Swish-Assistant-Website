@@ -265,13 +265,26 @@ export function registerClaimEmailRoutes(app: Express, deps: { requireAdmin: Adm
   app.get("/api/admin/claims/email-status", async (req: Request, res: Response) => {
     try {
       if (!(await deps.requireAdmin(req, res))) return;
-      const { data, error } = await supabaseAdmin
+      // dob_status comes from the DOB-bypass migration. If it hasn't been applied yet,
+      // fall back to the email columns alone so the badges keep working.
+      let rows: any[] | null = null;
+      const withDob = await supabaseAdmin
         .from("player_claims")
-        .select("id, approval_email_sent_at, approval_email_error")
+        .select("id, approval_email_sent_at, approval_email_error, dob_status")
         .eq("status", "approved");
-      if (error) return res.status(500).json({ error: "Couldn't load email status" });
-      const out: Record<string, { sentAt: string | null; error: string | null }> = {};
-      for (const r of data ?? []) out[r.id] = { sentAt: r.approval_email_sent_at, error: r.approval_email_error };
+      if (!withDob.error) rows = withDob.data;
+      else {
+        const plain = await supabaseAdmin
+          .from("player_claims")
+          .select("id, approval_email_sent_at, approval_email_error")
+          .eq("status", "approved");
+        if (plain.error) return res.status(500).json({ error: "Couldn't load email status" });
+        rows = plain.data;
+      }
+      const out: Record<string, { sentAt: string | null; error: string | null; dobStatus: string }> = {};
+      for (const r of rows ?? []) {
+        out[r.id] = { sentAt: r.approval_email_sent_at, error: r.approval_email_error, dobStatus: r.dob_status ?? "verified" };
+      }
       res.json(out);
     } catch (e) {
       console.error("[claims] email-status failed:", e);
