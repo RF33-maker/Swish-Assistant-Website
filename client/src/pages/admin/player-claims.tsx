@@ -38,6 +38,7 @@ import {
   type RowCandidate,
   PENDING_CLAIMS_QUERY_KEY,
   type ClaimEmailStatus,
+  type DobStatus,
   type ContactRequest,
   adminContactRequest,
   type EmailOutcome,
@@ -62,7 +63,7 @@ interface RequestPrefill {
   playerName: string;
 }
 
-type SortKey = "oldest" | "newest" | "name" | "team" | "flagged";
+type SortKey = "oldest" | "newest" | "name" | "team" | "flagged" | "dob";
 
 const SORT_OPTIONS: { id: SortKey; label: string }[] = [
   { id: "oldest", label: "Oldest first" },
@@ -70,13 +71,19 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
   { id: "name", label: "Player A–Z" },
   { id: "team", label: "Team A–Z" },
   { id: "flagged", label: "Needs a look first" },
+  { id: "dob", label: "DOB to verify first" },
 ];
 
 const byText = (a: string | null, b: string | null) => (a ?? "").localeCompare(b ?? "", undefined, { sensitivity: "base" });
 const byDate = (c: AdminClaimRow) => new Date(c.created_at).getTime();
 
 /** Search matches the player, the account email, the team and the competition. */
-function filterAndSort(rows: AdminClaimRow[], query: string, sort: SortKey): AdminClaimRow[] {
+function filterAndSort(
+  rows: AdminClaimRow[],
+  query: string,
+  sort: SortKey,
+  dobRank: (c: AdminClaimRow) => number = () => 0,
+): AdminClaimRow[] {
   const q = query.trim().toLowerCase();
   const matched = q
     ? rows.filter((c) =>
@@ -94,6 +101,8 @@ function filterAndSort(rows: AdminClaimRow[], query: string, sort: SortKey): Adm
         return byText(a.team_name, b.team_name) || byText(a.player_name, b.player_name);
       case "flagged":
         return flagged(b) - flagged(a) || byDate(a) - byDate(b);
+      case "dob":
+        return dobRank(b) - dobRank(a) || byDate(a) - byDate(b);
       default:
         return byDate(a) - byDate(b);
     }
@@ -107,7 +116,7 @@ function SortSearchBar({
   onSort,
   shown,
   total,
-  flaggedOption,
+  extraOption,
 }: {
   query: string;
   onQuery: (v: string) => void;
@@ -115,7 +124,8 @@ function SortSearchBar({
   onSort: (v: SortKey) => void;
   shown: number;
   total: number;
-  flaggedOption: boolean;
+  /** The tab-specific sort to offer: "flagged" on Pending, "dob" on Approved. */
+  extraOption: SortKey | null;
 }) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -132,7 +142,7 @@ function SortSearchBar({
       <label className="flex items-center gap-2 text-[13px] text-[color:var(--ch-text-2)]">
         Sort
         <select className={`${INPUT} !w-auto`} value={sort} onChange={(e) => onSort(e.target.value as SortKey)}>
-          {SORT_OPTIONS.filter((o) => flaggedOption || o.id !== "flagged").map((o) => (
+          {SORT_OPTIONS.filter((o) => (o.id !== "flagged" && o.id !== "dob") || o.id === extraOption).map((o) => (
             <option key={o.id} value={o.id}>
               {o.label}
             </option>
@@ -368,9 +378,17 @@ export default function PlayerClaimsAdminPage() {
   const history = useMemo(() => claims?.filter((c) => c.status === "rejected" || c.status === "revoked") ?? [], [claims]);
 
   const source = tab === "pending" ? pending : tab === "approved" ? approved : history;
-  // "Needs a look first" only exists on the pending tab.
-  const activeSort: SortKey = tab !== "pending" && sort === "flagged" ? "oldest" : sort;
-  const visible = useMemo(() => filterAndSort(source, query, activeSort), [source, query, activeSort]);
+  // "Needs a look first" only exists on the pending tab, "DOB to verify first" on the approved one.
+  const extraOption: SortKey | null = tab === "pending" ? "flagged" : tab === "approved" ? "dob" : null;
+  const activeSort: SortKey = (sort === "flagged" || sort === "dob") && sort !== extraOption ? "oldest" : sort;
+  const dobRank = useCallback(
+    (c: AdminClaimRow) => {
+      const st = emailStatus[c.claim_id]?.dobStatus;
+      return st === "unverified" ? 2 : st === "adult" ? 1 : 0;
+    },
+    [emailStatus],
+  );
+  const visible = useMemo(() => filterAndSort(source, query, activeSort, dobRank), [source, query, activeSort, dobRank]);
   const emptyText = query.trim()
     ? "No claims match that search."
     : tab === "pending"
@@ -463,7 +481,7 @@ export default function PlayerClaimsAdminPage() {
               onSort={setSort}
               shown={visible.length}
               total={source.length}
-              flaggedOption={tab === "pending"}
+              extraOption={extraOption}
             />
             <ClaimList
               rows={visible}
@@ -834,8 +852,11 @@ function ApprovedClaim({
   const [resending, setResending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [editingRows, setEditingRows] = useState(false);
+  const [addingDob, setAddingDob] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Without the server's answer, assume the usual case: a verified DOB is on file.
+  const dobStatus: DobStatus = email?.dobStatus ?? (claim.verified_dob ? "verified" : "unverified");
 
   const resend = async () => {
     setResending(true);
@@ -880,6 +901,9 @@ function ApprovedClaim({
             {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
             {email?.sentAt ? "Resend email" : "Send email"}
           </button>
+          <button type="button" className={BTN_GHOST} onClick={() => setAddingDob(true)} disabled={busy}>
+            {dobStatus === "verified" ? "Correct DOB" : "Add DOB"}
+          </button>
           <button type="button" className={BTN_GHOST} onClick={() => setEditingRows(true)} disabled={busy}>
             Edit rows
           </button>
@@ -889,9 +913,21 @@ function ApprovedClaim({
         </div>
       </div>
       <CoveredSummary rows={claim.covered_rows} />
-      <p className="text-[13px] text-[color:var(--ch-text-2)]">
-        Verified DOB <span className="font-semibold text-[color:var(--ch-text)]">{dobLine(claim.verified_dob)}</span> ·{" "}
-        <TierBadge tier={claim.verified_dob ? (ageFromDob(claim.verified_dob)! >= 18 ? "adult" : "u18") : null} />
+      <p className="flex flex-wrap items-center gap-1.5 text-[13px] text-[color:var(--ch-text-2)]">
+        {dobStatus === "verified" ? (
+          <>
+            Verified DOB <span className="font-semibold text-[color:var(--ch-text)]">{dobLine(claim.verified_dob)}</span> ·{" "}
+            <TierBadge tier={claim.verified_dob ? (ageFromDob(claim.verified_dob)! >= 18 ? "adult" : "u18") : null} />
+          </>
+        ) : dobStatus === "adult" ? (
+          <>
+            No DOB on file · <Badge tone="green">Over 18, confirmed by you</Badge>
+          </>
+        ) : (
+          <>
+            No DOB on file · <Badge tone="amber">DOB still to verify · restricted profile</Badge>
+          </>
+        )}
         {claim.approved_at && <> · approved {formatDistanceToNow(new Date(claim.approved_at), { addSuffix: true })}</>}
       </p>
       {email && (
@@ -936,6 +972,18 @@ function ApprovedClaim({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {addingDob && (
+        <AddDobDialog
+          claim={claim}
+          status={dobStatus}
+          onClose={() => setAddingDob(false)}
+          onSaved={async () => {
+            setAddingDob(false);
+            await onDone();
+          }}
+        />
+      )}
 
       {editingRows && (
         <EditRowsDialog
@@ -989,6 +1037,75 @@ function EditRowsDialog({
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}
           Save rows
         </button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function AddDobDialog({
+  claim,
+  status,
+  onClose,
+  onSaved,
+}: {
+  claim: AdminClaimRow;
+  status: DobStatus;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [dob, setDob] = useState(claim.verified_dob ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.rpc("admin_verify_claim_dob", { p_claim_id: claim.claim_id, p_dob: dob });
+    setBusy(false);
+    if (error) return setError(rpcErrorMessage(error, "Couldn't save the date of birth"));
+    await onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sa-pro max-h-[90vh] overflow-y-auto bg-[color:var(--ch-surface)] text-[color:var(--ch-text)] border-[color:var(--ch-border)]">
+        <DialogHeader>
+          <DialogTitle>{status === "verified" ? "Correct" : "Add"} {claim.player_name}'s date of birth</DialogTitle>
+          <DialogDescription className="text-[color:var(--ch-text-2)]">
+            Saved as verified on all {claim.covered_rows?.length ?? 1} of their rows. The profile is then adult or under-18 by
+            this date, whatever it was before.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <label className="block">
+            <span className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Verified date of birth</span>
+            <input
+              type="date"
+              required
+              className={INPUT}
+              value={dob}
+              min="1920-01-01"
+              max={maxDobInputValue()}
+              onChange={(e) => setDob(e.target.value)}
+            />
+            {dob && (
+              <span className="mt-1 block text-[12px] text-[color:var(--ch-muted)]">
+                Age {ageFromDob(dob)} — {ageFromDob(dob)! >= 18 ? "full public profile" : "under-18 privacy"}
+              </span>
+            )}
+          </label>
+          <ErrorLine message={error} />
+          <button type="submit" className={`${BTN_PRIMARY} w-full justify-center`} disabled={busy || !dob}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+            Save verified date of birth
+          </button>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -1284,6 +1401,10 @@ function AssignDialog({
 }) {
   const [email, setEmail] = useState(defaultEmail ?? "");
   const [dob, setDob] = useState(player.date_of_birth ?? "");
+  // 'verified' needs a date. The other two approve without one; see the options below.
+  const [dobMode, setDobMode] = useState<DobStatus>("verified");
+  // A recorded under-18 DOB can't be overridden by saying "over 18".
+  const recordedMinor = !!player.date_of_birth && ageFromDob(player.date_of_birth) !== null && ageFromDob(player.date_of_birth)! < 18;
   const [extraRows, setExtraRows] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1297,8 +1418,11 @@ function AssignDialog({
     const { data: claimId, error } = await supabase.rpc("admin_assign_claim", {
       p_player_id: player.player_id,
       p_user_email: email.trim(),
-      p_verified_dob: dob,
+      p_verified_dob: dobMode === "verified" ? dob : null,
       p_also_player_ids: extraRows ?? [],
+      // Only sent for the no-DOB options, so the usual path still works on a database
+      // that hasn't had the DOB-bypass migration yet.
+      ...(dobMode === "verified" ? {} : { p_dob_status: dobMode }),
     });
     if (error) {
       setBusy(false);
@@ -1358,23 +1482,65 @@ function AssignDialog({
               />
               <span className="mt-1 block text-[12px] text-[color:var(--ch-muted)]">The player must have signed up already.</span>
             </label>
-            <label className="block">
-              <span className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Verified date of birth</span>
-              <input
-                type="date"
-                required
-                className={INPUT}
-                value={dob}
-                min="1920-01-01"
-                max={maxDobInputValue()}
-                onChange={(e) => setDob(e.target.value)}
-              />
-              {dob && (
-                <span className="mt-1 block text-[12px] text-[color:var(--ch-muted)]">
-                  Age {ageFromDob(dob)} — {ageFromDob(dob)! >= 18 ? "full public profile" : "under-18 privacy"}
-                </span>
+            <fieldset className="space-y-2">
+              <legend className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Date of birth</legend>
+              {(
+                [
+                  ["verified", "I have their date of birth", "Verified. The profile is adult or under-18 by this date."],
+                  [
+                    "adult",
+                    "No DOB, but I know they're 18 or over",
+                    "Full adult profile (real name, indexed by search engines). No date of birth or age is shown.",
+                  ],
+                  [
+                    "unverified",
+                    "No DOB, and I'm not sure",
+                    "Approved now, but the profile stays restricted (masked name, not indexed) until you add a DOB.",
+                  ],
+                ] as [DobStatus, string, string][]
+              ).map(([id, label, hint]) => {
+                const blocked = id === "adult" && recordedMinor;
+                return (
+                  <label
+                    key={id}
+                    className={`flex items-start gap-3 rounded-xl border border-[color:var(--ch-border)] p-3 ${blocked ? "opacity-50" : "cursor-pointer hover:bg-[color:var(--ch-surface-3)]"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="dob-mode"
+                      className="mt-0.5 h-4 w-4 accent-[color:var(--ch-accent)]"
+                      checked={dobMode === id}
+                      disabled={blocked}
+                      onChange={() => setDobMode(id)}
+                    />
+                    <span className="min-w-0 flex-1 text-[13px]">
+                      <span className="block font-medium text-[color:var(--ch-text)]">{label}</span>
+                      <span className="block text-[12px] text-[color:var(--ch-text-2)]">
+                        {blocked ? "The record shows this player is under 18." : hint}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+              {dobMode === "verified" && (
+                <label className="block">
+                  <input
+                    type="date"
+                    required
+                    className={INPUT}
+                    value={dob}
+                    min="1920-01-01"
+                    max={maxDobInputValue()}
+                    onChange={(e) => setDob(e.target.value)}
+                  />
+                  {dob && (
+                    <span className="mt-1 block text-[12px] text-[color:var(--ch-muted)]">
+                      Age {ageFromDob(dob)} — {ageFromDob(dob)! >= 18 ? "full public profile" : "under-18 privacy"}
+                    </span>
+                  )}
+                </label>
               )}
-            </label>
+            </fieldset>
             <div>
               <span className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Rows on their profile</span>
               <RowPicker playerId={player.player_id} onChange={setExtraRows} />
@@ -1392,7 +1558,7 @@ function AssignDialog({
             <button
               type="submit"
               className={`${BTN_PRIMARY} w-full justify-center`}
-              disabled={busy || !email || !dob || extraRows === null}
+              disabled={busy || !email || (dobMode === "verified" && !dob) || extraRows === null}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               Assign and approve

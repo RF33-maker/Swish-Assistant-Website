@@ -193,10 +193,19 @@ export function useMyClaim(userId: string | null | undefined) {
   });
 }
 
-/** The approval-email outcome for an approved claim (from /api/admin/claims/email-status). */
+/**
+ * How a claim's date of birth was settled:
+ *  verified   – a verified DOB is on file
+ *  adult      – no DOB, the admin confirmed the player is 18+
+ *  unverified – no DOB, approved anyway; the profile stays restricted until one is added
+ */
+export type DobStatus = "verified" | "adult" | "unverified";
+
+/** Per-claim extras for an approved claim (from /api/admin/claims/email-status): email outcome and DOB status. */
 export interface ClaimEmailStatus {
   sentAt: string | null;
   error: string | null;
+  dobStatus: DobStatus;
 }
 
 /**
