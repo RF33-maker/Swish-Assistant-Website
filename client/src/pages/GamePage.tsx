@@ -21,6 +21,7 @@ import GameScoreHero, { useMatchupColors, type GameHeroState } from "@/component
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "@/components/game/GameOverview";
 import { gameRecap } from "@shared/recaps";
 import { playerPath, teamPath } from "@shared/seo";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 interface GameSchedule {
   game_key: string;
@@ -1140,12 +1141,13 @@ export default function GamePage() {
                           <div key={idx} className="ch-tile p-2.5 md:p-3 flex items-center justify-between">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
-                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)]">
-                                  <img 
-                                    src={player.photoUrl} 
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface-3)]">
+                                  <PlayerHeadshot
+                                    src={player.photoUrl}
                                     alt={player.name}
+                                    loading="lazy"
                                     className="w-full h-full object-cover"
-                                    style={{ objectPosition: `center ${player.photoFocusY}%` }}
+                                    fallbackStyle={{ objectPosition: `center ${player.photoFocusY}%` }}
                                   />
                                 </div>
                               ) : (
@@ -1187,12 +1189,13 @@ export default function GamePage() {
                           <div key={idx} className="ch-tile p-2.5 md:p-3 flex items-center justify-between">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
-                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)]">
-                                  <img 
-                                    src={player.photoUrl} 
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface-3)]">
+                                  <PlayerHeadshot
+                                    src={player.photoUrl}
                                     alt={player.name}
+                                    loading="lazy"
                                     className="w-full h-full object-cover"
-                                    style={{ objectPosition: `center ${player.photoFocusY}%` }}
+                                    fallbackStyle={{ objectPosition: `center ${player.photoFocusY}%` }}
                                   />
                                 </div>
                               ) : (

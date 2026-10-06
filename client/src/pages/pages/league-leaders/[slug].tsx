@@ -18,6 +18,7 @@ import {
   type AdvancedLeaderDef,
 } from "@/lib/advancedStats";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 interface ChildLeague {
   league_id: string;
@@ -628,10 +629,12 @@ export default function LeagueLeadersPage() {
                 {(() => {
                   const photoUrl = getPlayerPhotoUrlCached(player.photo_path);
                   return photoUrl ? (
-                    <img
+                    <PlayerHeadshot
                       src={photoUrl}
                       alt={player.name || ''}
-                      className="w-10 h-10 rounded-full object-cover object-top flex-shrink-0 bg-gray-100 dark:bg-neutral-800"
+                      loading="lazy"
+                      className="w-10 h-10 rounded-full object-cover flex-shrink-0 bg-gray-100 dark:bg-neutral-800"
+                      fallbackClassName="object-top"
                       onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement | null)?.style && ((e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex'); }}
                     />
                   ) : null;
