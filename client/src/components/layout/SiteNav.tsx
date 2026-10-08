@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { Link, useLocation } from "wouter"
-import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2, BadgeCheck, UserCheck } from "lucide-react"
+import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2, BadgeCheck, UserCheck, Landmark } from "lucide-react"
 import { SheetClose } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import StatsThreadLogo from "@/assets/statsthread-logo.svg"
@@ -82,6 +82,13 @@ export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet
       {internalLink("/news", location.startsWith("/news"), <>
         <Newspaper className="h-4 w-4 shrink-0" aria-hidden="true" />
         News
+      </>)}
+      {internalLink("/british-basketball-history", location.startsWith("/british-basketball-history"), <>
+        <Landmark className="h-4 w-4 shrink-0" aria-hidden="true" />
+        History
+        <span className="ml-auto whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-neutral-800 dark:text-neutral-400">
+          Soon
+        </span>
       </>)}
 
       {leagues.length > 0 && (

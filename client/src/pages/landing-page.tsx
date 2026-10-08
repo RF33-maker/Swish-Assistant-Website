@@ -18,6 +18,7 @@ import HomeTodayBar from "@/components/home/HomeTodayBar"
 import PlatformStatsStrip from "@/components/home/PlatformStatsStrip"
 import ScrollStory from "@/components/home/story/ScrollStory"
 import ExploreSection from "@/components/home/ExploreSection"
+import HistoryComingSoon from "@/components/home/HistoryComingSoon"
 import AudienceSection from "@/components/home/AudienceSection"
 import HomeFooter from "@/components/home/HomeFooter"
 import SectionHeader from "@/components/home/SectionHeader"
@@ -225,6 +226,8 @@ export default function LandingPage() {
         </div>
       </section>
       </div>
+
+      <HistoryComingSoon />
 
       {/* Below the content: who Swish is and what it offers */}
       <div data-story="brand">
