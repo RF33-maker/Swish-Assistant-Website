@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { TeamLogo } from "./TeamLogo";
 import EntityLink from "./EntityLink";
 import { generateGameSlug } from "@/lib/gameSlug";
+import { periodLabel } from "@/lib/periodLabel";
 import { CheckCircle2, Clock, Radio } from "lucide-react";
 
 interface Game {
@@ -14,6 +15,7 @@ interface Game {
   home_score?: number | null;
   away_score?: number | null;
   current_period?: number | null;
+  current_period_type?: string | null;
   current_clock?: string | null;
 }
 
@@ -41,7 +43,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
       const { games: rawGames, teamStats, liveEvents } = await res.json() as {
         games: Game[];
         teamStats: { game_key: string; name: string; tot_spoints: number }[];
-        liveEvents: { game_key: string; period: number; clock: string; created_at: string }[];
+        liveEvents: { game_key: string; period: number; period_type: string | null; clock: string; created_at: string }[];
       };
 
       const uniqueGames: Game[] = rawGames.map(g => ({ ...g }));
@@ -65,10 +67,10 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
         game.away_score = scoresByGame[game.game_key]?.away_score;
       });
 
-      const latestByGame: Record<string, { period: number; clock: string; created_at: string }> = {};
+      const latestByGame: Record<string, { period: number; period_type: string | null; clock: string; created_at: string }> = {};
       liveEvents.forEach(ev => {
         if (!latestByGame[ev.game_key]) {
-          latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock, created_at: ev.created_at };
+          latestByGame[ev.game_key] = { period: ev.period, period_type: ev.period_type, clock: ev.clock, created_at: ev.created_at };
         }
       });
 
@@ -79,6 +81,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
         const latest = latestByGame[game.game_key];
         if (latest) {
           game.current_period = latest.period;
+          game.current_period_type = latest.period_type;
           game.current_clock = latest.clock;
           if (now.getTime() - new Date(latest.created_at).getTime() >= FOUR_HOURS_MS) {
             game.status = 'final';
@@ -301,8 +304,8 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
                   {category === 'live' && (
                     <span className="text-[9px] sm:text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
                       <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
-                      {game.current_period
-                        ? `${game.current_period <= 4 ? `Q${game.current_period}` : `OT${game.current_period - 4}`}${game.current_clock ? ` ${game.current_clock.split(':').slice(0, 2).join(':')}` : ''}`
+                      {periodLabel(game.current_period, game.current_period_type)
+                        ? `${periodLabel(game.current_period, game.current_period_type)}${game.current_clock ? ` ${game.current_clock.split(':').slice(0, 2).join(':')}` : ''}`
                         : 'Live'}
                     </span>
                   )}
