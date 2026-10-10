@@ -11,7 +11,7 @@ import type { ShotData } from "./ShotChart";
 import TeamSplitShotChart from "./TeamSplitShotChart";
 import GameFlowSummary from "./GameFlowSummary";
 import PlayByPlay from "./PlayByPlay";
-import { normalizeEventPeriods } from "@/lib/periodLabel";
+import { normalizeEventPeriods, normalizeShotPeriods } from "@/lib/periodLabel";
 
 interface PlayerGameStats {
   id: string;
@@ -506,13 +506,13 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       // Fetch shot chart data from shot_chart table
       const { data: shots, error: shotsError } = await supabase
         .from("shot_chart")
-        .select("id, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key")
+        .select("id, action_number, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key")
         .eq("game_key", gameKey);
 
       if (shotsError) {
         console.error("Error fetching shot chart:", shotsError);
       } else {
-        setShotChartShots((shots || []) as ShotData[]);
+        setShotChartShots(normalizeShotPeriods((shots || []) as ShotData[], error || !events ? [] : normalizeEventPeriods(events)));
       }
     } catch (error) {
       console.error("Error loading live events:", error);
