@@ -146,25 +146,32 @@ function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors }: {
   );
 }
 
-function ShootingRows({ home, away, colors }: { home: GameTeamTotals; away: GameTeamTotals; colors: Colors }) {
-  const rows = [
-    { label: "FG%", hm: home.tot_sfieldgoalsmade, ha: home.tot_sfieldgoalsattempted, am: away.tot_sfieldgoalsmade, aa: away.tot_sfieldgoalsattempted },
-    { label: "3PT%", hm: home.tot_sthreepointersmade, ha: home.tot_sthreepointersattempted, am: away.tot_sthreepointersmade, aa: away.tot_sthreepointersattempted },
-    { label: "FT%", hm: home.tot_sfreethrowsmade, ha: home.tot_sfreethrowsattempted, am: away.tot_sfreethrowsmade, aa: away.tot_sfreethrowsattempted },
+/** Made/attempted for FG, 3PT and FT, home and away, shared by the Game and Team Stats tabs. */
+function shootingLines(home: GameTeamTotals, away: GameTeamTotals) {
+  return [
+    { key: "fg", short: "FG%", label: "Field goals", hm: home.tot_sfieldgoalsmade, ha: home.tot_sfieldgoalsattempted, am: away.tot_sfieldgoalsmade, aa: away.tot_sfieldgoalsattempted },
+    { key: "3p", short: "3PT%", label: "Three pointers", hm: home.tot_sthreepointersmade, ha: home.tot_sthreepointersattempted, am: away.tot_sthreepointersmade, aa: away.tot_sthreepointersattempted },
+    { key: "ft", short: "FT%", label: "Free throws", hm: home.tot_sfreethrowsmade, ha: home.tot_sfreethrowsattempted, am: away.tot_sfreethrowsmade, aa: away.tot_sfreethrowsattempted },
   ];
+}
+
+function ShootingRow({ line, label, colors }: { line: ReturnType<typeof shootingLines>[number]; label: string; colors: Colors }) {
+  return (
+    <StatCompareRow
+      label={label}
+      colors={colors}
+      home={pct(n(line.hm), n(line.ha))}
+      away={pct(n(line.am), n(line.aa))}
+      homeDisplay={pctLabel(n(line.hm), n(line.ha))}
+      awayDisplay={pctLabel(n(line.am), n(line.aa))}
+    />
+  );
+}
+
+function ShootingRows({ home, away, colors }: { home: GameTeamTotals; away: GameTeamTotals; colors: Colors }) {
   return (
     <div className="space-y-3.5">
-      {rows.map((r) => (
-        <StatCompareRow
-          key={r.label}
-          label={r.label}
-          colors={colors}
-          home={pct(n(r.hm), n(r.ha))}
-          away={pct(n(r.am), n(r.aa))}
-          homeDisplay={pctLabel(n(r.hm), n(r.ha))}
-          awayDisplay={pctLabel(n(r.am), n(r.aa))}
-        />
-      ))}
+      {shootingLines(home, away).map((line) => <ShootingRow key={line.key} line={line} label={line.short} colors={colors} />)}
     </div>
   );
 }
@@ -178,19 +185,9 @@ function CountingRows({ home, away, colors, withShooting = false }: { home: Game
       <StatCompareRow label="Steals" home={n(home.tot_ssteals)} away={n(away.tot_ssteals)} colors={colors} />
       <StatCompareRow label="Blocks" home={n(home.tot_sblocks)} away={n(away.tot_sblocks)} colors={colors} />
       <StatCompareRow label="Turnovers" home={n(home.tot_sturnovers)} away={n(away.tot_sturnovers)} colors={colors} lowerIsBetter />
-      {withShooting && (
-        <>
-          <StatCompareRow label="Field goals" colors={colors} home={n(home.tot_sfieldgoalsmade)} away={n(away.tot_sfieldgoalsmade)}
-            homeDisplay={`${n(home.tot_sfieldgoalsmade)}/${n(home.tot_sfieldgoalsattempted)}`}
-            awayDisplay={`${n(away.tot_sfieldgoalsmade)}/${n(away.tot_sfieldgoalsattempted)}`} />
-          <StatCompareRow label="Three pointers" colors={colors} home={n(home.tot_sthreepointersmade)} away={n(away.tot_sthreepointersmade)}
-            homeDisplay={`${n(home.tot_sthreepointersmade)}/${n(home.tot_sthreepointersattempted)}`}
-            awayDisplay={`${n(away.tot_sthreepointersmade)}/${n(away.tot_sthreepointersattempted)}`} />
-          <StatCompareRow label="Free throws" colors={colors} home={n(home.tot_sfreethrowsmade)} away={n(away.tot_sfreethrowsmade)}
-            homeDisplay={`${n(home.tot_sfreethrowsmade)}/${n(home.tot_sfreethrowsattempted)}`}
-            awayDisplay={`${n(away.tot_sfreethrowsmade)}/${n(away.tot_sfreethrowsattempted)}`} />
-        </>
-      )}
+      {withShooting && shootingLines(home, away).map((line) => (
+        <ShootingRow key={line.key} line={line} label={line.label} colors={colors} />
+      ))}
     </div>
   );
 }
