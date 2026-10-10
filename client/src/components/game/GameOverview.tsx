@@ -283,7 +283,9 @@ export function GameOverviewSections({
         </GameSection>
       )}
       {hasTeamStats && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        // grid-cols-1 is minmax(0, 1fr): without it a wide table (a 4-5 overtime game) stretches
+        // the whole column on a phone instead of scrolling inside its own card.
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <QuarterTable homeTeam={homeTeam} awayTeam={awayTeam} home={home!} away={away!} leagueId={leagueId} colors={colors} events={events} />
           <GameSection title="Shooting">
             <ShootingRows home={home!} away={away!} colors={colors} />
