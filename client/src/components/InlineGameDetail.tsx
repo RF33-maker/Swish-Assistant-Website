@@ -362,6 +362,8 @@ export function InlineGameDetail({
             ssteals: r.steals ?? r.ssteals,
             sblocks: r.blocks ?? r.sblocks,
             sturnovers: r.turnovers ?? r.sturnovers,
+            // v_box_score names this column `fouls`; the player_stats fallback keeps `sfoulspersonal`.
+            sfoulspersonal: r.fouls ?? r.sfoulspersonal ?? 0,
           });
 
           const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
