@@ -76,6 +76,54 @@ export function parseGameFlow(rawEvents: RawGameEvent[]): FlowPoint[] {
   return points;
 }
 
+export interface OvertimeScore {
+  /** Continuous numbering: 5 is the first overtime, 6 the second. */
+  period: number;
+  home: number;
+  away: number;
+}
+
+/**
+ * Points each team scored in each overtime.
+ *
+ * Only quarters 1-4 are stored per team, so overtime has to come from the
+ * play-by-play: the running score at the end of an overtime, less the running
+ * score at the end of the period before it. Expects events whose periods are
+ * already continuous (overtime from 5). Returns [] if the scores don't add up
+ * (a score going backwards), so callers can fall back to something coarser.
+ */
+export function overtimeScores(rawEvents: RawGameEvent[]): OvertimeScore[] {
+  // Running score at the end of each period that had any scoring, in order.
+  const ends: { period: number; home: number; away: number }[] = [];
+  for (const p of parseGameFlow(rawEvents)) {
+    const last = ends[ends.length - 1];
+    if (last && last.period === p.period) { last.home = p.homeScore; last.away = p.awayScore; }
+    else ends.push({ period: p.period, home: p.homeScore, away: p.awayScore });
+  }
+
+  const byPeriod = new Map<number, OvertimeScore>();
+  for (let i = 0; i < ends.length; i++) {
+    if (ends[i].period <= 4) continue;
+    const prev = ends[i - 1];
+    const home = ends[i].home - (prev?.home ?? 0);
+    const away = ends[i].away - (prev?.away ?? 0);
+    if (home < 0 || away < 0) return [];
+    byPeriod.set(ends[i].period, { period: ends[i].period, home, away });
+  }
+  if (byPeriod.size === 0) return [];
+
+  // A scoreless overtime has no scoring plays to find, but it still happened: one
+  // that has just started in a live game, or an empty one in between. Count any
+  // overtime the events mention, scoring or not.
+  const out: OvertimeScore[] = [];
+  const lastOt = Math.max(
+    ...Array.from(byPeriod.keys()),
+    ...rawEvents.map((e) => e.period ?? 0),
+  );
+  for (let p = 5; p <= lastOt; p++) out.push(byPeriod.get(p) ?? { period: p, home: 0, away: 0 });
+  return out;
+}
+
 /**
  * A "run" is points scored by one team uninterrupted by the other team
  * scoring — the standard broadcast definition. Returns the top `topN` by
