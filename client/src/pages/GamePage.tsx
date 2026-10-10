@@ -7,6 +7,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
+import { periodLabel } from "@/lib/periodLabel";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -97,6 +98,8 @@ interface LiveEvent {
   action_type: string;
   sub_type: string | null;
   period: number;
+  /** "REGULAR" or "OVERTIME"; overtime periods restart at 1. */
+  period_type?: string | null;
   clock: string;
   team_no: number;
   player_name: string | null;
@@ -1006,7 +1009,7 @@ export default function GamePage() {
             awayScore={isGamePlayed ? awayScore : null}
             state={heroState}
             liveLabel={isLive && currentPeriod
-              ? `${currentPeriod <= 4 ? `Q${currentPeriod}` : `OT${currentPeriod - 4}`}${currentClock ? ` · ${currentClock.split(':').slice(0, 2).join(':')}` : ''}`
+              ? `${periodLabel(currentPeriod, latestEvent?.period_type)}${currentClock ? ` · ${currentClock.split(':').slice(0, 2).join(':')}` : ''}`
               : null}
             homeSub={homeTeamRecord ? `${homeTeamRecord.wins}-${homeTeamRecord.losses}` : undefined}
             awaySub={awayTeamRecord ? `${awayTeamRecord.wins}-${awayTeamRecord.losses}` : undefined}

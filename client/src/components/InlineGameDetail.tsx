@@ -14,6 +14,7 @@ import GameScoreHero, { useMatchupColors } from "./game/GameScoreHero";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "./game/GameOverview";
 import { playerPath, teamPath } from "@shared/seo";
 import { gameRecap } from "@shared/recaps";
+import { periodLabel } from "@/lib/periodLabel";
 
 export interface GameInfo {
   date: string;
@@ -100,6 +101,7 @@ interface LiveEvent {
 
 interface LiveClock {
   period: number | null;
+  periodType: string | null;
   clock: string | null;
 }
 
@@ -505,13 +507,13 @@ export function InlineGameDetail({
     const fetchLiveClock = async () => {
       const { data } = await supabase
         .from("live_events")
-        .select("period,clock")
+        .select("period,period_type,clock")
         .eq("game_key", gameKey)
         .order("action_number", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (active && data) {
-        setLiveClock({ period: data.period ?? null, clock: data.clock ?? null });
+        setLiveClock({ period: data.period ?? null, periodType: data.period_type ?? null, clock: data.clock ?? null });
       }
     };
 
@@ -658,7 +660,7 @@ export function InlineGameDetail({
       })
     : [];
   const liveLabel = isLive && liveClock
-    ? [liveClock.period ? (liveClock.period <= 4 ? `Q${liveClock.period}` : `OT${liveClock.period - 4}`) : null, formatLiveClock(liveClock.clock)]
+    ? [periodLabel(liveClock.period, liveClock.periodType), formatLiveClock(liveClock.clock)]
         .filter(Boolean).join(" · ")
     : null;
   const BoxScoreTable = ({ players, teamName, score, color }: { players: PlayerStat[]; teamName: string; score: number; color: string }) => (

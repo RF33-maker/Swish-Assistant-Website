@@ -3,6 +3,7 @@ import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase"
 import { TeamLogo } from "./TeamLogo";
 import EntityLink from "./EntityLink";
 import { gamePath } from "@shared/seo";
+import { periodLabel } from "@/lib/periodLabel";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface GameItem {
@@ -15,6 +16,7 @@ interface GameItem {
   away_score: number | null;
   status: 'LIVE' | 'FINAL' | 'SCHEDULED';
   current_period?: number | null;
+  current_period_type?: string | null;
   current_clock?: string | null;
   age_group?: string;
   round?: string;
@@ -273,15 +275,15 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
         const liveKeys = allLive.map(g => g.game_key);
         const { data: liveEventsData } = await supabase
           .from("live_events")
-          .select("game_key, period, clock, created_at")
+          .select("game_key, period, period_type, clock, created_at")
           .in("game_key", liveKeys)
           .order("created_at", { ascending: false });
 
-        const latestByGame: Record<string, { period: number; clock: string; created_at: string }> = {};
+        const latestByGame: Record<string, { period: number; period_type: string | null; clock: string; created_at: string }> = {};
         if (liveEventsData) {
           liveEventsData.forEach(ev => {
             if (!latestByGame[ev.game_key]) {
-              latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock, created_at: ev.created_at };
+              latestByGame[ev.game_key] = { period: ev.period, period_type: ev.period_type, clock: ev.clock, created_at: ev.created_at };
             }
           });
         }
@@ -292,6 +294,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
           const latest = latestByGame[game.game_key];
           if (latest) {
             game.current_period = latest.period;
+            game.current_period_type = latest.period_type;
             game.current_clock = latest.clock;
             const timeSinceLastEvent = now.getTime() - new Date(latest.created_at).getTime();
             if (timeSinceLastEvent >= FOUR_HOURS_MS) {
@@ -494,8 +497,8 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                               <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                               LIVE
                             </span>
-                            {game.current_period && (
-                              <span className="text-[8px] text-red-400/60 mt-0.5">Q{game.current_period}</span>
+                            {periodLabel(game.current_period, game.current_period_type) && (
+                              <span className="text-[8px] text-red-400/60 mt-0.5">{periodLabel(game.current_period, game.current_period_type)}</span>
                             )}
                           </div>
                         ) : game.status === 'SCHEDULED' ? (
