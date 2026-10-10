@@ -11,6 +11,7 @@ import type { ShotData } from "./ShotChart";
 import TeamSplitShotChart from "./TeamSplitShotChart";
 import GameFlowSummary from "./GameFlowSummary";
 import PlayByPlay from "./PlayByPlay";
+import { normalizeEventPeriods } from "@/lib/periodLabel";
 
 interface PlayerGameStats {
   id: string;
@@ -498,7 +499,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       if (error) {
         console.error("Error fetching live events:", error);
       } else if (events) {
-        setLiveEvents(events);
+        setLiveEvents(normalizeEventPeriods(events));
         setEventsLoaded(true);
       }
 
