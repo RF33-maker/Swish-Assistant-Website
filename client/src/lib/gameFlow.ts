@@ -112,9 +112,14 @@ export function overtimeScores(rawEvents: RawGameEvent[]): OvertimeScore[] {
   }
   if (byPeriod.size === 0) return [];
 
-  // A scoreless overtime has no scoring plays to find, but it still happened.
+  // A scoreless overtime has no scoring plays to find, but it still happened: one
+  // that has just started in a live game, or an empty one in between. Count any
+  // overtime the events mention, scoring or not.
   const out: OvertimeScore[] = [];
-  const lastOt = Math.max(...Array.from(byPeriod.keys()));
+  const lastOt = Math.max(
+    ...Array.from(byPeriod.keys()),
+    ...rawEvents.map((e) => e.period ?? 0),
+  );
   for (let p = 5; p <= lastOt; p++) out.push(byPeriod.get(p) ?? { period: p, home: 0, away: 0 });
   return out;
 }
