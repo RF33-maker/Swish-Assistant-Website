@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { TeamLogo } from "@/components/TeamLogo";
 import GameFlowSummary from "@/components/GameFlowSummary";
+import { overtimeScores, type RawGameEvent } from "@/lib/gameFlow";
 import { StatCompareRow, type MatchupColors } from "./GameScoreHero";
 import EntityLink from "@/components/EntityLink";
 
@@ -77,8 +78,9 @@ const pctLabel = (made: number, att: number) => (
   </>
 );
 
-function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors }: {
+function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors, events }: {
   homeTeam: string; awayTeam: string; home: GameTeamTotals; away: GameTeamTotals; leagueId?: string | null; colors: Colors;
+  events?: unknown[] | null;
 }) {
   const quarters = ([1, 2, 3, 4] as const)
     .map((p) => ({ p, home: n(home[`p${p}_score`]), away: n(away[`p${p}_score`]) }))
@@ -86,10 +88,23 @@ function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors }: {
   if (quarters.length === 0) return null;
 
   // Only quarters 1-4 are stored, so any overtime shows up as the gap between the
-  // final score and the four-quarter sum. Show that gap as one OT column.
+  // final score and the four-quarter sum.
   const regulation = (side: "home" | "away") => quarters.reduce((s, q) => s + q[side], 0);
   const ot = { home: Math.max(0, n(home.tot_spoints) - regulation("home")), away: Math.max(0, n(away.tot_spoints) - regulation("away")) };
   const hasOt = n(home.tot_spoints) > 0 && n(away.tot_spoints) > 0 && (ot.home > 0 || ot.away > 0);
+
+  // With more than one overtime, split the gap per overtime using the play-by-play.
+  // Only trust the split if it adds back up to the gap; otherwise show it as one OT.
+  const split = hasOt && events ? overtimeScores(events as RawGameEvent[]) : [];
+  const splitAddsUp =
+    split.length > 1 &&
+    split.reduce((s, o) => s + o.home, 0) === ot.home &&
+    split.reduce((s, o) => s + o.away, 0) === ot.away;
+  const otColumns: { key: string; label: string; home: number; away: number }[] = !hasOt
+    ? []
+    : splitAddsUp
+      ? split.map((o) => ({ key: `ot${o.period}`, label: `OT${o.period - 4}`, home: o.home, away: o.away }))
+      : [{ key: "ot", label: "OT", home: ot.home, away: ot.away }];
 
   return (
     <GameSection title="Quarter by quarter">
@@ -99,7 +114,7 @@ function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors }: {
             <tr className="border-b border-[color:var(--ch-border)]">
               <th className="text-left py-2 pr-2">Team</th>
               {quarters.map((q) => <th key={q.p} className="text-center py-2 px-1 sm:px-1.5 w-9 sm:w-11">Q{q.p}</th>)}
-              {hasOt && <th className="text-center py-2 px-1 sm:px-1.5 w-9 sm:w-11">OT</th>}
+              {otColumns.map((c) => <th key={c.key} className="text-center py-2 px-1 sm:px-1.5 w-9 sm:w-11">{c.label}</th>)}
               <th className="text-center py-2 pl-1 sm:pl-1.5 w-10 sm:w-12">T</th>
             </tr>
           </thead>
@@ -128,11 +143,11 @@ function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors }: {
                       </td>
                     );
                   })}
-                  {hasOt && (
-                    <td className={`ch-num text-center py-2.5 px-1 sm:px-1.5 ${ot[side] > ot[side === "home" ? "away" : "home"] ? "font-bold text-[color:var(--ch-text)]" : "text-[color:var(--ch-text-2)]"}`}>
-                      {ot[side]}
+                  {otColumns.map((c) => (
+                    <td key={c.key} className={`ch-num text-center py-2.5 px-1 sm:px-1.5 ${c[side] > c[side === "home" ? "away" : "home"] ? "font-bold text-[color:var(--ch-text)]" : "text-[color:var(--ch-text-2)]"}`}>
+                      {c[side]}
                     </td>
-                  )}
+                  ))}
                   <td className="ch-display ch-num text-center py-2.5 pl-1 sm:pl-1.5 text-lg font-bold" style={{ color: tot > oppTot ? teamColor : "var(--ch-text-2)" }}>
                     {tot}
                   </td>
@@ -269,7 +284,7 @@ export function GameOverviewSections({
       )}
       {hasTeamStats && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <QuarterTable homeTeam={homeTeam} awayTeam={awayTeam} home={home!} away={away!} leagueId={leagueId} colors={colors} />
+          <QuarterTable homeTeam={homeTeam} awayTeam={awayTeam} home={home!} away={away!} leagueId={leagueId} colors={colors} events={events} />
           <GameSection title="Shooting">
             <ShootingRows home={home!} away={away!} colors={colors} />
           </GameSection>
