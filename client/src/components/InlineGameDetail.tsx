@@ -14,7 +14,7 @@ import GameScoreHero, { useMatchupColors } from "./game/GameScoreHero";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "./game/GameOverview";
 import { playerPath, teamPath } from "@shared/seo";
 import { gameRecap } from "@shared/recaps";
-import { periodLabel } from "@/lib/periodLabel";
+import { normalizeEventPeriods, periodLabel } from "@/lib/periodLabel";
 
 export interface GameInfo {
   date: string;
@@ -481,7 +481,7 @@ export function InlineGameDetail({
         supabase.from("live_events").select("*").eq("game_key", gameKey).order("action_number", { ascending: true }),
         supabase.from("shot_chart").select("id, action_number, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key").eq("game_key", gameKey),
       ]);
-      if (events) { setLiveEvents(events); setEventsLoaded(true); }
+      if (events) { setLiveEvents(normalizeEventPeriods(events)); setEventsLoaded(true); }
       if (shots) setShotData(shots as ShotData[]);
     } finally {
       setEventsLoading(false);
@@ -543,7 +543,7 @@ export function InlineGameDetail({
         supabase.from("shot_chart").select("id, action_number, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key").eq("game_key", gameKey),
       ]);
       if (!active) return;
-      if (events) setLiveEvents(events);
+      if (events) setLiveEvents(normalizeEventPeriods(events));
       if (shots) setShotData(shots as ShotData[]);
     };
     const tick = () => {

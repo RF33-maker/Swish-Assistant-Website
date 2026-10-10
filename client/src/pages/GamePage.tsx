@@ -7,7 +7,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
-import { periodLabel } from "@/lib/periodLabel";
+import { normalizeEventPeriods, periodLabel } from "@/lib/periodLabel";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -407,7 +407,7 @@ export default function GamePage() {
         console.error('[GamePage] live_events error:', error);
         return [];
       }
-      return data as LiveEvent[];
+      return normalizeEventPeriods(data as LiveEvent[]);
     },
     enabled: !!gameKey && !!gameData,
     refetchInterval: 5000,
