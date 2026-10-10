@@ -7,7 +7,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
-import { normalizeEventPeriods, periodLabel } from "@/lib/periodLabel";
+import { normalizeEventPeriods, normalizeShotPeriods, periodLabel } from "@/lib/periodLabel";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -430,6 +430,12 @@ export default function GamePage() {
     refetchInterval: isLiveGameStatus(normalizeGameStatus(gameData?.status)) ? 15000 : false,
     refetchIntervalInBackground: false,
   });
+
+  // Overtime shots are stored as period 1, like the plays; the plays know better.
+  const shotsByPeriod = useMemo(
+    () => normalizeShotPeriods(shotChartData ?? [], liveEvents ?? []),
+    [shotChartData, liveEvents],
+  );
 
   const [lastUpdatedText, setLastUpdatedText] = useState('');
 
@@ -1335,7 +1341,7 @@ export default function GamePage() {
 
                 <TabsContent value="shotchart" className="mt-0">
                   <TeamSplitShotChart
-                    shots={shotChartData || []}
+                    shots={shotsByPeriod}
                     loading={shotChartLoading}
                     emptyMessage="No shot data is available for this game yet."
                     homeTeam={gameData.hometeam}

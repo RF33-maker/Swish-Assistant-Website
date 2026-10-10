@@ -44,3 +44,27 @@ export function normalizeEventPeriods<T extends { period?: number | null; period
     return period === e.period ? e : { ...e, period };
   });
 }
+
+/**
+ * Give overtime shots their overtime period.
+ *
+ * shot_chart rows carry a period but no period type, so the restart at 1 can't
+ * be told from Q1 by looking at the shot alone. Each shot belongs to a play (same
+ * action_number), and the play knows. Pass events that have already been through
+ * `normalizeEventPeriods`; shots with no matching overtime play are left as they
+ * are, so a game whose events haven't loaded behaves as it did before.
+ */
+export function normalizeShotPeriods<S extends { action_number?: number | null; period?: number | null }>(
+  shots: S[],
+  events: { action_number?: number | null; period?: number | null }[],
+): S[] {
+  const overtimeByAction = new Map<number, number>();
+  for (const e of events) {
+    if (e.action_number != null && e.period != null && e.period > 4) overtimeByAction.set(e.action_number, e.period);
+  }
+  if (overtimeByAction.size === 0) return shots;
+  return shots.map((s) => {
+    const period = s.action_number != null ? overtimeByAction.get(s.action_number) : undefined;
+    return period === undefined || period === s.period ? s : { ...s, period };
+  });
+}
