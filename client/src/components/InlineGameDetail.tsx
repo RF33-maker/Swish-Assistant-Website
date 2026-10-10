@@ -665,11 +665,12 @@ export function InlineGameDetail({
     ? [periodLabel(liveClock.period, liveClock.periodType), formatLiveClock(liveClock.clock)]
         .filter(Boolean).join(" · ")
     : null;
-  const BoxScoreTable = ({ players, teamName, score, color }: { players: PlayerStat[]; teamName: string; score: number; color: string }) => (
+  const BoxScoreTable = ({ players, teamName, score, color, totals }: { players: PlayerStat[]; teamName: string; score: number; color: string; totals: TeamStatRow | null }) => (
     <SharedBoxScore
       players={players.map(linked)}
       teamName={teamName}
       teamHref={teamHref(teamName)}
+      teamTotals={totals}
       score={score}
       leagueId={leagueId ?? undefined}
       headerColor={color}
@@ -764,8 +765,8 @@ export function InlineGameDetail({
 
             {/* BOX SCORE TAB */}
             <TabsContent value="boxscore" className="mt-0 space-y-5">
-              <BoxScoreTable players={homePlayerStats} teamName={hometeam} score={homeScore} color={colors.homeFill} />
-              <BoxScoreTable players={awayPlayerStats} teamName={awayteam} score={awayScore} color={colors.awayFill} />
+              <BoxScoreTable players={homePlayerStats} teamName={hometeam} score={homeScore} color={colors.homeFill} totals={homeTeamStats} />
+              <BoxScoreTable players={awayPlayerStats} teamName={awayteam} score={awayScore} color={colors.awayFill} totals={awayTeamStats} />
             </TabsContent>
 
             {/* TEAM STATS TAB */}

@@ -1311,6 +1311,7 @@ export default function GamePage() {
                         players={homePlayerStats.map((p) => ({ ...p, href: playerHref(p) }))}
                         teamName={gameData.hometeam}
                         teamHref={teamPath(gameData.hometeam, leagueSlug)}
+                        teamTotals={homeTeamStats ?? null}
                         score={homeScore}
                         leagueId={gameData.league_id}
                         headerColor={colors.homeFill}
@@ -1320,6 +1321,7 @@ export default function GamePage() {
                         players={awayPlayerStats.map((p) => ({ ...p, href: playerHref(p) }))}
                         teamName={gameData.awayteam}
                         teamHref={teamPath(gameData.awayteam, leagueSlug)}
+                        teamTotals={awayTeamStats ?? null}
                         score={awayScore}
                         leagueId={gameData.league_id}
                         headerColor={colors.awayFill}
