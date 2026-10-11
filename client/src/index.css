@@ -543,6 +543,10 @@
   border-color: var(--ch-border-strong);
   box-shadow: 0 0 0 4px var(--ch-accent-soft);
 }
+/* Sliders (components/ui/slider) take the accent rather than the default blue. */
+.sa-pro .ch-slider .bg-secondary { background-color: var(--ch-surface-3); }
+.sa-pro .ch-slider .bg-primary { background-color: var(--ch-accent); }
+.sa-pro .ch-slider [role='slider'] { border-color: var(--ch-accent); background-color: var(--ch-surface); }
 
 /* Article body — shared by the public article page and the news editor, so
    what a writer sees while typing is what readers get. */

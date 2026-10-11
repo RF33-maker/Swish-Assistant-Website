@@ -56,7 +56,7 @@ export function CompetitionFieldSelect({
             type="button"
             tabIndex={-1}
             onClick={() => setOpen(!open)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-[color:var(--ch-muted)] hover:text-[color:var(--ch-text)]"
           >
             <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
           </button>
@@ -64,7 +64,7 @@ export function CompetitionFieldSelect({
       </div>
 
       {open && filtered.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full max-h-48 overflow-y-auto bg-white rounded-lg border border-gray-200 shadow-lg divide-y divide-gray-100">
+        <div className="absolute z-20 mt-1 max-h-48 w-full divide-y divide-[color:var(--ch-border)] overflow-y-auto rounded-[10px] border border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] shadow-[var(--ch-shadow-lg)]">
           {filtered.map((option) => (
             <button
               key={option}
@@ -73,8 +73,8 @@ export function CompetitionFieldSelect({
                 onChange(option);
                 setOpen(false);
               }}
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-50 ${
-                option === value ? "font-semibold text-orange-700" : "text-gray-700"
+              className={`w-full px-3 py-2 text-left text-sm hover:bg-[color:var(--ch-surface-3)] ${
+                option === value ? "font-semibold text-[color:var(--ch-accent)]" : "text-[color:var(--ch-text-2)]"
               }`}
             >
               {option}

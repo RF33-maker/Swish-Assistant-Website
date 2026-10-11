@@ -1,10 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, ImagePlus, Loader2, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
+import { Loader2, RotateCcw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlayerPhotoControl } from "@/components/social/PlayerPhotoControl";
+import {
+  BTN_GHOST,
+  ColourField,
+  CompetitionField,
+  ERROR,
+  FIELD,
+  Field,
+  HINT,
+  Panel,
+  RangeField,
+  readStoredCompetition,
+  rememberCompetition,
+  SaveActions,
+  SELECT_MENU,
+  Stage,
+  type CompetitionOption,
+} from "@/components/social/studioUi";
+import { photoChangeLendsTo, usePlayerPhotoChange } from "@/lib/playerPhotos";
 import { supabase } from "@/lib/supabase";
 import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
@@ -15,15 +30,6 @@ import type { LeadersResponse } from "@/types/leaders";
 
 const DEFAULT_SLUG = "nbl-division-1-2026-2027";
 const SLUG_KEY = "weekly-awards-slug";
-type CompetitionOption = { slug: string; name: string };
-
-function readStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
 
 function stripSeason(name: string): string {
   return name.replace(/\s*\(?\d{4}\s*[-/–]\s*\d{2,4}\)?\s*$/, "").trim();
@@ -36,7 +42,7 @@ function fmtShift(v: number): string {
 
 /** Player / Team league leaders: the top five in a category, with the #1 player's photo or club logo. */
 export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
-  const initialSlug = new URLSearchParams(window.location.search).get("slug") || readStored(SLUG_KEY) || DEFAULT_SLUG;
+  const initialSlug = new URLSearchParams(window.location.search).get("slug") || readStoredCompetition(SLUG_KEY) || DEFAULT_SLUG;
 
   const [competitions, setCompetitions] = useState<CompetitionOption[]>([]);
   const [slug, setSlug] = useState(initialSlug);
@@ -114,6 +120,19 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
     () => ({ leagueName: subtitle || data?.league.name || "", leagueLogoUrl, primaryHex }),
     [subtitle, data, leagueLogoUrl, primaryHex],
   );
+
+  // A photo added here or in another studio: redraw with it, keeping the category and the subtitle.
+  usePlayerPhotoChange((change) => {
+    if (kind !== "player") return;
+    const gained = (data?.leaders || []).filter((l) =>
+      photoChangeLendsTo(change, { playerId: l.id, name: l.name, hasPhoto: !!l.photoUrl }),
+    );
+    if (gained.length === 0) return;
+    const ids = new Set(gained.map((l) => l.id));
+    setData((prev) => prev && { ...prev, leaders: prev.leaders.map((l) => (ids.has(l.id) ? { ...l, photoUrl: change.url } : l)) });
+    // Framing set for the old photo wouldn't suit the new one.
+    setFraming((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !ids.has(id))));
+  });
 
   const leader = data?.leaders[0] ?? null;
   const leaderFraming = leader ? framing[leader.id] ?? DEFAULT_FRAMING : DEFAULT_FRAMING;
@@ -194,199 +213,149 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   const title = kind === "player" ? "Player leaders" : "Team leaders";
   const chooseSlug = (v: string) => {
     setSlug(v);
-    try {
-      localStorage.setItem(SLUG_KEY, v);
-    } catch {
-      // remembering the competition is a convenience only
-    }
+    rememberCompetition(SLUG_KEY, v);
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[380px_1fr]">
-      <Card className="order-2 h-fit min-w-0 border-orange-200 bg-white dark:border-orange-700 dark:bg-gray-800 lg:order-1">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-orange-900 dark:text-orange-400">{title}</CardTitle>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {kind === "player"
-              ? "The top five players in a category, with the leader's photo."
-              : "The top five teams in a category, with the leader's club logo."}
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Competition</label>
-            <Select value={slug} onValueChange={chooseSlug}>
-              <SelectTrigger className="border-orange-200 dark:border-orange-700">
-                <SelectValue placeholder="Choose a competition" />
-              </SelectTrigger>
-              <SelectContent>
-                {!competitions.some((c) => c.slug === slug) && <SelectItem value={slug}>{slug}</SelectItem>}
-                {competitions.map((c) => (
-                  <SelectItem key={c.slug} value={c.slug}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
+      <Panel
+        title={title}
+        description={
+          kind === "player"
+            ? "The top five players in a category, with the leader's photo."
+            : "The top five teams in a category, with the leader's club logo."
+        }
+        className="order-2 lg:order-1"
+        bodyClassName="space-y-4"
+      >
+        <CompetitionField value={slug} onChange={chooseSlug} competitions={competitions} />
+
+        <Field label="Category">
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger className={FIELD} data-testid="select-leader-category">
+              <SelectValue placeholder="Choose a category" />
+            </SelectTrigger>
+            <SelectContent className={SELECT_MENU}>
+              {(data?.categories ?? [{ key: "pts", label: "Points" }]).map((c) => (
+                <SelectItem key={c.key} value={c.key}>
+                  {c.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field
+          label={`Minimum games${data ? ` (auto: ${data.minGames})` : ""}`}
+          hint="Leave empty for half of the most games anyone has played. Percentage categories also need a few attempts."
+        >
+          <input
+            type="number"
+            min={1}
+            value={minGamesText}
+            placeholder={data ? String(data.minGames) : "auto"}
+            onChange={(e) => setMinGamesText(e.target.value)}
+            className={FIELD}
+            data-testid="input-min-games"
+          />
+        </Field>
+
+        <Field label="Card subtitle">
+          <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className={FIELD} />
+        </Field>
+
+        <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />
+
+        {error && <p className={ERROR}>{error}</p>}
+      </Panel>
+
+      <Panel className="order-1 lg:order-2" bodyClassName="!p-3 sm:!p-5">
+        {loading && !data ? (
+          <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-accent)]" />
           </div>
+        ) : (
+          <Stage
+            busy={rendering && !hasCard}
+            empty={
+              !hasCard && !rendering
+                ? `No ${kind === "player" ? "players" : "teams"} qualify yet. Try a lower minimum, or another category.`
+                : undefined
+            }
+          >
+            <div ref={canvasHostRef} className="w-full" />
+          </Stage>
+        )}
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="border-orange-200 dark:border-orange-700" data-testid="select-leader-category">
-                <SelectValue placeholder="Choose a category" />
-              </SelectTrigger>
-              <SelectContent>
-                {(data?.categories ?? [{ key: "pts", label: "Points" }]).map((c) => (
-                  <SelectItem key={c.key} value={c.key}>
-                    {c.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        {kind === "player" && leader && (
+          <div className="mx-auto mt-3 max-w-[640px] space-y-3">
+            <PlayerPhotoControl key={leader.id} playerId={leader.id} playerName={leader.name} photoUrl={leader.photoUrl} />
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Minimum games{data ? ` (auto: ${data.minGames})` : ""}
-            </label>
-            <Input
-              type="number"
-              min={1}
-              value={minGamesText}
-              placeholder={data ? String(data.minGames) : "auto"}
-              onChange={(e) => setMinGamesText(e.target.value)}
-              className="border-orange-200 dark:border-orange-700"
-              data-testid="input-min-games"
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              Leave empty for half of the most games anyone has played. Percentage categories also need a few attempts.
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Card subtitle</label>
-            <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className="border-orange-200 dark:border-orange-700" />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Card colour</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                value={/^#[0-9a-f]{6}$/i.test(primaryHex) ? primaryHex : "#f97316"}
-                onChange={(e) => updateColour(e.target.value)}
-                className="h-9 w-14 cursor-pointer rounded border"
-              />
-              <span className="text-xs text-gray-500">{colorOverride ? "Custom (saved for this competition)" : "From the league logo"}</span>
-              {colorOverride && (
-                <button className="text-xs text-orange-700 underline" onClick={resetColour}>
-                  Reset
-                </button>
-              )}
-            </div>
-          </div>
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </CardContent>
-      </Card>
-
-      <Card className="order-1 min-w-0 border-orange-200 bg-white dark:border-orange-700 dark:bg-gray-800 lg:order-2">
-        <CardContent className="p-2 sm:p-4">
-          {loading && !data ? (
-            <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-            </div>
-          ) : (
-            <div className="relative mx-auto max-w-[640px]">
-              <div ref={canvasHostRef} className="w-full overflow-hidden rounded-lg" />
-              {rendering && !hasCard && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                  <Loader2 className="h-6 w-6 animate-spin text-white" />
+            {leader.photoUrl && (
+              <div className="ch-tile space-y-3 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-[color:var(--ch-text)]">Photo framing</p>
+                    <p className={HINT}>Adjusts the card only. The photo always fills its panel.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFraming((prev) => ({ ...prev, [leader.id]: undefined }))}
+                    disabled={!framing[leader.id]}
+                    className={`${BTN_GHOST} flex-none`}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Reset
+                  </button>
                 </div>
-              )}
-              {!hasCard && !rendering && (
-                <p className="py-10 text-center text-sm text-gray-500">
-                  No {kind === "player" ? "players" : "teams"} qualify yet. Try a lower minimum, or another category.
-                </p>
-              )}
-            </div>
-          )}
-
-          {kind === "player" && leader?.photoUrl && (
-            <div className="mx-auto mt-3 max-w-[640px] space-y-3 rounded-lg border border-orange-200 bg-orange-50/60 p-3 dark:border-orange-800 dark:bg-orange-950/20">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{leader.name}'s photo</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Adjusts the card only. The photo always fills its panel.
-                  </p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <RangeField
+                    label="Zoom"
+                    display={`${Math.round(leaderFraming.zoom * 100)}%`}
+                    min={1}
+                    max={3}
+                    step={0.05}
+                    value={leaderFraming.zoom}
+                    onChange={(v) => adjust({ zoom: v })}
+                  />
+                  <RangeField
+                    label="Left ↔ Right"
+                    display={fmtShift(leaderFraming.x)}
+                    min={-50}
+                    max={50}
+                    step={1}
+                    value={leaderFraming.x}
+                    onChange={(v) => adjust({ x: v })}
+                  />
+                  <RangeField
+                    label="Up ↔ Down"
+                    display={fmtShift(leaderFraming.y)}
+                    min={-50}
+                    max={50}
+                    step={1}
+                    value={leaderFraming.y}
+                    onChange={(v) => adjust({ y: v })}
+                  />
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setFraming((prev) => ({ ...prev, [leader.id]: undefined }))}
-                  disabled={!framing[leader.id]}
-                  className="h-8 flex-none gap-1.5"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Reset
-                </Button>
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                  <span className="flex justify-between">
-                    Zoom <span className="tabular-nums text-gray-500">{Math.round(leaderFraming.zoom * 100)}%</span>
-                  </span>
-                  <Slider min={1} max={3} step={0.05} value={[leaderFraming.zoom]} onValueChange={([v]) => adjust({ zoom: v })} />
-                </label>
-                <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                  <span className="flex justify-between">
-                    Left ↔ Right <span className="tabular-nums text-gray-500">{fmtShift(leaderFraming.x)}</span>
-                  </span>
-                  <Slider min={-50} max={50} step={1} value={[leaderFraming.x]} onValueChange={([v]) => adjust({ x: v })} />
-                </label>
-                <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                  <span className="flex justify-between">
-                    Up ↔ Down <span className="tabular-nums text-gray-500">{fmtShift(leaderFraming.y)}</span>
-                  </span>
-                  <Slider min={-50} max={50} step={1} value={[leaderFraming.y]} onValueChange={([v]) => adjust({ y: v })} />
-                </label>
-              </div>
-            </div>
-          )}
-
-          <div className="mx-auto mt-3 max-w-[640px] space-y-2">
-            {canShareFiles ? (
-              <>
-                <Button
-                  onClick={saveToPhotos}
-                  disabled={!shareFile || rendering}
-                  className="w-full bg-orange-500 text-white hover:bg-orange-600"
-                  data-testid="button-save-to-photos"
-                >
-                  <ImagePlus className="mr-2 h-4 w-4" />
-                  Save to Photos
-                </Button>
-                <p className="text-center text-xs text-gray-500 dark:text-gray-400">Tap Save Image in the menu that opens.</p>
-                <Button onClick={download} disabled={!hasCard || rendering || downloading} variant="outline" className="w-full">
-                  {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Download file
-                </Button>
-              </>
-            ) : (
-              <Button onClick={download} disabled={!hasCard || rendering || downloading} className="w-full bg-orange-500 text-white hover:bg-orange-600">
-                {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Download PNG
-              </Button>
             )}
-            <p className="text-center text-xs text-gray-500 dark:text-gray-400">
-              {data ? `Based on ${data.gamesCounted} game${data.gamesCounted === 1 ? "" : "s"} · ` : ""}Card size: 1080×1350px (Instagram portrait)
-            </p>
           </div>
-        </CardContent>
-      </Card>
+        )}
+
+        <div className="mx-auto mt-3 max-w-[640px] space-y-2">
+          <SaveActions
+            canShare={canShareFiles}
+            onSave={saveToPhotos}
+            saveDisabled={!shareFile || rendering}
+            onDownload={download}
+            downloadDisabled={!hasCard || rendering || downloading}
+            downloading={downloading}
+          />
+          <p className={`text-center ${HINT}`}>
+            {data ? `Based on ${data.gamesCounted} game${data.gamesCounted === 1 ? "" : "s"} · ` : ""}Card size: 1080×1350px (Instagram portrait)
+          </p>
+        </div>
+      </Panel>
     </div>
   );
 }

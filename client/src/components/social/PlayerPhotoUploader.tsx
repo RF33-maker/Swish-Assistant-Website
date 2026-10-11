@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ImagePlus, Loader2, Search, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Upload, User, Loader2, Search } from "lucide-react";
+import { playerPhotoUrl, usePlayerPhotoChange } from "@/lib/playerPhotos";
+import { PlayerPhotoControl } from "./PlayerPhotoControl";
+import { FIELD, Field, HINT, Panel } from "./studioUi";
 
 type PlayerOption = {
   id: string;
@@ -11,40 +11,44 @@ type PlayerOption = {
   team: string | null;
   allTeams: string[];
   photo_path: string | null;
+  // Every record sharing this name, so a photo added from a card (which
+  // names one record) is recognised here too.
+  recordIds: string[];
 };
 
+/**
+ * Give any player a photo without going through a card: find them by name or
+ * club, then add, replace or pick from what is already on file. The photo
+ * links to all of their records and every open studio redraws with it.
+ */
 export function PlayerPhotoUploader() {
   const [players, setPlayers] = useState<PlayerOption[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerOption | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
   const [loadingPlayers, setLoadingPlayers] = useState(true);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [currentPhotoUrl, setCurrentPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const loadPlayers = async () => {
       setLoadingPlayers(true);
-      
+
       // Fetch all players using pagination to bypass the 1000 row limit
       let allPlayers: any[] = [];
       let page = 0;
       const pageSize = 1000;
       let hasMore = true;
-      
+
       while (hasMore) {
         const { data, error } = await supabase
           .from("players")
           .select("id, full_name, team_name, photo_path, created_at")
           .order("full_name", { ascending: true })
           .range(page * pageSize, (page + 1) * pageSize - 1);
-        
+
         if (error) {
           console.error("Error loading players:", error);
           break;
         }
-        
+
         if (data && data.length > 0) {
           allPlayers = [...allPlayers, ...data];
           hasMore = data.length === pageSize;
@@ -80,12 +84,13 @@ export function PlayerPhotoUploader() {
           team: teams[0] || null,
           allTeams: teams,
           photo_path: withPhoto?.photo_path || null,
+          recordIds: rows.map((r) => r.id as string),
         };
       });
-      
+
       // Sort by name
       mapped.sort((a, b) => a.name.localeCompare(b.name));
-      
+
       setPlayers(mapped);
       setLoadingPlayers(false);
     };
@@ -103,274 +108,123 @@ export function PlayerPhotoUploader() {
     ).slice(0, 20);
   }, [players, searchQuery]);
 
-  const handleSelectPlayer = async (player: PlayerOption) => {
+  const handleSelectPlayer = (player: PlayerOption) => {
     setSelectedPlayer(player);
     setSearchQuery(player.name);
-    
-    // If player has a photo_path stored, use it directly
-    if (player.photo_path) {
-      const { data } = supabase.storage
-        .from("player-photos")
-        .getPublicUrl(player.photo_path);
-      setCurrentPhotoUrl(data.publicUrl);
-    } else {
-      // Fallback: check storage directly
-      const { data: existingPhoto } = await supabase.storage
-        .from("player-photos")
-        .list(player.id);
-      
-      if (existingPhoto && existingPhoto.length > 0) {
-        const { data } = supabase.storage
-          .from("player-photos")
-          .getPublicUrl(`${player.id}/${existingPhoto[0].name}`);
-        setCurrentPhotoUrl(data.publicUrl);
-      } else {
-        setCurrentPhotoUrl(null);
-      }
-    }
   };
 
-  const handleUpload = async () => {
-    if (!selectedPlayer || !file) {
-      setMessage({ type: "error", text: "Select a player and a file first." });
-      return;
-    }
-
-    setLoading(true);
-    setMessage(null);
-
-    try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const filePath = `${selectedPlayer.id}/primary.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("player-photos")
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      // Step 1: Check if this player belongs to a canonical identity group.
-      // If so, sync the photo to ALL linked records via the identity API.
-      let syncedViaIdentity = false;
-      let totalSynced = 1;
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
-        if (token) {
-          const identityRes = await fetch(`/api/player-identities/for-player/${selectedPlayer.id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (identityRes.ok) {
-            const { identity } = await identityRes.json();
-            if (identity?.id) {
-              const syncRes = await fetch(`/api/player-identities/${identity.id}/sync-photo`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ photoPath: filePath }),
-              });
-              if (!syncRes.ok) {
-                const errJson = await syncRes.json().catch(() => ({}));
-                throw new Error(errJson.error || `Photo sync failed (${syncRes.status})`);
-              }
-              syncedViaIdentity = true;
-              totalSynced = identity.playerIds?.length || 1;
-            }
-          }
-        }
-      } catch (identityErr) {
-        console.warn("[PlayerPhotoUploader] Identity sync skipped:", identityErr);
-      }
-
-      // Step 2: Fallback — update all records sharing this name (exact ilike match).
-      // This covers players not yet in an identity group.
-      if (!syncedViaIdentity) {
-        const nameLower = selectedPlayer.name.toLowerCase().trim();
-        const { data: allMatches, error: fetchErr } = await supabase
-          .from("players")
-          .select("id")
-          .ilike("full_name", nameLower);
-        if (fetchErr) console.warn("Could not fetch duplicate player records:", fetchErr);
-
-        const idsToUpdate = allMatches && allMatches.length > 0
-          ? allMatches.map((r: { id: string }) => r.id)
-          : [selectedPlayer.id];
-
-        const { error: updateError } = await supabase
-          .from("players")
-          .update({ photo_path: filePath })
-          .in("id", idsToUpdate);
-
-        if (updateError) {
-          console.error("Failed to update photo_path:", updateError);
-          throw updateError;
-        }
-        totalSynced = idsToUpdate.length;
-      }
-
-      setMessage({
-        type: "success",
-        text: `Photo uploaded and synced to ${totalSynced} player record${totalSynced !== 1 ? "s" : ""}${syncedViaIdentity ? " via identity group" : ""}.`,
-      });
-
-      const { data } = supabase.storage
-        .from("player-photos")
-        .getPublicUrl(filePath);
-      setCurrentPhotoUrl(data.publicUrl);
-    } catch (err: any) {
-      console.error(err);
-      setMessage({ type: "error", text: `Upload failed: ${err.message ?? "unknown error"}` });
-    } finally {
-      setLoading(false);
-    }
+  const clearSelection = () => {
+    setSelectedPlayer(null);
+    setSearchQuery("");
   };
+
+  // Wherever the photo was changed (here, or on a card in one of the studios), keep this list in step.
+  usePlayerPhotoChange((change) => {
+    const reached = (p: PlayerOption) => p.recordIds.some((id) => change.playerIds.includes(id));
+    setPlayers((prev) => prev.map((p) => (reached(p) ? { ...p, photo_path: change.path } : p)));
+    setSelectedPlayer((prev) => (prev && reached(prev) ? { ...prev, photo_path: change.path } : prev));
+  });
 
   return (
-    <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
-          <User className="h-5 w-5" />
-          Assign Player Photo
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {loadingPlayers ? (
-          <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-          </div>
-        ) : players.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-            No players found in database
-          </p>
-        ) : (
-          <>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Search Player ({players.length} available)
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  type="text"
-                  placeholder="Type player name..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    if (selectedPlayer && e.target.value !== selectedPlayer.name) {
-                      setSelectedPlayer(null);
-                      setCurrentPhotoUrl(null);
-                    }
-                  }}
-                  className="pl-10 border-gray-200 dark:border-gray-600"
-                  data-testid="input-player-search"
-                />
-              </div>
-              
-              {searchQuery && !selectedPlayer && filteredPlayers.length > 0 && (
-                <div className="border border-gray-200 dark:border-gray-600 rounded-md max-h-48 overflow-y-auto bg-white dark:bg-gray-800">
-                  {filteredPlayers.map((p, idx) => (
-                    <button
-                      key={p.id}
-                      onClick={() => handleSelectPlayer(p)}
-                      className="w-full text-left px-3 py-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                      data-testid={`option-player-${idx}`}
-                    >
-                      <div className="font-medium text-gray-900 dark:text-white">{p.name}</div>
+    <Panel
+      title="Player photos"
+      icon={ImagePlus}
+      description="Find any player and add, replace or switch their photo. It links to all of their records, and cards you have open redraw by themselves."
+      bodyClassName="space-y-4"
+    >
+      {loadingPlayers ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-accent)]" />
+        </div>
+      ) : players.length === 0 ? (
+        <p className="py-4 text-center text-sm text-[color:var(--ch-text-2)]">No players found in database</p>
+      ) : (
+        <>
+          <Field label={`Search player (${players.length.toLocaleString()} available)`}>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--ch-muted)]" />
+              <input
+                type="text"
+                placeholder="Type a player or club name..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (selectedPlayer && e.target.value !== selectedPlayer.name) setSelectedPlayer(null);
+                }}
+                className={`${FIELD} pl-9 ${searchQuery ? "pr-9" : ""}`}
+                data-testid="input-player-search"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[color:var(--ch-muted)] hover:text-[color:var(--ch-text)]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {searchQuery && !selectedPlayer && filteredPlayers.length > 0 && (
+              <div className="ch-tile max-h-64 divide-y divide-[color:var(--ch-border)] overflow-y-auto">
+                {filteredPlayers.map((p, idx) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleSelectPlayer(p)}
+                    className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[color:var(--ch-surface-3)]"
+                    data-testid={`option-player-${idx}`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-[color:var(--ch-text)]">{p.name}</span>
                       {p.team && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <span className="block truncate text-xs text-[color:var(--ch-muted)]">
                           {p.team}
                           {p.allTeams.length > 1 && ` · also ${p.allTeams.slice(1).join(", ")}`}
-                        </div>
+                        </span>
                       )}
-                    </button>
-                  ))}
-                </div>
-              )}
-              
-              {searchQuery && !selectedPlayer && filteredPlayers.length === 0 && (
-                <p className="text-sm text-gray-500 dark:text-gray-400">No players found</p>
-              )}
-              
-              {selectedPlayer && (
-                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-md px-3 py-2">
-                  <div className="font-medium text-orange-900 dark:text-orange-300">{selectedPlayer.name}</div>
-                  {selectedPlayer.team && <div className="text-xs text-orange-700 dark:text-orange-400">{selectedPlayer.team}</div>}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Photo File
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-sm text-gray-600 dark:text-gray-300
-                  file:mr-4 file:py-2 file:px-4
-                  file:rounded-md file:border-0
-                  file:text-sm file:font-semibold
-                  file:bg-orange-100 file:text-orange-700
-                  dark:file:bg-orange-900/30 dark:file:text-orange-400
-                  hover:file:bg-orange-200 dark:hover:file:bg-orange-900/50
-                  cursor-pointer"
-                data-testid="input-player-photo"
-              />
-            </div>
-
-            <Button
-              onClick={handleUpload}
-              disabled={loading || !selectedPlayer || !file}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-              data-testid="button-upload-photo"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload & Link
-                </>
-              )}
-            </Button>
-
-            {currentPhotoUrl && (
-              <div className="space-y-2 pt-2 border-t border-gray-200 dark:border-gray-600">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Current Photo:
-                </p>
-                <img
-                  src={currentPhotoUrl}
-                  alt="Current player"
-                  className="h-32 w-32 rounded-lg object-cover border border-gray-200 dark:border-gray-600"
-                  data-testid="img-current-photo"
-                  onError={(e) => {
-                    console.error("[PlayerPhotoUploader] Image failed to load:", currentPhotoUrl);
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-                <p className="text-xs text-gray-400 break-all">{currentPhotoUrl}</p>
+                    </span>
+                    {!p.photo_path && (
+                      <span className="flex-none rounded-full bg-[color:var(--ch-surface-3)] px-2 py-0.5 text-[10.5px] font-semibold text-[color:var(--ch-text-2)]">
+                        No photo
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
             )}
 
-            {message && (
-              <p
-                className={`text-sm ${
-                  message.type === "success"
-                    ? "text-green-600 dark:text-green-400"
-                    : "text-red-600 dark:text-red-400"
-                }`}
-                data-testid="text-upload-message"
-              >
-                {message.text}
-              </p>
+            {searchQuery && !selectedPlayer && filteredPlayers.length === 0 && (
+              <p className={HINT}>No players found</p>
             )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </Field>
+
+          {selectedPlayer ? (
+            <div className="space-y-2">
+              {selectedPlayer.team && (
+                <p className={HINT}>
+                  {selectedPlayer.team}
+                  {selectedPlayer.allTeams.length > 1 && ` · also ${selectedPlayer.allTeams.slice(1).join(", ")}`}
+                </p>
+              )}
+              <PlayerPhotoControl
+                key={selectedPlayer.id}
+                playerId={selectedPlayer.id}
+                playerName={selectedPlayer.name}
+                photoUrl={selectedPlayer.photo_path ? playerPhotoUrl(selectedPlayer.photo_path) : null}
+                showAllOnFile
+              />
+            </div>
+          ) : (
+            !searchQuery && (
+              <p className={HINT}>
+                Making a card? You can also add a photo right under its preview, without coming here.
+              </p>
+            )
+          )}
+        </>
+      )}
+    </Panel>
   );
 }
