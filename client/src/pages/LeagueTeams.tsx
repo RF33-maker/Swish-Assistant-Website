@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import { BarChart3, Eye, Loader2, Star, Users } from "lucide-react";
+import AdminPageShell, { AdminPageNotice } from "@/components/layout/AdminPageShell";
+import { BTN_PRIMARY, TALL } from "@/components/layout/proUi";
 import { TeamLogo } from "@/components/TeamLogo";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import React from "react";
@@ -42,48 +44,12 @@ interface Team {
   avgTeamPoints: number;
 }
 
-interface Suggestion {
-  name: string;
-  slug: string;
-}
-
 export default function LeagueTeams() {
   const { slug } = useParams();
   const [location, navigate] = useLocation();
   const [league, setLeague] = useState<League | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (search.trim().length === 0) {
-        setSuggestions([]);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("competitions")
-        .select("name, slug")
-        .ilike("name", `%${search}%`)
-        .eq("is_public", true)
-        .limit(5);
-
-      if (!error) {
-        setSuggestions(data || []);
-      }
-    };
-
-    const delay = setTimeout(fetchSuggestions, 300);
-    return () => clearTimeout(delay);
-  }, [search]);
-
-  const handleSearch = () => {
-    if (search.trim()) {
-      navigate(`/competition/${search}`);
-    }
-  };
 
   useEffect(() => {
     const fetchLeagueAndTeams = async () => {
@@ -253,228 +219,131 @@ export default function LeagueTeams() {
     fetchLeagueAndTeams();
   }, [slug]);
 
+  const back = { href: `/competition/${slug}`, label: "Back to league" };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading teams...</p>
-        </div>
-      </div>
+      <AdminPageShell title="League teams" eyebrow="League admin" back={back} width="max-w-7xl">
+        <AdminPageNotice>
+          <Loader2 className="mx-auto mb-3 h-7 w-7 animate-spin text-[color:var(--ch-accent)]" />
+          Loading teams...
+        </AdminPageNotice>
+      </AdminPageShell>
     );
   }
 
   if (!league) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">League Not Found</h1>
-          <p className="text-slate-600 mb-4">The league you're looking for doesn't exist.</p>
-          <button
-            onClick={() => navigate("/")}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg"
-          >
+      <AdminPageShell title="League not found" eyebrow="League admin" back={{ href: "/", label: "Home" }} width="max-w-7xl">
+        <AdminPageNotice>
+          <p>The league you're looking for doesn't exist.</p>
+          <button type="button" onClick={() => navigate("/")} className={`${BTN_PRIMARY} mt-4`}>
             Go Home
           </button>
-        </div>
-      </div>
+        </AdminPageNotice>
+      </AdminPageShell>
     );
   }
 
+  const subheading = "mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[color:var(--ch-text)]";
+
   return (
-    <div className="min-h-screen bg-[#fffaf1]">
-      <header className="bg-white shadow-sm sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img
-            src={SwishLogo}
-            alt="Swish Assistant"
-            className="h-9 cursor-pointer"
-            onClick={() => navigate("/")}
-          />
-        </div>
-
-        <div className="relative w-full max-w-md mx-6">
-          <input
-            type="text"
-            placeholder="Find your league"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="w-full px-4 py-2 border border-gray-300 rounded-full text-sm"
-          />
-          <button
-            onClick={handleSearch}
-            className="absolute right-0 top-0 h-full px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm"
-          >
-            Go
-          </button>
-
-          {suggestions.length > 0 && (
-            <ul className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-              {suggestions.map((item, index) => (
-                <li
-                  key={index}
-                  onClick={() => {
-                    setSearch("");
-                    setSuggestions([]);
-                    navigate(`/competition/${item.slug}`);
-                  }}
-                  className="px-4 py-2 cursor-pointer hover:bg-orange-100 text-left text-slate-800"
-                >
-                  {item.name}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="flex gap-4 text-sm">
-          <button
-            onClick={() => navigate("/")}
-            className="text-slate-600 hover:text-orange-500"
-          >
-            Home
-          </button>
-          <button
-            onClick={() => navigate(`/competition/${slug}`)}
-            className="text-slate-600 hover:text-orange-500"
-          >
-            Back to League
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        {/* League Header */}
-        <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-8 text-white mb-8">
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 bg-white/20 rounded-xl flex items-center justify-center border-2 border-white/30">
-              <div className="text-center">
-                <div className="text-3xl font-bold">{league.name.charAt(0)}</div>
-                <div className="text-sm opacity-75">LOGO</div>
-              </div>
-            </div>
-            
-            <div className="flex-1">
-              <h1 className="text-4xl font-bold mb-2">{league.name}</h1>
-              <p className="text-lg opacity-90 mb-2">
-                Organised by {league.organiser_name || "BallParkSports"}
-              </p>
-              <div className="text-lg opacity-90">
-                {teams.length} Teams • {teams.reduce((sum, team) => sum + team.totalGames, 0)} Total Games
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Teams Grid */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-slate-800 mb-6">League Teams</h2>
-          
-          {teams.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {teams.map((team, index) => (
-                <div key={team.name} className="bg-white rounded-xl shadow hover:shadow-lg transition-shadow border border-gray-200 overflow-hidden">
-                  {/* Team Header */}
-                  <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-6 text-white">
-                    <div className="flex items-center gap-4">
-                      {/* Team Logo */}
-                      <TeamLogo 
-                        teamName={team.name} 
-                        leagueId={league.league_id} 
-                        size="lg" 
-                        className="border-2 border-white/30" 
-                      />
-                      
-                      {/* Team Info */}
-                      <div className="flex-1">
-                        <h3 className="text-2xl font-bold mb-2">{team.name}</h3>
-                        <div className="text-sm opacity-90 space-y-1">
-                          <div>{team.roster.length} Players • {team.totalGames} Games</div>
-                          <div>Team Average: <span className="font-bold">{team.avgTeamPoints} PPG</span></div>
-                        </div>
-                      </div>
-                    </div>
+    <AdminPageShell
+      title={league.name}
+      eyebrow="League teams"
+      back={back}
+      width="max-w-7xl"
+      description={
+        <>
+          Organised by {league.organiser_name || "BallParkSports"} · {teams.length} Teams •{" "}
+          {teams.reduce((sum, team) => sum + team.totalGames, 0)} Total Games
+        </>
+      }
+    >
+      {/* Teams Grid */}
+      {teams.length > 0 ? (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {teams.map((team) => (
+            <div key={team.name} className="ch-card ch-hover overflow-hidden">
+              {/* Team Header */}
+              <div className="flex items-center gap-4 border-b border-[color:var(--ch-border)] p-4 sm:p-5">
+                <TeamLogo teamName={team.name} leagueId={league.league_id} size="lg" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="ch-display truncate text-[1.5rem] font-bold uppercase leading-none tracking-tight text-[color:var(--ch-text)]">
+                    {team.name}
+                  </h3>
+                  <div className="mt-1.5 text-[13px] text-[color:var(--ch-text-2)]">
+                    {team.roster.length} Players • {team.totalGames} Games · Team Average:{" "}
+                    <span className="ch-num font-semibold text-[color:var(--ch-text)]">{team.avgTeamPoints} PPG</span>
                   </div>
+                </div>
+              </div>
 
-                  {/* Team Content */}
-                  <div className="p-6 space-y-4">
-                    {/* Top Player & Team Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Top Player */}
-                      {team.topPlayer && (
-                        <div>
-                          <h4 className="font-semibold text-slate-800 mb-3 text-sm flex items-center gap-2">
-                            <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                            </svg>
-                            Top Player
-                          </h4>
-                          <div className="bg-gray-50 border border-orange-100 rounded-lg p-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                {team.topPlayer.name.charAt(0)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-bold text-slate-800 text-sm truncate">{team.topPlayer.name}</div>
-                                <div className="text-xs text-slate-600">{team.topPlayer.position}</div>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-bold text-orange-600 text-sm">{team.topPlayer.avgPoints}</div>
-                                <div className="text-xs text-slate-500">PPG</div>
-                              </div>
-                            </div>
-                          </div>
+              {/* Team Content */}
+              <div className="space-y-4 p-4 sm:p-5">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {/* Top Player */}
+                  {team.topPlayer && (
+                    <div>
+                      <h4 className={subheading}>
+                        <Star className="h-4 w-4 text-[color:var(--ch-accent)]" />
+                        Top Player
+                      </h4>
+                      <div className="ch-tile flex items-center gap-3 p-3">
+                        <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-[color:var(--ch-accent-soft)] text-sm font-bold text-[color:var(--ch-accent)]">
+                          {team.topPlayer.name.charAt(0)}
                         </div>
-                      )}
-
-                      {/* Recent Form */}
-                      <div>
-                        <h4 className="font-semibold text-slate-800 mb-3 text-sm flex items-center gap-2">
-                          <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
-                          Recent Games
-                        </h4>
-                        <div className="space-y-2">
-                          {team.recentGames.slice(0, 3).map((game, idx) => (
-                            <div key={idx} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
-                              <span className="text-slate-700">vs {game.opponent}</span>
-                              <span className="font-bold text-orange-600">{game.totalPoints} PTS</span>
-                            </div>
-                          ))}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold text-[color:var(--ch-text)]">{team.topPlayer.name}</div>
+                          <div className="text-xs text-[color:var(--ch-text-2)]">{team.topPlayer.position}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="ch-num text-sm font-bold text-[color:var(--ch-accent)]">{team.topPlayer.avgPoints}</div>
+                          <div className="text-xs text-[color:var(--ch-muted)]">PPG</div>
                         </div>
                       </div>
                     </div>
+                  )}
 
-                    {/* View Full Profile Button */}
-                    <div className="pt-4 border-t border-gray-100">
-                      <button 
-                        onClick={() => navigate(teamPath(team.name, slug) || `/team/${encodeURIComponent(team.name)}`)}
-                        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        View Full Team Profile
-                      </button>
+                  {/* Recent Form */}
+                  <div>
+                    <h4 className={subheading}>
+                      <BarChart3 className="h-4 w-4 text-[color:var(--ch-accent)]" />
+                      Recent Games
+                    </h4>
+                    <div className="space-y-2">
+                      {team.recentGames.slice(0, 3).map((game, idx) => (
+                        <div key={idx} className="ch-tile flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                          <span className="min-w-0 truncate text-[color:var(--ch-text-2)]">vs {game.opponent}</span>
+                          <span className="ch-num flex-none font-bold text-[color:var(--ch-accent)]">{game.totalPoints} PTS</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
-              ))}
+
+                {/* View Full Profile Button */}
+                <div className="border-t border-[color:var(--ch-border)] pt-4">
+                  <button
+                    type="button"
+                    onClick={() => navigate(teamPath(team.name, slug) || `/team/${encodeURIComponent(team.name)}`)}
+                    className={`${BTN_PRIMARY} ${TALL} w-full`}
+                  >
+                    <Eye className="h-4 w-4" />
+                    View Full Team Profile
+                  </button>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-              <svg className="w-20 h-20 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <h3 className="text-2xl font-medium text-gray-900 mb-2">No Teams Found</h3>
-              <p className="text-gray-600">Teams will appear here once player data is available for this league.</p>
-            </div>
-          )}
+          ))}
         </div>
-      </main>
-    </div>
+      ) : (
+        <AdminPageNotice>
+          <Users className="mx-auto mb-3 h-10 w-10 text-[color:var(--ch-muted)]" />
+          <h3 className="text-base font-semibold text-[color:var(--ch-text)]">No Teams Found</h3>
+          <p className="mt-1">Teams will appear here once player data is available for this league.</p>
+        </AdminPageNotice>
+      )}
+    </AdminPageShell>
   );
 }

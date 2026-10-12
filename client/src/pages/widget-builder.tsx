@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check, Code, BarChart3, Users, Trophy, Gamepad2, BookOpen } from "lucide-react";
+import { Copy, Check, Code, BarChart3, Users, Trophy, Gamepad2, BookOpen } from "lucide-react";
+import AdminPageShell from "@/components/layout/AdminPageShell";
+import { BTN_GHOST, BTN_PRIMARY, FIELD, Field, HINT, TALL } from "@/components/layout/proUi";
 import {
   type WidgetParams,
   type WidgetType,
@@ -37,7 +37,6 @@ const WIDGET_TYPES: Array<{ value: WidgetType; label: string; icon: typeof BarCh
 ];
 
 export default function WidgetBuilder() {
-  const [, navigate] = useLocation();
   const [copied, setCopied] = useState(false);
 
   const [embedMode, setEmbedMode] = useState<'fixed' | 'responsive'>('fixed');
@@ -46,11 +45,11 @@ export default function WidgetBuilder() {
   const [leagueSlug, setLeagueSlug] = useState('');
   const [playerId, setPlayerId] = useState('');
   const [teamName, setTeamName] = useState('');
-  const [primaryColor, setPrimaryColor] = useState(WIDGET_DEFAULTS.primaryColor);
-  const [accentColor, setAccentColor] = useState(WIDGET_DEFAULTS.accentColor);
-  const [bgColor, setBgColor] = useState(WIDGET_DEFAULTS.bgColor);
-  const [font, setFont] = useState(WIDGET_DEFAULTS.font);
-  const [borderRadius, setBorderRadius] = useState(WIDGET_DEFAULTS.borderRadius);
+  const [primaryColor, setPrimaryColor] = useState<string>(WIDGET_DEFAULTS.primaryColor);
+  const [accentColor, setAccentColor] = useState<string>(WIDGET_DEFAULTS.accentColor);
+  const [bgColor, setBgColor] = useState<string>(WIDGET_DEFAULTS.bgColor);
+  const [font, setFont] = useState<string>(WIDGET_DEFAULTS.font);
+  const [borderRadius, setBorderRadius] = useState<number>(WIDGET_DEFAULTS.borderRadius);
   const [layout, setLayout] = useState<WidgetLayoutType>(WIDGET_DEFAULTS.layout);
   const [customWidth, setCustomWidth] = useState<number | null>(null);
   const [customHeight, setCustomHeight] = useState<number | null>(null);
@@ -220,322 +219,293 @@ export default function WidgetBuilder() {
   const needsPlayer = widgetType === 'player-stats';
   const hasRequiredData = needsPlayer ? (!!playerId && !!leagueId) : !!leagueId;
 
-  const labelStyle = "text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1 block";
-  const inputStyle = "w-full px-3 py-2 border border-orange-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white";
+  const choice = (active: boolean) =>
+    `rounded-[10px] border text-left transition-colors ${
+      active
+        ? "border-[color:var(--ch-accent)] bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-text)]"
+        : "border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)] text-[color:var(--ch-text-2)] hover:border-[color:var(--ch-border-strong)]"
+    }`;
+  const colourField = (label: string, value: string, set: (v: string) => void) => (
+    <Field label={label}>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value}
+          onChange={e => set(e.target.value)}
+          aria-label={`${label} colour`}
+          className="h-9 w-9 flex-none cursor-pointer rounded-lg border border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] p-0.5"
+        />
+        <input type="text" value={value} onChange={e => set(e.target.value)} className={`${FIELD} !h-9 min-w-0 !px-2 !text-xs`} />
+      </div>
+    </Field>
+  );
+  const step = (n: number) => (
+    <span className="ch-num flex h-5 w-5 flex-none items-center justify-center rounded-full bg-[color:var(--ch-accent-soft)] text-[11px] font-bold text-[color:var(--ch-accent)]">
+      {n}
+    </span>
+  );
+  const heading = "flex items-center gap-2 text-sm font-semibold text-[color:var(--ch-text)]";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-orange-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        <div className="flex items-center justify-between mb-6">
-          <Button
-            variant="outline"
-            onClick={() => navigate("/dashboard")}
-            className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Dashboard
-          </Button>
-          <div className="flex items-center gap-2">
-            <Code className="h-5 w-5 text-orange-600" />
-            <h1 className="text-xl font-bold text-slate-900">Widget Builder</h1>
-          </div>
-          <a
-            href="/embed"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-sm font-medium text-orange-700 hover:text-orange-900"
-          >
-            <BookOpen className="h-4 w-4" />
-            Embed guide
-          </a>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-2 space-y-5">
-            <div className="bg-white rounded-xl border border-orange-100 shadow-sm p-5 space-y-4">
-              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">1</span>
-                Widget Type
-              </h2>
-              <div className="grid grid-cols-2 gap-2">
-                {WIDGET_TYPES.map(wt => {
-                  const Icon = wt.icon;
-                  const active = widgetType === wt.value;
-                  return (
-                    <button
-                      key={wt.value}
-                      onClick={() => setWidgetType(wt.value)}
-                      className={`flex flex-col items-start gap-1 p-3 rounded-lg border-2 text-left transition-all ${
-                        active
-                          ? 'border-orange-500 bg-orange-50 shadow-sm'
-                          : 'border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/30'
-                      }`}
-                    >
-                      <Icon className={`h-4 w-4 ${active ? 'text-orange-600' : 'text-slate-400'}`} />
-                      <span className={`text-xs font-semibold ${active ? 'text-orange-800' : 'text-slate-700'}`}>{wt.label}</span>
-                      <span className="text-[10px] text-slate-400 leading-tight">{wt.desc}</span>
-                    </button>
-                  );
-                })}
-              </div>
+    <AdminPageShell
+      title="Widget builder"
+      description="Build an embeddable widget for standings, player stats, scores or league leaders, then copy its code."
+      width="max-w-7xl"
+      actions={
+        <a href="/embed" target="_blank" rel="noopener noreferrer" className={BTN_GHOST}>
+          <BookOpen className="h-4 w-4" />
+          Embed guide
+        </a>
+      }
+    >
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-5">
+        <div className="space-y-4 lg:col-span-2">
+          <section className="ch-card space-y-4 p-4 sm:p-5">
+            <h2 className={heading}>
+              {step(1)}
+              Widget Type
+            </h2>
+            <div className="grid grid-cols-2 gap-2">
+              {WIDGET_TYPES.map(wt => {
+                const Icon = wt.icon;
+                const active = widgetType === wt.value;
+                return (
+                  <button
+                    key={wt.value}
+                    type="button"
+                    onClick={() => setWidgetType(wt.value)}
+                    aria-pressed={active}
+                    className={`${choice(active)} flex flex-col items-start gap-1 p-3`}
+                  >
+                    <Icon className={`h-4 w-4 ${active ? 'text-[color:var(--ch-accent)]' : 'text-[color:var(--ch-muted)]'}`} />
+                    <span className="text-xs font-semibold text-[color:var(--ch-text)]">{wt.label}</span>
+                    <span className="text-[10.5px] leading-tight text-[color:var(--ch-muted)]">{wt.desc}</span>
+                  </button>
+                );
+              })}
             </div>
+          </section>
 
-            <div className="bg-white rounded-xl border border-orange-100 shadow-sm p-5 space-y-4">
-              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">2</span>
-                Data Source
-              </h2>
+          <section className="ch-card space-y-4 p-4 sm:p-5">
+            <h2 className={heading}>
+              {step(2)}
+              Data Source
+            </h2>
 
-              <div>
-                <label className={labelStyle}>League</label>
+            <Field label="League">
+              <select
+                className={FIELD}
+                value={leagueId}
+                onChange={e => handleLeagueChange(e.target.value)}
+                disabled={loadingLeagues}
+              >
+                <option value="">Select a league...</option>
+                {leagues.map(l => (
+                  <option key={l.league_id} value={l.league_id}>{l.name}</option>
+                ))}
+              </select>
+            </Field>
+
+            {needsPlayer && (
+              <Field label="Player">
                 <select
-                  className={inputStyle}
-                  value={leagueId}
-                  onChange={e => handleLeagueChange(e.target.value)}
-                  disabled={loadingLeagues}
+                  className={FIELD}
+                  value={playerId}
+                  onChange={e => setPlayerId(e.target.value)}
+                  disabled={loadingPlayers || !leagueId}
                 >
-                  <option value="">Select a league...</option>
-                  {leagues.map(l => (
-                    <option key={l.league_id} value={l.league_id}>{l.name}</option>
+                  <option value="">{!leagueId ? 'Select a league first...' : 'Select a player...'}</option>
+                  {players.map(p => (
+                    <option key={p.id} value={p.id}>{p.full_name || p.name} {p.team ? `(${p.team})` : ''}</option>
                   ))}
                 </select>
-              </div>
+              </Field>
+            )}
 
-              {needsPlayer && (
-                <div>
-                  <label className={labelStyle}>Player</label>
-                  <select
-                    className={inputStyle}
-                    value={playerId}
-                    onChange={e => setPlayerId(e.target.value)}
-                    disabled={loadingPlayers || !leagueId}
-                  >
-                    <option value="">{!leagueId ? 'Select a league first...' : 'Select a player...'}</option>
-                    {players.map(p => (
-                      <option key={p.id} value={p.id}>{p.full_name || p.name} {p.team ? `(${p.team})` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {supportsTeamFilter && (
-                <div>
-                  <label className={labelStyle}>Team (optional filter)</label>
-                  <select
-                    className={inputStyle}
-                    value={teamName}
-                    onChange={e => setTeamName(e.target.value)}
-                    disabled={loadingTeams || !leagueId}
-                  >
-                    <option value="">{!leagueId ? 'Select a league first...' : 'All teams'}</option>
-                    {teams.map(t => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-white rounded-xl border border-orange-100 shadow-sm p-5 space-y-4">
-              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">3</span>
-                Appearance
-              </h2>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className={labelStyle}>Primary</label>
-                  <div className="flex items-center gap-2">
-                    <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" />
-                    <input type="text" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="flex-1 text-xs px-2 py-1 border border-slate-200 rounded" />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelStyle}>Accent</label>
-                  <div className="flex items-center gap-2">
-                    <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" />
-                    <input type="text" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="flex-1 text-xs px-2 py-1 border border-slate-200 rounded" />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelStyle}>Background</label>
-                  <div className="flex items-center gap-2">
-                    <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-0" />
-                    <input type="text" value={bgColor} onChange={e => setBgColor(e.target.value)} className="flex-1 text-xs px-2 py-1 border border-slate-200 rounded" />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className={labelStyle}>Font</label>
-                <select className={inputStyle} value={font} onChange={e => setFont(e.target.value)}>
-                  {FONT_OPTIONS.map(f => (
-                    <option key={f} value={f}>{f}</option>
+            {supportsTeamFilter && (
+              <Field label="Team (optional filter)">
+                <select
+                  className={FIELD}
+                  value={teamName}
+                  onChange={e => setTeamName(e.target.value)}
+                  disabled={loadingTeams || !leagueId}
+                >
+                  <option value="">{!leagueId ? 'Select a league first...' : 'All teams'}</option>
+                  {teams.map(t => (
+                    <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
-              </div>
+              </Field>
+            )}
+          </section>
 
-              <div>
-                <label className={labelStyle}>Border Radius: {borderRadius}px</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={24}
-                  value={borderRadius}
-                  onChange={e => setBorderRadius(parseInt(e.target.value))}
-                  className="w-full accent-orange-500"
-                />
-              </div>
+          <section className="ch-card space-y-4 p-4 sm:p-5">
+            <h2 className={heading}>
+              {step(3)}
+              Appearance
+            </h2>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {colourField("Primary", primaryColor, setPrimaryColor)}
+              {colourField("Accent", accentColor, setAccentColor)}
+              {colourField("Background", bgColor, setBgColor)}
             </div>
 
-            <div className="bg-white rounded-xl border border-orange-100 shadow-sm p-5 space-y-4">
-              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs font-bold">4</span>
-                Size & Layout
-              </h2>
+            <Field label="Font">
+              <select className={FIELD} value={font} onChange={e => setFont(e.target.value)}>
+                {FONT_OPTIONS.map(f => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </Field>
 
-              <div className="flex gap-2">
-                {(['compact', 'standard', 'wide'] as WidgetLayoutType[]).map(preset => (
+            <Field label={`Border Radius: ${borderRadius}px`}>
+              <input
+                type="range"
+                min={0}
+                max={24}
+                value={borderRadius}
+                onChange={e => setBorderRadius(parseInt(e.target.value))}
+                className="w-full accent-[color:var(--ch-accent)]"
+              />
+            </Field>
+          </section>
+
+          <section className="ch-card space-y-4 p-4 sm:p-5">
+            <h2 className={heading}>
+              {step(4)}
+              Size & Layout
+            </h2>
+
+            <div className="flex gap-2">
+              {(['compact', 'standard', 'wide'] as WidgetLayoutType[]).map(preset => {
+                const active = layout === preset && !customWidth;
+                return (
                   <button
                     key={preset}
+                    type="button"
                     onClick={() => { setLayout(preset); setCustomWidth(null); setCustomHeight(null); }}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold capitalize transition-all border-2 ${
-                      layout === preset && !customWidth
-                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                        : 'border-slate-200 text-slate-500 hover:border-orange-200'
-                    }`}
+                    aria-pressed={active}
+                    className={`${choice(active)} flex-1 px-3 py-2 text-center text-xs font-semibold capitalize`}
                   >
                     {preset}
-                    <span className="block text-[10px] font-normal text-slate-400 mt-0.5">
+                    <span className="mt-0.5 block text-[10.5px] font-normal text-[color:var(--ch-muted)]">
                       {LAYOUT_PRESETS[preset].width}x{LAYOUT_PRESETS[preset].height}
                     </span>
                   </button>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelStyle}>Custom Width (px)</label>
-                  <input
-                    type="number"
-                    className={inputStyle}
-                    placeholder={String(LAYOUT_PRESETS[layout].width)}
-                    value={customWidth || ''}
-                    onChange={e => setCustomWidth(e.target.value ? parseInt(e.target.value) : null)}
-                    min={200}
-                    max={1200}
-                  />
-                </div>
-                <div>
-                  <label className={labelStyle}>Custom Height (px)</label>
-                  <input
-                    type="number"
-                    className={inputStyle}
-                    placeholder={String(LAYOUT_PRESETS[layout].height)}
-                    value={customHeight || ''}
-                    onChange={e => setCustomHeight(e.target.value ? parseInt(e.target.value) : null)}
-                    min={200}
-                    max={1200}
-                  />
-                </div>
-              </div>
+                );
+              })}
             </div>
 
-            <div className="bg-white rounded-xl border border-orange-100 shadow-sm p-5 space-y-3">
-              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <Code className="h-4 w-4 text-orange-600" />
-                Embed Code
-              </h2>
-              <div className="flex gap-2">
-                {(['fixed', 'responsive'] as const).map(mode => (
-                  <button
-                    key={mode}
-                    onClick={() => setEmbedMode(mode)}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold capitalize transition-all border-2 ${
-                      embedMode === mode
-                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                        : 'border-slate-200 text-slate-500 hover:border-orange-200'
-                    }`}
-                  >
-                    {mode === 'fixed' ? 'Fixed size' : 'Responsive'}
-                    <span className="block text-[10px] font-normal text-slate-400 mt-0.5">
-                      {mode === 'fixed' ? `${dimensions.width}x${dimensions.height}` : '100% width'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Want widgets to auto-resize to their content?{' '}
-                <a href="/embed#auto-resize" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">See the embed guide</a>
-                .
-              </p>
-              <div className="bg-slate-900 text-green-400 text-xs p-3 rounded-lg font-mono overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
-                {hasRequiredData ? embedCode : '<iframe ...> Select data source above to generate embed code'}
-              </div>
-              <Button
-                onClick={handleCopy}
-                disabled={!hasRequiredData}
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                size="sm"
-              >
-                {copied ? (
-                  <><Check className="h-4 w-4 mr-1" /> Copied!</>
-                ) : (
-                  <><Copy className="h-4 w-4 mr-1" /> Copy Embed Code</>
-                )}
-              </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Custom Width (px)">
+                <input
+                  type="number"
+                  className={FIELD}
+                  placeholder={String(LAYOUT_PRESETS[layout].width)}
+                  value={customWidth || ''}
+                  onChange={e => setCustomWidth(e.target.value ? parseInt(e.target.value) : null)}
+                  min={200}
+                  max={1200}
+                />
+              </Field>
+              <Field label="Custom Height (px)">
+                <input
+                  type="number"
+                  className={FIELD}
+                  placeholder={String(LAYOUT_PRESETS[layout].height)}
+                  value={customHeight || ''}
+                  onChange={e => setCustomHeight(e.target.value ? parseInt(e.target.value) : null)}
+                  min={200}
+                  max={1200}
+                />
+              </Field>
             </div>
-          </div>
+          </section>
 
-          <div className="lg:col-span-3">
-            <div className="sticky top-6">
-              <div className="bg-white rounded-xl border border-orange-100 shadow-sm p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-sm font-bold text-slate-800">Live Preview</h2>
-                  <span className="text-xs text-slate-400">{dimensions.width} x {dimensions.height}px</span>
-                </div>
-
-                <div
-                  className="mx-auto overflow-hidden"
-                  style={{
-                    width: Math.min(dimensions.width, 600),
-                    maxWidth: '100%',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    backgroundColor: '#f1f5f9',
-                  }}
+          <section className="ch-card space-y-3 p-4 sm:p-5">
+            <h2 className={heading}>
+              <Code className="h-4 w-4 text-[color:var(--ch-accent)]" />
+              Embed Code
+            </h2>
+            <div className="flex gap-2">
+              {(['fixed', 'responsive'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setEmbedMode(mode)}
+                  aria-pressed={embedMode === mode}
+                  className={`${choice(embedMode === mode)} flex-1 px-3 py-2 text-center text-xs font-semibold`}
                 >
-                  {hasRequiredData ? (
-                    <iframe
-                      key={iframeUrl}
-                      src={iframeUrl}
-                      width={dimensions.width}
-                      height={dimensions.height}
-                      style={{
-                        border: 'none',
-                        maxWidth: '100%',
-                        transform: dimensions.width > 600 ? `scale(${600 / dimensions.width})` : undefined,
-                        transformOrigin: 'top left',
-                        height: dimensions.width > 600 ? dimensions.height * (600 / dimensions.width) : dimensions.height,
-                      }}
-                      title="Widget Preview"
-                    />
-                  ) : (
-                    <div
-                      className="flex flex-col items-center justify-center text-slate-400"
-                      style={{ height: Math.min(dimensions.height, 400) }}
-                    >
-                      <Code className="h-10 w-10 mb-3 text-slate-300" />
-                      <p className="text-sm font-medium">Select a data source</p>
-                      <p className="text-xs mt-1">Choose a league{widgetType === 'player-stats' ? ' and player' : ''} to see a live preview</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+                  {mode === 'fixed' ? 'Fixed size' : 'Responsive'}
+                  <span className="mt-0.5 block text-[10.5px] font-normal text-[color:var(--ch-muted)]">
+                    {mode === 'fixed' ? `${dimensions.width}x${dimensions.height}` : '100% width'}
+                  </span>
+                </button>
+              ))}
             </div>
-          </div>
+            <p className={HINT}>
+              Want widgets to auto-resize to their content?{' '}
+              <a href="/embed#auto-resize" target="_blank" rel="noopener noreferrer" className="font-medium text-[color:var(--ch-accent)] hover:underline">See the embed guide</a>
+              .
+            </p>
+            <div className="overflow-x-auto whitespace-pre-wrap break-all rounded-[10px] bg-[#0b1220] p-3 font-mono text-xs leading-relaxed text-emerald-400">
+              {hasRequiredData ? embedCode : '<iframe ...> Select data source above to generate embed code'}
+            </div>
+            <button type="button" onClick={handleCopy} disabled={!hasRequiredData} className={`${BTN_PRIMARY} ${TALL} w-full`}>
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? "Copied!" : "Copy Embed Code"}
+            </button>
+          </section>
+        </div>
+
+        <div className="lg:sticky lg:top-4 lg:col-span-3">
+          <section className="ch-card p-4 sm:p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="ch-display text-[1.4rem] font-bold uppercase leading-none tracking-tight text-[color:var(--ch-text)]">Live preview</h2>
+              <span className={`ch-num ${HINT}`}>{dimensions.width} x {dimensions.height}px</span>
+            </div>
+
+            {/* The widget keeps its own colours, so its frame stays light whatever the site theme. */}
+            <div
+              className="mx-auto overflow-hidden"
+              style={{
+                width: Math.min(dimensions.width, 600),
+                maxWidth: '100%',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                backgroundColor: '#f1f5f9',
+              }}
+            >
+              {hasRequiredData ? (
+                <iframe
+                  key={iframeUrl}
+                  src={iframeUrl}
+                  width={dimensions.width}
+                  height={dimensions.height}
+                  style={{
+                    border: 'none',
+                    maxWidth: '100%',
+                    transform: dimensions.width > 600 ? `scale(${600 / dimensions.width})` : undefined,
+                    transformOrigin: 'top left',
+                    height: dimensions.width > 600 ? dimensions.height * (600 / dimensions.width) : dimensions.height,
+                  }}
+                  title="Widget Preview"
+                />
+              ) : (
+                <div
+                  className="flex flex-col items-center justify-center text-slate-500"
+                  style={{ height: Math.min(dimensions.height, 400) }}
+                >
+                  <Code className="mb-3 h-10 w-10 text-slate-300" />
+                  <p className="text-sm font-medium">Select a data source</p>
+                  <p className="mt-1 text-xs">Choose a league{widgetType === 'player-stats' ? ' and player' : ''} to see a live preview</p>
+                </div>
+              )}
+            </div>
+          </section>
         </div>
       </div>
-    </div>
+    </AdminPageShell>
   );
 }

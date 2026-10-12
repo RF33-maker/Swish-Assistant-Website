@@ -4,15 +4,16 @@ import { supabase } from "@/lib/supabase";
 import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import UploadSection from "@/components/LeagueAdmin/upload-section-la";
 import DuplicatePlayerManager from "@/components/LeagueAdmin/DuplicatePlayerManager";
-import { Link2, ChevronDown } from "lucide-react";
+import { Link2, ChevronDown, ExternalLink, Image as ImageIcon, Instagram, Loader2, Upload, Users } from "lucide-react";
+import AdminPageShell, { AdminPageNotice } from "@/components/layout/AdminPageShell";
+import { BTN_GHOST, BTN_PRIMARY, FIELD, Field, Panel, TALL } from "@/components/layout/proUi";
 import { CompetitionFieldSelect } from "@/components/CompetitionFieldSelect";
 import { fetchCompetitionFieldOptions, type CompetitionFieldOptions } from "@/lib/competitionFieldOptions";
 
-const DETAIL_INPUT_CLASS =
-  "w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 [color-scheme:light] focus:ring-2 focus:ring-orange-500 focus:border-transparent";
+const DETAIL_INPUT_CLASS = `${FIELD} pr-8`;
+const BACK = { href: "/league-management", label: "League management" };
 
 interface League {
   league_id: string;
@@ -552,429 +553,313 @@ export default function LeagueAdmin() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading league admin...</p>
-        </div>
-      </div>
+      <AdminPageShell title="League admin" eyebrow="League management" back={BACK} width="max-w-7xl">
+        <AdminPageNotice>
+          <Loader2 className="mx-auto mb-3 h-7 w-7 animate-spin text-[color:var(--ch-accent)]" />
+          Loading league admin...
+        </AdminPageNotice>
+      </AdminPageShell>
     );
   }
 
   if (!league) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">League Not Found</h1>
-          <p className="text-gray-600 mb-4">The league you're looking for doesn't exist.</p>
-          <button
-            onClick={() => navigate('/')}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg"
-          >
+      <AdminPageShell title="League not found" eyebrow="League management" back={BACK} width="max-w-7xl">
+        <AdminPageNotice>
+          <p>The league you're looking for doesn't exist.</p>
+          <button type="button" onClick={() => navigate('/')} className={`${BTN_PRIMARY} mt-4`}>
             Go Home
           </button>
-        </div>
-      </div>
+        </AdminPageNotice>
+      </AdminPageShell>
     );
   }
 
   if (!isOwner) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h1>
-          <p className="text-gray-600 mb-4">You don't have permission to access this league's admin panel.</p>
-          <button
-            onClick={() => navigate(`/competition/${slug}`)}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg"
-          >
+      <AdminPageShell title="Access denied" eyebrow="League management" back={BACK} width="max-w-7xl">
+        <AdminPageNotice>
+          <p>You don't have permission to access this league's admin panel.</p>
+          <button type="button" onClick={() => navigate(`/competition/${slug}`)} className={`${BTN_PRIMARY} mt-4`}>
             View League
           </button>
-        </div>
-      </div>
+        </AdminPageNotice>
+      </AdminPageShell>
     );
   }
 
+  const otherLeagues = userLeagues.filter((l) => l.league_id !== league.league_id);
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-full md:max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => navigate(`/competition/${slug}`)}
-                  className="text-gray-600 hover:text-gray-800"
-                  data-testid="button-back-to-league"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <div>
-                  <h1 className="text-xl md:text-2xl font-bold text-gray-800">League Admin</h1>
-                  <p className="text-sm md:text-base text-gray-600">{league.name}</p>
-                </div>
-              </div>
-              <img src={SwishLogo} alt="Swish" className="h-6 md:h-8 md:hidden" />
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/league-management')}
-                className="flex items-center gap-2 w-full md:w-auto justify-center px-4 md:px-4 py-2 text-sm md:text-base text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors border border-orange-200 hover:border-orange-300"
-                data-testid="button-league-management"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                <span className="font-medium">League Management</span>
-              </button>
-              <img src={SwishLogo} alt="Swish" className="hidden md:block h-8" />
-            </div>
-          </div>
-        </div>
-      </header>
+    <AdminPageShell
+      title={league.name}
+      eyebrow="League admin"
+      back={BACK}
+      width="max-w-7xl"
+      actions={
+        <button type="button" onClick={() => navigate(`/competition/${slug}`)} className={BTN_GHOST} data-testid="button-back-to-league">
+          <ExternalLink className="h-4 w-4" />
+          View league page
+        </button>
+      }
+    >
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-      <main className="max-w-full md:max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-
-          {/* Competition Details & Linking */}
-          <div className="md:col-span-2 bg-white rounded-xl shadow p-4 md:p-6">
-            <div className="flex items-center gap-3 mb-4 md:mb-6">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                <Link2 className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <h2 className="text-lg md:text-xl font-semibold text-gray-800">Competition Details</h2>
-                <p className="text-xs md:text-sm text-gray-600">Organisation, season, and division metadata for this competition</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Organisation</label>
-                <CompetitionFieldSelect
-                  value={orgInput}
-                  onChange={setOrgInput}
-                  options={fieldOptions.organisations}
-                  placeholder="e.g. Basketball England"
-                  inputClassName={DETAIL_INPUT_CLASS}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Season</label>
-                <CompetitionFieldSelect
-                  value={seasonInput}
-                  onChange={setSeasonInput}
-                  options={fieldOptions.seasons}
-                  placeholder="e.g. 2026-27"
-                  inputClassName={DETAIL_INPUT_CLASS}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Division</label>
-                <CompetitionFieldSelect
-                  value={divisionInput}
-                  onChange={setDivisionInput}
-                  options={fieldOptions.divisions}
-                  placeholder="e.g. Division One"
-                  inputClassName={DETAIL_INPUT_CLASS}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Age group</label>
-                <CompetitionFieldSelect
-                  value={ageGroupInput}
-                  onChange={setAgeGroupInput}
-                  options={fieldOptions.ageGroups}
-                  placeholder="e.g. U16"
-                  inputClassName={DETAIL_INPUT_CLASS}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Gender</label>
-                <CompetitionFieldSelect
-                  value={genderInput}
-                  onChange={setGenderInput}
-                  options={fieldOptions.genders}
-                  placeholder="e.g. Women's"
-                  inputClassName={DETAIL_INPUT_CLASS}
-                />
-              </div>
-            </div>
-            <button
-              onClick={handleSaveDetails}
-              disabled={savingDetails}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                savingDetails ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white'
-              }`}
-            >
-              {savingDetails ? 'Saving...' : 'Save Details'}
-            </button>
-
-            <div className="mt-6 pt-6 border-t border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-800 mb-1">Linked seasons</h3>
-              <p className="text-xs text-gray-500 mb-3">
-                Link this competition to a prior season of the same league so it's recognised as the same league — teams and logos carry over immediately, and new uploads for either season will match instead of creating a duplicate.
-              </p>
-
-              {siblingSeasons.length > 0 ? (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {siblingSeasons
-                    .filter((s) => s.league_id !== league.league_id)
-                    .map((s) => (
-                      <button
-                        key={s.league_id}
-                        onClick={() => navigate(`/league-admin/${s.slug}`)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-full border border-orange-200 text-orange-700 hover:bg-orange-50"
-                      >
-                        <Link2 className="h-3 w-3" />
-                        {s.name}{s.season ? ` · ${s.season}` : ''}
-                      </button>
-                    ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 mb-3">Not linked to any other season yet.</p>
-              )}
-
-              <div className="relative inline-block">
-                <button
-                  type="button"
-                  onClick={() => setShowLinkPicker(!showLinkPicker)}
-                  disabled={linking}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-orange-700 border border-orange-300 rounded-lg hover:bg-orange-50 transition-colors disabled:opacity-50"
-                >
-                  <Link2 className="h-4 w-4" />
-                  {linking ? 'Linking...' : 'Link to existing league'}
-                  <ChevronDown className={`h-3 w-3 transition-transform ${showLinkPicker ? 'rotate-180' : ''}`} />
-                </button>
-
-                {showLinkPicker && (
-                  <div className="absolute z-10 mt-2 w-72 bg-white rounded-lg border border-orange-200 shadow-lg p-2">
-                    <input
-                      type="text"
-                      placeholder="Search your leagues..."
-                      value={linkSearch}
-                      onChange={(e) => setLinkSearch(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg mb-2 bg-white text-gray-900 [color-scheme:light]"
-                    />
-                    <div className="max-h-48 overflow-y-auto divide-y divide-gray-100">
-                      {userLeagues
-                        .filter((l) => l.league_id !== league.league_id)
-                        .filter((l) => l.name.toLowerCase().includes(linkSearch.trim().toLowerCase()))
-                        .map((l) => (
-                          <button
-                            key={l.league_id}
-                            onClick={() => handleLinkToLeague(l.league_id)}
-                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 rounded"
-                          >
-                            {l.name}{l.season ? <span className="text-gray-400"> · {l.season}</span> : null}
-                          </button>
-                        ))}
-                      {userLeagues.filter((l) => l.league_id !== league.league_id).length === 0 && (
-                        <p className="px-3 py-2 text-sm text-gray-500">No other leagues found.</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Banner Management */}
-          <div className="bg-white rounded-xl shadow p-4 md:p-6">
-            <div className="flex items-center gap-3 mb-4 md:mb-6">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-lg md:text-xl font-semibold text-gray-800">League Banner</h2>
-                <p className="text-xs md:text-sm text-gray-600">Upload a custom banner for your league page</p>
-              </div>
-            </div>
-
-            {league.banner_url && (
-              <div className="mb-4">
-                <img 
-                  src={league.banner_url} 
-                  alt="League Banner" 
-                  className="w-full h-32 md:h-48 object-cover rounded-lg border"
-                />
-              </div>
-            )}
-
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleBannerUpload}
-              className="hidden"
-              id="banner-upload"
-              disabled={uploadingBanner}
-            />
-            <label
-              htmlFor="banner-upload"
-              className={`w-full inline-flex items-center justify-center gap-2 px-4 md:px-6 py-2 md:py-3 text-sm md:text-base bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg cursor-pointer transition-colors ${
-                uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {uploadingBanner ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  {league.banner_url ? 'Change Banner' : 'Upload Banner'}
-                </>
-              )}
-            </label>
-          </div>
-
-          {/* Instagram Management */}
-          <div className="bg-white rounded-xl shadow p-4 md:p-6">
-            <div className="flex items-center gap-3 mb-4 md:mb-6">
-              <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-pink-600" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-lg md:text-xl font-semibold text-gray-800">Instagram Integration</h2>
-                <p className="text-xs md:text-sm text-gray-600">Connect your league's Instagram profile</p>
-              </div>
-            </div>
-
-            <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-              <input
-                type="text"
-                placeholder="Enter Instagram profile URL (e.g., https://www.instagram.com/yourleague)"
-                value={instagramUrl}
-                onChange={(e) => setInstagramUrl(e.target.value)}
-                className="w-full px-3 md:px-3 py-2 md:py-3 text-sm md:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+        {/* Competition Details & Linking */}
+        <Panel
+          title="Competition details"
+          icon={Link2}
+          description="Organisation, season, and division metadata for this competition"
+          className="md:col-span-2"
+        >
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Organisation">
+              <CompetitionFieldSelect
+                value={orgInput}
+                onChange={setOrgInput}
+                options={fieldOptions.organisations}
+                placeholder="e.g. Basketball England"
+                inputClassName={DETAIL_INPUT_CLASS}
               />
-              <button
-                onClick={handleInstagramUpdate}
-                disabled={updatingInstagram}
-                className={`w-full md:w-auto px-4 md:px-6 py-2 md:py-3 text-sm md:text-base font-medium rounded-lg transition-colors ${
-                  updatingInstagram 
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                    : 'bg-pink-500 text-white hover:bg-pink-600'
-                }`}
-              >
-                {updatingInstagram ? 'Updating...' : 'Update Instagram'}
-              </button>
-            </div>
+            </Field>
+            <Field label="Season">
+              <CompetitionFieldSelect
+                value={seasonInput}
+                onChange={setSeasonInput}
+                options={fieldOptions.seasons}
+                placeholder="e.g. 2026-27"
+                inputClassName={DETAIL_INPUT_CLASS}
+              />
+            </Field>
+            <Field label="Division">
+              <CompetitionFieldSelect
+                value={divisionInput}
+                onChange={setDivisionInput}
+                options={fieldOptions.divisions}
+                placeholder="e.g. Division One"
+                inputClassName={DETAIL_INPUT_CLASS}
+              />
+            </Field>
+            <Field label="Age group">
+              <CompetitionFieldSelect
+                value={ageGroupInput}
+                onChange={setAgeGroupInput}
+                options={fieldOptions.ageGroups}
+                placeholder="e.g. U16"
+                inputClassName={DETAIL_INPUT_CLASS}
+              />
+            </Field>
+            <Field label="Gender">
+              <CompetitionFieldSelect
+                value={genderInput}
+                onChange={setGenderInput}
+                options={fieldOptions.genders}
+                placeholder="e.g. Women's"
+                inputClassName={DETAIL_INPUT_CLASS}
+              />
+            </Field>
           </div>
+          <button type="button" onClick={handleSaveDetails} disabled={savingDetails} className={`${BTN_PRIMARY} ${TALL}`}>
+            {savingDetails && <Loader2 className="h-4 w-4 animate-spin" />}
+            {savingDetails ? 'Saving...' : 'Save Details'}
+          </button>
 
-          {/* PDF Upload Section */}
-          <div className="md:col-span-2 bg-white rounded-xl shadow overflow-hidden">
-            <UploadSection leagues={
-              league?.parent_league_id && !userLeagues.some(l => l.league_id === league.league_id)
-                ? [...userLeagues, league]
-                : userLeagues
-            } />
-          </div>
+          <div className="mt-6 border-t border-[color:var(--ch-border)] pt-5">
+            <h3 className="text-sm font-semibold text-[color:var(--ch-text)]">Linked seasons</h3>
+            <p className="mb-3 mt-1 max-w-3xl text-[13px] text-[color:var(--ch-text-2)]">
+              Link this competition to a prior season of the same league so it's recognised as the same league — teams and logos carry over immediately, and new uploads for either season will match instead of creating a duplicate.
+            </p>
 
-          {/* Duplicate Player Management */}
-          <DuplicatePlayerManager leagueId={league.league_id} />
-
-          {/* Team Logo Management */}
-          <div className="md:col-span-2 bg-white rounded-xl shadow p-4 md:p-6">
-            <div className="flex items-center gap-3 mb-4 md:mb-6">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-lg md:text-xl font-semibold text-gray-800">Team Logo Management</h2>
-                <p className="text-xs md:text-sm text-gray-600">Upload and manage logos for all teams in your league</p>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <p className="text-sm text-gray-600">Found {teams.length} teams in this league</p>
-            </div>
-
-            {teams.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                {teams.map((teamName) => (
-                  <div key={teamName} className="border border-gray-200 rounded-lg p-3 md:p-4">
-                    <div className="text-center mb-4">
-                      <TeamLogo 
-                        teamName={teamName} 
-                        leagueId={league.league_id} 
-                        logoUrl={teamLogos[teamName]}
-                        size="lg" 
-                        className="mx-auto mb-2" 
-                      />
-                      <h3 className="font-medium text-gray-800">{teamName}</h3>
-                    </div>
-
-                    <div className="space-y-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleTeamLogoUpload(teamName, file);
-                        }}
-                        className="hidden"
-                        id={`logo-upload-${teamName}`}
-                        disabled={uploadingLogo === teamName}
-                      />
-                      <label
-                        htmlFor={`logo-upload-${teamName}`}
-                        className={`w-full inline-flex items-center justify-center gap-2 px-3 md:px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs md:text-sm rounded-lg cursor-pointer transition-colors ${
-                          uploadingLogo === teamName ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        {uploadingLogo === teamName ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Uploading...
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                            </svg>
-                            Upload Logo
-                          </>
-                        )}
-                      </label>
-                      
-                      {teamLogos[teamName] && (
-                        <button
-                          onClick={() => handleRemoveLogo(teamName)}
-                          className="w-full px-3 py-2 text-sm text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-lg transition-colors"
-                        >
-                          Remove Logo
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+            {siblingSeasons.length > 0 ? (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {siblingSeasons
+                  .filter((s) => s.league_id !== league.league_id)
+                  .map((s) => (
+                    <button
+                      key={s.league_id}
+                      type="button"
+                      onClick={() => navigate(`/league-admin/${s.slug}`)}
+                      className="ch-chip inline-flex h-8 items-center gap-1.5 px-3 text-xs"
+                    >
+                      <Link2 className="h-3 w-3" />
+                      {s.name}{s.season ? ` · ${s.season}` : ''}
+                    </button>
+                  ))}
               </div>
             ) : (
-              <div className="text-center py-12 text-gray-500">
-                <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                <p className="text-lg font-medium mb-2">No Teams Found</p>
-                <p className="text-sm">Teams will appear here once player data is added to your league.</p>
-              </div>
+              <p className="mb-3 text-sm text-[color:var(--ch-muted)]">Not linked to any other season yet.</p>
             )}
-          </div>
 
+            <div className="relative inline-block">
+              <button
+                type="button"
+                onClick={() => setShowLinkPicker(!showLinkPicker)}
+                disabled={linking}
+                aria-expanded={showLinkPicker}
+                className={BTN_GHOST}
+              >
+                <Link2 className="h-4 w-4" />
+                {linking ? 'Linking...' : 'Link to existing league'}
+                <ChevronDown className={`h-3 w-3 transition-transform ${showLinkPicker ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showLinkPicker && (
+                <div className="absolute z-10 mt-2 w-72 rounded-xl border border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] p-2 shadow-[var(--ch-shadow-lg)]">
+                  <input
+                    type="text"
+                    placeholder="Search your leagues..."
+                    value={linkSearch}
+                    onChange={(e) => setLinkSearch(e.target.value)}
+                    className={`${FIELD} mb-2`}
+                  />
+                  <div className="max-h-48 divide-y divide-[color:var(--ch-border)] overflow-y-auto">
+                    {otherLeagues
+                      .filter((l) => l.name.toLowerCase().includes(linkSearch.trim().toLowerCase()))
+                      .map((l) => (
+                        <button
+                          key={l.league_id}
+                          type="button"
+                          onClick={() => handleLinkToLeague(l.league_id)}
+                          className="block w-full rounded px-3 py-2 text-left text-sm text-[color:var(--ch-text)] hover:bg-[color:var(--ch-surface-3)]"
+                        >
+                          {l.name}{l.season ? <span className="text-[color:var(--ch-muted)]"> · {l.season}</span> : null}
+                        </button>
+                      ))}
+                    {otherLeagues.length === 0 && (
+                      <p className="px-3 py-2 text-sm text-[color:var(--ch-muted)]">No other leagues found.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </Panel>
+
+        {/* Banner Management */}
+        <Panel title="League banner" icon={ImageIcon} description="Upload a custom banner for your league page">
+          {league.banner_url && (
+            <div className="mb-4">
+              <img
+                src={league.banner_url}
+                alt="League Banner"
+                className="h-32 w-full rounded-[10px] border border-[color:var(--ch-border)] object-cover md:h-48"
+              />
+            </div>
+          )}
+
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleBannerUpload}
+            className="hidden"
+            id="banner-upload"
+            disabled={uploadingBanner}
+          />
+          <label
+            htmlFor="banner-upload"
+            className={`${BTN_PRIMARY} ${TALL} w-full cursor-pointer ${uploadingBanner ? 'pointer-events-none opacity-50' : ''}`}
+          >
+            {uploadingBanner ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {uploadingBanner ? 'Uploading...' : league.banner_url ? 'Change Banner' : 'Upload Banner'}
+          </label>
+        </Panel>
+
+        {/* Instagram Management */}
+        <Panel title="Instagram" icon={Instagram} description="Connect your league's Instagram profile">
+          <div className="flex flex-col gap-2.5 md:flex-row">
+            <input
+              type="text"
+              placeholder="Enter Instagram profile URL (e.g., https://www.instagram.com/yourleague)"
+              value={instagramUrl}
+              onChange={(e) => setInstagramUrl(e.target.value)}
+              className={`${FIELD} !h-11`}
+            />
+            <button type="button" onClick={handleInstagramUpdate} disabled={updatingInstagram} className={`${BTN_PRIMARY} ${TALL} flex-none`}>
+              {updatingInstagram && <Loader2 className="h-4 w-4 animate-spin" />}
+              {updatingInstagram ? 'Updating...' : 'Update Instagram'}
+            </button>
+          </div>
+        </Panel>
+
+        {/* PDF Upload Section */}
+        <div className="md:col-span-2">
+          <UploadSection leagues={
+            league?.parent_league_id && !userLeagues.some(l => l.league_id === league.league_id)
+              ? [...userLeagues, league]
+              : userLeagues
+          } />
         </div>
-      </main>
-    </div>
+
+        {/* Duplicate Player Management */}
+        <DuplicatePlayerManager leagueId={league.league_id} />
+
+        {/* Team Logo Management */}
+        <Panel
+          title="Team logos"
+          icon={Users}
+          description="Upload and manage logos for all teams in your league"
+          className="md:col-span-2"
+        >
+          <p className="mb-4 text-sm text-[color:var(--ch-text-2)]">Found {teams.length} teams in this league</p>
+
+          {teams.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {teams.map((teamName) => (
+                <div key={teamName} className="ch-tile p-4">
+                  <div className="mb-4 text-center">
+                    <TeamLogo
+                      teamName={teamName}
+                      leagueId={league.league_id}
+                      logoUrl={teamLogos[teamName]}
+                      size="lg"
+                      className="mx-auto mb-2"
+                    />
+                    <h3 className="text-sm font-medium text-[color:var(--ch-text)]">{teamName}</h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleTeamLogoUpload(teamName, file);
+                      }}
+                      className="hidden"
+                      id={`logo-upload-${teamName}`}
+                      disabled={uploadingLogo === teamName}
+                    />
+                    <label
+                      htmlFor={`logo-upload-${teamName}`}
+                      className={`${BTN_PRIMARY} w-full cursor-pointer ${uploadingLogo === teamName ? 'pointer-events-none opacity-50' : ''}`}
+                    >
+                      {uploadingLogo === teamName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      {uploadingLogo === teamName ? 'Uploading...' : 'Upload Logo'}
+                    </label>
+
+                    {teamLogos[teamName] && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLogo(teamName)}
+                        className={`${BTN_GHOST} w-full hover:!text-[color:var(--ch-loss)]`}
+                      >
+                        Remove Logo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center text-[color:var(--ch-text-2)]">
+              <Users className="mx-auto mb-3 h-10 w-10 text-[color:var(--ch-muted)]" />
+              <p className="font-semibold text-[color:var(--ch-text)]">No Teams Found</p>
+              <p className="mt-1 text-sm">Teams will appear here once player data is added to your league.</p>
+            </div>
+          )}
+        </Panel>
+
+      </div>
+    </AdminPageShell>
   );
 }

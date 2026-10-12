@@ -1,19 +1,18 @@
-import { Download, Trophy, Loader2, Filter, Search, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ImagePlus, X, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
+import { Trophy, Loader2, Filter, Search, ChevronDown, RefreshCw, AlertTriangle, ImagePlus, X, ChevronLeft, ChevronRight, RotateCcw, CameraOff, Check } from "lucide-react";
 import { PostQueueSection } from "@/components/social/PostQueueSection";
+import { PlayerPhotoControl } from "@/components/social/PlayerPhotoControl";
+import { BTN_GHOST, ERROR, FIELD, HINT, Panel, RangeField, SaveActions, SELECT_MENU } from "@/components/social/studioUi";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { generateMaskedPhoto } from "@/lib/photoMasking";
+import { photoChangeReaches, playerPhotoUrl, usePlayerPhotoChange } from "@/lib/playerPhotos";
 import { renderSocialCardToBlob } from "@/lib/socialCardCapture";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
+import { useStoredState } from "@/hooks/useStoredState";
 import {
   Select,
   SelectContent,
@@ -21,6 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+const ICON_BTN =
+  "flex h-7 w-7 flex-none items-center justify-center rounded-md text-[color:var(--ch-text-2)] transition hover:bg-[color:var(--ch-surface-3)] hover:text-[color:var(--ch-text)] disabled:pointer-events-none disabled:opacity-40";
 
 interface CompetitionOption {
   league_id: string;
@@ -270,24 +272,18 @@ async function buildPlayerPerformanceCardData(
     }
   }
 
-  let playerPhotoUrl = "";
+  let photoUrl = "";
   let photoFocusY = 50;
   
   if (perf.player_photo_path) {
-    const { data: photoData } = supabase.storage
-      .from("player-photos")
-      .getPublicUrl(perf.player_photo_path);
-    playerPhotoUrl = photoData.publicUrl;
+    photoUrl = playerPhotoUrl(perf.player_photo_path);
   } else if (perf.player_id) {
     const { data: photoList } = await supabase.storage
       .from("player-photos")
       .list(perf.player_id);
     
     if (photoList && photoList.length > 0) {
-      const { data: photoData } = supabase.storage
-        .from("player-photos")
-        .getPublicUrl(`${perf.player_id}/${photoList[0].name}`);
-      playerPhotoUrl = photoData.publicUrl;
+      photoUrl = playerPhotoUrl(`${perf.player_id}/${photoList[0].name}`);
     }
   }
 
@@ -302,10 +298,10 @@ async function buildPlayerPerformanceCardData(
     }
   }
 
-  let maskedPhotoUrl = playerPhotoUrl;
-  if (playerPhotoUrl) {
+  let maskedPhotoUrl = photoUrl;
+  if (photoUrl) {
     try {
-      maskedPhotoUrl = await generateMaskedPhoto(playerPhotoUrl, photoFocusY);
+      maskedPhotoUrl = await generateMaskedPhoto(photoUrl, photoFocusY);
     } catch (error) {
       console.error("Failed to mask photo, using original:", error);
     }
@@ -333,7 +329,7 @@ async function buildPlayerPerformanceCardData(
     home_logo_url: playerTeamLogo || "",
     away_logo_url: opponentLogo || "",
     photo_url: maskedPhotoUrl,
-    background_photo_url: playerPhotoUrl,
+    background_photo_url: photoUrl,
     photo_focus_y: photoFocusY,
     photo_zoom: 1,
     photo_position_x: 50,
@@ -343,26 +339,46 @@ async function buildPlayerPerformanceCardData(
   };
 }
 
+const TEMPLATES = [
+  { value: "default", label: "Swish Default" },
+  { value: "reba-sl", label: "REBA SL" },
+  { value: "photo-overlay", label: "Photo Overlay" },
+  { value: "photo-overlay-reel", label: "Photo Overlay · Reel Cover" },
+];
+
+const TIME_FILTERS = [
+  { value: "all-time", label: "All Time" },
+  { value: "last-3-days", label: "Last 3 Days" },
+  { value: "latest", label: "Last 7 Days" },
+];
+
+const STORE = "swish-social:performances";
+
 export default function TopPerformancesStudio() {
   const [performances, setPerformances] = useState<TopPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedData, setSelectedData] = useState<PlayerPerformanceV1Data>(defaultData);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedPerf, setSelectedPerf] = useState<TopPerformance | null>(null);
+  const selectedId = selectedPerf?.id ?? null;
+  // From the click until the card's logos and photo have been gathered.
+  const [building, setBuilding] = useState(false);
   const [leagueBrands, setLeagueBrands] = useState<LeagueBrand[]>([]);
   const [competitions, setCompetitions] = useState<CompetitionOption[]>([]);
-  const [selectedLeague, setSelectedLeague] = useState<string>(ALL_FILTER_VALUE);
-  const [selectedCompetition, setSelectedCompetition] = useState<string>(ALL_FILTER_VALUE);
+  // Remembered, so a refresh or a trip to another page comes back to the same list.
+  const [selectedLeague, setSelectedLeague] = useStoredState<string>(`${STORE}:league`, ALL_FILTER_VALUE);
+  const [selectedCompetition, setSelectedCompetition] = useStoredState<string>(`${STORE}:competition`, ALL_FILTER_VALUE);
+  const [storedTimeFilter, setTimeFilter] = useStoredState<string>(`${STORE}:time`, "all-time");
+  const [storedTemplate, setSelectedTemplate] = useStoredState<string>(`${STORE}:template`, "default");
+  const [performanceSearch, setPerformanceSearch] = useStoredState<string>(`${STORE}:search`, "", "session");
+  const timeFilter = TIME_FILTERS.some((t) => t.value === storedTimeFilter) ? storedTimeFilter : "all-time";
+  const selectedTemplate = TEMPLATES.some((t) => t.value === storedTemplate) ? storedTemplate : "default";
   const [hierarchyReady, setHierarchyReady] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<string>("all-time");
-  const [performanceSearch, setPerformanceSearch] = useState<string>("");
   const [queueIds, setQueueIds] = useState<string[]>([]);
   const [queueCardCache, setQueueCardCache] = useState<Record<string, PlayerPerformanceV1Data>>({});
-  const [queueLoading, setQueueLoading] = useState(false);
-  const [showAllPerformances, setShowAllPerformances] = useState(false);
+  const [queueLoading] = useState(false);
   const [hasMorePerformances, setHasMorePerformances] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [performanceOffset, setPerformanceOffset] = useState(0);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>("default");
   const [sponsorLogos, setSponsorLogos] = useState<SponsorLogo[]>([]);
 
   // Preview state — generated once when a performance is selected.
@@ -379,9 +395,15 @@ export default function TopPerformancesStudio() {
   // commit its result. Guards against rapid selection/template changes where
   // a slower capture can finish after a newer one and overwrite state.
   const generationTokenRef = useRef(0);
+  // The same guard for gathering a card's data, which is also slow.
+  const selectionTokenRef = useRef(0);
+  // The stat lines behind the card on screen and the cards in the queue, so
+  // they can be rebuilt when one of their players gets a new photo.
+  const perfByIdRef = useRef(new Map<string, TopPerformance>());
+  const previewRef = useRef<HTMLDivElement>(null);
 
   const PAGE_SIZE = 50;
-  
+
   const queueCards = useMemo(() => {
     return queueIds.map(id => queueCardCache[id]).filter(Boolean);
   }, [queueIds, queueCardCache]);
@@ -587,12 +609,25 @@ export default function TopPerformancesStudio() {
         return b.latest_activity - a.latest_activity || a.name.localeCompare(b.name);
       });
 
+      // A remembered league or competition that has since gone would leave the list empty.
+      if (selectedLeague !== ALL_FILTER_VALUE && !rankedLeagues.some((league) => league.id === selectedLeague)) {
+        setSelectedLeague(ALL_FILTER_VALUE);
+        setSelectedCompetition(ALL_FILTER_VALUE);
+      } else if (
+        selectedCompetition !== ALL_FILTER_VALUE &&
+        !rankedCompetitions.some((c) => c.league_id === selectedCompetition && c.brand_id === selectedLeague)
+      ) {
+        setSelectedCompetition(ALL_FILTER_VALUE);
+      }
+
       setCompetitions(rankedCompetitions);
       setLeagueBrands(rankedLeagues);
     } catch (error) {
       console.error("[SocialTools] Error loading league hierarchy:", error);
       setCompetitions([]);
       setLeagueBrands([]);
+      setSelectedLeague(ALL_FILTER_VALUE);
+      setSelectedCompetition(ALL_FILTER_VALUE);
     } finally {
       setHierarchyReady(true);
     }
@@ -947,22 +982,71 @@ export default function TopPerformancesStudio() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTemplate]);
 
-  const handleSelectPerformance = async (perf: TopPerformance) => {
-    setSelectedId(perf.id);
+  const buildCard = async (perf: TopPerformance) => {
     const competition = await resolvePerformanceCompetition(perf, competitionById);
     const brand = competition ? leagueBrandById.get(competition.brand_id) : undefined;
     const cardData = await buildPlayerPerformanceCardData(perf, competition, brand);
     cardData.sponsor_logo_urls = sponsorLogos.map((logo) => logo.url);
-    setSelectedData(cardData);
-    
-    if (!queueIds.includes(perf.id)) {
-      setQueueIds(prev => [...prev, perf.id]);
-      setQueueCardCache(prev => ({ ...prev, [perf.id]: cardData }));
-    }
-
-    // Generate the preview PNG immediately after building card data.
-    generatePreview(cardData, selectedTemplate);
+    return cardData;
   };
+
+  /** Puts a stat line on screen as a card. `refreshQueue` also replaces its queued copy (its photo changed). */
+  const showPerformance = async (perf: TopPerformance, refreshQueue = false) => {
+    const token = ++selectionTokenRef.current;
+    perfByIdRef.current.set(perf.id, perf);
+    setSelectedPerf(perf);
+    setBuilding(true);
+    try {
+      const cardData = await buildCard(perf);
+      // A newer pick took over while this one was gathering its logos and photo.
+      if (selectionTokenRef.current !== token) return;
+      setSelectedData(cardData);
+
+      if (refreshQueue || !queueIds.includes(perf.id)) {
+        setQueueIds((prev) => (prev.includes(perf.id) ? prev : [...prev, perf.id]));
+        setQueueCardCache((prev) => ({ ...prev, [perf.id]: cardData }));
+      }
+
+      // Generate the preview PNG immediately after building card data.
+      generatePreview(cardData, selectedTemplate);
+    } catch (err) {
+      if (selectionTokenRef.current !== token) return;
+      console.error("[SocialTools] could not build the card:", err);
+      setPreviewError(true);
+    } finally {
+      if (selectionTokenRef.current === token) setBuilding(false);
+    }
+  };
+
+  const handleSelectPerformance = (perf: TopPerformance) => {
+    void showPerformance(perf);
+    // One column on phones and tablets: bring the card into view rather than leaving it below the list.
+    if (!window.matchMedia("(min-width: 1024px)").matches) {
+      window.setTimeout(() => previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    }
+  };
+
+  // A photo added or switched anywhere in Swish Social (the strip under the
+  // preview, or the Player photos tool) lands here: the list learns the new
+  // photo and any card already made for that player is redrawn with it.
+  usePlayerPhotoChange((change) => {
+    const withPhoto = (perf: TopPerformance) =>
+      photoChangeReaches(change, perf.player_id) ? { ...perf, player_photo_path: change.path } : perf;
+    setPerformances((prev) => prev.map(withPhoto));
+
+    perfByIdRef.current.forEach((perf, id) => {
+      const next = withPhoto(perf);
+      if (next === perf) return;
+      perfByIdRef.current.set(id, next);
+      if (id === selectedId) {
+        void showPerformance(next, true);
+      } else if (queueIds.includes(id)) {
+        void buildCard(next)
+          .then((card) => setQueueCardCache((prev) => ({ ...prev, [id]: card })))
+          .catch((err) => console.error("[SocialTools] could not refresh a queued card:", err));
+      }
+    });
+  });
 
   const handleLeagueChange = (leagueId: string) => {
     setSelectedLeague(leagueId);
@@ -1006,451 +1090,429 @@ export default function TopPerformancesStudio() {
     }
   };
 
+  const overlayTemplate = selectedTemplate === "photo-overlay" || selectedTemplate === "photo-overlay-reel";
+  const drawing = building || previewGenerating;
+  // While a newly picked card is still being gathered, selectedData belongs to the previous one.
+  const cardPhotoUrl = !selectedPerf
+    ? null
+    : building
+      ? selectedPerf.player_photo_path
+        ? playerPhotoUrl(selectedPerf.player_photo_path)
+        : null
+      : selectedData.background_photo_url || null;
+
   return (
-    <div className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Left side - Performance selector */}
-          <div className="lg:col-span-3">
-            <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
-              <CardHeader className="pb-3">
-                <div className="space-y-3">
-                  <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
-                    <Trophy className="h-5 w-5" />
-                    Top Performances
-                  </CardTitle>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <Select value={selectedLeague} onValueChange={handleLeagueChange}>
-                      <SelectTrigger className="w-full border-orange-200 dark:border-orange-700" data-testid="select-league">
-                        <Filter className="h-4 w-4 mr-2 text-orange-500" />
-                        <SelectValue placeholder="All Leagues" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={ALL_FILTER_VALUE}>All Leagues</SelectItem>
-                        {leagueBrands.map((league) => (
-                          <SelectItem key={league.id} value={league.id}>
-                            {league.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={selectedCompetition}
-                      onValueChange={setSelectedCompetition}
-                      disabled={selectedLeague === ALL_FILTER_VALUE}
-                    >
-                      <SelectTrigger
-                        className="w-full border-orange-200 dark:border-orange-700"
-                        data-testid="select-competition"
-                      >
-                        <SelectValue
-                          placeholder={
-                            selectedLeague === ALL_FILTER_VALUE
-                              ? "Choose a league first"
-                              : "All Competitions"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={ALL_FILTER_VALUE}>All Competitions</SelectItem>
-                        {availableCompetitions.map((competition) => (
-                          <SelectItem key={competition.league_id} value={competition.league_id}>
-                            {competition.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={timeFilter} onValueChange={setTimeFilter}>
-                      <SelectTrigger className="w-full border-orange-200 dark:border-orange-700" data-testid="select-time">
-                        <SelectValue placeholder="All Time" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all-time">All Time</SelectItem>
-                        <SelectItem value="last-3-days">Last 3 Days</SelectItem>
-                        <SelectItem value="latest">Last 7 Days</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="relative mb-4">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    type="text"
-                    placeholder="Search by player, team, or opponent..."
-                    value={performanceSearch}
-                    onChange={(e) => setPerformanceSearch(e.target.value)}
-                    className="pl-10 border-gray-200 dark:border-gray-600"
-                    data-testid="input-performance-search"
-                  />
-                </div>
-                {loading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-                  </div>
-                ) : filteredPerformances.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
-                    <Search className="h-8 w-8 mb-2 opacity-50" />
-                    <p>No performances found matching "{performanceSearch}"</p>
-                  </div>
-                ) : (
-                  <div>
-                    <ScrollArea className={showAllPerformances ? "h-[800px]" : "h-[400px]"}>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-4">
-                        {filteredPerformances.map((perf) => (
-                          <div
-                            key={perf.id}
-                            onClick={() => handleSelectPerformance(perf)}
-                            className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md relative ${
-                              selectedId === perf.id
-                                ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
-                                : queueIds.includes(perf.id)
-                                ? "border-green-400 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-600 hover:border-orange-300 dark:hover:border-orange-600"
-                            }`}
-                            data-testid={`card-performance-${perf.id}`}
-                          >
-                            <div className="flex justify-between items-start mb-2">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                                  {perf.player_name}
-                                </h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                                  {perf.team}
-                                </p>
-                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                  vs {perf.opponent} ({perf.player_team_score}-{perf.opponent_score})
-                                </p>
-                              </div>
-                              <div className="text-right ml-3">
-                                <span className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                                  {perf.spoints}
-                                </span>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">PTS</p>
-                              </div>
-                            </div>
-                            <div className="flex gap-4 text-sm text-gray-600 dark:text-gray-300">
-                              <span>{perf.sreboundstotal} REB</span>
-                              <span>{perf.sassists} AST</span>
-                              {perf.ssteals ? <span>{perf.ssteals} STL</span> : null}
-                            </div>
-                            {queueIds.includes(perf.id) && (
-                              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
-                                Queued
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                    <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <button
-                        onClick={() => setShowAllPerformances(!showAllPerformances)}
-                        className="w-full py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 flex items-center justify-center gap-1"
-                      >
-                        {showAllPerformances ? (
-                          <>
-                            <ChevronUp className="h-4 w-4" />
-                            Collapse View
-                          </>
-                        ) : (
-                          <>
-                            <ChevronDown className="h-4 w-4" />
-                            Expand View ({filteredPerformances.length} loaded)
-                          </>
-                        )}
-                      </button>
-                      {hasMorePerformances && (
-                        <button
-                          onClick={loadMorePerformances}
-                          disabled={loadingMore}
-                          className="w-full py-2 text-sm font-medium text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 flex items-center justify-center gap-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg disabled:opacity-50"
-                        >
-                          {loadingMore ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Loading more...
-                            </>
-                          ) : (
-                            <>
-                              <ChevronDown className="h-4 w-4" />
-                              Load More Performances
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(340px,440px)]">
+        {/* Left side - Performance selector */}
+        <Panel title="Top performances" icon={Trophy} description="Pick a stat line to turn it into a card.">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+            <Select value={selectedLeague} onValueChange={handleLeagueChange}>
+              <SelectTrigger className={FIELD} data-testid="select-league">
+                {/* The trigger clamps its child span to one line with its own display; !flex keeps icon and text on a row. */}
+                <span className="!flex min-w-0 items-center gap-2">
+                  <Filter className="h-4 w-4 flex-none text-[color:var(--ch-accent)]" />
+                  <SelectValue placeholder="All Leagues" />
+                </span>
+              </SelectTrigger>
+              <SelectContent className={SELECT_MENU}>
+                <SelectItem value={ALL_FILTER_VALUE}>All Leagues</SelectItem>
+                {leagueBrands.map((league) => (
+                  <SelectItem key={league.id} value={league.id}>
+                    {league.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={selectedCompetition}
+              onValueChange={setSelectedCompetition}
+              disabled={selectedLeague === ALL_FILTER_VALUE}
+            >
+              <SelectTrigger className={FIELD} data-testid="select-competition">
+                <SelectValue
+                  placeholder={
+                    selectedLeague === ALL_FILTER_VALUE
+                      ? "Choose a league first"
+                      : "All Competitions"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent className={SELECT_MENU}>
+                <SelectItem value={ALL_FILTER_VALUE}>All Competitions</SelectItem>
+                {availableCompetitions.map((competition) => (
+                  <SelectItem key={competition.league_id} value={competition.league_id}>
+                    {competition.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={timeFilter} onValueChange={setTimeFilter}>
+              <SelectTrigger className={FIELD} data-testid="select-time">
+                <SelectValue placeholder="All Time" />
+              </SelectTrigger>
+              <SelectContent className={SELECT_MENU}>
+                {TIME_FILTERS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Right side - Card preview and Photo uploader */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-orange-900 dark:text-orange-400">
-                    Card Preview
-                  </CardTitle>
-                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
-                    <SelectTrigger className="w-[160px] border-orange-200 dark:border-orange-700" data-testid="select-template">
-                      <SelectValue placeholder="Template" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="default">Swish Default</SelectItem>
-                      <SelectItem value="reba-sl">REBA SL</SelectItem>
-                        <SelectItem value="photo-overlay">Photo Overlay</SelectItem>
-                        <SelectItem value="photo-overlay-reel">Photo Overlay · Reel Cover</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {(selectedTemplate === "photo-overlay" || selectedTemplate === "photo-overlay-reel") && (
-                  <div className="mb-4 space-y-4 rounded-lg border border-orange-200 bg-orange-50/60 p-3 dark:border-orange-800 dark:bg-orange-950/20">
-                    <div>
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white">Photo framing</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Adjusts the card only. Your original photo stays unchanged.</p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={resetPhotoFraming}
-                          disabled={!selectedId}
-                          className="h-8 gap-1.5"
-                          data-testid="button-reset-photo-framing"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          Reset
-                        </Button>
-                      </div>
+          <div className="relative mt-2.5">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--ch-muted)]" />
+            <input
+              type="text"
+              placeholder="Search by player, team, or opponent..."
+              value={performanceSearch}
+              onChange={(e) => setPerformanceSearch(e.target.value)}
+              className={`${FIELD} pl-9 ${performanceSearch ? "pr-9" : ""}`}
+              data-testid="input-performance-search"
+            />
+            {performanceSearch && (
+              <button
+                type="button"
+                onClick={() => setPerformanceSearch("")}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[color:var(--ch-muted)] hover:text-[color:var(--ch-text)]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
 
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                          <span className="flex justify-between">
-                            Zoom
-                            <span className="tabular-nums text-gray-500">{Math.round((selectedData.photo_zoom ?? 1) * 100)}%</span>
-                          </span>
-                          <Slider
-                            min={0.6}
-                            max={2.5}
-                            step={0.05}
-                            value={[selectedData.photo_zoom ?? 1]}
-                            onValueChange={([value]) => applyPhotoFraming({ photo_zoom: value })}
-                            disabled={!selectedId}
-                            data-testid="slider-photo-zoom"
-                          />
-                        </label>
-                        <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                          <span className="flex justify-between">
-                            Horizontal
-                            <span className="tabular-nums text-gray-500">{Math.round(selectedData.photo_position_x ?? 50)}%</span>
-                          </span>
-                          <Slider
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={[selectedData.photo_position_x ?? 50]}
-                            onValueChange={([value]) => applyPhotoFraming({ photo_position_x: value })}
-                            disabled={!selectedId}
-                            data-testid="slider-photo-position-x"
-                          />
-                        </label>
-                        <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                          <span className="flex justify-between">
-                            Vertical
-                            <span className="tabular-nums text-gray-500">{Math.round(selectedData.photo_position_y ?? selectedData.photo_focus_y ?? 50)}%</span>
-                          </span>
-                          <Slider
-                            min={0}
-                            max={100}
-                            step={1}
-                            value={[selectedData.photo_position_y ?? selectedData.photo_focus_y ?? 50]}
-                            onValueChange={([value]) => applyPhotoFraming({ photo_position_y: value })}
-                            disabled={!selectedId}
-                            data-testid="slider-photo-position-y"
-                          />
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-orange-200 pt-3 dark:border-orange-800">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">Sponsor logos</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Optional · up to 4 · included in preview and PNG</p>
-                      </div>
-                      {sponsorLogos.length < 4 && (
-                        <label className="inline-flex cursor-pointer items-center rounded-md border border-orange-300 bg-white px-3 py-2 text-xs font-medium text-orange-700 shadow-sm hover:bg-orange-50 dark:border-orange-700 dark:bg-gray-900 dark:text-orange-300">
-                          <ImagePlus className="mr-1.5 h-4 w-4" />
-                          Add logo
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                            multiple
-                            className="sr-only"
-                            onChange={(event) => {
-                              handleSponsorFiles(event.target.files);
-                              event.target.value = "";
-                            }}
-                            data-testid="input-sponsor-logos"
-                          />
-                        </label>
-                      )}
-                    </div>
-
-                    {sponsorLogos.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        {sponsorLogos.map((logo, index) => (
-                          <div key={logo.id} className="flex items-center gap-2 rounded-md border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
-                            <div className="flex h-10 w-16 items-center justify-center rounded bg-gray-100 p-1 dark:bg-gray-800">
-                              <img src={logo.url} alt="" className="max-h-full max-w-full object-contain" />
-                            </div>
-                            <span className="min-w-0 flex-1 truncate text-xs text-gray-700 dark:text-gray-300">{logo.name}</span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={index === 0}
-                              onClick={() => moveSponsorLogo(index, -1)}
-                              title="Move sponsor left"
-                            >
-                              <ChevronLeft className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={index === sponsorLogos.length - 1}
-                              onClick={() => moveSponsorLogo(index, 1)}
-                              title="Move sponsor right"
-                            >
-                              <ChevronRight className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-red-500 hover:text-red-600"
-                              onClick={() => removeSponsorLogo(logo.id)}
-                              title="Remove sponsor"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    </div>
-                  </div>
-                )}
-                <div className="mb-4 flex gap-2">
-                  {canShareFiles ? (
-                    <div className="flex flex-1 flex-col gap-2">
-                      <Button
-                        onClick={handleSaveToPhotos}
-                        className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                        disabled={selectedId === null || previewGenerating || !shareFile}
-                        data-testid="button-save-to-photos"
-                      >
-                        <ImagePlus className="h-4 w-4 mr-2" />
-                        Save to Photos
-                      </Button>
-                      <p className="text-center text-xs text-gray-500 dark:text-gray-400">Tap Save Image in the menu that opens.</p>
-                      {shareNotice && <p className="text-center text-xs text-red-600">{shareNotice}</p>}
-                      <Button
-                        onClick={handleDownload}
-                        variant="outline"
-                        className="w-full"
-                        disabled={selectedId === null || previewGenerating}
-                        data-testid="button-download"
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        Download file
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={handleDownload}
-                      className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
-                      disabled={selectedId === null || previewGenerating}
-                      data-testid="button-download"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download as PNG
-                    </Button>
-                  )}
-                  {selectedId !== null && (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => generatePreview(selectedData, selectedTemplate)}
-                      disabled={previewGenerating}
-                      title="Regenerate preview"
-                      className="flex-shrink-0"
-                      data-testid="button-regenerate"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${previewGenerating ? "animate-spin" : ""}`} />
-                    </Button>
-                  )}
-                </div>
-
-                {/* Preview area */}
-                <div className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden min-h-[160px] flex items-center justify-center">
-                  {!selectedId ? (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 py-8 text-center px-4">
-                      Select a performance to see a preview
-                    </p>
-                  ) : previewGenerating ? (
-                    <div className="flex flex-col items-center gap-3 py-10 text-gray-500">
-                      <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-                      <span className="text-sm">Generating preview…</span>
-                    </div>
-                  ) : previewError ? (
-                    <div className="flex flex-col items-center gap-3 py-10 text-gray-500">
-                      <AlertTriangle className="h-7 w-7 text-amber-500" />
-                      <span className="text-sm text-center px-4">Preview failed</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => generatePreview(selectedData, selectedTemplate)}
-                        className="gap-2"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Retry
-                      </Button>
-                    </div>
-                  ) : previewImgUrl ? (
-                    <img
-                      src={previewImgUrl}
-                      alt="Card preview"
-                      className="w-full h-auto block rounded-lg"
-                    />
-                  ) : null}
-                </div>
-                
-                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
-                  Card size: {selectedTemplate === "photo-overlay-reel" ? "1080×1920px (9:16 Reel cover)" : "1080×1350px (Instagram portrait)"}
+          <div className="mt-4">
+            {loading ? (
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2" aria-busy="true">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="ch-skel h-[104px] !rounded-[10px]" />
+                ))}
+              </div>
+            ) : filteredPerformances.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-[color:var(--ch-text-2)]">
+                <Search className="mb-2 h-7 w-7 text-[color:var(--ch-muted)]" />
+                <p className="text-sm">
+                  {performanceSearch.trim()
+                    ? `No performances found matching "${performanceSearch}"`
+                    : "No performances for these filters yet."}
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            ) : (
+              <>
+                <div className="max-h-[min(68vh,780px)] min-h-[280px] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    {filteredPerformances.map((perf) => {
+                      const on = selectedId === perf.id;
+                      const queued = queueIds.includes(perf.id);
+                      return (
+                        <button
+                          key={perf.id}
+                          type="button"
+                          onClick={() => handleSelectPerformance(perf)}
+                          aria-pressed={on}
+                          className={`ch-tile ch-hover w-full p-3.5 text-left ${
+                            on ? "!border-[color:var(--ch-accent)] !bg-[color:var(--ch-accent-soft)]" : ""
+                          }`}
+                          data-testid={`card-performance-${perf.id}`}
+                        >
+                          {/* Spans throughout: a button may only hold phrasing content. */}
+                          <span className="flex items-start justify-between gap-3">
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-[color:var(--ch-text)]">
+                                {perf.player_name}
+                              </span>
+                              <span className="block truncate text-[13px] text-[color:var(--ch-text-2)]">
+                                {perf.team}
+                              </span>
+                              <span className="mt-1 block truncate text-xs text-[color:var(--ch-muted)]">
+                                vs {perf.opponent} ({perf.player_team_score}-{perf.opponent_score})
+                              </span>
+                            </span>
+                            <span className="flex-none text-right">
+                              <span className="ch-display ch-num block text-[1.9rem] font-bold leading-none text-[color:var(--ch-accent)]">
+                                {perf.spoints}
+                              </span>
+                              <span className="block text-[10px] font-semibold tracking-wider text-[color:var(--ch-muted)]">PTS</span>
+                            </span>
+                          </span>
+                          <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[color:var(--ch-text-2)]">
+                            <span>{perf.sreboundstotal} REB</span>
+                            <span>{perf.sassists} AST</span>
+                            {perf.ssteals ? <span>{perf.ssteals} STL</span> : null}
+                            <span className="ml-auto flex items-center gap-1.5">
+                              {!perf.player_photo_path && (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full bg-[color:var(--ch-surface-3)] px-2 py-0.5 text-[10.5px] font-semibold text-[color:var(--ch-text-2)]"
+                                  title="No photo is linked to this player yet. Select the card to add one."
+                                >
+                                  <CameraOff className="h-3 w-3" />
+                                  No photo
+                                </span>
+                              )}
+                              {queued && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-700 dark:text-emerald-300">
+                                  <Check className="h-3 w-3" />
+                                  Queued
+                                </span>
+                              )}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--ch-border)] pt-3">
+                  <span className={HINT}>
+                    {performanceSearch.trim()
+                      ? `${filteredPerformances.length} of ${performances.length} loaded`
+                      : `${performances.length} loaded`}
+                  </span>
+                  {hasMorePerformances && (
+                    <button type="button" onClick={loadMorePerformances} disabled={loadingMore} className={BTN_GHOST}>
+                      {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronDown className="h-4 w-4" />}
+                      {loadingMore ? "Loading more..." : "Load more"}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-        </div>
+        </Panel>
 
-        <PostQueueSection 
-          cards={queueCards} 
-          template={selectedTemplate}
-          loading={queueLoading} 
-          onRemove={handleRemoveFromQueue}
-          onClear={handleClearQueue}
-        />
+        {/* Right side - Card preview, the player's photo and the way out */}
+        <div ref={previewRef} className="scroll-mt-4 lg:sticky lg:top-4">
+          <Panel
+            title="Card preview"
+            className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto"
+            bodyClassName="space-y-3"
+            action={
+              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                <SelectTrigger className={`${FIELD} !h-9 !w-[190px]`} data-testid="select-template">
+                  <SelectValue placeholder="Template" />
+                </SelectTrigger>
+                <SelectContent className={SELECT_MENU}>
+                  {TEMPLATES.map((template) => (
+                    <SelectItem key={template.value} value={template.value}>
+                      {template.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            }
+          >
+            {/* Preview area */}
+            <div className="flex min-h-[200px] items-center justify-center overflow-hidden rounded-xl bg-[color:var(--ch-surface-3)]">
+              {!selectedPerf ? (
+                <p className="px-4 py-10 text-center text-sm text-[color:var(--ch-text-2)]">
+                  Select a performance to see a preview
+                </p>
+              ) : drawing ? (
+                <div className="flex flex-col items-center gap-3 py-12 text-[color:var(--ch-text-2)]">
+                  <Loader2 className="h-7 w-7 animate-spin text-[color:var(--ch-accent)]" />
+                  <span className="text-sm">Generating preview…</span>
+                </div>
+              ) : previewError ? (
+                <div className="flex flex-col items-center gap-3 py-10 text-[color:var(--ch-text-2)]">
+                  <AlertTriangle className="h-7 w-7 text-amber-500" />
+                  <span className="px-4 text-center text-sm">Preview failed</span>
+                  <button
+                    type="button"
+                    onClick={() => (selectedData === defaultData ? showPerformance(selectedPerf) : generatePreview(selectedData, selectedTemplate))}
+                    className={BTN_GHOST}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Retry
+                  </button>
+                </div>
+              ) : previewImgUrl ? (
+                <img
+                  src={previewImgUrl}
+                  alt="Card preview"
+                  className="block h-auto max-h-[66vh] w-auto max-w-full"
+                  data-testid="img-card-preview"
+                />
+              ) : null}
+            </div>
+
+            {selectedPerf && (
+              <PlayerPhotoControl
+                key={selectedPerf.player_id || selectedPerf.id}
+                playerId={selectedPerf.player_id}
+                playerName={selectedPerf.player_name}
+                photoUrl={cardPhotoUrl}
+                standIn={!selectedPerf.player_photo_path}
+              />
+            )}
+
+            <SaveActions
+              canShare={canShareFiles}
+              onSave={handleSaveToPhotos}
+              saveDisabled={selectedId === null || drawing || !shareFile}
+              onDownload={handleDownload}
+              downloadDisabled={selectedId === null || drawing}
+              downloadTestId="button-download"
+              aside={
+                selectedId !== null && (
+                  <button
+                    type="button"
+                    onClick={() => generatePreview(selectedData, selectedTemplate)}
+                    disabled={drawing || selectedData === defaultData}
+                    title="Regenerate preview"
+                    aria-label="Regenerate preview"
+                    className={`${BTN_GHOST} !h-11 !w-11 flex-none !px-0`}
+                    data-testid="button-regenerate"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${drawing ? "animate-spin" : ""}`} />
+                  </button>
+                )
+              }
+              notice={shareNotice && <p className={`text-center ${ERROR}`}>{shareNotice}</p>}
+            />
+
+            {overlayTemplate && (
+              <div className="ch-tile space-y-4 p-3">
+                <div>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-[color:var(--ch-text)]">Photo framing</p>
+                      <p className={HINT}>Adjusts the card only. Your original photo stays unchanged.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resetPhotoFraming}
+                      disabled={!selectedId}
+                      className={`${BTN_GHOST} flex-none`}
+                      data-testid="button-reset-photo-framing"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Reset
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <RangeField
+                      label="Zoom"
+                      display={`${Math.round((selectedData.photo_zoom ?? 1) * 100)}%`}
+                      min={0.6}
+                      max={2.5}
+                      step={0.05}
+                      value={selectedData.photo_zoom ?? 1}
+                      onChange={(value) => applyPhotoFraming({ photo_zoom: value })}
+                      disabled={!selectedId}
+                      testId="slider-photo-zoom"
+                    />
+                    <RangeField
+                      label="Horizontal"
+                      display={`${Math.round(selectedData.photo_position_x ?? 50)}%`}
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={selectedData.photo_position_x ?? 50}
+                      onChange={(value) => applyPhotoFraming({ photo_position_x: value })}
+                      disabled={!selectedId}
+                      testId="slider-photo-position-x"
+                    />
+                    <RangeField
+                      label="Vertical"
+                      display={`${Math.round(selectedData.photo_position_y ?? selectedData.photo_focus_y ?? 50)}%`}
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={selectedData.photo_position_y ?? selectedData.photo_focus_y ?? 50}
+                      onChange={(value) => applyPhotoFraming({ photo_position_y: value })}
+                      disabled={!selectedId}
+                      testId="slider-photo-position-y"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-[color:var(--ch-border)] pt-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold text-[color:var(--ch-text)]">Sponsor logos</p>
+                      <p className={HINT}>Optional · up to 4 · included in preview and PNG</p>
+                    </div>
+                    {sponsorLogos.length < 4 && (
+                      <label className={`${BTN_GHOST} flex-none cursor-pointer`}>
+                        <ImagePlus className="h-4 w-4" />
+                        Add logo
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                          multiple
+                          className="sr-only"
+                          onChange={(event) => {
+                            handleSponsorFiles(event.target.files);
+                            event.target.value = "";
+                          }}
+                          data-testid="input-sponsor-logos"
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {sponsorLogos.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {sponsorLogos.map((logo, index) => (
+                        <div
+                          key={logo.id}
+                          className="flex items-center gap-2 rounded-lg border border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-2"
+                        >
+                          <div className="flex h-10 w-16 flex-none items-center justify-center rounded bg-[color:var(--ch-surface-3)] p-1">
+                            <img src={logo.url} alt="" className="max-h-full max-w-full object-contain" />
+                          </div>
+                          <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--ch-text-2)]">{logo.name}</span>
+                          <button
+                            type="button"
+                            className={ICON_BTN}
+                            disabled={index === 0}
+                            onClick={() => moveSponsorLogo(index, -1)}
+                            title="Move sponsor left"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className={ICON_BTN}
+                            disabled={index === sponsorLogos.length - 1}
+                            onClick={() => moveSponsorLogo(index, 1)}
+                            title="Move sponsor right"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className={`${ICON_BTN} hover:!text-[color:var(--ch-loss)]`}
+                            onClick={() => removeSponsorLogo(logo.id)}
+                            title="Remove sponsor"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <p className={`text-center ${HINT}`}>
+              Card size: {selectedTemplate === "photo-overlay-reel" ? "1080×1920px (9:16 Reel cover)" : "1080×1350px (Instagram portrait)"}
+            </p>
+          </Panel>
+        </div>
+      </div>
+
+      <PostQueueSection 
+        cards={queueCards} 
+        template={selectedTemplate}
+        loading={queueLoading} 
+        onRemove={handleRemoveFromQueue}
+        onClear={handleClearQueue}
+      />
     </div>
   );
 }
