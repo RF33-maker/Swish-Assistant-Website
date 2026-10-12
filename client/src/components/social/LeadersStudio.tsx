@@ -12,6 +12,7 @@ import { canvasToBlob, DEFAULT_FRAMING, ensureDisplayFont, type PhotoFraming } f
 import { renderLeadersCard } from "@/lib/generateLeadersCards";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import type { LeadersResponse } from "@/types/leaders";
+import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
 
 const DEFAULT_SLUG = "nbl-division-1-2026-2027";
 const SLUG_KEY = "weekly-awards-slug";
@@ -34,13 +35,14 @@ function fmtShift(v: number): string {
   return n > 0 ? `+${n}%` : `${n}%`;
 }
 
-/** Player / Team league leaders: the top five in a category, with the #1 player's photo or club logo. */
+/** Player / Team league leaders: the top five in a category, led by the #1 player's photo or the #1 club's crest. */
 export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   const initialSlug = new URLSearchParams(window.location.search).get("slug") || readStored(SLUG_KEY) || DEFAULT_SLUG;
 
   const [competitions, setCompetitions] = useState<CompetitionOption[]>([]);
   const [slug, setSlug] = useState(initialSlug);
   const [category, setCategory] = useState("pts");
+  const [style, setStyle] = useCardStyle();
   const [minGamesText, setMinGamesText] = useState("");
   const [data, setData] = useState<LeadersResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -101,14 +103,18 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   useEffect(() => {
     let cancelled = false;
     setTeamLogoUrls([]);
-    if (kind !== "team" || !data) return;
+    if (!data) return;
+    // Team leaders show each club's crest; player leaders show the crest of each player's club.
     void Promise.all(
-      data.leaders.map((l) => getTeamLogoCached({ leagueId: l.league_id, teamName: l.team_name || l.name }).catch(() => null)),
+      data.leaders.map((l) => {
+        const teamName = l.team_name || (data.kind === "team" ? l.name : null);
+        return teamName ? getTeamLogoCached({ leagueId: l.league_id, teamName }).catch(() => null) : null;
+      }),
     ).then((urls) => !cancelled && setTeamLogoUrls(urls));
     return () => {
       cancelled = true;
     };
-  }, [kind, data]);
+  }, [data]);
 
   const brand = useMemo(
     () => ({ leagueName: subtitle || data?.league.name || "", leagueLogoUrl, primaryHex }),
@@ -127,7 +133,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   const renderToken = useRef(0);
   const [rendering, setRendering] = useState(false);
   const [hasCard, setHasCard] = useState(false);
-  const fileName = `${kind}-leaders-${category}-${slug}.png`;
+  const fileName = `${kind}-leaders-${category}-${slug}${style === "league" ? "" : `-${style}`}.png`;
 
   useEffect(() => {
     const token = ++renderToken.current;
@@ -142,12 +148,14 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
     setShareFile(null);
     void renderLeadersCard({
       kind,
+      style,
       categoryTitle: data.category.title,
       unit: data.category.short,
       leaders: data.leaders,
       brand,
       teamLogoUrls,
       framing: leaderFraming,
+      footnote: data.minGames > 1 ? `Min. ${data.minGames} games` : undefined,
     })
       .then((canvas) => {
         if (token !== renderToken.current) return;
@@ -164,7 +172,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, data, brand, teamLogoUrls, leaderFraming, fileName]);
+  }, [kind, style, data, brand, teamLogoUrls, leaderFraming, fileName]);
 
   const download = async () => {
     const canvas = cardCanvasRef.current;
@@ -208,8 +216,8 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
           <CardTitle className="text-orange-900 dark:text-orange-400">{title}</CardTitle>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {kind === "player"
-              ? "The top five players in a category, with the leader's photo."
-              : "The top five teams in a category, with the leader's club logo."}
+              ? "The top five players in a category, led by the leader's photo."
+              : "The top five teams in a category, led by the leader's club crest."}
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -269,23 +277,27 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
             <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className="border-orange-200 dark:border-orange-700" />
           </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Card colour</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                value={/^#[0-9a-f]{6}$/i.test(primaryHex) ? primaryHex : "#f97316"}
-                onChange={(e) => updateColour(e.target.value)}
-                className="h-9 w-14 cursor-pointer rounded border"
-              />
-              <span className="text-xs text-gray-500">{colorOverride ? "Custom (saved for this competition)" : "From the league logo"}</span>
-              {colorOverride && (
-                <button className="text-xs text-orange-700 underline" onClick={resetColour}>
-                  Reset
-                </button>
-              )}
+          <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
+
+          {style !== "swish" && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Card colour</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={/^#[0-9a-f]{6}$/i.test(primaryHex) ? primaryHex : "#f97316"}
+                  onChange={(e) => updateColour(e.target.value)}
+                  className="h-9 w-14 cursor-pointer rounded border"
+                />
+                <span className="text-xs text-gray-500">{colorOverride ? "Custom (saved for this competition)" : "From the league logo"}</span>
+                {colorOverride && (
+                  <button className="text-xs text-orange-700 underline" onClick={resetColour}>
+                    Reset
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
         </CardContent>
@@ -319,7 +331,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-900 dark:text-white">{leader.name}'s photo</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Adjusts the card only. The photo always fills its panel.
+                    Adjusts the card only. The photo's edges fade into the card wherever it sits.
                   </p>
                 </div>
                 <Button
@@ -339,7 +351,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
                   <span className="flex justify-between">
                     Zoom <span className="tabular-nums text-gray-500">{Math.round(leaderFraming.zoom * 100)}%</span>
                   </span>
-                  <Slider min={1} max={3} step={0.05} value={[leaderFraming.zoom]} onValueChange={([v]) => adjust({ zoom: v })} />
+                  <Slider min={0.6} max={3} step={0.05} value={[leaderFraming.zoom]} onValueChange={([v]) => adjust({ zoom: v })} />
                 </label>
                 <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
                   <span className="flex justify-between">

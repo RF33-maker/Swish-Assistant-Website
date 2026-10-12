@@ -1,8 +1,9 @@
 /**
- * Team of the Week / Player of the Week post cards, drawn straight onto a
- * Canvas 2D context (same approach as generateTrendingCard.ts) so the preview and
- * the exported PNG are the same pixels — html2canvas mangles rotated text and
- * object-fit crops.
+ * The Player of the Week post card, and the canvas helpers the other Swish Social
+ * cards are built from (Team of the Week lives in generateTeamOfTheWeekCard.ts).
+ * Everything is drawn straight onto a Canvas 2D context (same approach as
+ * generateTrendingCard.ts) so the preview and the exported PNG are the same
+ * pixels — html2canvas mangles rotated text and object-fit crops.
  */
 
 import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
@@ -393,155 +394,6 @@ function drawHeader(
   const subSize = fitSize(ctx, subtitle, 900, 50, 30, 400);
   const subCap = drawTextTop(ctx, subtitle, CARD_W / 2, topY + cap + 20, { size: subSize, align: "center" });
   return topY + cap + 20 + subCap;
-}
-
-// ── Team of the Week ─────────────────────────────────────────────────────────
-
-const TEAM_SIDE = 33;
-const TEAM_GAP = 10;
-
-/** Which player's photo panel a card-space x coordinate falls in (for click-to-select). */
-export function teamPanelIndexAt(cardX: number, count: number): number | null {
-  const panelW = (CARD_W - TEAM_SIDE * 2 - TEAM_GAP * (count - 1)) / count;
-  for (let i = 0; i < count; i += 1) {
-    const left = TEAM_SIDE + i * (panelW + TEAM_GAP);
-    if (cardX >= left - TEAM_GAP / 2 && cardX <= left + panelW + TEAM_GAP / 2) return i;
-  }
-  return null;
-}
-
-export type TeamCardOptions = {
-  framing?: FramingMap;
-  showGameScore?: boolean;
-  /** Marked face positions by player_id; unmarked players use a guess. */
-  heads?: HeadMap;
-  alignHeads?: boolean;
-  headLine?: number;
-};
-
-export async function renderTeamOfTheWeek(
-  awards: WeeklyAward[],
-  brand: WeeklyCardBrand,
-  options: TeamCardOptions = {},
-): Promise<{ canvas: HTMLCanvasElement; unaligned: string[] }> {
-  const {
-    framing = {},
-    showGameScore = true,
-    heads = {},
-    alignHeads = true,
-    headLine = DEFAULT_HEAD_LINE,
-  } = options;
-  const unaligned: string[] = [];
-  await ensureDisplayFont();
-  const [logo, leagueLogo, ...photos] = await Promise.all([
-    fetchImg(swishLogoSrc),
-    fetchImg(brand.leagueLogoUrl),
-    ...awards.map((a) => fetchImg(a.photoUrl)),
-  ]);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = CARD_W;
-  canvas.height = CARD_H;
-  const ctx = canvas.getContext("2d")!;
-  const accent = shade(brand.primaryHex, 0.28);
-
-  ctx.fillStyle = verticalGradient(ctx, 0, CARD_H, [
-    [0, shade(brand.primaryHex, 0.05)],
-    [0.36, shade(brand.primaryHex, -0.42)],
-    [0.78, shade(brand.primaryHex, -0.82)],
-    [1, "#070403"],
-  ]);
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
-
-  if (leagueLogo) {
-    drawContain(ctx, leagueLogo, -20, -30, 300, 300, 0.16);
-    drawContain(ctx, leagueLogo, CARD_W - 240, -30, 300, 300, 0.08);
-  }
-
-  const headerBottom = drawHeader(ctx, "TEAM OF THE WEEK", brand.leagueName, 108);
-
-  const count = Math.max(1, awards.length);
-  const panelW = (CARD_W - TEAM_SIDE * 2 - TEAM_GAP * (count - 1)) / count;
-  const panelTop = Math.max(176, Math.round(headerBottom + 16));
-  // Without the game score there's room for taller photos.
-  const panelH = (showGameScore ? 1010 : 1118) - panelTop;
-
-  awards.forEach((a, i) => {
-    const x = TEAM_SIDE + i * (panelW + TEAM_GAP);
-    const photo = photos[i];
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, panelTop, panelW, panelH);
-    ctx.clip();
-    const bg = ctx.createLinearGradient(x, panelTop, x + panelW, panelTop + panelH);
-    bg.addColorStop(0, shade(brand.primaryHex, -0.1));
-    bg.addColorStop(1, shade(brand.primaryHex, -0.6));
-    ctx.fillStyle = bg;
-    ctx.fillRect(x, panelTop, panelW, panelH);
-    if (photo) {
-      const placed = placeInFrame(photo, panelW, panelH, {
-        framing: framing[a.player_id] ?? DEFAULT_FRAMING,
-        head: alignHeads ? heads[a.player_id] ?? GUESSED_HEAD : null,
-        headLine,
-        focusY: a.photoFocusY ?? 50,
-      });
-      if (!placed.aligned) unaligned.push(a.player_id);
-      ctx.drawImage(
-        photo,
-        x + placed.left,
-        panelTop + placed.top,
-        photo.naturalWidth * placed.scale,
-        photo.naturalHeight * placed.scale,
-      );
-    } else {
-      drawTextTop(ctx, initialsOf(a.full_name), x + panelW / 2, panelTop + panelH * 0.3, {
-        size: 150, weight: 700, color: "#fff", alpha: 0.22, align: "center",
-      });
-    }
-    ctx.fillStyle = verticalGradient(ctx, panelTop, panelTop + panelH, [[0.45, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0.72)"]]);
-    ctx.fillRect(x, panelTop, panelW, panelH);
-
-    // Player name, reading bottom-to-top along the panel's right edge.
-    const nameSize = fitSize(ctx, a.full_name, panelH - 40, 66, 34, 500);
-    ctx.translate(x + panelW - 14, panelTop + panelH - 12);
-    ctx.rotate(-Math.PI / 2);
-    setFont(ctx, { size: nameSize, weight: 500 });
-    ctx.fillStyle = "#fff";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    ctx.shadowColor = "rgba(0,0,0,0.65)";
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 2;
-    ctx.fillText(a.full_name, 0, 0);
-    ctx.restore();
-
-    // Headline stats
-    const stats = headlineStats(a);
-    const cell = Math.floor(panelW / 3);
-    const startX = x + (panelW - cell * stats.length) / 2;
-    let y = panelTop + panelH + 12;
-    const numCap = capHeight(ctx, { size: 44, weight: 500 });
-    stats.forEach((s, idx) => {
-      drawTextTop(ctx, String(s.value), startX + idx * cell + cell / 2, y, { size: 44, weight: 500, align: "center" });
-    });
-    y += numCap + 12;
-    const lblCap = capHeight(ctx, { size: 21 });
-    stats.forEach((s, idx) => {
-      const cx = startX + idx * cell + cell / 2;
-      drawTextTop(ctx, s.label, cx, y, { size: 21, alpha: 0.85, align: "center" });
-      if (idx < stats.length - 1) drawTextTop(ctx, "|", startX + (idx + 1) * cell, y, { size: 21, alpha: 0.5, align: "center" });
-    });
-    if (showGameScore) {
-      y += lblCap + 24;
-      const gsCap = drawTextTop(ctx, "Game Score", x + panelW / 2, y, { size: 33, align: "center" });
-      y += gsCap + 12;
-      drawTextTop(ctx, fmtGameScore(a.game_score), x + panelW / 2, y, { size: 48, weight: 600, color: accent, align: "center" });
-    }
-  });
-
-  drawFooter(ctx, [logo, "statsthread", leagueLogo], brand.leagueName);
-  return { canvas, unaligned };
 }
 
 // ── Player of the Week ───────────────────────────────────────────────────────
