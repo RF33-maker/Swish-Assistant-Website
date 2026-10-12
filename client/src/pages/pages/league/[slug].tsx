@@ -654,7 +654,22 @@ export default function LeaguePage() {
     navigate(`/competition/${slug}`);
   }, [slug, navigate, previousSection]);
 
-  const [comparisonMode, setComparisonMode] = useState<'player' | 'team' | 'landscape'>('player'); // Player comparison, team comparison, or the league landscape
+  // Player comparison, team comparison, or the league landscape; ?compare= opens one directly (a shared comparison link).
+  const [comparisonMode, setComparisonMode] = useState<'player' | 'team' | 'landscape'>(() => {
+    const mode = new URLSearchParams(window.location.search).get('compare');
+    return mode === 'team' || mode === 'landscape' ? mode : 'player';
+  });
+  // Who a comparison starts with when it is opened from a player's or a team's page.
+  const [comparePreselect, setComparePreselect] = useState<{ playerSlug?: string | null; team?: string | null }>({});
+  const openComparison = (mode: 'player' | 'team', preselect: { playerSlug?: string | null; team?: string | null }) => {
+    setComparePreselect(preselect);
+    setComparisonMode(mode);
+    setSelectedPlayerSlug(null);
+    setSelectedTeamName(null);
+    setActiveSection('comparison');
+    if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) fetchAllPlayerAverages();
+    if (teamStatsData.length === 0) fetchTeamStats();
+  };
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
   const [filteredPlayerAverages, setFilteredPlayerAverages] = useState<any[]>([]);
   const [statsSearch, setStatsSearch] = useState("");
@@ -4276,6 +4291,7 @@ export default function LeaguePage() {
                   {
                     key: 'comparison', label: 'Compare', icon: ArrowLeftRight, show: true,
                     onClick: () => {
+                  setComparePreselect({});
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('comparison');
@@ -5653,46 +5669,33 @@ export default function LeaguePage() {
             {/* Comparison Section */}
             {activeSection === 'comparison' && (
               <div className="space-y-4 md:space-y-6">
-                {/* Toggle between Player and Team Comparison */}
-                <div className="ch-card p-3 md:p-4">
-                  <div className="flex flex-wrap items-center justify-center gap-2">
+                {/* Player comparison, team comparison, or the league landscape */}
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Comparison">
+                  {([
+                    { mode: 'player', label: 'Players', testId: 'button-player-comparison' },
+                    { mode: 'team', label: 'Teams', testId: 'button-team-comparison' },
+                    { mode: 'landscape', label: 'League landscape', testId: 'button-league-landscape' },
+                  ] as const).map((option) => (
                     <button
-                      onClick={() => setComparisonMode('player')}
-                      className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
-                        comparisonMode === 'player'
-                          ? 'text-white shadow-md'
-                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
-                      }`}
-                      style={comparisonMode === 'player' ? { backgroundColor: brandColor } : {}}
-                      data-testid="button-player-comparison"
+                      key={option.mode}
+                      type="button"
+                      onClick={() => {
+                        setComparePreselect({});
+                        setComparisonMode(option.mode);
+                        // Keeps a copied link on the view it was copied from.
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('section', 'comparison');
+                        url.searchParams.set('compare', option.mode);
+                        window.history.replaceState(window.history.state, '', url);
+                      }}
+                      data-active={comparisonMode === option.mode}
+                      aria-pressed={comparisonMode === option.mode}
+                      data-testid={option.testId}
+                      className="ch-chip inline-flex h-9 items-center px-4 text-[13px] font-semibold"
                     >
-                      Player Comparison
+                      {option.label}
                     </button>
-                    <button
-                      onClick={() => setComparisonMode('team')}
-                      className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
-                        comparisonMode === 'team'
-                          ? 'text-white shadow-md'
-                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
-                      }`}
-                      style={comparisonMode === 'team' ? { backgroundColor: brandColor } : {}}
-                      data-testid="button-team-comparison"
-                    >
-                      Team Comparison
-                    </button>
-                    <button
-                      onClick={() => setComparisonMode('landscape')}
-                      className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
-                        comparisonMode === 'landscape'
-                          ? 'text-white shadow-md'
-                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
-                      }`}
-                      style={comparisonMode === 'landscape' ? { backgroundColor: brandColor } : {}}
-                      data-testid="button-league-landscape"
-                    >
-                      League Landscape
-                    </button>
-                  </div>
+                  ))}
                 </div>
 
                 {/* Render appropriate comparison component */}
@@ -5712,6 +5715,7 @@ export default function LeaguePage() {
                     leagueId={league?.league_id || ""} 
                     allPlayers={allPlayerAverages}
                     brandColor={brandColorHex}
+                    preselectSlug={comparePreselect.playerSlug}
                   />
                 ) : (
                   <TeamComparison 
@@ -5719,6 +5723,8 @@ export default function LeaguePage() {
                     allTeams={teamStatsData}
                     brandColor={brandColorHex}
                     scopedLeagueIds={isParentLeague ? selectedAgeGroupLeagueIds : [getDataLeagueId(slug, league?.league_id || "")]}
+                    standings={standings as { team: string }[]}
+                    preselectTeam={comparePreselect.team}
                   />
                 )}
               </div>
@@ -5727,6 +5733,17 @@ export default function LeaguePage() {
             {/* Inline Leaders Section */}
             {activeSection === 'player' && selectedPlayerSlug && (
               <div className="md:col-span-3">
+                <div className="mb-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => openComparison('player', { playerSlug: selectedPlayerSlug })}
+                    className="ch-btn ch-btn-ghost justify-center gap-1.5"
+                    data-testid="button-compare-this-player"
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                    Compare with another player
+                  </button>
+                </div>
                 <InlinePlayerProfile
                   playerSlug={selectedPlayerSlug}
                   brandColor={brandColor}
@@ -5739,6 +5756,17 @@ export default function LeaguePage() {
 
             {activeSection === 'team' && selectedTeamName && (
               <div className="md:col-span-3">
+                <div className="mb-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => openComparison('team', { team: selectedTeamName })}
+                    className="ch-btn ch-btn-ghost justify-center gap-1.5"
+                    data-testid="button-compare-this-team"
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5" />
+                    Compare with another team
+                  </button>
+                </div>
                 <InlineTeamProfile
                   teamName={selectedTeamName}
                   brandColor={brandColor}

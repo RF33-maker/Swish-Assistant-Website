@@ -9,13 +9,7 @@ export function aggregateTeamStats(filteredStats: any[], teamName: string) {
   let totalPlusMinus = 0, totalPF = 0;
   let totalPitp = 0, totalFastbreak = 0, totalSecondChance = 0;
 
-  let sumEfgPercent = 0, sumTsPercent = 0, sumThreePtRate = 0;
-  let sumAstPercent = 0, sumAstToRatio = 0, sumOrebPercent = 0;
-  let sumDrebPercent = 0, sumRebPercent = 0, sumTovPercent = 0;
-  let sumPace = 0, sumOffRating = 0, sumDefRating = 0, sumNetRating = 0;
 
-  let sumPts2pt = 0, sumPts3pt = 0, sumPtsFt = 0, sumPtsMidrange = 0;
-  let sumPtsPitp = 0, sumPtsFb = 0, sumPts2ndCh = 0, sumPtsOffTo = 0;
 
   filteredStats.forEach((stat: any) => {
     totalPoints += stat.tot_spoints || 0;
@@ -40,29 +34,15 @@ export function aggregateTeamStats(filteredStats: any[], teamName: string) {
     totalFastbreak += stat.tot_spointsfastbreak || 0;
     totalSecondChance += stat.tot_spointssecondchance || 0;
 
-    sumEfgPercent += stat.efg_percent || 0;
-    sumTsPercent += stat.ts_percent || 0;
-    sumThreePtRate += stat.three_point_rate || 0;
-    sumAstPercent += stat.ast_percent || 0;
-    sumAstToRatio += stat.ast_to_ratio || 0;
-    sumOrebPercent += stat.oreb_percent || 0;
-    sumDrebPercent += stat.dreb_percent || 0;
-    sumRebPercent += stat.reb_percent || 0;
-    sumTovPercent += stat.tov_percent || 0;
-    sumPace += stat.pace || 0;
-    sumOffRating += stat.off_rating || 0;
-    sumDefRating += stat.def_rating || 0;
-    sumNetRating += stat.net_rating || 0;
 
-    sumPts2pt += stat.pts_percent_2pt || 0;
-    sumPts3pt += stat.pts_percent_3pt || 0;
-    sumPtsFt += stat.pts_percent_ft || 0;
-    sumPtsMidrange += stat.pts_percent_midrange || 0;
-    sumPtsPitp += stat.pts_percent_pitp || 0;
-    sumPtsFb += stat.pts_percent_fastbreak || 0;
-    sumPts2ndCh += stat.pts_percent_second_chance || 0;
-    sumPtsOffTo += stat.pts_percent_off_turnovers || 0;
   });
+
+  // The advanced figures are stored per game and are missing for some games; average only the
+  // games that have one, rather than counting a missing game as a zero.
+  const avg = (column: string, decimals = 1): string => {
+    const values = filteredStats.map((row: any) => row[column]).filter((v: any) => v != null && Number.isFinite(Number(v))).map(Number);
+    return (values.length ? values.reduce((sum: number, v: number) => sum + v, 0) / values.length : 0).toFixed(decimals);
+  };
 
   return {
     name: teamName,
@@ -84,27 +64,27 @@ export function aggregateTeamStats(filteredStats: any[], teamName: string) {
     twoPercentage: total2PA > 0 ? ((total2PM / total2PA) * 100).toFixed(1) : '0.0',
     threePercentage: total3PA > 0 ? ((total3PM / total3PA) * 100).toFixed(1) : '0.0',
     ftPercentage: totalFTA > 0 ? ((totalFTM / totalFTA) * 100).toFixed(1) : '0.0',
-    efgPercent: (sumEfgPercent / games).toFixed(1),
-    tsPercent: (sumTsPercent / games).toFixed(1),
-    threePtRate: (sumThreePtRate / games).toFixed(1),
-    astPercent: (sumAstPercent / games).toFixed(1),
-    astToRatio: (sumAstToRatio / games).toFixed(2),
-    orebPercent: (sumOrebPercent / games).toFixed(1),
-    drebPercent: (sumDrebPercent / games).toFixed(1),
-    rebPercent: (sumRebPercent / games).toFixed(1),
-    tovPercent: (sumTovPercent / games).toFixed(1),
-    pace: (sumPace / games).toFixed(1),
-    offRating: (sumOffRating / games).toFixed(1),
-    defRating: (sumDefRating / games).toFixed(1),
-    netRating: (sumNetRating / games).toFixed(1),
-    pts2ptPercent: (sumPts2pt / games).toFixed(1),
-    pts3ptPercent: (sumPts3pt / games).toFixed(1),
-    ptsFtPercent: (sumPtsFt / games).toFixed(1),
-    ptsMidrangePercent: (sumPtsMidrange / games).toFixed(1),
-    ptsPitpPercent: (sumPtsPitp / games).toFixed(1),
-    ptsFbPercent: (sumPtsFb / games).toFixed(1),
-    pts2ndChPercent: (sumPts2ndCh / games).toFixed(1),
-    ptsOffToPercent: (sumPtsOffTo / games).toFixed(1),
+    efgPercent: avg('efg_percent'),
+    tsPercent: avg('ts_percent'),
+    threePtRate: avg('three_point_rate'),
+    astPercent: avg('ast_percent'),
+    astToRatio: avg('ast_to_ratio', 2),
+    orebPercent: avg('oreb_percent'),
+    drebPercent: avg('dreb_percent'),
+    rebPercent: avg('reb_percent'),
+    tovPercent: avg('tov_percent'),
+    pace: avg('pace'),
+    offRating: avg('off_rating'),
+    defRating: avg('def_rating'),
+    netRating: avg('net_rating'),
+    pts2ptPercent: avg('pts_percent_2pt'),
+    pts3ptPercent: avg('pts_percent_3pt'),
+    ptsFtPercent: avg('pts_percent_ft'),
+    ptsMidrangePercent: avg('pts_percent_midrange'),
+    ptsPitpPercent: avg('pts_percent_pitp'),
+    ptsFbPercent: avg('pts_percent_fastbreak'),
+    pts2ndChPercent: avg('pts_percent_second_chance'),
+    ptsOffToPercent: avg('pts_percent_off_turnovers'),
   };
 }
 
