@@ -1,13 +1,14 @@
 /**
- * The Player of the Week post card, and the canvas helpers the other Swish Social
- * cards are built from (Team of the Week lives in generateTeamOfTheWeekCard.ts).
+ * Canvas helpers the Swish Social cards are built from: the card size and fonts,
+ * image loading, text and photo placement, and the footer. The cards themselves
+ * live in generatePlayerOfTheWeekCard.ts, generateTeamOfTheWeekCard.ts and
+ * generateLeadersCards.ts, and share their look through cardStyle.ts.
  * Everything is drawn straight onto a Canvas 2D context (same approach as
  * generateTrendingCard.ts) so the preview and the exported PNG are the same
  * pixels — html2canvas mangles rotated text and object-fit crops.
  */
 
-import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
-import type { WeeklyAward, WeeklyCardBrand } from "@/types/weeklyAwards";
+import type { WeeklyAward } from "@/types/weeklyAwards";
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
@@ -16,20 +17,36 @@ export const DISPLAY = '"Oswald", Impact, "Arial Narrow", sans-serif';
 export const BODY = "Arial, Helvetica, sans-serif";
 const FONT_HREF = "https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap";
 
-/** Loads the condensed display font on demand (only the weekly cards need it). */
-export async function ensureDisplayFont(): Promise<void> {
-  if (typeof document === "undefined") return;
-  if (!document.querySelector(`link[href="${FONT_HREF}"]`)) {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = FONT_HREF;
-    document.head.appendChild(link);
-  }
-  try {
-    await Promise.all(["400", "500", "600", "700"].map((w) => document.fonts.load(`${w} 40px "Oswald"`)));
-  } catch {
-    // fall back to the system condensed stack
-  }
+let displayFont: Promise<void> | null = null;
+
+/** Loads the condensed display font on demand (only the Swish Social cards need it). */
+export function ensureDisplayFont(): Promise<void> {
+  if (typeof document === "undefined") return Promise.resolve();
+  displayFont ??= (async () => {
+    if (!document.querySelector(`link[href="${FONT_HREF}"]`)) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = FONT_HREF;
+      // Until the stylesheet arrives the browser has never heard of the font, and asking it to load
+      // one would resolve at once with nothing: a card drawn then comes out in the fallback face.
+      // Give up after a few seconds so a blocked font host can't hold a card back.
+      const arrived = new Promise<void>((resolve) => {
+        link.onload = () => resolve();
+        link.onerror = () => resolve();
+        setTimeout(resolve, 4000);
+      });
+      document.head.appendChild(link);
+      await arrived;
+    }
+    try {
+      await Promise.all(["400", "500", "600", "700"].map((w) => document.fonts.load(`${w} 40px "Oswald"`)));
+    } catch {
+      // fall back to the system condensed stack
+    }
+    // Not there yet (slow or blocked): let the next card try again rather than settle for the fallback.
+    if (!document.fonts.check('700 40px "Oswald"')) displayFont = null;
+  })();
+  return displayFont;
 }
 
 // ── colour / stat helpers ────────────────────────────────────────────────────
@@ -63,8 +80,7 @@ export function headlineStats(a: WeeklyAward): { key: StatKey; label: string; va
   return STAT_ORDER.filter((k) => chosen.has(k)).map((key) => ({ key, label: STAT_LABEL[key], value: val(key) }));
 }
 
-const fmtGameScore = (v: number | null) => (v == null ? "—" : Number(v).toFixed(1));
-const splitStat = (made: number | null, att: number | null) => (made == null || att == null ? "—" : `${made}/${att}`);
+export const fmtGameScore = (v: number | null) => (v == null ? "—" : Number(v).toFixed(1));
 export const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
@@ -214,76 +230,6 @@ export function placeInFrame(
   return { left, top, scale, aligned: Math.abs(top - wantedTop) < 1 };
 }
 
-/**
- * Draws a photo into a frame: filled edge to edge by default, but free to be zoomed
- * out or shifted. Wherever a photo edge ends up inside the frame it fades into the
- * card colour behind it, so pushing a player down to clear a heading looks natural.
- */
-function drawPhoto(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
-  x: number, y: number, w: number, h: number,
-  focusY: number,
-  framing: PhotoFraming,
-) {
-  const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight) * framing.zoom;
-  const dw = img.naturalWidth * scale;
-  const dh = img.naturalHeight * scale;
-  const left = (w - dw) / 2 + (framing.x / 100) * w;
-  const top = (h - dh) * (Math.max(0, Math.min(100, focusY)) / 100) + (framing.y / 100) * h;
-
-  const layer = document.createElement("canvas");
-  layer.width = Math.round(w);
-  layer.height = Math.round(h);
-  const lctx = layer.getContext("2d")!;
-  lctx.drawImage(img, left, top, dw, dh);
-
-  const fadeV = h * 0.08;
-  const fadeH = w * 0.08;
-  const mask = (x0: number, y0: number, x1: number, y1: number) => {
-    const g = lctx.createLinearGradient(x0, y0, x1, y1);
-    g.addColorStop(0, "rgba(0,0,0,0)");
-    g.addColorStop(1, "rgba(0,0,0,1)");
-    lctx.fillStyle = g;
-    lctx.fillRect(0, 0, layer.width, layer.height);
-  };
-  lctx.globalCompositeOperation = "destination-in";
-  if (top > 1) mask(0, top, 0, top + fadeV);
-  if (top + dh < h - 1) mask(0, top + dh, 0, top + dh - fadeV);
-  if (left > 1) mask(left, 0, left + fadeH, 0);
-  if (left + dw < w - 1) mask(left + dw, 0, left + dw - fadeH, 0);
-
-  ctx.drawImage(layer, x, y);
-}
-
-/** A soft, enlarged copy of the photo to sit behind it (the "photo overlay" look). */
-function drawBlurredBackdrop(ctx: CanvasRenderingContext2D, img: HTMLImageElement, focusY: number) {
-  const scale = Math.max(CARD_W / img.naturalWidth, CARD_H / img.naturalHeight) * 1.25;
-  const dw = img.naturalWidth * scale;
-  const dh = img.naturalHeight * scale;
-  const left = (CARD_W - dw) / 2;
-  const top = (CARD_H - dh) * (Math.max(0, Math.min(100, focusY)) / 100);
-
-  ctx.save();
-  ctx.globalAlpha = 0.85;
-  const canFilter = typeof (ctx as { filter?: unknown }).filter === "string";
-  if (canFilter) {
-    ctx.filter = "blur(60px)";
-    ctx.drawImage(img, left, top, dw, dh);
-  } else {
-    // Browsers without canvas filters: shrink then stretch back for a similar softness.
-    const small = document.createElement("canvas");
-    small.width = Math.round(CARD_W / 40);
-    small.height = Math.round(CARD_H / 40);
-    const sctx = small.getContext("2d")!;
-    sctx.imageSmoothingQuality = "high";
-    sctx.drawImage(img, left / 40, top / 40, dw / 40, dh / 40);
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(small, 0, 0, CARD_W, CARD_H);
-  }
-  ctx.restore();
-}
-
 export function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, alpha = 1) {
   const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
   const dw = img.naturalWidth * scale;
@@ -355,167 +301,6 @@ export function drawFooter(ctx: CanvasRenderingContext2D, logos: (FooterLogo | n
     });
     ctx.restore();
   }
-}
-
-/** Title + subtitle block; returns the y where content below it can start. */
-function drawHeader(
-  ctx: CanvasRenderingContext2D,
-  title: string,
-  subtitle: string,
-  maxTitle: number,
-  lightMiddle = true,
-): number {
-  const titleSize = fitSize(ctx, title, 900, maxTitle, 60, 700);
-  const parts = title.split(" OF THE ");
-  const topY = 20;
-  const cap = capHeight(ctx, { size: titleSize, weight: 700 });
-
-  if (lightMiddle && parts.length === 2) {
-    // "TEAM" / "WEEK" bold with a lighter "OF THE" between, centred as one line.
-    const bold: TextOpts = { size: titleSize, weight: 700 };
-    const light: TextOpts = { size: titleSize, weight: 400 };
-    setFont(ctx, bold);
-    const wLead = ctx.measureText(parts[0]).width;
-    const wTail = ctx.measureText(parts[1]).width;
-    setFont(ctx, light);
-    const gap = ctx.measureText(" ").width;
-    const wMid = ctx.measureText("OF THE").width;
-    const total = wLead + gap + wMid + gap + wTail;
-    let x = CARD_W / 2 - total / 2;
-    drawTextTop(ctx, parts[0], x, topY, bold);
-    x += wLead + gap;
-    drawTextTop(ctx, "OF THE", x, topY, light);
-    x += wMid + gap;
-    drawTextTop(ctx, parts[1], x, topY, bold);
-  } else {
-    drawTextTop(ctx, title, CARD_W / 2, topY, { ...{ size: titleSize, weight: 700 }, align: "center" });
-  }
-
-  const subSize = fitSize(ctx, subtitle, 900, 50, 30, 400);
-  const subCap = drawTextTop(ctx, subtitle, CARD_W / 2, topY + cap + 20, { size: subSize, align: "center" });
-  return topY + cap + 20 + subCap;
-}
-
-// ── Player of the Week ───────────────────────────────────────────────────────
-
-export async function renderPlayerOfTheWeek(
-  award: WeeklyAward,
-  brand: WeeklyCardBrand,
-  teamLogoUrl?: string | null,
-  framing?: PhotoFraming,
-  tint: number = DEFAULT_TINT,
-  showGameScore = true,
-): Promise<HTMLCanvasElement> {
-  await ensureDisplayFont();
-  const [logo, photo, teamLogo, leagueLogo] = await Promise.all([
-    fetchImg(swishLogoSrc),
-    fetchImg(award.photoUrl),
-    fetchImg(teamLogoUrl),
-    fetchImg(brand.leagueLogoUrl),
-  ]);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = CARD_W;
-  canvas.height = CARD_H;
-  const ctx = canvas.getContext("2d")!;
-  const accent = shade(brand.primaryHex, 0.28);
-
-  const t = Math.max(0, Math.min(100, tint)) / 100;
-
-  const bg = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
-  bg.addColorStop(0, shade(brand.primaryHex, -0.55));
-  bg.addColorStop(1, "#070403");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
-
-  const focusY = award.photoFocusY ?? 50;
-  if (photo) {
-    drawBlurredBackdrop(ctx, photo, focusY);
-    // Wash of the competition colour over the blurred backdrop.
-    ctx.save();
-    ctx.globalAlpha = t * 0.6;
-    ctx.fillStyle = brand.primaryHex;
-    ctx.fillRect(0, 0, CARD_W, CARD_H);
-    ctx.restore();
-    drawPhoto(ctx, photo, 0, 0, CARD_W, CARD_H, focusY, framing ?? DEFAULT_FRAMING);
-  } else {
-    drawTextTop(ctx, initialsOf(award.full_name), CARD_W / 2, 220, { size: 520, weight: 700, alpha: 0.14, align: "center" });
-  }
-  ctx.fillStyle = verticalGradient(ctx, 0, CARD_H, [
-    [0, withAlpha(shade(brand.primaryHex, -0.45), 0.35 + 0.5 * t)],
-    [0.24, "rgba(0,0,0,0)"],
-    [0.42, "rgba(0,0,0,0)"],
-    [0.66, "rgba(7,4,3,0.86)"],
-    [0.9, "#070403"],
-  ]);
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
-
-  // Competition logo, faded into the bottom-right behind the game score.
-  if (leagueLogo) drawContain(ctx, leagueLogo, CARD_W - 430, 905, 520, 520, 0.11);
-
-  drawHeader(ctx, "PLAYER OF THE WEEK", brand.leagueName, 118, false);
-
-  const LEFT = 60;
-  let y = 748;
-  if (teamLogo) drawContain(ctx, teamLogo, LEFT, y - 6, 60, 60);
-  const teamX = teamLogo ? LEFT + 76 : LEFT;
-  const teamSize = fitSize(ctx, award.team_name || "", CARD_W - LEFT - teamX, 40, 24, 500);
-  const teamCap = drawTextTop(ctx, award.team_name || "", teamX, y, { size: teamSize, weight: 500, alpha: 0.95 });
-  y += Math.max(teamCap, 52) + 8;
-
-  if (award.opponent_name) {
-    const opp = `vs ${award.opponent_name}`;
-    const oppSize = fitSize(ctx, opp, CARD_W - LEFT * 2 - 200, 32, 20, 400);
-    const oppCap = drawTextTop(ctx, opp, LEFT, y, { size: oppSize, alpha: 0.75 });
-    if (award.game_result) {
-      setFont(ctx, { size: oppSize });
-      const w = ctx.measureText(opp).width;
-      drawTextTop(ctx, award.game_result, LEFT + w + 16, y, {
-        size: oppSize, color: award.game_result.startsWith("W") ? "#8ddc74" : "#ff786b",
-      });
-    }
-    y += oppCap + 24;
-  }
-
-  const nameText = award.full_name.toUpperCase();
-  const nameSize = fitSize(ctx, nameText, CARD_W - LEFT * 2, 190, 70, 700);
-  const nameCap = drawTextTop(ctx, nameText, LEFT, y, { size: nameSize, weight: 700 });
-  y += nameCap + 34;
-
-  const headline: [string, number | null][] = [
-    ["PTS", award.pts], ["REB", award.reb], ["AST", award.ast], ["STL", award.stl], ["BLK", award.blk],
-  ];
-  const numCap = capHeight(ctx, { size: 84, weight: 600 });
-  headline.forEach(([label, value], i) => {
-    const cx = LEFT + 48 + i * 130;
-    drawTextTop(ctx, String(value ?? 0), cx, y, { size: 84, weight: 600, align: "center" });
-    drawTextTop(ctx, label, cx, y + numCap + 12, { size: 26, alpha: 0.8, align: "center" });
-  });
-
-  if (showGameScore) {
-    const gsX = CARD_W - LEFT - 130;
-    drawTextTop(ctx, "Game Score", gsX, y - 18, { size: 30, alpha: 0.85, align: "center" });
-    drawTextTop(ctx, fmtGameScore(award.game_score), gsX, y + 30, { size: 110, weight: 700, color: accent, align: "center" });
-  }
-
-  y += numCap + 12 + capHeight(ctx, { size: 26 }) + 40;
-  const splits: [string, string][] = [
-    ["FG", splitStat(award.fgm, award.fga)],
-    ["3PT", splitStat(award.tpm, award.tpa)],
-    ["FT", splitStat(award.ftm, award.fta)],
-  ];
-  let sx = LEFT;
-  splits.forEach(([label, value]) => {
-    drawTextTop(ctx, label, sx, y + 10, { size: 24, alpha: 0.7 });
-    setFont(ctx, { size: 24 });
-    sx += ctx.measureText(label).width + 12;
-    drawTextTop(ctx, value, sx, y, { size: 38, weight: 500, alpha: 0.9 });
-    setFont(ctx, { size: 38, weight: 500 });
-    sx += ctx.measureText(value).width + 46;
-  });
-
-  drawFooter(ctx, [logo, "statsthread", teamLogo, leagueLogo], brand.leagueName);
-  return canvas;
 }
 
 export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {

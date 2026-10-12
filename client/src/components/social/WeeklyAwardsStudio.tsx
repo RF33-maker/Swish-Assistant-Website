@@ -31,12 +31,12 @@ import {
   canvasToBlob,
   defaultFraming,
   ensureDisplayFont,
-  renderPlayerOfTheWeek,
   type FramingMap,
   type HeadMap,
   type HeadPoint,
   type PhotoFraming,
 } from "@/lib/generateWeeklyCards";
+import { renderPlayerOfTheWeek } from "@/lib/generatePlayerOfTheWeekCard";
 import { renderTeamOfTheWeek, teamPanelIndexAt } from "@/lib/generateTeamOfTheWeekCard";
 import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
@@ -118,7 +118,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   );
   const [unaligned, setUnaligned] = useState<string[]>([]);
   const [tint, setTint] = useState(DEFAULT_TINT);
-  // Team of the Week only: the look shared with the leaders cards, and each player's club crest.
+  // The look shared with the leaders cards, and (Team of the Week) each player's club crest.
   const [style, setStyle] = useCardStyle();
   const [clubLogos, setClubLogos] = useState<Record<string, string | null>>({});
 
@@ -313,7 +313,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   const [rendering, setRendering] = useState(false);
   const [hasCard, setHasCard] = useState(false);
   const cardCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const styleSuffix = kind === "team" && style !== "league" ? `-${style}` : "";
+  const styleSuffix = style !== "league" ? `-${style}` : "";
   const cardFileName = `${kind === "team" ? "team" : "player"}-of-the-week-${slug}-${weekStart || "latest"}${styleSuffix}.png`;
   const renderToken = useRef(0);
 
@@ -343,7 +343,14 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
             if (token === renderToken.current) setUnaligned(result.unaligned);
             return result.canvas;
           })
-        : renderPlayerOfTheWeek(potw!, brand, teamLogoUrl, framing[potw!.player_id], tint, showGameScore);
+        : renderPlayerOfTheWeek(potw!, brand, {
+            style,
+            weekLabel: weekStart ? fmtWeek(weekStart) : "",
+            teamLogoUrl,
+            framing: framing[potw!.player_id],
+            tint,
+            showGameScore,
+          });
     void draw
       .then((canvas) => {
         if (token !== renderToken.current) return;
@@ -441,9 +448,9 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
           <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className={FIELD} />
         </Field>
 
-        {kind === "team" && <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />}
+        <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
 
-        {!(kind === "team" && style === "swish") && (
+        {style !== "swish" && (
           <ColourField
             value={primaryHex}
             custom={!!colorOverride}
@@ -670,7 +677,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                   value={tint}
                   onChange={setTint}
                   testId="slider-photo-tint"
-                  hint="How much of the competition colour washes over the soft photo behind the player. 0% is just the photo."
+                  hint="How much of the card's colour washes over the photo. 0% leaves the photo as it was taken."
                 />
               )}
 
@@ -678,7 +685,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                 <p className={HINT}>
                   {kind === "team"
                     ? "Fine-tune just this photo: extra zoom, or nudge the head from the shared line. Its edges melt into the photos beside it."
-                    : "Move the photo freely: any space that opens up at an edge shows a soft blurred copy of the same photo. Slide Down (or zoom out) to bring a player's head clear of the heading."}
+                    : "Move the photo freely: any edge that comes into view melts into the card. Slide Down (or zoom out) to bring a player's head clear of the heading."}
                 </p>
               )}
             </div>

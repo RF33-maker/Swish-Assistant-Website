@@ -34,6 +34,7 @@ import {
   ensureDisplayFont,
   fetchImg,
   fitSize,
+  fmtGameScore,
   headlineStats,
   initialsOf,
   placeInFrame,
@@ -125,8 +126,6 @@ function drawColumnPhoto(
   ctx.drawImage(photo.canvas, index * cw - OVERLAP, FRAME_TOP - RISE);
   return placed.aligned;
 }
-
-const fmtGameScore = (v: number | null) => (v == null ? "—" : Number(v).toFixed(1));
 
 export async function renderTeamOfTheWeek(
   awards: WeeklyAward[],
