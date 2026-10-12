@@ -19,6 +19,7 @@ import {
   Stage,
   type CompetitionOption,
 } from "@/components/social/studioUi";
+import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
 import { photoChangeLendsTo, usePlayerPhotoChange } from "@/lib/playerPhotos";
 import { supabase } from "@/lib/supabase";
 import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
@@ -40,13 +41,14 @@ function fmtShift(v: number): string {
   return n > 0 ? `+${n}%` : `${n}%`;
 }
 
-/** Player / Team league leaders: the top five in a category, with the #1 player's photo or club logo. */
+/** Player / Team league leaders: the top five in a category, led by the #1 player's photo or the #1 club's crest. */
 export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   const initialSlug = new URLSearchParams(window.location.search).get("slug") || readStoredCompetition(SLUG_KEY) || DEFAULT_SLUG;
 
   const [competitions, setCompetitions] = useState<CompetitionOption[]>([]);
   const [slug, setSlug] = useState(initialSlug);
   const [category, setCategory] = useState("pts");
+  const [style, setStyle] = useCardStyle();
   const [minGamesText, setMinGamesText] = useState("");
   const [data, setData] = useState<LeadersResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -107,14 +109,18 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   useEffect(() => {
     let cancelled = false;
     setTeamLogoUrls([]);
-    if (kind !== "team" || !data) return;
+    if (!data) return;
+    // Team leaders show each club's crest; player leaders show the crest of each player's club.
     void Promise.all(
-      data.leaders.map((l) => getTeamLogoCached({ leagueId: l.league_id, teamName: l.team_name || l.name }).catch(() => null)),
+      data.leaders.map((l) => {
+        const teamName = l.team_name || (data.kind === "team" ? l.name : null);
+        return teamName ? getTeamLogoCached({ leagueId: l.league_id, teamName }).catch(() => null) : null;
+      }),
     ).then((urls) => !cancelled && setTeamLogoUrls(urls));
     return () => {
       cancelled = true;
     };
-  }, [kind, data]);
+  }, [data]);
 
   const brand = useMemo(
     () => ({ leagueName: subtitle || data?.league.name || "", leagueLogoUrl, primaryHex }),
@@ -146,7 +152,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   const renderToken = useRef(0);
   const [rendering, setRendering] = useState(false);
   const [hasCard, setHasCard] = useState(false);
-  const fileName = `${kind}-leaders-${category}-${slug}.png`;
+  const fileName = `${kind}-leaders-${category}-${slug}${style === "league" ? "" : `-${style}`}.png`;
 
   useEffect(() => {
     const token = ++renderToken.current;
@@ -161,12 +167,14 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
     setShareFile(null);
     void renderLeadersCard({
       kind,
+      style,
       categoryTitle: data.category.title,
       unit: data.category.short,
       leaders: data.leaders,
       brand,
       teamLogoUrls,
       framing: leaderFraming,
+      footnote: data.minGames > 1 ? `Min. ${data.minGames} games` : undefined,
     })
       .then((canvas) => {
         if (token !== renderToken.current) return;
@@ -183,7 +191,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, data, brand, teamLogoUrls, leaderFraming, fileName]);
+  }, [kind, style, data, brand, teamLogoUrls, leaderFraming, fileName]);
 
   const download = async () => {
     const canvas = cardCanvasRef.current;
@@ -222,8 +230,8 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
         title={title}
         description={
           kind === "player"
-            ? "The top five players in a category, with the leader's photo."
-            : "The top five teams in a category, with the leader's club logo."
+            ? "The top five players in a category, led by the leader's photo."
+            : "The top five teams in a category, led by the leader's club crest."
         }
         className="order-2 lg:order-1"
         bodyClassName="space-y-4"
@@ -264,7 +272,9 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
           <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className={FIELD} />
         </Field>
 
-        <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />
+        <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
+
+        {style !== "swish" && <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />}
 
         {error && <p className={ERROR}>{error}</p>}
       </Panel>
@@ -296,7 +306,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-[color:var(--ch-text)]">Photo framing</p>
-                    <p className={HINT}>Adjusts the card only. The photo always fills its panel.</p>
+                    <p className={HINT}>Adjusts the card only. The photo's edges fade into the card wherever it sits.</p>
                   </div>
                   <button
                     type="button"
@@ -312,7 +322,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
                   <RangeField
                     label="Zoom"
                     display={`${Math.round(leaderFraming.zoom * 100)}%`}
-                    min={1}
+                    min={0.6}
                     max={3}
                     step={0.05}
                     value={leaderFraming.zoom}

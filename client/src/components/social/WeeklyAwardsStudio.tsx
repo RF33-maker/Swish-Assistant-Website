@@ -32,13 +32,13 @@ import {
   defaultFraming,
   ensureDisplayFont,
   renderPlayerOfTheWeek,
-  renderTeamOfTheWeek,
-  teamPanelIndexAt,
   type FramingMap,
   type HeadMap,
   type HeadPoint,
   type PhotoFraming,
 } from "@/lib/generateWeeklyCards";
+import { renderTeamOfTheWeek, teamPanelIndexAt } from "@/lib/generateTeamOfTheWeekCard";
+import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import type { WeeklyAward, WeeklyAwardsResponse } from "@/types/weeklyAwards";
 
@@ -118,6 +118,9 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   );
   const [unaligned, setUnaligned] = useState<string[]>([]);
   const [tint, setTint] = useState(DEFAULT_TINT);
+  // Team of the Week only: the look shared with the leaders cards, and each player's club crest.
+  const [style, setStyle] = useCardStyle();
+  const [clubLogos, setClubLogos] = useState<Record<string, string | null>>({});
 
   const [leagueLogoUrl, setLeagueLogoUrl] = useState<string | null>(null);
   const [logoColorHex, setLogoColorHex] = useState<string | null>(null);
@@ -284,6 +287,18 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     return () => { cancelled = true; };
   }, [potw]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (kind !== "team") return;
+    void Promise.all(
+      chosen.map(async (a) => {
+        const url = a.team_name ? await getTeamLogoCached({ leagueId: a.league_id, teamName: a.team_name }).catch(() => null) : null;
+        return [a.player_id, url] as const;
+      }),
+    ).then((pairs) => !cancelled && setClubLogos(Object.fromEntries(pairs)));
+    return () => { cancelled = true; };
+  }, [kind, chosen]);
+
   const brand = useMemo(
     () => ({
       leagueName: subtitle || data?.league.name || "",
@@ -298,7 +313,8 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   const [rendering, setRendering] = useState(false);
   const [hasCard, setHasCard] = useState(false);
   const cardCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const cardFileName = `${kind === "team" ? "team" : "player"}-of-the-week-${slug}-${weekStart || "latest"}.png`;
+  const styleSuffix = kind === "team" && style !== "league" ? `-${style}` : "";
+  const cardFileName = `${kind === "team" ? "team" : "player"}-of-the-week-${slug}-${weekStart || "latest"}${styleSuffix}.png`;
   const renderToken = useRef(0);
 
   useEffect(() => {
@@ -315,6 +331,9 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     const draw =
       kind === "team"
         ? renderTeamOfTheWeek(chosen, brand, {
+            style,
+            weekLabel: weekStart ? fmtWeek(weekStart) : "",
+            teamLogoUrls: clubLogos,
             framing,
             showGameScore,
             heads: headMap,
@@ -341,7 +360,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, chosen, potw, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName]);
+  }, [kind, chosen, potw, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName, style, clubLogos, weekStart]);
 
   const toggle = (id: string) =>
     setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 5 ? cur : [...cur, id]));
@@ -422,12 +441,16 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
           <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className={FIELD} />
         </Field>
 
-        <ColourField
-          value={primaryHex}
-          custom={!!colorOverride}
-          onChange={updateColour}
-          onReset={() => { setColorOverride(null); try { localStorage.removeItem(`weekly-awards-colour:${slug}`); } catch { /* ignore */ } }}
-        />
+        {kind === "team" && <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />}
+
+        {!(kind === "team" && style === "swish") && (
+          <ColourField
+            value={primaryHex}
+            custom={!!colorOverride}
+            onChange={updateColour}
+            onReset={() => { setColorOverride(null); try { localStorage.removeItem(`weekly-awards-colour:${slug}`); } catch { /* ignore */ } }}
+          />
+        )}
 
         <Toggle
           checked={showGameScore}
@@ -550,8 +573,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                         testId="slider-head-line"
                       />
                       <p className={HINT}>
-                        Photos always fill their frame with nothing faded. Each one is zoomed and shifted just enough to put the marked
-                        face on this line.
+                        Each photo is zoomed and shifted just enough to put the marked face on this line.
                       </p>
                       {needMarks.length > 0 && (
                         <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -655,7 +677,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
               {target.photoUrl && (
                 <p className={HINT}>
                   {kind === "team"
-                    ? "Fine-tune just this photo: extra zoom, or nudge the head from the shared line. The photo always stays filled edge to edge."
+                    ? "Fine-tune just this photo: extra zoom, or nudge the head from the shared line. Its edges melt into the photos beside it."
                     : "Move the photo freely: any space that opens up at an edge shows a soft blurred copy of the same photo. Slide Down (or zoom out) to bring a player's head clear of the heading."}
                 </p>
               )}
