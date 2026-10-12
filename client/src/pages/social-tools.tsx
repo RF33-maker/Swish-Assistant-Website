@@ -1,16 +1,17 @@
 import { useState } from "react";
-import { ImagePlus, Layers, Medal, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
+import { ImagePlus, Layers, Medal, ScatterChart, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
 import AdminPageShell from "@/components/layout/AdminPageShell";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TopPerformancesStudio from "@/components/social/TopPerformancesStudio";
 import WeeklyAwardsStudio from "@/components/social/WeeklyAwardsStudio";
 import LeadersStudio from "@/components/social/LeadersStudio";
 import LineupsStudio from "@/components/social/LineupsStudio";
+import LandscapeStudio from "@/components/social/LandscapeStudio";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 import { FIELD, SELECT_MENU } from "@/components/social/studioUi";
 
-type SectionId = "performances" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "best-lineup" | "photos";
+type SectionId = "performances" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "best-lineup" | "photos";
 
 type Group = "Game cards" | "Weekly awards" | "League leaders" | "Lineups" | "Tools";
 
@@ -30,6 +31,7 @@ const SECTIONS: Section[] = [
   { id: "player-of-the-week", group: "Weekly awards", label: "Player of the Week", icon: Star },
   { id: "player-leaders", group: "League leaders", label: "Player leaders", icon: Medal },
   { id: "team-leaders", group: "League leaders", label: "Team leaders", icon: Shield },
+  { id: "team-landscape", group: "League leaders", label: "Team landscape", icon: ScatterChart },
   { id: "best-lineup", group: "Lineups", label: "Best lineup", icon: Layers },
   { id: "photos", group: "Tools", label: "Player photos", icon: ImagePlus },
 ];
@@ -153,6 +155,11 @@ export default function SocialToolsPage() {
         {visited.has("team-leaders") && (
           <div className={show("team-leaders")}>
             <LeadersStudio kind="team" />
+          </div>
+        )}
+        {visited.has("team-landscape") && (
+          <div className={show("team-landscape")}>
+            <LandscapeStudio />
           </div>
         )}
         {visited.has("best-lineup") && (
