@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import { TeamLogo } from "@/components/TeamLogo";
+import { generateComparisonCardBlob } from "@/lib/generateComparisonCard";
 import ShareableCard from "@/components/ShareableCard";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
@@ -16,6 +16,7 @@ import {
   CompareRows,
   CopyLinkButton,
   readCompareParam,
+  scoreRows,
   shortTeamName,
   Suggestions,
   VIEW_OPTIONS,
@@ -34,9 +35,12 @@ interface TeamComparisonProps {
   standings?: { team: string }[];
   /** A team to start with on the left (from "Compare" on a team's page). */
   preselectTeam?: string | null;
+  /** For the downloadable card. */
+  leagueName?: string;
+  leagueLogoUrl?: string | null;
 }
 
-export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds, standings, preselectTeam }: TeamComparisonProps) {
+export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds, standings, preselectTeam, leagueName, leagueLogoUrl }: TeamComparisonProps) {
   const [team1Name, setTeam1Name] = useState<string>("");
   const [team2Name, setTeam2Name] = useState<string>("");
   const [team1Stats, setTeam1Stats] = useState<any>(null);
@@ -298,226 +302,30 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  // Share-card layout — sized for the wide (1080px) social-friendly capture
-  // surface in ShareableCard. Uses generous logos, full-text team names that
-  // wrap rather than truncate, and a tall stats table so the export reads
-  // cleanly when shared on Instagram / X.
-  const renderShareVsTeam = (s: any, accent: 'orange' | 'slate') => (
-    <div className="flex flex-col items-center gap-3 min-w-0">
-      <div
-        className={`rounded-full bg-white shadow flex items-center justify-center overflow-hidden ${
-          accent === 'orange' ? 'border-4 border-orange-300' : 'border-4 border-slate-300'
-        }`}
-        style={{ width: 140, height: 140, padding: 6 }}
-      >
-        <TeamLogo
-          teamName={s.name}
-          leagueId={leagueId}
-          size={124}
-          className="!w-[124px] !h-[124px]"
-          crossOrigin="anonymous"
-        />
-      </div>
-      <div className="text-center w-full px-1">
-        <div
-          className="font-black text-slate-800"
-          style={{
-            fontSize: 26,
-            lineHeight: 1.15,
-            wordBreak: 'break-word',
-            hyphens: 'auto',
-          }}
-        >
-          {s.name}
-        </div>
-        <div className="text-slate-500 mt-1 font-medium" style={{ fontSize: 15 }}>
-          {s.games} game{s.games !== 1 ? 's' : ''}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderShareVsHeader = (s1: any, s2: any) => (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-5">
-      {renderShareVsTeam(s1, 'orange')}
-      <div
-        className="font-black text-orange-500 tracking-widest self-center"
-        style={{ fontSize: 48 }}
-      >
-        VS
-      </div>
-      {renderShareVsTeam(s2, 'slate')}
-    </div>
-  );
-
-  const renderShareTable = (s1: any, s2: any, captionText?: string) => {
-    const rows = getTeamComparisonRows(comparisonCategory, s1, s2);
-    return (
-      <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-        {captionText && (
-          <div
-            className="text-center font-bold uppercase tracking-widest text-orange-700 bg-orange-50 border-b border-orange-100"
-            style={{ fontSize: 14, padding: '10px 12px', letterSpacing: '0.18em' }}
-          >
-            {captionText}
-          </div>
-        )}
-        <table className="w-full" style={{ fontSize: 18 }}>
-          <thead className="bg-slate-50">
-            <tr>
-              <th
-                className="text-right font-black text-slate-800 align-bottom"
-                style={{ padding: '14px 16px', width: '38%', wordBreak: 'break-word', lineHeight: 1.15, fontSize: 18 }}
-              >
-                {s1.name}
-              </th>
-              <th
-                className="text-center font-bold text-slate-500 uppercase tracking-wider align-bottom"
-                style={{ padding: '14px 8px', fontSize: 12, letterSpacing: '0.16em' }}
-              >
-                Stat
-              </th>
-              <th
-                className="text-left font-black text-slate-800 align-bottom"
-                style={{ padding: '14px 16px', width: '38%', wordBreak: 'break-word', lineHeight: 1.15, fontSize: 18 }}
-              >
-                {s2.name}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => {
-              const num1 = parseFloat(String(row.value1));
-              const num2 = parseFloat(String(row.value2));
-              const t1Better = row.lowerIsBetter ? num1 < num2 : num1 > num2;
-              const t2Better = row.lowerIsBetter ? num2 < num1 : num2 > num1;
-              return (
-                <tr
-                  key={i}
-                  className={`border-t border-slate-100 ${i % 2 === 1 ? 'bg-slate-50/60' : ''}`}
-                >
-                  <td
-                    className={`text-right tabular-nums font-bold ${t1Better ? 'text-orange-600' : 'text-slate-700'}`}
-                    style={{ padding: '8px 16px', fontSize: 20 }}
-                  >
-                    {row.value1}
-                  </td>
-                  <td
-                    className="text-center font-semibold text-slate-600 uppercase tracking-wider"
-                    style={{ padding: '8px 8px', fontSize: 12, letterSpacing: '0.16em' }}
-                  >
-                    {row.label}
-                  </td>
-                  <td
-                    className={`text-left tabular-nums font-bold ${t2Better ? 'text-orange-600' : 'text-slate-700'}`}
-                    style={{ padding: '8px 16px', fontSize: 20 }}
-                  >
-                    {row.value2}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const renderShareContent = () => {
-    if (!team1Stats || !team2Stats) return null;
-    // Body fills the 4:5 frame: roughly 1080w × 982h after header/footer.
-    const bodyMinHeight = 980;
-    if (view === 'season') {
-      return (
-        <div className="flex flex-col gap-7" style={{ minHeight: bodyMinHeight }}>
-          {renderShareVsHeader(team1Stats, team2Stats)}
-          {renderShareTable(team1Stats, team2Stats, `${comparisonCategory} • Season Averages`)}
-        </div>
-      );
-    }
-    // Head-to-Head
-    if (h2h.games.length === 0) {
-      return (
-        <div className="flex flex-col gap-7" style={{ minHeight: bodyMinHeight }}>
-          {renderShareVsHeader(team1Stats, team2Stats)}
-          <div className="rounded-xl bg-slate-50 border border-slate-200 text-center" style={{ padding: 32 }}>
-            <p className="font-bold text-slate-700" style={{ fontSize: 22 }}>
-              No head-to-head matchups yet
-            </p>
-            <p className="text-slate-500 mt-2" style={{ fontSize: 16 }}>
-              {team1Stats.name} and {team2Stats.name} haven't played each other.
-            </p>
-          </div>
-        </div>
-      );
-    }
-    const recordText = h2h.team1Wins > h2h.team2Wins
-      ? `${team1Stats.name} leads ${h2h.team1Wins}-${h2h.team2Wins}`
-      : h2h.team2Wins > h2h.team1Wins
-        ? `${team2Stats.name} leads ${h2h.team2Wins}-${h2h.team1Wins}`
-        : `Series tied ${h2h.team1Wins}-${h2h.team2Wins}`;
-    const recentGames = h2h.games.slice(0, 6);
-    return (
-      <div className="flex flex-col gap-6" style={{ minHeight: bodyMinHeight }}>
-        {renderShareVsHeader(team1Stats, team2Stats)}
-        <div
-          className="text-center rounded-xl bg-orange-50 border border-orange-200"
-          style={{ padding: '18px 24px' }}
-        >
-          <div
-            className="uppercase tracking-widest text-slate-500 font-bold"
-            style={{ fontSize: 13, letterSpacing: '0.2em' }}
-          >
-            Series Record
-          </div>
-          <div className="font-black text-slate-800 mt-1.5" style={{ fontSize: 30, lineHeight: 1.15, wordBreak: 'break-word' }}>
-            {recordText}
-          </div>
-          <div className="text-slate-500 mt-1" style={{ fontSize: 14 }}>
-            {h2h.games.length} game{h2h.games.length !== 1 ? 's' : ''} played
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-          <div
-            className="text-center font-bold uppercase tracking-widest text-orange-700 bg-orange-50 border-b border-orange-100"
-            style={{ fontSize: 13, padding: '10px 12px', letterSpacing: '0.18em' }}
-          >
-            Recent Matchups
-          </div>
-          <table className="w-full" style={{ fontSize: 16 }}>
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="text-left font-bold text-slate-600" style={{ padding: '10px 14px' }}>Date</th>
-                <th className="text-center font-bold text-slate-600" style={{ padding: '10px 14px' }}>Score</th>
-                <th className="text-left font-bold text-slate-600" style={{ padding: '10px 14px' }}>Winner</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentGames.map((g, idx) => {
-                const scoreText = g.homeIsTeam1
-                  ? `${g.score1} - ${g.score2}`
-                  : `${g.score2} - ${g.score1}`;
-                return (
-                  <tr key={g.game_key || idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/60' : ''}`}>
-                    <td className="text-slate-700 whitespace-nowrap" style={{ padding: '10px 14px' }}>{formatDate(g.date)}</td>
-                    <td className="text-center font-bold tabular-nums text-slate-800" style={{ padding: '10px 14px', fontSize: 18 }}>{scoreText}</td>
-                    <td className="font-semibold text-orange-600" style={{ padding: '10px 14px', wordBreak: 'break-word' }}>{g.winner ?? 'Tie'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {h2h.games.length > recentGames.length && (
-            <div className="text-center text-slate-500 bg-slate-50" style={{ fontSize: 13, padding: '8px 12px' }}>
-              +{h2h.games.length - recentGames.length} more game{h2h.games.length - recentGames.length !== 1 ? 's' : ''}
-            </div>
-          )}
-        </div>
-        {h2h.team1Stats && h2h.team2Stats && (
-          renderShareTable(h2h.team1Stats, h2h.team2Stats, `${comparisonCategory} • H2H Only`)
-        )}
-      </div>
-    );
+  // The downloadable card: drawn on a canvas in the Swish Social look, from whichever view is on show.
+  const generateCardBlob = () => {
+    const inH2H = view === 'h2h' && h2h.team1Stats && h2h.team2Stats;
+    const s1 = inH2H ? h2h.team1Stats : team1Stats;
+    const s2 = inH2H ? h2h.team2Stats : team2Stats;
+    return generateComparisonCardBlob({
+      kind: 'team',
+      left: { name: shortTeamName(s1.name) || s1.name, games: s1.games, logoUrl: team1LogoUrl },
+      right: { name: shortTeamName(s2.name) || s2.name, games: s2.games, logoUrl: team2LogoUrl },
+      rows: scoreRows(getTeamComparisonRows(comparisonCategory, s1, s2)).map((r) => ({ ...r, value1: String(r.value1), value2: String(r.value2) })),
+      banner: `${inH2H ? 'Head-to-head only' : 'Season averages'} · ${comparisonCategory}`,
+      // In the head-to-head view the middle of the card carries the series score.
+      centre: inH2H ? { text: `${h2h.team1Wins}–${h2h.team2Wins}`, caption: 'Series' } : undefined,
+      results: inH2H
+        ? h2h.games.map((g) => {
+            const [home, away] = g.homeIsTeam1 ? [s1.name, s2.name] : [s2.name, s1.name];
+            const [homeScore, awayScore] = g.homeIsTeam1 ? [g.score1, g.score2] : [g.score2, g.score1];
+            return `${formatDate(g.date)} · ${shortTeamName(home) || home} ${homeScore}–${awayScore} ${shortTeamName(away) || away}`;
+          })
+        : undefined,
+      leagueName: leagueName || '',
+      leagueLogoUrl,
+      primaryHex: brandColor || '#f97316',
+    });
   };
 
   const clearTeam1 = () => {
@@ -582,7 +390,9 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
             primaryColor: brandColor,
           }}
           shareCaption={comparisonCategory.toUpperCase()}
-          shareContent={renderShareContent()}
+          generateCardBlob={generateCardBlob}
+          // The image is drawn by generateCardBlob, so the hidden capture layout isn't needed.
+          shareContent={<></>}
           teamLogos={[
             { name: team1Stats.name, logoUrl: team1LogoUrl },
             { name: team2Stats.name, logoUrl: team2LogoUrl },

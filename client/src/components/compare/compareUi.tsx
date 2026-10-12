@@ -350,9 +350,10 @@ const STAT_NAMES: Record<string, string> = {
 
 export type CompareRowData = { label: string; value1: string | number; value2: string | number; lowerIsBetter?: boolean };
 
-type Scored = CompareRowData & { n1: number; n2: number; lead: 0 | 1 | 2 };
+export type ScoredRow = CompareRowData & { n1: number; n2: number; lead: 0 | 1 | 2 };
 
-function scoreRows(rows: CompareRowData[]): Scored[] {
+/** Works out who is better in each stat, and drops the stats neither side has a number for. */
+export function scoreRows(rows: CompareRowData[]): ScoredRow[] {
   return rows
     .map((row) => {
       const n1 = parseFloat(String(row.value1));

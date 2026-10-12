@@ -39,6 +39,7 @@ import {
 import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { LeagueLandscape, LeagueLandscapeTeaser } from "@/components/LeagueLandscape";
+import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName, buildFuzzyTeamAliasMap } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName, strictNamesMatch, normalizeName } from "@/lib/fuzzyMatch";
@@ -745,6 +746,9 @@ export default function LeaguePage() {
 
   const displayBannerUrl = league?.banner_url || publicBrandingData?.banner_url;
   const displayLogoUrl = league?.logo_url || publicBrandingData?.logo_url;
+  // The downloadable cards also take the logo from the competition's league brand, as Swish Social does.
+  const { leagueLogoUrl: cardLeagueLogoUrl } = useCompetitionCardBrand(slug || "");
+  const cardLogoUrl = displayLogoUrl || cardLeagueLogoUrl;
   const displayLeagueName = league?.name || publicBrandingData?.name;
 
   const brandColor = leagueBrandColors?.primary || 'rgb(100, 100, 100)';
@@ -5716,6 +5720,8 @@ export default function LeaguePage() {
                     allPlayers={allPlayerAverages}
                     brandColor={brandColorHex}
                     preselectSlug={comparePreselect.playerSlug}
+                    leagueName={league?.name}
+                    leagueLogoUrl={cardLogoUrl}
                   />
                 ) : (
                   <TeamComparison 
@@ -5725,6 +5731,8 @@ export default function LeaguePage() {
                     scopedLeagueIds={isParentLeague ? selectedAgeGroupLeagueIds : [getDataLeagueId(slug, league?.league_id || "")]}
                     standings={standings as { team: string }[]}
                     preselectTeam={comparePreselect.team}
+                    leagueName={league?.name}
+                    leagueLogoUrl={cardLogoUrl}
                   />
                 )}
               </div>
