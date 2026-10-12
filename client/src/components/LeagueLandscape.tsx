@@ -405,3 +405,46 @@ export function LeagueLandscape({ slug, brandColor, scopedLeagueIds, onTeamSelec
     </div>
   );
 }
+
+// A made-up scatter for the teaser: enough to say "chart", without fetching the league's numbers on the Overview tab.
+const TEASER_DOTS: [number, number][] = [
+  [78, 18], [66, 26], [58, 34], [84, 40], [47, 30], [38, 52], [55, 56], [64, 62], [30, 44], [22, 66], [44, 72], [72, 74],
+];
+
+/** The Overview tab's way in to the league landscape. */
+export function LeagueLandscapeTeaser({ brandColor, onOpen }: { brandColor?: string; onOpen: () => void }) {
+  const accent = brandColor || "var(--ch-accent)";
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      data-testid="landscape-teaser"
+      className="ch-card ch-hover group flex w-full items-center gap-4 p-4 text-left md:gap-6 md:p-6"
+    >
+      <span
+        aria-hidden="true"
+        className="relative h-20 w-24 flex-none overflow-hidden rounded-lg border border-[color:var(--ch-border)] bg-slate-50 dark:bg-white/[0.03] md:h-24 md:w-32"
+      >
+        <span className="absolute inset-y-0 left-1/2 w-px bg-slate-900/20 dark:bg-white/20" />
+        <span className="absolute inset-x-0 top-1/2 h-px bg-slate-900/20 dark:bg-white/20" />
+        {TEASER_DOTS.map(([x, y], i) => (
+          <span
+            key={i}
+            className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-400 dark:bg-white/50 md:h-2.5 md:w-2.5"
+            style={{ left: `${x}%`, top: `${y}%`, ...(i === 0 ? { backgroundColor: accent, boxShadow: `0 0 0 3px color-mix(in srgb, ${accent} 30%, transparent)` } : {}) }}
+          />
+        ))}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold tracking-tight text-[color:var(--ch-text)] md:text-base">League landscape</span>
+        <span className="mt-1 block text-xs text-[color:var(--ch-text-2)] md:text-sm">
+          See where every team sits: offence against defence, pace, shooting, rebounding and more, across {LANDSCAPE_PRESETS.length} charts.
+        </span>
+        <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold md:text-sm" style={{ color: accent }}>
+          Explore the landscape
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+        </span>
+      </span>
+    </button>
+  );
+}

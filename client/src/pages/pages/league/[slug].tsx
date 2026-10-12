@@ -38,7 +38,7 @@ import {
 } from "@/components/skeletons/LoadingSkeleton";
 import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
-import { LeagueLandscape } from "@/components/LeagueLandscape";
+import { LeagueLandscape, LeagueLandscapeTeaser } from "@/components/LeagueLandscape";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName, buildFuzzyTeamAliasMap } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName, strictNamesMatch, normalizeName } from "@/lib/fuzzyMatch";
@@ -6618,6 +6618,28 @@ export default function LeaguePage() {
                   )
                   })()}
                 </div>
+
+                {/* The way in to the league landscape, which lives in the Compare tab */}
+                <LeagueLandscapeTeaser
+                  brandColor={readableBrand.body}
+                  onOpen={() => {
+                    setSelectedPlayerSlug(null);
+                    setSelectedTeamName(null);
+                    setComparisonMode('landscape');
+                    setActiveSection('comparison');
+                    // The same loads as the Compare tab itself, so the two comparisons are ready too.
+                    if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
+                      fetchAllPlayerAverages();
+                    }
+                    if (teamStatsData.length === 0) {
+                      fetchTeamStats();
+                    }
+                    // The tile sits well down the Overview; bring the chart's controls into view once it is drawn.
+                    setTimeout(() => {
+                      document.querySelector('[data-testid="button-league-landscape"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 50);
+                  }}
+                />
 
             {/* Tournament Bracket - Only for BCB Trophy */}
             {slug === 'british-championship-basketball' && league?.league_id && (
