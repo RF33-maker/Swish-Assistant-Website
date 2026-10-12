@@ -10,6 +10,7 @@ import { canvasToBlob, ensureDisplayFont } from "@/lib/generateWeeklyCards";
 import { renderLineupSimpleCard } from "@/lib/generateLineupSimpleCard";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import type { LineupMetric, LineupUnit, LineupsResponse } from "@/types/lineups";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 const HEADS_KEY = "weekly-awards-heads";
 
@@ -264,11 +265,12 @@ export function TeamLineupsPanel({ slug, teamName, accentColor, teamRgb }: Props
                   {u.players.map((p) => (
                     <div key={p.key} className="min-w-0 text-center">
                       {p.photoUrl ? (
-                        <img
+                        <PlayerHeadshot
                           src={p.photoUrl}
                           alt=""
                           loading="lazy"
-                          className="mx-auto h-11 w-11 rounded-full bg-gray-200 object-cover object-top md:h-14 md:w-14 dark:bg-neutral-700"
+                          className="mx-auto h-11 w-11 rounded-full bg-gray-200 object-cover md:h-14 md:w-14 dark:bg-neutral-700"
+                          fallbackClassName="object-top"
                         />
                       ) : (
                         <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-slate-600 md:h-14 md:w-14 dark:bg-neutral-700 dark:text-slate-300">

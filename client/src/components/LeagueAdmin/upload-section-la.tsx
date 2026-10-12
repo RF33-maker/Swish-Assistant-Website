@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { UploadCloud } from "lucide-react";
+import { BTN_GHOST, BTN_PRIMARY, FIELD, Field, Panel } from "@/components/layout/proUi";
 
 type AmbiguousTeam = {
   leagueId: string;
@@ -276,97 +276,93 @@ const UploadSectionLA = ({ leagues }: any) => {
   });
 
   return (
-    <Card className="w-full">
-      <CardContent className="p-6 space-y-4">
-        {/* League Dropdown */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Select League
-          </label>
-          <select
-            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
-            value={selectedLeagueId}
-            onChange={(e) => setSelectedLeagueId(e.target.value)}
-            data-testid="select-league"
-          >
-            <option value="">-- Choose a League --</option>
-            {leagues?.map((league: any) => (
-              <option key={league.league_id} value={league.league_id}>
-                {league.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* File Upload */}
-        <div
-          {...getRootProps()}
-          className={`p-6 border-2 border-dashed rounded-lg text-center cursor-pointer transition-colors ${
-            isDragActive
-              ? "border-orange-500 bg-orange-50"
-              : "border-gray-300 bg-gray-50 hover:bg-gray-100"
-          }`}
+    <Panel title="Upload game data" icon={UploadCloud} description="Add a box score file to a league. It is parsed straight into the database." bodyClassName="space-y-4">
+      {/* League Dropdown */}
+      <Field label="Select League">
+        <select
+          className={FIELD}
+          value={selectedLeagueId}
+          onChange={(e) => setSelectedLeagueId(e.target.value)}
+          data-testid="select-league"
         >
-          <input {...getInputProps()} />
-          {isDragActive ? (
-            <p className="text-orange-600 font-medium">
-              Drop the file here...
-            </p>
-          ) : (
-            <p className="text-gray-600">
-              Drag and drop a file here, or{" "}
-              <span className="font-semibold text-orange-600">click to select</span>{" "}
-              a <strong>.xlsx</strong> or <strong>.pdf</strong> file
-            </p>
-          )}
-        </div>
+          <option value="">-- Choose a League --</option>
+          {leagues?.map((league: any) => (
+            <option key={league.league_id} value={league.league_id}>
+              {league.name}
+            </option>
+          ))}
+        </select>
+      </Field>
 
-        {/* Status Messages */}
-        {isUploading && (
-          <p className="text-sm text-blue-600 font-medium">⏳ Uploading...</p>
+      {/* File Upload */}
+      <div
+        {...getRootProps()}
+        className={`cursor-pointer rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
+          isDragActive
+            ? "border-[color:var(--ch-accent)] bg-[color:var(--ch-accent-soft)]"
+            : "border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface-2)] hover:bg-[color:var(--ch-surface-3)]"
+        }`}
+      >
+        <input {...getInputProps()} />
+        {isDragActive ? (
+          <p className="font-medium text-[color:var(--ch-accent)]">
+            Drop the file here...
+          </p>
+        ) : (
+          <p className="text-sm text-[color:var(--ch-text-2)]">
+            Drag and drop a file here, or{" "}
+            <span className="font-semibold text-[color:var(--ch-accent)]">click to select</span>{" "}
+            a <strong>.xlsx</strong> or <strong>.pdf</strong> file
+          </p>
         )}
-        {statusMessage && (
-          <p className="text-sm font-medium">{statusMessage}</p>
-        )}
+      </div>
 
-        {/* Manual Re-Parse Button */}
-        {lastFilePath && (
-          <Button
-            onClick={() => triggerParse(lastFilePath)}
-            className="mt-4 bg-orange-500 hover:bg-orange-600"
-            disabled={!selectedLeagueId}
-          >
-            🔄 Re-Parse Latest File
-          </Button>
-        )}
-      </CardContent>
+      {/* Status Messages */}
+      {isUploading && (
+        <p className="text-sm font-medium text-[color:var(--ch-text-2)]">⏳ Uploading...</p>
+      )}
+      {statusMessage && (
+        <p className="text-sm font-medium text-[color:var(--ch-text)]">{statusMessage}</p>
+      )}
+
+      {/* Manual Re-Parse Button */}
+      {lastFilePath && (
+        <button
+          type="button"
+          onClick={() => triggerParse(lastFilePath)}
+          className={BTN_PRIMARY}
+          disabled={!selectedLeagueId}
+        >
+          🔄 Re-Parse Latest File
+        </button>
+      )}
+
       {ambiguousTeams.length > 0 && (
-        <CardContent className="px-6 pb-6 space-y-3">
-          <h3 className="font-semibold">Teams needing review</h3>
+        <div className="space-y-3 border-t border-[color:var(--ch-border)] pt-4">
+          <h3 className="text-sm font-semibold text-[color:var(--ch-text)]">Teams needing review</h3>
           {ambiguousTeams.map((team) => (
-            <div key={`${team.leagueId}:${team.teamName}`} className="rounded-md border p-3 space-y-2">
-              <div className="font-medium">{team.teamName}</div>
+            <div key={`${team.leagueId}:${team.teamName}`} className="ch-tile space-y-2 p-3">
+              <div className="text-sm font-medium text-[color:var(--ch-text)]">{team.teamName}</div>
               <div className="flex flex-wrap gap-2">
                 {team.candidates.map((candidate) => (
-                  <Button
+                  <button
                     key={candidate.teamId}
                     type="button"
-                    variant="outline"
-                    size="sm"
+                    className={BTN_GHOST}
                     onClick={() => resolveAmbiguous(team, candidate.teamId)}
                   >
                     Link to {candidate.name} ({Math.round(candidate.score * 100)}%)
-                  </Button>
+                  </button>
                 ))}
-                <Button type="button" size="sm" onClick={() => resolveAmbiguous(team)}>
+                <button type="button" className={BTN_PRIMARY} onClick={() => resolveAmbiguous(team)}>
                   This is a new team
-                </Button>
+                </button>
               </div>
             </div>
           ))}
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </Panel>
   );
 };
 

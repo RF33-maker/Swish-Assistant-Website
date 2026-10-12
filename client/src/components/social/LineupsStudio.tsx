@@ -1,23 +1,39 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, ImagePlus, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
+import { Loader2, UserRound } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlayerPhotoButton } from "@/components/social/PlayerPhotoControl";
+import {
+  ColourField,
+  CompetitionField,
+  ERROR,
+  FIELD,
+  Field,
+  HINT,
+  Panel,
+  RangeField,
+  readStoredCompetition,
+  rememberCompetition,
+  SaveActions,
+  SELECT_MENU,
+  Stage,
+  Toggle,
+  type CompetitionOption,
+} from "@/components/social/studioUi";
+import { photoChangeLendsTo, usePlayerPhotoChange } from "@/lib/playerPhotos";
 import { supabase } from "@/lib/supabase";
 import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { canvasToBlob, DEFAULT_HEAD_LINE, ensureDisplayFont } from "@/lib/generateWeeklyCards";
 import { renderLineupCard } from "@/lib/generateLineupCard";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
-import type { LineupMetric, LineupsResponse } from "@/types/lineups";
+import type { LineupMetric, LineupPlayer, LineupsResponse } from "@/types/lineups";
 
 const DEFAULT_SLUG = "bcb-trophy-2027";
-const SLUG_KEY = "weekly-awards-slug";
+// Lineups need play-by-play data, which only some competitions have, so this
+// studio remembers its own competition rather than sharing the other studios'.
+const SLUG_KEY = "lineups-slug";
 const HEADS_KEY = "weekly-awards-heads";
 const ALIGN_KEY = "weekly-awards-align";
-type CompetitionOption = { slug: string; name: string };
 
 const METRICS: { key: LineupMetric; label: string }[] = [
   { key: "net", label: "Net rating (best per 100 possessions)" },
@@ -40,7 +56,7 @@ function stripSeason(name: string): string {
 
 /** A team's best five-man unit: five photo panels with the unit's numbers underneath. */
 export default function LineupsStudio() {
-  const initialSlug = new URLSearchParams(window.location.search).get("slug") || readJson<string | null>(SLUG_KEY, null) || DEFAULT_SLUG;
+  const initialSlug = new URLSearchParams(window.location.search).get("slug") || readStoredCompetition(SLUG_KEY) || DEFAULT_SLUG;
 
   const [competitions, setCompetitions] = useState<CompetitionOption[]>([]);
   const [slug, setSlug] = useState(initialSlug);
@@ -119,7 +135,21 @@ export default function LineupsStudio() {
 
   useEffect(() => setUnitIndex(0), [slug, teamId, metric, minMinutesText]);
 
+  // A photo added here or in another studio: redraw with it, keeping the team and the unit picked.
+  usePlayerPhotoChange((change) => {
+    const gains = (p: LineupPlayer) => photoChangeLendsTo(change, { playerId: p.id, name: p.name, hasPhoto: !!p.photoUrl });
+    if (!data?.units.some((u) => u.players.some(gains))) return;
+    setData(
+      (prev) =>
+        prev && {
+          ...prev,
+          units: prev.units.map((u) => ({ ...u, players: u.players.map((p) => (gains(p) ? { ...p, photoUrl: change.url } : p)) })),
+        },
+    );
+  });
+
   const unit = data?.units[unitIndex] ?? null;
+  const missingPhotos = unit ? unit.players.filter((p) => !p.photoUrl).length : 0;
   const teamName = data?.team?.name ?? "";
 
   useEffect(() => {
@@ -201,11 +231,7 @@ export default function LineupsStudio() {
   const chooseSlug = (v: string) => {
     setTeamId("");
     setSlug(v);
-    try {
-      localStorage.setItem(SLUG_KEY, JSON.stringify(v));
-    } catch {
-      // remembering the competition is a convenience only
-    }
+    rememberCompetition(SLUG_KEY, v);
   };
   const updateAlign = (patch: Partial<{ on: boolean; line: number }>) => {
     const next = { ...align, ...patch };
@@ -218,82 +244,63 @@ export default function LineupsStudio() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[380px_1fr]">
-      <Card className="order-2 h-fit min-w-0 border-orange-200 bg-white dark:border-orange-700 dark:bg-gray-800 lg:order-1">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-orange-900 dark:text-orange-400">Best lineup</CardTitle>
-          <p className="text-sm text-gray-600 dark:text-gray-400">A team's best five-man unit, from who was on court together.</p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Competition</label>
-            <Select value={slug} onValueChange={chooseSlug}>
-              <SelectTrigger className="border-orange-200 dark:border-orange-700">
-                <SelectValue placeholder="Choose a competition" />
-              </SelectTrigger>
-              <SelectContent>
-                {!competitions.some((c) => c.slug === slug) && <SelectItem value={slug}>{slug}</SelectItem>}
-                {competitions.map((c) => (
-                  <SelectItem key={c.slug} value={c.slug}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
+      <Panel
+        title="Best lineup"
+        description="A team's best five-man unit, from who was on court together."
+        className="order-2 lg:order-1"
+        bodyClassName="space-y-4"
+      >
+        <CompetitionField value={slug} onChange={chooseSlug} competitions={competitions} />
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Team</label>
-            <Select value={teamId} onValueChange={setTeamId} disabled={!data?.teams.length}>
-              <SelectTrigger className="border-orange-200 dark:border-orange-700" data-testid="select-lineup-team">
-                <SelectValue placeholder="Best team" />
-              </SelectTrigger>
-              <SelectContent>
-                {(data?.teams ?? []).map((t) => (
-                  <SelectItem key={t.team_id} value={t.team_id}>
-                    {t.name} ({t.units})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-gray-500 dark:text-gray-400">The number is how many units qualify for that team.</p>
-          </div>
+        <Field label="Team" hint="The number is how many units qualify for that team.">
+          <Select value={teamId} onValueChange={setTeamId} disabled={!data?.teams.length}>
+            <SelectTrigger className={FIELD} data-testid="select-lineup-team">
+              <SelectValue placeholder="Best team" />
+            </SelectTrigger>
+            <SelectContent className={SELECT_MENU}>
+              {(data?.teams ?? []).map((t) => (
+                <SelectItem key={t.team_id} value={t.team_id}>
+                  {t.name} ({t.units})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Rank units by</label>
-            <Select value={metric} onValueChange={(v) => setMetric(v as LineupMetric)}>
-              <SelectTrigger className="border-orange-200 dark:border-orange-700" data-testid="select-lineup-metric">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {METRICS.map((m) => (
-                  <SelectItem key={m.key} value={m.key}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <Field label="Rank units by">
+          <Select value={metric} onValueChange={(v) => setMetric(v as LineupMetric)}>
+            <SelectTrigger className={FIELD} data-testid="select-lineup-metric">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className={SELECT_MENU}>
+              {METRICS.map((m) => (
+                <SelectItem key={m.key} value={m.key}>
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
 
+        <div className="space-y-1.5">
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Min. minutes together</label>
-              <Input
+            <Field label="Min. minutes together">
+              <input
                 type="number"
                 min={1}
                 value={minMinutesText}
                 onChange={(e) => setMinMinutesText(e.target.value)}
-                className="border-orange-200 dark:border-orange-700"
+                className={FIELD}
                 data-testid="input-min-minutes"
               />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Which unit</label>
+            </Field>
+            <Field label="Which unit">
               <Select value={String(unitIndex)} onValueChange={(v) => setUnitIndex(Number(v))} disabled={!data?.units.length}>
-                <SelectTrigger className="border-orange-200 dark:border-orange-700" data-testid="select-lineup-rank">
+                <SelectTrigger className={FIELD} data-testid="select-lineup-rank">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={SELECT_MENU}>
                   {(data?.units ?? []).map((u, i) => (
                     <SelectItem key={i} value={String(i)}>
                       #{u.rank}
@@ -301,103 +308,100 @@ export default function LineupsStudio() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </Field>
           </div>
-          <p className="-mt-2 text-xs text-gray-500 dark:text-gray-400">
+          <p className={HINT}>
             Small samples swing wildly early in a season, so keep the minimum up. Units with barely any recorded possessions are ignored.
           </p>
+        </div>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Card subtitle</label>
-            <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className="border-orange-200 dark:border-orange-700" />
-          </div>
+        <Field label="Card subtitle">
+          <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className={FIELD} />
+        </Field>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Card colour</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="color"
-                value={/^#[0-9a-f]{6}$/i.test(primaryHex) ? primaryHex : "#f97316"}
-                onChange={(e) => updateColour(e.target.value)}
-                className="h-9 w-14 cursor-pointer rounded border"
+        <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />
+
+        <div className="ch-tile space-y-2 p-3">
+          <Toggle bare checked={align.on} onChange={(on) => updateAlign({ on })} label="Line up heads across the photos" />
+          {align.on && (
+            <>
+              <RangeField
+                label="Head height"
+                display={`${align.line}%`}
+                min={10}
+                max={50}
+                step={1}
+                value={align.line}
+                onChange={(v) => updateAlign({ line: v })}
               />
-              <span className="text-xs text-gray-500">{colorOverride ? "Custom (saved for this competition)" : "From the league logo"}</span>
-              {colorOverride && (
-                <button className="text-xs text-orange-700 underline" onClick={resetColour}>
-                  Reset
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-2 rounded-md border border-orange-200 p-2.5 dark:border-orange-700">
-            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-              <input type="checkbox" checked={align.on} onChange={(e) => updateAlign({ on: e.target.checked })} />
-              Line up heads across the photos
-            </label>
-            {align.on && (
-              <>
-                <label className="block space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                  <span className="flex justify-between">
-                    Head height <span className="tabular-nums text-gray-500">{align.line}%</span>
-                  </span>
-                  <Slider min={10} max={50} step={1} value={[align.line]} onValueChange={([v]) => updateAlign({ line: v })} />
-                </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Uses the faces you have marked in Team of the Week. Others use a guess until they are marked there.
-                </p>
-              </>
-            )}
-          </div>
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </CardContent>
-      </Card>
-
-      <Card className="order-1 min-w-0 border-orange-200 bg-white dark:border-orange-700 dark:bg-gray-800 lg:order-2">
-        <CardContent className="p-2 sm:p-4">
-          {loading && !data ? (
-            <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-            </div>
-          ) : (
-            <div className="relative mx-auto max-w-[640px]">
-              <div ref={canvasHostRef} className="w-full overflow-hidden rounded-lg" />
-              {rendering && !hasCard && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                  <Loader2 className="h-6 w-6 animate-spin text-white" />
-                </div>
-              )}
-              {!hasCard && !rendering && !error && (
-                <p className="py-10 text-center text-sm text-gray-500">No five-man unit has played enough together yet. Try a lower minimum.</p>
-              )}
-            </div>
+              <p className={HINT}>
+                Uses the faces you have marked in Team of the Week. Others use a guess until they are marked there.
+              </p>
+            </>
           )}
-          <div className="mx-auto mt-3 max-w-[640px] space-y-2">
-            {canShareFiles ? (
-              <>
-                <Button onClick={saveToPhotos} disabled={!shareFile || rendering} className="w-full bg-orange-500 text-white hover:bg-orange-600" data-testid="button-save-to-photos">
-                  <ImagePlus className="mr-2 h-4 w-4" />
-                  Save to Photos
-                </Button>
-                <p className="text-center text-xs text-gray-500 dark:text-gray-400">Tap Save Image in the menu that opens.</p>
-                <Button onClick={download} disabled={!hasCard || rendering || downloading} variant="outline" className="w-full">
-                  {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Download file
-                </Button>
-              </>
-            ) : (
-              <Button onClick={download} disabled={!hasCard || rendering || downloading} className="w-full bg-orange-500 text-white hover:bg-orange-600">
-                {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Download PNG
-              </Button>
-            )}
-            <p className="text-center text-xs text-gray-500 dark:text-gray-400">
-              {data ? `Built from ${data.stintsUsed} stints in ${data.reliability.reliable} of ${data.reliability.teamGames} team-games that match the box score · ` : ""}Card size: 1080×1350px (Instagram portrait)
-            </p>
+        </div>
+
+        {error && <p className={ERROR}>{error}</p>}
+      </Panel>
+
+      <Panel className="order-1 lg:order-2" bodyClassName="!p-3 sm:!p-5">
+        {loading && !data ? (
+          <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-accent)]" />
           </div>
-        </CardContent>
-      </Card>
+        ) : (
+          <Stage
+            busy={rendering && !hasCard}
+            empty={
+              !hasCard && !rendering && !error
+                ? "No five-man unit has played enough together yet. Try a lower minimum."
+                : undefined
+            }
+          >
+            <div ref={canvasHostRef} className="w-full" />
+          </Stage>
+        )}
+
+        {unit && (
+          <div className="ch-tile mx-auto mt-3 max-w-[640px] p-3" data-testid="lineup-photos">
+            <p className="text-[13px] font-semibold text-[color:var(--ch-text)]">Player photos</p>
+            <p className={HINT}>
+              {missingPhotos === 0
+                ? "All five have a photo."
+                : `${missingPhotos} of the five ${missingPhotos === 1 ? "has" : "have"} no photo yet. Add one and the card redraws by itself.`}
+            </p>
+            <ul className="mt-2 divide-y divide-[color:var(--ch-border)]">
+              {unit.players.map((p) => (
+                <li key={p.key} className="flex items-center gap-3 py-1.5">
+                  <span className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded-md bg-[color:var(--ch-surface-3)]">
+                    {p.photoUrl ? (
+                      <img src={p.photoUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                    ) : (
+                      <UserRound className="h-4 w-4 text-[color:var(--ch-muted)]" />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-[color:var(--ch-text)]">{p.name}</span>
+                  <PlayerPhotoButton playerId={p.id} playerName={p.name} label={p.photoUrl ? "Replace" : "Add photo"} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="mx-auto mt-3 max-w-[640px] space-y-2">
+          <SaveActions
+            canShare={canShareFiles}
+            onSave={saveToPhotos}
+            saveDisabled={!shareFile || rendering}
+            onDownload={download}
+            downloadDisabled={!hasCard || rendering || downloading}
+            downloading={downloading}
+          />
+          <p className={`text-center ${HINT}`}>
+            {data ? `Built from ${data.stintsUsed} stints in ${data.reliability.reliable} of ${data.reliability.teamGames} team-games that match the box score · ` : ""}Card size: 1080×1350px (Instagram portrait)
+          </p>
+        </div>
+      </Panel>
     </div>
   );
 }

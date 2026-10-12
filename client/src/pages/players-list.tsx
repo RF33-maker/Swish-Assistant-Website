@@ -8,6 +8,7 @@ import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSec
 import { supabase } from "@/lib/supabase";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { areSamePlayer } from "@/hooks/useGlobalSearch";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 const SITE_URL = "https://swishassistant.com";
 const MIN_QUERY = 2;
@@ -125,7 +126,7 @@ function PlayerAvatar({ name, photo }: { name: string; photo: string | null }) {
   return (
     <span className="h-12 w-12 shrink-0 rounded-full ch-tile overflow-hidden flex items-center justify-center">
       {photo && !failed ? (
-        <img src={photo} alt="" loading="lazy" onError={() => setFailed(true)} className="h-full w-full object-cover object-top" />
+        <PlayerHeadshot src={photo} alt="" loading="lazy" onError={() => setFailed(true)} className="h-full w-full object-cover" fallbackClassName="object-top" />
       ) : (
         <span className="ch-display font-bold text-[17px] tracking-tight text-[color:var(--ch-text-2)]">{initials(name)}</span>
       )}

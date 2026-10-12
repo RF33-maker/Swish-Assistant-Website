@@ -101,30 +101,30 @@ function StatCard({
 }) {
   const badgeClasses =
     badgeColor === "green"
-      ? "bg-green-100 text-green-700"
-      : "bg-red-100 text-red-700";
+      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+      : "bg-red-500/15 text-red-700 dark:text-red-300";
 
   return (
     <div
       className={`rounded-lg border p-3 ${
-        badgeColor === "green" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+        badgeColor === "green" ? "border-emerald-500/30 bg-emerald-500/10" : "border-red-500/30 bg-red-500/10"
       }`}
     >
       <div className="flex items-center gap-2 mb-2">
-        <span className="font-medium text-gray-800 text-sm truncate">{name}</span>
+        <span className="font-medium text-[color:var(--ch-text)] text-sm truncate">{name}</span>
         <span className={`px-1.5 py-0.5 text-xs rounded font-medium flex-shrink-0 ${badgeClasses}`}>
           {badge}
         </span>
       </div>
       {stats.loading ? (
-        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-          <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+        <div className="flex items-center gap-1.5 text-xs text-[color:var(--ch-muted)]">
+          <div className="h-3 w-3 animate-spin rounded-full border-2 border-[color:var(--ch-muted)] border-t-transparent" />
           Loading stats…
         </div>
       ) : stats.error ? (
-        <p className="text-xs text-gray-400 italic">Stats unavailable</p>
+        <p className="text-xs text-[color:var(--ch-muted)] italic">Stats unavailable</p>
       ) : stats.gp === 0 ? (
-        <p className="text-xs text-gray-400 italic">No stats recorded</p>
+        <p className="text-xs text-[color:var(--ch-muted)] italic">No stats recorded</p>
       ) : (
         <div className="grid grid-cols-4 gap-1 text-center">
           {[
@@ -134,8 +134,8 @@ function StatCard({
             { label: "APG", value: stats.apg.toFixed(1) },
           ].map(({ label, value }) => (
             <div key={label}>
-              <div className="text-base font-bold text-gray-800">{value}</div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</div>
+              <div className="text-base font-bold text-[color:var(--ch-text)]">{value}</div>
+              <div className="text-[10px] text-[color:var(--ch-text-2)] uppercase tracking-wide">{label}</div>
             </div>
           ))}
         </div>
@@ -394,24 +394,24 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
   const loadingPlaceholder: PlayerStatPreview = { gp: 0, ppg: 0, rpg: 0, apg: 0, loading: true, error: false };
 
   return (
-    <div className="md:col-span-2 bg-white rounded-xl shadow p-4 md:p-6">
+    <div className="ch-card md:col-span-2 p-4 sm:p-5">
       <button
         onClick={handleExpand}
         className="w-full flex items-center justify-between gap-3 text-left"
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-[color:var(--ch-accent-soft)]">
+            <svg className="w-5 h-5 text-[color:var(--ch-accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
           </div>
           <div>
-            <h2 className="text-lg md:text-xl font-semibold text-gray-800">Player Names & Duplicates</h2>
-            <p className="text-xs md:text-sm text-gray-600">Correct displayed names and merge duplicate player records</p>
+            <h2 className="ch-display text-[1.4rem] font-bold uppercase leading-none tracking-tight text-[color:var(--ch-text)]">Player Names & Duplicates</h2>
+            <p className="mt-1.5 text-[13px] text-[color:var(--ch-text-2)]">Correct displayed names and merge duplicate player records</p>
           </div>
         </div>
         <svg
-          className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+          className={`w-5 h-5 text-[color:var(--ch-muted)] transition-transform ${isExpanded ? "rotate-180" : ""}`}
           fill="none" stroke="currentColor" viewBox="0 0 24 24"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -421,33 +421,33 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
       {isExpanded && (
         <div className="mt-6 space-y-6">
           {successMsg && (
-            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+            <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-700 dark:text-emerald-300 text-sm">
               <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
               {successMsg}
-              <button onClick={() => setSuccessMsg(null)} className="ml-auto text-green-500 hover:text-green-700">×</button>
+              <button onClick={() => setSuccessMsg(null)} className="ml-auto text-emerald-600 dark:text-emerald-400 hover:opacity-80">×</button>
             </div>
           )}
           {errorMsg && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-700 dark:text-red-300 text-sm">
               <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               {errorMsg}
-              <button onClick={() => setErrorMsg(null)} className="ml-auto text-red-500 hover:text-red-700">×</button>
+              <button onClick={() => setErrorMsg(null)} className="ml-auto text-red-600 dark:text-red-400 hover:opacity-80">×</button>
             </div>
           )}
 
           <div>
-            <h3 className="font-semibold text-gray-800 mb-1">Correct a Player Name</h3>
-            <p className="text-xs text-gray-500 mb-4">
+            <h3 className="font-semibold text-[color:var(--ch-text)] mb-1">Correct a Player Name</h3>
+            <p className="text-xs text-[color:var(--ch-text-2)] mb-4">
               This is the one place to correct the name shown across the league page. A first initial is allowed, for example J. Smith.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-end">
               <div className="relative">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Find player</label>
+                <label className="block text-xs font-medium text-[color:var(--ch-text-2)] mb-1">Find player</label>
                 <input
                   type="text"
                   placeholder="Search current name…"
@@ -457,10 +457,10 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
                     setCorrectedName("");
                     setNameSearch(e.target.value);
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="ch-input h-10 w-full px-3 text-sm"
                 />
                 {!namePlayer && filteredNamePlayers.length > 0 && (
-                  <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-[10px] border border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] shadow-[var(--ch-shadow-lg)]">
                     {filteredNamePlayers.slice(0, 20).map((p) => (
                       <button
                         key={p.id}
@@ -470,7 +470,7 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
                           setCorrectedName(getDisplayName(p));
                           setNameSearch("");
                         }}
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 text-gray-800"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text)]"
                       >
                         {getDisplayName(p)}
                       </button>
@@ -480,14 +480,14 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Correct display name</label>
+                <label className="block text-xs font-medium text-[color:var(--ch-text-2)] mb-1">Correct display name</label>
                 <input
                   type="text"
                   placeholder="First name or initial + surname"
                   value={correctedName}
                   onChange={(e) => setCorrectedName(e.target.value)}
                   disabled={!namePlayer}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100"
+                  className="ch-input h-10 w-full px-3 text-sm disabled:opacity-60"
                 />
               </div>
 
@@ -495,7 +495,7 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
                 type="button"
                 onClick={saveCorrectedName}
                 disabled={!namePlayer || !correctedName.trim() || savingName}
-                className="w-full sm:w-auto px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                className="ch-btn ch-btn-primary justify-center disabled:pointer-events-none disabled:opacity-50 !h-10 w-full sm:w-auto"
               >
                 {savingName && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                 Save Name
@@ -504,17 +504,17 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
           </div>
 
           {/* Auto-detected duplicates */}
-          <div className="border-t pt-6">
+          <div className="border-t border-[color:var(--ch-border)] pt-6">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-800">Auto-detected Duplicates</h3>
+              <h3 className="font-semibold text-[color:var(--ch-text)]">Auto-detected Duplicates</h3>
               <button
                 onClick={loadDuplicates}
                 disabled={loadingPairs}
-                className="text-sm text-purple-600 hover:text-purple-700 flex items-center gap-1 disabled:opacity-50"
+                className="flex items-center gap-1 text-sm font-medium text-[color:var(--ch-accent)] hover:opacity-80 disabled:opacity-50"
               >
                 {loadingPairs ? (
                   <>
-                    <div className="w-3 h-3 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-3 h-3 border-2 border-[color:var(--ch-accent)] border-t-transparent rounded-full animate-spin" />
                     Scanning...
                   </>
                 ) : (
@@ -529,55 +529,55 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
             </div>
 
             {loadingPairs ? (
-              <div className="flex items-center justify-center py-8 text-gray-500 text-sm">
-                <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mr-2" />
+              <div className="flex items-center justify-center py-8 text-[color:var(--ch-text-2)] text-sm">
+                <div className="w-5 h-5 border-2 border-[color:var(--ch-accent)] border-t-transparent rounded-full animate-spin mr-2" />
                 Scanning for duplicate names…
               </div>
             ) : pairs.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <svg className="w-10 h-10 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="text-center py-8 text-[color:var(--ch-text-2)]">
+                <svg className="w-10 h-10 mx-auto mb-2 text-[color:var(--ch-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <p className="text-sm font-medium">No duplicates detected</p>
-                <p className="text-xs text-gray-400 mt-1">All player records appear to be unique.</p>
+                <p className="text-xs text-[color:var(--ch-muted)] mt-1">All player records appear to be unique.</p>
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs text-gray-500 mb-3">
+                <p className="text-xs text-[color:var(--ch-text-2)] mb-3">
                   {pairs.length} potential duplicate pair{pairs.length !== 1 ? "s" : ""} found, strongest match first.
                   Review each and click Merge to consolidate records.
                   {pairs.some((p) => p.ambiguous) && (
-                    <> Pairs marked <span className="font-medium text-amber-700">check carefully</span> matched on weak
+                    <> Pairs marked <span className="font-medium text-amber-700 dark:text-amber-300">check carefully</span> matched on weak
                     evidence — confirm they are the same person before merging.</>
                   )}
                 </p>
                 {pairs.map((pair) => (
-                  <div key={pair.duplicateId} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                  <div key={pair.duplicateId} className="ch-tile flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="font-medium text-gray-800 truncate">{pair.canonicalName}</span>
-                        <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded font-medium flex-shrink-0">keep</span>
-                        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="font-medium text-[color:var(--ch-text)] truncate">{pair.canonicalName}</span>
+                        <span className="px-1.5 py-0.5 text-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded font-medium flex-shrink-0">keep</span>
+                        <svg className="w-4 h-4 text-[color:var(--ch-muted)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                         </svg>
-                        <span className="font-medium text-gray-600 truncate">{pair.duplicateName}</span>
-                        <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium flex-shrink-0">merge</span>
+                        <span className="font-medium text-[color:var(--ch-text-2)] truncate">{pair.duplicateName}</span>
+                        <span className="px-1.5 py-0.5 text-xs bg-red-500/15 text-red-700 dark:text-red-300 rounded font-medium flex-shrink-0">merge</span>
                         {pair.reason && (
-                          <span className="px-1.5 py-0.5 text-xs bg-gray-200 text-gray-600 rounded flex-shrink-0">
+                          <span className="px-1.5 py-0.5 text-xs bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)] rounded flex-shrink-0">
                             {REASON_LABELS[pair.reason] || pair.reason}
                           </span>
                         )}
                         {pair.ambiguous && (
-                          <span className="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 rounded font-medium flex-shrink-0">
+                          <span className="px-1.5 py-0.5 text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 dark:text-amber-300 rounded font-medium flex-shrink-0">
                             check carefully
                           </span>
                         )}
                       </div>
                       {pair.warning && (
-                        <p className="text-xs text-amber-700 mt-0.5">{pair.warning}</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">{pair.warning}</p>
                       )}
                       {pair.statsToRepoint > 0 && (
-                        <p className="text-xs text-gray-400 mt-0.5">
+                        <p className="text-xs text-[color:var(--ch-muted)] mt-0.5">
                           {pair.statsToRepoint} stat row{pair.statsToRepoint !== 1 ? "s" : ""} will be re-pointed
                         </p>
                       )}
@@ -585,7 +585,7 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
                     <button
                       onClick={() => setConfirmPair(pair)}
                       disabled={mergingId === pair.duplicateId}
-                      className="sm:flex-shrink-0 w-full sm:w-auto px-3 py-1.5 text-sm bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                      className="ch-btn ch-btn-primary justify-center disabled:pointer-events-none disabled:opacity-50 w-full sm:w-auto sm:flex-shrink-0"
                     >
                       {mergingId === pair.duplicateId ? (
                         <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -599,20 +599,20 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
           </div>
 
           {/* Manual merge */}
-          <div className="border-t pt-6">
-            <h3 className="font-semibold text-gray-800 mb-1">Manual Merge</h3>
-            <p className="text-xs text-gray-500 mb-4">Force-merge any two players the algorithm may have missed.</p>
+          <div className="border-t border-[color:var(--ch-border)] pt-6">
+            <h3 className="font-semibold text-[color:var(--ch-text)] mb-1">Manual Merge</h3>
+            <p className="text-xs text-[color:var(--ch-text-2)] mb-4">Force-merge any two players the algorithm may have missed.</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Player 1 (canonical / keep) */}
               <div ref={dropdown1Ref} className="relative">
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Player to keep <span className="text-green-600">(canonical)</span>
+                <label className="block text-xs font-medium text-[color:var(--ch-text-2)] mb-1">
+                  Player to keep <span className="text-emerald-600 dark:text-emerald-400">(canonical)</span>
                 </label>
                 {manualPlayer1 ? (
-                  <div className="flex items-center gap-2 p-2 border border-green-300 bg-green-50 rounded-lg text-sm">
-                    <span className="flex-1 font-medium text-gray-800 truncate">{getDisplayName(manualPlayer1)}</span>
-                    <button onClick={() => { setManualPlayer1(null); setManualSearch1(""); }} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+                  <div className="flex items-center gap-2 p-2 border border-emerald-500/30 bg-emerald-500/10 rounded-lg text-sm">
+                    <span className="flex-1 font-medium text-[color:var(--ch-text)] truncate">{getDisplayName(manualPlayer1)}</span>
+                    <button onClick={() => { setManualPlayer1(null); setManualSearch1(""); }} className="text-[color:var(--ch-muted)] hover:text-[color:var(--ch-text)] flex-shrink-0">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -626,15 +626,15 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
                       value={manualSearch1}
                       onChange={(e) => { setManualSearch1(e.target.value); setShowDropdown1(true); }}
                       onFocus={() => setShowDropdown1(true)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="ch-input h-10 w-full px-3 text-sm"
                     />
                     {showDropdown1 && filteredPlayers1.length > 0 && (
-                      <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-[10px] border border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] shadow-[var(--ch-shadow-lg)]">
                         {filteredPlayers1.slice(0, 20).map((p) => (
                           <button
                             key={p.id}
                             onMouseDown={() => { setManualPlayer1(p); setManualSearch1(""); setShowDropdown1(false); }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 text-gray-800"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text)]"
                           >
                             {getDisplayName(p)}
                           </button>
@@ -647,13 +647,13 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
 
               {/* Player 2 (duplicate / merge) */}
               <div ref={dropdown2Ref} className="relative">
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Player to remove <span className="text-red-600">(duplicate)</span>
+                <label className="block text-xs font-medium text-[color:var(--ch-text-2)] mb-1">
+                  Player to remove <span className="text-red-600 dark:text-red-400">(duplicate)</span>
                 </label>
                 {manualPlayer2 ? (
-                  <div className="flex items-center gap-2 p-2 border border-red-300 bg-red-50 rounded-lg text-sm">
-                    <span className="flex-1 font-medium text-gray-800 truncate">{getDisplayName(manualPlayer2)}</span>
-                    <button onClick={() => { setManualPlayer2(null); setManualSearch2(""); }} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+                  <div className="flex items-center gap-2 p-2 border border-red-500/30 bg-red-500/10 rounded-lg text-sm">
+                    <span className="flex-1 font-medium text-[color:var(--ch-text)] truncate">{getDisplayName(manualPlayer2)}</span>
+                    <button onClick={() => { setManualPlayer2(null); setManualSearch2(""); }} className="text-[color:var(--ch-muted)] hover:text-[color:var(--ch-text)] flex-shrink-0">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -667,15 +667,15 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
                       value={manualSearch2}
                       onChange={(e) => { setManualSearch2(e.target.value); setShowDropdown2(true); }}
                       onFocus={() => setShowDropdown2(true)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="ch-input h-10 w-full px-3 text-sm"
                     />
                     {showDropdown2 && filteredPlayers2.length > 0 && (
-                      <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-[10px] border border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] shadow-[var(--ch-shadow-lg)]">
                         {filteredPlayers2.slice(0, 20).map((p) => (
                           <button
                             key={p.id}
                             onMouseDown={() => { setManualPlayer2(p); setManualSearch2(""); setShowDropdown2(false); }}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 text-gray-800"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text)]"
                           >
                             {getDisplayName(p)}
                           </button>
@@ -688,19 +688,19 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
             </div>
 
             {loadingPlayers && (
-              <p className="text-xs text-gray-400 mt-2">Loading player list…</p>
+              <p className="text-xs text-[color:var(--ch-muted)] mt-2">Loading player list…</p>
             )}
 
             {manualPlayer1 && manualPlayer2 && (
-              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-sm text-amber-800">
+              <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-sm text-amber-700 dark:text-amber-300 dark:text-amber-300">
                   All stats from <strong>{getDisplayName(manualPlayer2)}</strong> will be moved to{" "}
                   <strong>{getDisplayName(manualPlayer1)}</strong>, then the duplicate record will be deleted.
                 </p>
                 <button
                   onClick={() => setConfirmManual(true)}
                   disabled={mergingId === "manual"}
-                  className="mt-3 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg font-medium transition-colors disabled:opacity-50"
+                  className="ch-btn ch-btn-primary justify-center disabled:pointer-events-none disabled:opacity-50 mt-3"
                 >
                   Merge Players
                 </button>
@@ -713,9 +713,9 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
       {/* Confirmation modal for auto-detected pair */}
       {confirmPair && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">Confirm Merge</h3>
-            <p className="text-sm text-gray-500 mb-4">
+          <div className="w-full max-w-md rounded-[14px] border border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-6 shadow-[var(--ch-shadow-lg)]">
+            <h3 className="text-lg font-semibold text-[color:var(--ch-text)] mb-1">Confirm Merge</h3>
+            <p className="text-sm text-[color:var(--ch-text-2)] mb-4">
               Verify these are the same person before merging. Stats will be permanently combined.
             </p>
 
@@ -735,23 +735,23 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
               />
             </div>
 
-            <p className="text-xs text-gray-500 mb-1">
+            <p className="text-xs text-[color:var(--ch-text-2)] mb-1">
               {confirmPair.statsToRepoint > 0 && (
                 <>{confirmPair.statsToRepoint} stat row{confirmPair.statsToRepoint !== 1 ? "s" : ""} will be re-pointed. </>
               )}
             </p>
-            <p className="text-xs text-red-600 font-medium mb-4">This action cannot be undone.</p>
+            <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-4">This action cannot be undone.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmPair(null)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                className="ch-btn ch-btn-ghost justify-center disabled:pointer-events-none disabled:opacity-50 !h-10 flex-1"
               >
                 Cancel
               </button>
               <button
                 onClick={() => executeMerge(confirmPair)}
                 disabled={!!mergingId}
-                className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                className="ch-btn ch-btn-primary justify-center disabled:pointer-events-none disabled:opacity-50 !h-10 flex-1"
               >
                 {mergingId ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : null}
                 Merge
@@ -764,9 +764,9 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
       {/* Confirmation modal for manual merge */}
       {confirmManual && manualPlayer1 && manualPlayer2 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">Confirm Manual Merge</h3>
-            <p className="text-sm text-gray-500 mb-4">
+          <div className="w-full max-w-md rounded-[14px] border border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-6 shadow-[var(--ch-shadow-lg)]">
+            <h3 className="text-lg font-semibold text-[color:var(--ch-text)] mb-1">Confirm Manual Merge</h3>
+            <p className="text-sm text-[color:var(--ch-text-2)] mb-4">
               Verify these are the same person before merging. Stats will be permanently combined.
             </p>
 
@@ -786,18 +786,18 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
               />
             </div>
 
-            <p className="text-xs text-red-600 font-medium mb-4">This action cannot be undone.</p>
+            <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-4">This action cannot be undone.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmManual(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                className="ch-btn ch-btn-ghost justify-center disabled:pointer-events-none disabled:opacity-50 !h-10 flex-1"
               >
                 Cancel
               </button>
               <button
                 onClick={executeManualMerge}
                 disabled={mergingId === "manual"}
-                className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                className="ch-btn ch-btn-primary justify-center disabled:pointer-events-none disabled:opacity-50 !h-10 flex-1"
               >
                 {mergingId === "manual" ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : null}
                 Merge

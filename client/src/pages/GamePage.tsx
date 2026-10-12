@@ -7,6 +7,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
+import { normalizeEventPeriods, normalizeShotPeriods, periodLabel } from "@/lib/periodLabel";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,6 +22,7 @@ import GameScoreHero, { useMatchupColors, type GameHeroState } from "@/component
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "@/components/game/GameOverview";
 import { gameRecap } from "@shared/recaps";
 import { playerPath, teamPath } from "@shared/seo";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 interface GameSchedule {
   game_key: string;
@@ -96,6 +98,8 @@ interface LiveEvent {
   action_type: string;
   sub_type: string | null;
   period: number;
+  /** "REGULAR" or "OVERTIME"; overtime periods restart at 1. */
+  period_type?: string | null;
   clock: string;
   team_no: number;
   player_name: string | null;
@@ -403,7 +407,7 @@ export default function GamePage() {
         console.error('[GamePage] live_events error:', error);
         return [];
       }
-      return data as LiveEvent[];
+      return normalizeEventPeriods(data as LiveEvent[]);
     },
     enabled: !!gameKey && !!gameData,
     refetchInterval: 5000,
@@ -426,6 +430,12 @@ export default function GamePage() {
     refetchInterval: isLiveGameStatus(normalizeGameStatus(gameData?.status)) ? 15000 : false,
     refetchIntervalInBackground: false,
   });
+
+  // Overtime shots are stored as period 1, like the plays; the plays know better.
+  const shotsByPeriod = useMemo(
+    () => normalizeShotPeriods(shotChartData ?? [], liveEvents ?? []),
+    [shotChartData, liveEvents],
+  );
 
   const [lastUpdatedText, setLastUpdatedText] = useState('');
 
@@ -1005,7 +1015,7 @@ export default function GamePage() {
             awayScore={isGamePlayed ? awayScore : null}
             state={heroState}
             liveLabel={isLive && currentPeriod
-              ? `${currentPeriod <= 4 ? `Q${currentPeriod}` : `OT${currentPeriod - 4}`}${currentClock ? ` · ${currentClock.split(':').slice(0, 2).join(':')}` : ''}`
+              ? `${periodLabel(currentPeriod, latestEvent?.period_type)}${currentClock ? ` · ${currentClock.split(':').slice(0, 2).join(':')}` : ''}`
               : null}
             homeSub={homeTeamRecord ? `${homeTeamRecord.wins}-${homeTeamRecord.losses}` : undefined}
             awaySub={awayTeamRecord ? `${awayTeamRecord.wins}-${awayTeamRecord.losses}` : undefined}
@@ -1140,12 +1150,13 @@ export default function GamePage() {
                           <div key={idx} className="ch-tile p-2.5 md:p-3 flex items-center justify-between">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
-                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)]">
-                                  <img 
-                                    src={player.photoUrl} 
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface-3)]">
+                                  <PlayerHeadshot
+                                    src={player.photoUrl}
                                     alt={player.name}
+                                    loading="lazy"
                                     className="w-full h-full object-cover"
-                                    style={{ objectPosition: `center ${player.photoFocusY}%` }}
+                                    fallbackStyle={{ objectPosition: `center ${player.photoFocusY}%` }}
                                   />
                                 </div>
                               ) : (
@@ -1187,12 +1198,13 @@ export default function GamePage() {
                           <div key={idx} className="ch-tile p-2.5 md:p-3 flex items-center justify-between">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
-                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)]">
-                                  <img 
-                                    src={player.photoUrl} 
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface-3)]">
+                                  <PlayerHeadshot
+                                    src={player.photoUrl}
                                     alt={player.name}
+                                    loading="lazy"
                                     className="w-full h-full object-cover"
-                                    style={{ objectPosition: `center ${player.photoFocusY}%` }}
+                                    fallbackStyle={{ objectPosition: `center ${player.photoFocusY}%` }}
                                   />
                                 </div>
                               ) : (
@@ -1299,6 +1311,7 @@ export default function GamePage() {
                         players={homePlayerStats.map((p) => ({ ...p, href: playerHref(p) }))}
                         teamName={gameData.hometeam}
                         teamHref={teamPath(gameData.hometeam, leagueSlug)}
+                        teamTotals={homeTeamStats ?? null}
                         score={homeScore}
                         leagueId={gameData.league_id}
                         headerColor={colors.homeFill}
@@ -1308,6 +1321,7 @@ export default function GamePage() {
                         players={awayPlayerStats.map((p) => ({ ...p, href: playerHref(p) }))}
                         teamName={gameData.awayteam}
                         teamHref={teamPath(gameData.awayteam, leagueSlug)}
+                        teamTotals={awayTeamStats ?? null}
                         score={awayScore}
                         leagueId={gameData.league_id}
                         headerColor={colors.awayFill}
@@ -1329,7 +1343,7 @@ export default function GamePage() {
 
                 <TabsContent value="shotchart" className="mt-0">
                   <TeamSplitShotChart
-                    shots={shotChartData || []}
+                    shots={shotsByPeriod}
                     loading={shotChartLoading}
                     emptyMessage="No shot data is available for this game yet."
                     homeTeam={gameData.hometeam}

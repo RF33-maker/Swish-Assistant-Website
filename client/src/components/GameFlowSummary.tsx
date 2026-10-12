@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, ReferenceLine, Tooltip, ResponsiveContainer } from 'recharts';
 import { Flame } from 'lucide-react';
 import { parseGameFlow, computeBiggestRuns, computeLeadChanges, formatClock, type RawGameEvent } from '@/lib/gameFlow';
+import { periodLabel } from '@/lib/periodLabel';
 
 interface Props {
   events: RawGameEvent[];
@@ -20,7 +21,7 @@ function CustomTooltip({ active, payload, homeTeam, awayTeam }: any) {
   return (
     <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg px-3 py-2 text-xs">
       <div className="font-semibold text-slate-800 dark:text-white mb-1">
-        Q{p.period} · {formatClock(p.clock)}
+        {periodLabel(p.period)} · {formatClock(p.clock)}
       </div>
       <div className="text-slate-600 dark:text-slate-300">{homeTeam} {p.homeScore} – {p.awayScore} {awayTeam}</div>
       {p.playerName && <div className="text-slate-400 dark:text-neutral-500 mt-0.5">{p.playerName}</div>}
@@ -84,7 +85,7 @@ export default function GameFlowSummary({ events, homeTeam, awayTeam, homeColor 
           </ResponsiveContainer>
         </div>
         <div className="flex justify-between text-[11px] text-slate-400 dark:text-neutral-500 px-2 -mt-1">
-          {periodBoundaries.map(b => <span key={b.period}>Q{b.period}</span>)}
+          {periodBoundaries.map(b => <span key={b.period}>{periodLabel(b.period)}</span>)}
         </div>
       </div>
 

@@ -44,6 +44,7 @@ import { computeClubAccolades, computeTeamAccolades, topAccolades } from "@/lib/
 import { useTeamCompetitions } from "@/hooks/useTeamCompetitions";
 import { TeamLineupsPanel } from "@/components/TeamLineupsPanel";
 import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
 
@@ -334,6 +335,8 @@ function TeamShotChartSection({
 }
 
 // Small circular avatar for name-list rows (Team Roster, Player Stats).
+// PlayerHeadshot serves the pre-framed thumbnail; the crop below only applies
+// to an original photo that has no thumbnail yet.
 // The source photos are portrait, near-square-ish (0.96 aspect), so
 // object-fit: cover barely crops them into a ~1:1 circle — most of what
 // showed was jersey, not face. Zooms in on the top of the frame instead of
@@ -351,13 +354,13 @@ function PlayerAvatarThumb({ photoUrl, name, size = "w-6 h-6 md:w-7 md:h-7", fal
   return (
     <>
       {photoUrl ? (
-        <div className={`${size} rounded-full overflow-hidden flex-shrink-0`}>
-          <img
+        <div className={`${size} rounded-full overflow-hidden flex-shrink-0 bg-slate-200 dark:bg-neutral-700`}>
+          <PlayerHeadshot
             src={photoUrl}
             alt={name}
             loading="lazy"
             className="w-full h-full object-cover"
-            style={{ objectPosition: "center 12%", transform: "scale(2.4)", transformOrigin: "center 12%" }}
+            fallbackStyle={{ objectPosition: "center 12%", transform: "scale(1.5)", transformOrigin: "center 12%" }}
             onError={(e) => {
               const wrapper = e.currentTarget.parentElement;
               if (wrapper) wrapper.style.display = "none";
@@ -1647,12 +1650,12 @@ export default function TeamProfile() {
                 >
                   <div className="flex flex-col md:flex-row items-center md:items-start gap-3 md:gap-4">
                     {team.topPlayer.photoUrl ? (
-                      <img
+                      <PlayerHeadshot
                         src={team.topPlayer.photoUrl}
                         alt={team.topPlayer.name}
                         loading="lazy"
-                        className="w-12 h-12 md:w-16 md:h-16 rounded-full object-cover flex-shrink-0"
-                        style={{ objectPosition: `center ${team.topPlayer.photoFocusY ?? 50}%` }}
+                        className="w-12 h-12 md:w-16 md:h-16 rounded-full object-cover flex-shrink-0 bg-slate-200 dark:bg-neutral-700"
+                        fallbackStyle={{ objectPosition: `center ${team.topPlayer.photoFocusY ?? 50}%` }}
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).style.display = "none";
                           (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.removeProperty("display");

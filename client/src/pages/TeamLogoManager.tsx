@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { fetchLeagueChildren } from "@/lib/leagueChildren";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import { Loader2, Trash2, Upload, Users } from "lucide-react";
+import AdminPageShell, { AdminPageNotice } from "@/components/layout/AdminPageShell";
+import { BTN_GHOST, BTN_PRIMARY } from "@/components/layout/proUi";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
 import React from "react";
@@ -189,182 +191,133 @@ export default function TeamLogoManager() {
     }
   };
 
+  const back = { href: `/competition/${slug}`, label: "Back to league" };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading team management...</p>
-        </div>
-      </div>
+      <AdminPageShell title="Team logos" eyebrow="League admin" back={back} width="max-w-7xl">
+        <AdminPageNotice>
+          <Loader2 className="mx-auto mb-3 h-7 w-7 animate-spin text-[color:var(--ch-accent)]" />
+          Loading team management...
+        </AdminPageNotice>
+      </AdminPageShell>
     );
   }
 
   if (!league) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">League Not Found</h1>
-          <p className="text-slate-600 mb-4">The league you're looking for doesn't exist.</p>
-          <button
-            onClick={() => navigate("/")}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg"
-          >
+      <AdminPageShell title="League not found" eyebrow="League admin" back={{ href: "/", label: "Home" }} width="max-w-7xl">
+        <AdminPageNotice>
+          <p>The league you're looking for doesn't exist.</p>
+          <button type="button" onClick={() => navigate("/")} className={`${BTN_PRIMARY} mt-4`}>
             Go Home
           </button>
-        </div>
-      </div>
+        </AdminPageNotice>
+      </AdminPageShell>
     );
   }
 
   if (!isOwner) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Access Denied</h1>
-          <p className="text-slate-600 mb-4">Only league owners can manage team logos.</p>
-          <button
-            onClick={() => navigate(`/competition/${slug}`)}
-            className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg"
-          >
+      <AdminPageShell title="Access denied" eyebrow="League admin" back={back} width="max-w-7xl">
+        <AdminPageNotice>
+          <p>Only league owners can manage team logos.</p>
+          <button type="button" onClick={() => navigate(`/competition/${slug}`)} className={`${BTN_PRIMARY} mt-4`}>
             Back to League
           </button>
-        </div>
-      </div>
+        </AdminPageNotice>
+      </AdminPageShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#fffaf1]">
-      <header className="bg-white shadow-sm sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img
-            src={SwishLogo}
-            alt="Swish Assistant"
-            className="h-9 cursor-pointer"
-            onClick={() => navigate("/")}
-          />
-        </div>
-
-        <div className="flex gap-4 text-sm">
-          <button
-            onClick={() => navigate("/")}
-            className="text-slate-600 hover:text-orange-500"
-          >
-            Home
-          </button>
-          <button
-            onClick={() => navigate(`/competition/${slug}`)}
-            className="text-slate-600 hover:text-orange-500"
-          >
-            Back to League
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Team Logo Management</h1>
-          <p className="text-slate-600">
-            Upload and manage team logos for <span className="font-semibold">{league.name}</span>
-          </p>
-          <p className="text-sm text-slate-500 mt-1">
-            Team logos will appear across all league features including scoreboards, standings, and team profiles.
-          </p>
-        </div>
-
-        {/* Teams Grid */}
-        {teams.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {teams.map((team) => (
-              <div key={team.name} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                {/* Team Header */}
-                <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-4 text-white">
-                  <div className="flex items-center gap-3">
-                    <TeamLogo 
-                      teamName={team.name} 
-                      leagueId={league.league_id}
-                      logoUrl={teamLogos[team.name]}
-                      size="md"
-                      className="border-2 border-white/30"
-                    />
-                    <div>
-                      <h3 className="font-bold text-lg">{team.name}</h3>
-                      <p className="text-sm opacity-90">
-                        {team.hasLogo ? "Has Logo" : "No Logo"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Team Actions */}
-                <div className="p-4 space-y-3">
-                  {/* Current Logo Preview */}
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-slate-700 mb-2">Current Logo:</p>
-                    <TeamLogo 
-                      teamName={team.name} 
-                      leagueId={league.league_id}
-                      logoUrl={teamLogos[team.name]}
-                      size="xl"
-                      className="mx-auto"
-                    />
-                  </div>
-
-                  {/* Upload/Replace Button */}
-                  <TeamLogoUploader
-                    leagueId={league.league_id}
-                    teamName={team.name}
-                    onUploadComplete={() => handleLogoUploadComplete(team.name)}
-                    buttonClassName={`w-full ${team.hasLogo ? 'bg-blue-500 hover:bg-blue-600' : 'bg-orange-500 hover:bg-orange-600'} text-white font-medium py-2 px-4 rounded-lg transition-colors`}
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                      {team.hasLogo ? 'Replace Logo' : 'Upload Logo'}
-                    </div>
-                  </TeamLogoUploader>
-
-                  {/* Remove Logo Button */}
-                  {team.hasLogo && (
-                    <button
-                      onClick={() => handleRemoveLogo(team.name)}
-                      className="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      Remove Logo
-                    </button>
-                  )}
-                </div>
+    <AdminPageShell
+      title="Team logos"
+      eyebrow="League admin"
+      back={back}
+      width="max-w-7xl"
+      description={
+        <>
+          Upload and manage team logos for <span className="font-semibold text-[color:var(--ch-text)]">{league.name}</span>. They appear across
+          all league features including scoreboards, standings, and team profiles.
+        </>
+      }
+    >
+      {/* Teams Grid */}
+      {teams.length > 0 ? (
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {teams.map((team) => (
+            <div key={team.name} className="ch-card overflow-hidden">
+              {/* Team Header */}
+              <div className="flex items-center justify-between gap-3 border-b border-[color:var(--ch-border)] px-4 py-3">
+                <h3 className="min-w-0 truncate text-[15px] font-semibold text-[color:var(--ch-text)]">{team.name}</h3>
+                <span
+                  className={`inline-flex h-5 flex-none items-center rounded-full px-2 text-[10.5px] font-bold uppercase tracking-[0.06em] ${
+                    team.hasLogo ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300" : "bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)]"
+                  }`}
+                >
+                  {team.hasLogo ? "Has Logo" : "No Logo"}
+                </span>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-16 bg-white rounded-xl border border-gray-200">
-            <svg className="w-20 h-20 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-            <h3 className="text-2xl font-medium text-gray-900 mb-2">No Teams Found</h3>
-            <p className="text-gray-600">Teams will appear here once player data is available for this league.</p>
-          </div>
-        )}
 
-        {/* Help Section */}
-        <div className="mt-12 bg-blue-50 border border-blue-200 rounded-xl p-6">
-          <h3 className="text-lg font-bold text-blue-900 mb-2">📋 Logo Guidelines</h3>
-          <ul className="text-sm text-blue-800 space-y-1">
-            <li>• Logos should be square (1:1 aspect ratio) for best results</li>
-            <li>• Recommended size: 512x512 pixels or larger</li>
-            <li>• Supported formats: JPG, PNG, GIF, WebP</li>
-            <li>• Maximum file size: 5MB</li>
-            <li>• Logos will automatically appear in scoreboards, standings, and team profiles</li>
-          </ul>
+              {/* Team Actions */}
+              <div className="space-y-3 p-4">
+                {/* Current Logo Preview */}
+                <TeamLogo
+                  teamName={team.name}
+                  leagueId={league.league_id}
+                  logoUrl={teamLogos[team.name]}
+                  size="xl"
+                  className="mx-auto"
+                />
+
+                {/* Upload/Replace Button */}
+                <TeamLogoUploader
+                  leagueId={league.league_id}
+                  teamName={team.name}
+                  onUploadComplete={() => handleLogoUploadComplete(team.name)}
+                  buttonClassName={`${team.hasLogo ? BTN_GHOST : BTN_PRIMARY} w-full`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Upload className="h-4 w-4" />
+                    {team.hasLogo ? 'Replace Logo' : 'Upload Logo'}
+                  </div>
+                </TeamLogoUploader>
+
+                {/* Remove Logo Button */}
+                {team.hasLogo && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveLogo(team.name)}
+                    className={`${BTN_GHOST} w-full hover:!text-[color:var(--ch-loss)]`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Remove Logo
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
-      </main>
-    </div>
+      ) : (
+        <AdminPageNotice>
+          <Users className="mx-auto mb-3 h-10 w-10 text-[color:var(--ch-muted)]" />
+          <h3 className="text-base font-semibold text-[color:var(--ch-text)]">No Teams Found</h3>
+          <p className="mt-1">Teams will appear here once player data is available for this league.</p>
+        </AdminPageNotice>
+      )}
+
+      {/* Help Section */}
+      <div className="ch-card mt-8 p-5">
+        <h3 className="text-sm font-semibold text-[color:var(--ch-text)]">Logo guidelines</h3>
+        <ul className="mt-2 space-y-1 text-sm text-[color:var(--ch-text-2)]">
+          <li>• Logos should be square (1:1 aspect ratio) for best results</li>
+          <li>• Recommended size: 512x512 pixels or larger</li>
+          <li>• Supported formats: JPG, PNG, GIF, WebP</li>
+          <li>• Maximum file size: 5MB</li>
+          <li>• Logos will automatically appear in scoreboards, standings, and team profiles</li>
+        </ul>
+      </div>
+    </AdminPageShell>
   );
 }

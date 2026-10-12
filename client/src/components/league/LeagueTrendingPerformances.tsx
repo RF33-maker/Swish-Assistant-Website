@@ -7,6 +7,7 @@ import ShareableCard from "@/components/ShareableCard";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { generateTrendingCardBlob } from "@/lib/generateTrendingCard";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 interface PerfRow {
   league_id: string;
@@ -169,7 +170,7 @@ function PerfCard({
         <div className="flex items-center gap-2.5 pr-9 mb-2">
           <div className="h-8 w-8 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-amber-100 dark:from-neutral-800 dark:to-neutral-800 flex items-center justify-center flex-shrink-0">
             {photoUrl ? (
-              <img src={photoUrl} alt={perf.full_name} className="h-full w-full object-cover" />
+              <PlayerHeadshot src={photoUrl} alt={perf.full_name} loading="lazy" className="h-full w-full object-cover" fallbackClassName="object-top" />
             ) : (
               <span className="text-orange-600 dark:text-orange-300 font-bold text-xs">
                 {perf.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("")}

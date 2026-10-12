@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 interface InlineTeamProfileProps {
   teamName: string;
@@ -697,10 +698,12 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 }}
               >
                 {player.photoPath ? (
-                  <img
+                  <PlayerHeadshot
                     src={player.photoPath}
                     alt={player.name}
-                    className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-neutral-700 shadow-sm"
+                    loading="lazy"
+                    className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-neutral-700 shadow-sm bg-slate-200 dark:bg-neutral-700"
+                    fallbackClassName="object-top"
                   />
                 ) : (
                   <div

@@ -1,10 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, ImagePlus, Loader2, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Slider } from "@/components/ui/slider";
+import { Loader2, RotateCcw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlayerPhotoButton, PlayerPhotoControl } from "@/components/social/PlayerPhotoControl";
+import {
+  BTN_GHOST,
+  ColourField,
+  CompetitionField,
+  ERROR,
+  FIELD,
+  Field,
+  HINT,
+  Panel,
+  RangeField,
+  readStoredCompetition,
+  rememberCompetition,
+  SaveActions,
+  SELECT_MENU,
+  Stage,
+  Toggle,
+  type CompetitionOption,
+} from "@/components/social/studioUi";
+import { photoChangeLendsTo, usePlayerPhotoChange } from "@/lib/playerPhotos";
 import { supabase } from "@/lib/supabase";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
@@ -27,7 +43,6 @@ import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import type { WeeklyAward, WeeklyAwardsResponse } from "@/types/weeklyAwards";
 
 const DEFAULT_SLUG = "nbl-division-1-2026-2027";
-type CompetitionOption = { slug: string; name: string };
 type CardKind = "team" | "player";
 
 function fmtShift(v: number): string {
@@ -72,14 +87,6 @@ function writeJson(key: string, value: unknown) {
   }
 }
 
-function readStored(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
 type StudioProps = {
   kind: CardKind;
   showGameScore: boolean;
@@ -87,7 +94,7 @@ type StudioProps = {
 };
 
 export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScoreChange }: StudioProps) {
-  const initialSlug = new URLSearchParams(window.location.search).get("slug") || readStored(SLUG_KEY) || DEFAULT_SLUG;
+  const initialSlug = new URLSearchParams(window.location.search).get("slug") || readStoredCompetition(SLUG_KEY) || DEFAULT_SLUG;
 
   const [competitions, setCompetitions] = useState<CompetitionOption[]>([]);
   const [slug, setSlug] = useState(initialSlug);
@@ -211,6 +218,18 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     [data, selected],
   );
   const potw = data?.awards[0] || null;
+
+  // A photo added here or in another studio: redraw with it, keeping the week, the picks and the subtitle.
+  usePlayerPhotoChange((change) => {
+    const gained = (data?.awards || []).filter((a) =>
+      photoChangeLendsTo(change, { playerId: a.player_id, name: a.full_name, hasPhoto: !!a.photoUrl }),
+    );
+    if (gained.length === 0) return;
+    const ids = new Set(gained.map((a) => a.player_id));
+    setData((prev) => prev && { ...prev, awards: prev.awards.map((a) => (ids.has(a.player_id) ? { ...a, photoUrl: change.url } : a)) });
+    // Framing set for the old photo wouldn't suit the new one.
+    setFraming((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !ids.has(id))));
+  });
 
   // The player whose photo the framing sliders currently adjust.
   const target: WeeklyAward | null =
@@ -386,169 +405,125 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   const chooseSlug = (v: string) => {
     setWeekStart("");
     setSlug(v);
-    try {
-      localStorage.setItem(SLUG_KEY, v);
-    } catch {
-      // remembering the competition is a convenience only
-    }
+    rememberCompetition(SLUG_KEY, v);
   };
 
+  const lastName = (a: WeeklyAward) => a.full_name.split(" ").slice(-1)[0];
+
   return (
-    <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[380px_1fr]">
-      <Card className="order-2 h-fit min-w-0 bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700 lg:order-1">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-orange-900 dark:text-orange-400">{title}</CardTitle>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {kind === "team"
-              ? "The five best game scores across a Monday–Sunday week."
-              : "The best game score of the week, as a full-photo card."}
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Competition</label>
-            <Select value={slug} onValueChange={chooseSlug}>
-              <SelectTrigger className="border-orange-200 dark:border-orange-700"><SelectValue placeholder="Choose a competition" /></SelectTrigger>
-              <SelectContent>
-                {!competitions.some((c) => c.slug === slug) && <SelectItem value={slug}>{slug}</SelectItem>}
-                {competitions.map((c) => (
-                  <SelectItem key={c.slug} value={c.slug}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
+      <Panel
+        title={title}
+        description={
+          kind === "team"
+            ? "The five best game scores across a Monday–Sunday week."
+            : "The best game score of the week, as a full-photo card."
+        }
+        className="order-2 lg:order-1"
+        bodyClassName="space-y-4"
+      >
+        <CompetitionField value={slug} onChange={chooseSlug} competitions={competitions} />
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Week</label>
-            <Select value={weekStart} onValueChange={setWeekStart} disabled={!data?.weeks.length}>
-              <SelectTrigger className="border-orange-200 dark:border-orange-700"><SelectValue placeholder="Latest week" /></SelectTrigger>
-              <SelectContent>
-                {(data?.weeks || []).map((w) => (
-                  <SelectItem key={w} value={w}>{fmtWeek(w)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <Field label="Week">
+          <Select value={weekStart} onValueChange={setWeekStart} disabled={!data?.weeks.length}>
+            <SelectTrigger className={FIELD} data-testid="select-week">
+              <SelectValue placeholder="Latest week" />
+            </SelectTrigger>
+            <SelectContent className={SELECT_MENU}>
+              {(data?.weeks || []).map((w) => (
+                <SelectItem key={w} value={w}>{fmtWeek(w)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Card subtitle</label>
-            <Input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className="border-orange-200 dark:border-orange-700" />
-          </div>
+        <Field label="Card subtitle">
+          <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className={FIELD} />
+        </Field>
 
-          {kind === "team" && <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />}
+        {kind === "team" && <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />}
 
-          {!(kind === "team" && style === "swish") && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Card colour</label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={/^#[0-9a-f]{6}$/i.test(primaryHex) ? primaryHex : "#f97316"}
-                  onChange={(e) => updateColour(e.target.value)}
-                  className="h-9 w-14 cursor-pointer rounded border"
-                />
-                <span className="text-xs text-gray-500">
-                  {colorOverride ? "Custom (saved for this competition)" : "From the league logo"}
-                </span>
-                {colorOverride && (
-                  <button
-                    className="text-xs text-orange-700 underline"
-                    onClick={() => { setColorOverride(null); try { localStorage.removeItem(`weekly-awards-colour:${slug}`); } catch { /* ignore */ } }}
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+        {!(kind === "team" && style === "swish") && (
+          <ColourField
+            value={primaryHex}
+            custom={!!colorOverride}
+            onChange={updateColour}
+            onReset={() => { setColorOverride(null); try { localStorage.removeItem(`weekly-awards-colour:${slug}`); } catch { /* ignore */ } }}
+          />
+        )}
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-orange-200 p-3 dark:border-orange-700">
-            <input
-              type="checkbox"
-              checked={showGameScore}
-              onChange={(e) => onShowGameScoreChange(e.target.checked)}
-              className="mt-0.5"
-              data-testid="toggle-game-score"
-            />
-            <span>
-              <span className="block text-sm font-medium text-gray-700 dark:text-gray-300">Show game score</span>
-              <span className="block text-xs text-gray-500 dark:text-gray-400">
-                Players are still picked by game score; this only shows or hides the number on the card.
-              </span>
-            </span>
-          </label>
+        <Toggle
+          checked={showGameScore}
+          onChange={onShowGameScoreChange}
+          label="Show game score"
+          hint="Players are still picked by game score; this only shows or hides the number on the card."
+          testId="toggle-game-score"
+        />
 
-          {kind === "team" && (
-            <div className="space-y-1">
-              <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Players ({selected.length}/5) — top game scores, untick to swap
-              </div>
-              <div className="max-h-[420px] divide-y overflow-y-auto rounded-md border border-orange-200 bg-white dark:border-orange-700 dark:bg-gray-900">
-                {(data?.awards || []).map((a) => (
-                  <label key={a.player_id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(a.player_id)}
-                      onChange={() => toggle(a.player_id)}
-                      disabled={!selected.includes(a.player_id) && selected.length >= 5}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{a.full_name}</span>
-                      <span className="block truncate text-xs text-gray-500">
-                        {a.team_name} · {a.pts}p {a.reb}r {a.ast}a
-                        {!a.photoUrl && " · no photo"}
-                      </span>
+        {kind === "team" && (
+          <Field label={`Players (${selected.length}/5) — top game scores, untick to swap`}>
+            <div className="ch-tile max-h-[420px] divide-y divide-[color:var(--ch-border)] overflow-y-auto">
+              {(data?.awards || []).map((a) => (
+                <label key={a.player_id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(a.player_id)}
+                    onChange={() => toggle(a.player_id)}
+                    disabled={!selected.includes(a.player_id) && selected.length >= 5}
+                    className="h-4 w-4 flex-none accent-[color:var(--ch-accent)]"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium text-[color:var(--ch-text)]">{a.full_name}</span>
+                    <span className="block truncate text-xs text-[color:var(--ch-muted)]">
+                      {a.team_name} · {a.pts}p {a.reb}r {a.ast}a
                     </span>
-                    <span className="tabular-nums text-orange-600">{a.game_score != null ? Number(a.game_score).toFixed(1) : "—"}</span>
-                  </label>
-                ))}
-              </div>
+                  </span>
+                  {!a.photoUrl && <PlayerPhotoButton playerId={a.player_id} playerName={a.full_name} />}
+                  <span className="ch-num flex-none font-semibold text-[color:var(--ch-accent)]">{a.game_score != null ? Number(a.game_score).toFixed(1) : "—"}</span>
+                </label>
+              ))}
             </div>
-          )}
+          </Field>
+        )}
+      </Panel>
 
-        </CardContent>
-      </Card>
+      <Panel className="order-1 lg:order-2" bodyClassName="!p-3 sm:!p-5">
+        {loading && !data ? (
+          <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-accent)]" /></div>
+        ) : (
+          <Stage busy={rendering && !hasCard} empty={!hasCard && !rendering ? "No stats found for this week." : undefined}>
+            <div
+              ref={canvasHostRef}
+              onClick={selectPanelAt}
+              className={`w-full ${kind === "team" ? "cursor-pointer" : ""}`}
+            />
+          </Stage>
+        )}
+        {target && targetFraming && (
+          <div className="mx-auto mt-3 max-w-[640px] space-y-3">
+            <PlayerPhotoControl
+              key={target.player_id}
+              playerId={target.player_id}
+              playerName={target.full_name}
+              photoUrl={target.photoUrl}
+            />
 
-      <Card className="order-1 min-w-0 bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700 lg:order-2">
-        <CardContent className="p-2 sm:p-4">
-          {loading && !data ? (
-            <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-orange-500" /></div>
-          ) : (
-            <div className="relative mx-auto max-w-[640px]">
-              <div
-                ref={canvasHostRef}
-                onClick={selectPanelAt}
-                className={`w-full overflow-hidden rounded-lg ${kind === "team" ? "cursor-pointer" : ""}`}
-              />
-              {rendering && !hasCard && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                  <Loader2 className="h-6 w-6 animate-spin text-white" />
-                </div>
-              )}
-              {!hasCard && !rendering && (
-                <p className="py-10 text-center text-sm text-gray-500">No stats found for this week.</p>
-              )}
-            </div>
-          )}
-          {target && targetFraming && (
-            <div className="mx-auto mt-3 max-w-[640px] space-y-3 rounded-lg border border-orange-200 bg-orange-50/60 p-3 dark:border-orange-800 dark:bg-orange-950/20">
+            <div className="ch-tile space-y-3 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Photo framing</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Adjusts the card only. Your original photo stays unchanged.</p>
+                  <p className="text-[13px] font-semibold text-[color:var(--ch-text)]">Photo framing</p>
+                  <p className={HINT}>Adjusts the card only. Your original photo stays unchanged.</p>
                 </div>
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
                   onClick={resetFraming}
                   disabled={!framing[target.player_id]}
-                  className="h-8 flex-none gap-1.5"
+                  className={`${BTN_GHOST} flex-none`}
                   data-testid="button-reset-photo-framing"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   Reset
-                </Button>
+                </button>
               </div>
 
               {kind === "team" && (
@@ -561,67 +536,65 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                         type="button"
                         onClick={() => setActiveId(a.player_id)}
                         aria-pressed={on}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                          on
-                            ? "border-orange-500 bg-orange-500 text-white"
-                            : "border-orange-200 bg-white text-orange-700 hover:bg-orange-50 dark:border-orange-700 dark:bg-gray-900 dark:text-orange-300"
-                        }`}
+                        data-active={on}
+                        className="ch-chip px-3 py-1 text-xs"
                       >
-                        {a.full_name.split(" ").slice(-1)[0]}
+                        {lastName(a)}
                         {framing[a.player_id] ? " •" : ""}
-                        {align.on && a.photoUrl && !heads[a.photoUrl] ? " ?" : ""}
+                        {!a.photoUrl ? " (no photo)" : align.on && !heads[a.photoUrl] ? " ?" : ""}
                       </button>
                     );
                   })}
                 </div>
               )}
               {kind === "team" && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">Tip: tap a photo in the preview to adjust it.</p>
+                <p className={HINT}>Tip: tap a photo in the preview to adjust it.</p>
               )}
 
               {kind === "team" && (
-                <div className="space-y-2 rounded-md border border-orange-200 bg-white/70 p-2.5 dark:border-orange-700 dark:bg-gray-900/40">
-                  <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                    <input
-                      type="checkbox"
-                      checked={align.on}
-                      onChange={(e) => updateAlign({ on: e.target.checked })}
-                      data-testid="toggle-align-heads"
-                    />
-                    Line up heads across the photos
-                  </label>
+                <div className="space-y-2 rounded-lg border border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-2.5">
+                  <Toggle
+                    bare
+                    checked={align.on}
+                    onChange={(on) => updateAlign({ on })}
+                    label="Line up heads across the photos"
+                    testId="toggle-align-heads"
+                  />
                   {align.on && (
                     <>
-                      <label className="block space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                        <span className="flex justify-between">
-                          Head height
-                          <span className="tabular-nums text-gray-500">{align.line}%</span>
-                        </span>
-                        <Slider min={10} max={50} step={1} value={[align.line]} onValueChange={([v]) => updateAlign({ line: v })} data-testid="slider-head-line" />
-                      </label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                      <RangeField
+                        label="Head height"
+                        display={`${align.line}%`}
+                        min={10}
+                        max={50}
+                        step={1}
+                        value={align.line}
+                        onChange={(v) => updateAlign({ line: v })}
+                        testId="slider-head-line"
+                      />
+                      <p className={HINT}>
                         Each photo is zoomed and shifted just enough to put the marked face on this line.
                       </p>
                       {needMarks.length > 0 && (
                         <p className="text-xs text-amber-700 dark:text-amber-400">
-                          Mark the face for {needMarks.map((a) => a.full_name.split(" ").slice(-1)[0]).join(", ")} (chips with ?). Until then a
+                          Mark the face for {needMarks.map(lastName).join(", ")} (chips with ?). Until then a
                           guess is used.
                         </p>
                       )}
                       {couldNotAlign.length > 0 && (
                         <p className="text-xs text-amber-700 dark:text-amber-400">
-                          {couldNotAlign.map((a) => a.full_name.split(" ").slice(-1)[0]).join(", ")}: face is too close to the edge of the
+                          {couldNotAlign.map(lastName).join(", ")}: face is too close to the edge of the
                           photo to reach the line without zooming in too far, so it sits as near as it can.
                         </p>
                       )}
                       {target.photoUrl && (
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                            <p className="text-xs font-medium text-[color:var(--ch-text)]">
                               Tap the middle of {target.full_name.split(" ")[0]}'s face
                             </p>
                             {targetHead && (
-                              <button type="button" onClick={clearHead} className="text-xs text-orange-700 underline">
+                              <button type="button" onClick={clearHead} className="text-xs font-medium text-[color:var(--ch-accent)] hover:underline">
                                 Clear
                               </button>
                             )}
@@ -637,12 +610,12 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                             />
                             {targetHead && (
                               <span
-                                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-orange-500 bg-white/30 shadow"
+                                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[color:var(--ch-accent)] bg-white/30 shadow"
                                 style={{ left: `${targetHead.x * 100}%`, top: `${targetHead.y * 100}%` }}
                               />
                             )}
                           </div>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Saved for this photo, so you only do it once.</p>
+                          <p className={HINT}>Saved for this photo, so you only do it once.</p>
                         </div>
                       )}
                     </>
@@ -651,91 +624,80 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
               )}
 
               {!target.photoUrl ? (
-                <p className="text-xs text-gray-500 dark:text-gray-400">{target.full_name} has no photo yet, so there is nothing to frame.</p>
+                <p className={HINT}>Add a photo for {target.full_name} above and the framing controls appear here.</p>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                    <span className="flex justify-between">
-                      Zoom
-                      <span className="tabular-nums text-gray-500">{Math.round(targetFraming.zoom * 100)}%</span>
-                    </span>
-                    <Slider min={kind === "team" ? 1 : 0.4} max={3} step={0.05} value={[targetFraming.zoom]} onValueChange={([v]) => adjust({ zoom: v })} data-testid="slider-photo-zoom" />
-                  </label>
-                  <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                    <span className="flex justify-between">
-                      Left ↔ Right
-                      <span className="tabular-nums text-gray-500">{fmtShift(targetFraming.x)}</span>
-                    </span>
-                    <Slider min={-50} max={50} step={1} value={[targetFraming.x]} onValueChange={([v]) => adjust({ x: v })} data-testid="slider-photo-position-x" />
-                  </label>
-                  <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                    <span className="flex justify-between">
-                      Up ↔ Down
-                      <span className="tabular-nums text-gray-500">{fmtShift(targetFraming.y)}</span>
-                    </span>
-                    <Slider min={-50} max={50} step={1} value={[targetFraming.y]} onValueChange={([v]) => adjust({ y: v })} data-testid="slider-photo-position-y" />
-                  </label>
+                  <RangeField
+                    label="Zoom"
+                    display={`${Math.round(targetFraming.zoom * 100)}%`}
+                    min={kind === "team" ? 1 : 0.4}
+                    max={3}
+                    step={0.05}
+                    value={targetFraming.zoom}
+                    onChange={(v) => adjust({ zoom: v })}
+                    testId="slider-photo-zoom"
+                  />
+                  <RangeField
+                    label="Left ↔ Right"
+                    display={fmtShift(targetFraming.x)}
+                    min={-50}
+                    max={50}
+                    step={1}
+                    value={targetFraming.x}
+                    onChange={(v) => adjust({ x: v })}
+                    testId="slider-photo-position-x"
+                  />
+                  <RangeField
+                    label="Up ↔ Down"
+                    display={fmtShift(targetFraming.y)}
+                    min={-50}
+                    max={50}
+                    step={1}
+                    value={targetFraming.y}
+                    onChange={(v) => adjust({ y: v })}
+                    testId="slider-photo-position-y"
+                  />
                 </div>
               )}
 
               {kind === "player" && target.photoUrl && (
-                <label className="block space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
-                  <span className="flex justify-between">
-                    Colour tint
-                    <span className="tabular-nums text-gray-500">{tint}%</span>
-                  </span>
-                  <Slider min={0} max={100} step={5} value={[tint]} onValueChange={([v]) => setTint(v)} data-testid="slider-photo-tint" />
-                  <span className="block font-normal text-gray-500 dark:text-gray-400">
-                    How much of the competition colour washes over the soft photo behind the player. 0% is just the photo.
-                  </span>
-                </label>
+                <RangeField
+                  label="Colour tint"
+                  display={`${tint}%`}
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={tint}
+                  onChange={setTint}
+                  testId="slider-photo-tint"
+                  hint="How much of the competition colour washes over the soft photo behind the player. 0% is just the photo."
+                />
               )}
 
               {target.photoUrl && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className={HINT}>
                   {kind === "team"
                     ? "Fine-tune just this photo: extra zoom, or nudge the head from the shared line. Its edges melt into the photos beside it."
                     : "Move the photo freely: any space that opens up at an edge shows a soft blurred copy of the same photo. Slide Down (or zoom out) to bring a player's head clear of the heading."}
                 </p>
               )}
             </div>
-          )}
-
-          <div className="mx-auto mt-3 max-w-[640px] space-y-2">
-            {canShareFiles ? (
-              <>
-                <Button
-                  onClick={saveToPhotos}
-                  disabled={!shareFile || rendering}
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-                  data-testid="button-save-to-photos"
-                >
-                  <ImagePlus className="mr-2 h-4 w-4" />
-                  Save to Photos
-                </Button>
-                <p className="text-center text-xs text-gray-500 dark:text-gray-400">Tap Save Image in the menu that opens.</p>
-                <Button
-                  onClick={download}
-                  disabled={!hasCard || rendering || downloading}
-                  variant="outline"
-                  className="w-full"
-                  data-testid="button-download-file"
-                >
-                  {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                  Download file
-                </Button>
-              </>
-            ) : (
-              <Button onClick={download} disabled={!hasCard || rendering || downloading} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
-                {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Download PNG
-              </Button>
-            )}
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <p className="text-center text-xs text-gray-500 dark:text-gray-400">Card size: 1080×1350px (Instagram portrait)</p>
           </div>
-        </CardContent>
-      </Card>
+        )}
+
+        <div className="mx-auto mt-3 max-w-[640px] space-y-2">
+          <SaveActions
+            canShare={canShareFiles}
+            onSave={saveToPhotos}
+            saveDisabled={!shareFile || rendering}
+            onDownload={download}
+            downloadDisabled={!hasCard || rendering || downloading}
+            downloading={downloading}
+          />
+          {error && <p className={ERROR}>{error}</p>}
+          <p className={`text-center ${HINT}`}>Card size: 1080×1350px (Instagram portrait)</p>
+        </div>
+      </Panel>
     </div>
   );
 }

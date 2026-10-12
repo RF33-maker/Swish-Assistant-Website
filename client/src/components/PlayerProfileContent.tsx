@@ -27,6 +27,8 @@ import ShareableCard from "@/components/ShareableCard";
 import { withAlpha } from "@/lib/colorContrast";
 import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+import { useHeadshotUrl } from "@/components/PlayerHeadshot";
+import { uploadHeadshotVariants } from "@/lib/headshotVariants";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { selectProfileMatches } from "@/lib/profileMatches";
 import PreferredNameControl from "@/components/PreferredNameControl";
@@ -572,6 +574,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         });
 
       if (uploadError) throw uploadError;
+
+      // Regenerate the web-sized variants for this path, so avatars and the
+      // banner show the new photo rather than a stale thumbnail of the old one.
+      await uploadHeadshotVariants(file, filePath);
 
       const { error: updateError } = await supabase
         .from('players')
@@ -1816,10 +1822,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       .filter((g, i, arr) => arr.findIndex(x => x.game_key === g.game_key) === i);
   }, [playerStats, selectedLeagueIds]);
 
-  const playerPhotoUrl = useMemo(
+  const playerPhotoOriginalUrl = useMemo(
     () => getPlayerPhotoUrlCached(playerInfo?.photoPath ?? null, photoCacheBuster || undefined),
     [playerInfo?.photoPath, photoCacheBuster]
   );
+  // The banner and cards show the web-sized variant (tens of KB) rather than
+  // the multi-MB original; falls back to the original when there isn't one.
+  const playerPhotoUrl = useHeadshotUrl(playerPhotoOriginalUrl, "web");
 
   // Resolve the team logo URL once for the share-card header band on all
   // four ShareableCards rendered below (Season Averages, Shooting Splits,

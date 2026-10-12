@@ -15,6 +15,7 @@ import {
   getPublicProfile,
   getPublicProfileStats,
 } from "@/lib/playerClaims";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 // /p/:slug — a claimed player's shareable profile. Data comes from
 // get_public_profile, which applies the age tiers server-side: under-18 and
@@ -104,8 +105,9 @@ function ProfileCard({ profile, isOwner }: { profile: PublicProfile; isOwner: bo
         <div className="flex flex-col sm:flex-row">
           <div className="sm:w-56 shrink-0 bg-[color:var(--ch-surface-3)] aspect-[4/5] sm:aspect-auto sm:min-h-[260px] relative">
             {photoUrl ? (
-              <img
+              <PlayerHeadshot
                 src={photoUrl}
+                variant="web"
                 alt={profile.display_name}
                 className="absolute inset-0 h-full w-full object-cover"
                 style={{ objectPosition: `50% ${profile.photo_focus_y ?? 20}%` }}

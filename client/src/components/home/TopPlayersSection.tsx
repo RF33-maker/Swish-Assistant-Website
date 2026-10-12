@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Trophy } from "lucide-react";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import SectionHeader from "@/components/home/SectionHeader";
+import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 interface LeagueOption {
   league_id: string;
@@ -82,10 +83,12 @@ function LeaderCard({
                 {idx + 1}
               </span>
               {photoUrl ? (
-                <img
+                <PlayerHeadshot
                   src={photoUrl}
                   alt={p.full_name}
-                  className="w-8 h-8 rounded-full object-cover object-top flex-shrink-0 bg-gray-100 dark:bg-neutral-700"
+                  loading="lazy"
+                  className="w-8 h-8 rounded-full object-cover flex-shrink-0 bg-gray-100 dark:bg-neutral-700"
+                  fallbackClassName="object-top"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
                   }}

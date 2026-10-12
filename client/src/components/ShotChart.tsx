@@ -327,6 +327,16 @@ export default function ShotChart({
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [shots]);
 
+  // Regulation is periods 1-4; overtime is 5+ (OT1 = 5). Only list the overtimes
+  // that actually appear in these shots.
+  const overtimePeriods = useMemo(() => {
+    const set = new Set<number>();
+    shots.forEach((s) => {
+      if (s.period != null && s.period > 4) set.add(s.period);
+    });
+    return Array.from(set).sort((x, y) => x - y);
+  }, [shots]);
+
   const subTypes = useMemo(() => {
     const set = new Set<string>();
     shots.forEach((s) => {
@@ -600,6 +610,9 @@ export default function ShotChart({
                   <option value="2">Q2</option>
                   <option value="3">Q3</option>
                   <option value="4">Q4</option>
+                  {overtimePeriods.map((p) => (
+                    <option key={p} value={p}>{`OT${p - 4}`}</option>
+                  ))}
                 </select>
               )}
 

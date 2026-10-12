@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { playerPhotoUrl } from "@/lib/playerPhotos";
+import { BTN_GHOST, BTN_PRIMARY, FIELD, Field, HINT, Panel, TALL } from "./studioUi";
 import {
   Search, Link2, Unlink, Trash2, Plus, Loader2, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, X
 } from "lucide-react";
@@ -259,298 +257,298 @@ export function PlayerIdentityManager() {
     }
   };
 
+  const results = "ch-tile divide-y divide-[color:var(--ch-border)] overflow-y-auto";
+  const resultRow = "block w-full px-3 py-2 text-left hover:bg-[color:var(--ch-surface-3)] disabled:cursor-not-allowed disabled:opacity-40";
+  const searchIcon = "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--ch-muted)]";
+  const iconBtn = "flex h-8 w-8 flex-none items-center justify-center rounded-md text-[color:var(--ch-muted)] transition hover:bg-[color:var(--ch-surface-3)] hover:text-[color:var(--ch-loss)] disabled:opacity-50";
+
   if (migrationNeeded) {
     return (
-      <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
-            <Link2 className="h-5 w-5" />
-            Player Identity Manager
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
-            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-            <div className="min-w-0 break-words text-sm text-amber-800 dark:text-amber-300 space-y-2">
-              <p className="font-semibold">Database migration required</p>
-              <p>Run the SQL in <code className="break-all font-mono text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">supabase/migrations/20260625_player_identities.sql</code> in your Supabase dashboard (SQL Editor) to create the <code className="break-all font-mono text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">player_identities</code> and <code className="break-all font-mono text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">player_identity_members</code> tables.</p>
-              <p>After running the migration, refresh this page.</p>
-            </div>
+      <Panel title="Player identities" icon={Link2}>
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0 space-y-2 break-words text-sm text-amber-800 dark:text-amber-300">
+            <p className="font-semibold">Database migration required</p>
+            <p>Run the SQL in <code className="break-all rounded bg-amber-500/15 px-1 font-mono text-xs">supabase/migrations/20260625_player_identities.sql</code> in your Supabase dashboard (SQL Editor) to create the <code className="break-all rounded bg-amber-500/15 px-1 font-mono text-xs">player_identities</code> and <code className="break-all rounded bg-amber-500/15 px-1 font-mono text-xs">player_identity_members</code> tables.</p>
+            <p>After running the migration, refresh this page.</p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     );
   }
 
   return (
-    <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
-          <Link2 className="h-5 w-5" />
-          Player Identity Manager
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Link the same real-world player across multiple leagues. Once linked, photos and profile stats sync automatically.
+    <Panel
+      title="Player identities"
+      icon={Link2}
+      description="Link the same real-world player across multiple leagues. Once linked, photos and profile stats sync automatically."
+      bodyClassName="space-y-5"
+    >
+      {msg && (
+        <div
+          className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
+            msg.type === "success"
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+          }`}
+        >
+          {msg.type === "success"
+            ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+            : <AlertCircle className="h-4 w-4 flex-shrink-0" />}
+          {msg.text}
+        </div>
+      )}
+
+      {/* ── Create new identity group ── */}
+      <div className="space-y-3 rounded-xl border border-dashed border-[color:var(--ch-border-strong)] p-4">
+        <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--ch-text)]">
+          <Plus className="h-4 w-4 text-[color:var(--ch-accent)]" />
+          Create new identity group
         </p>
 
-        {msg && (
-          <div className={`flex items-center gap-2 p-3 rounded-md text-sm ${
-            msg.type === "success"
-              ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700"
-              : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700"
-          }`}>
-            {msg.type === "success"
-              ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-              : <AlertCircle className="h-4 w-4 flex-shrink-0" />}
-            {msg.text}
+        <div className="relative">
+          <Search className={searchIcon} />
+          <input
+            placeholder="Search players to link…"
+            value={playerSearch}
+            onChange={e => setPlayerSearch(e.target.value)}
+            className={`${FIELD} pl-9`}
+          />
+        </div>
+
+        {(searchingPlayers || playerResults.length > 0) && (
+          <div className={`${results} max-h-40`}>
+            {searchingPlayers && (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-[color:var(--ch-accent)]" />
+              </div>
+            )}
+            {!searchingPlayers && playerResults.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => addToPending(p)}
+                disabled={!!pendingPlayers.find(x => x.id === p.id)}
+                className={resultRow}
+              >
+                <div className="text-sm font-medium text-[color:var(--ch-text)]">{p.full_name}</div>
+                <div className="text-xs text-[color:var(--ch-muted)]">{p.team_name || "–"} · {p.league_id?.slice(0, 8)}</div>
+              </button>
+            ))}
           </div>
         )}
 
-        {/* ── Create new identity group ── */}
-        <div className="space-y-3 border border-dashed border-orange-200 dark:border-orange-700 rounded-lg p-4">
-          <p className="text-sm font-semibold text-orange-900 dark:text-orange-400 flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Create new identity group
-          </p>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search players to link…"
-              value={playerSearch}
-              onChange={e => setPlayerSearch(e.target.value)}
-              className="pl-10 border-gray-200 dark:border-gray-600 text-sm"
-            />
-          </div>
-
-          {(searchingPlayers || playerResults.length > 0) && (
-            <div className="border border-gray-200 dark:border-gray-600 rounded-md max-h-40 overflow-y-auto bg-white dark:bg-gray-800">
-              {searchingPlayers && (
-                <div className="flex items-center justify-center py-3">
-                  <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
-                </div>
-              )}
-              {!searchingPlayers && playerResults.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => addToPending(p)}
-                  disabled={!!pendingPlayers.find(x => x.id === p.id)}
-                  className="w-full text-left px-3 py-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 border-b border-gray-100 dark:border-gray-700 last:border-b-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <div className="font-medium text-gray-900 dark:text-white text-sm">{p.full_name}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">{p.team_name || "–"} · {p.league_id?.slice(0, 8)}</div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {pendingPlayers.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Players to link:</p>
+        {pendingPlayers.length > 0 && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-[color:var(--ch-text-2)]">Players to link:</p>
               <div className="flex flex-wrap gap-2">
                 {pendingPlayers.map(p => (
-                  <Badge
+                  <span
                     key={p.id}
-                    variant="secondary"
-                    className="flex items-center gap-1 pr-1 bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300"
+                    className="inline-flex items-center gap-1 rounded-full bg-[color:var(--ch-accent-soft)] py-0.5 pl-2.5 pr-1 text-xs font-medium text-[color:var(--ch-text)]"
                   >
                     {p.full_name}
-                    <button onClick={() => removePending(p.id)} className="ml-1 hover:text-red-500">
+                    <button
+                      type="button"
+                      onClick={() => removePending(p.id)}
+                      aria-label={`Remove ${p.full_name}`}
+                      className="flex h-5 w-5 items-center justify-center rounded-full hover:text-[color:var(--ch-loss)]"
+                    >
                       <X className="h-3 w-3" />
                     </button>
-                  </Badge>
+                  </span>
                 ))}
               </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-600 dark:text-gray-400">Canonical name</label>
-                <Input
-                  value={canonicalName}
-                  onChange={e => setCanonicalName(e.target.value)}
-                  placeholder="Best display name for this person"
-                  className="text-sm border-gray-200 dark:border-gray-600"
-                />
-              </div>
-
-              <Button
-                onClick={createIdentity}
-                disabled={creating || pendingPlayers.length < 2 || !canonicalName.trim()}
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white text-sm"
-              >
-                {creating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Link2 className="h-4 w-4 mr-2" />}
-                Link {pendingPlayers.length} players as one identity
-              </Button>
             </div>
-          )}
-        </div>
 
-        {/* ── Existing identity groups ── */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search identities…"
-                value={identitySearch}
-                onChange={e => { setIdentitySearch(e.target.value); fetchIdentities(e.target.value || undefined); }}
-                className="pl-10 border-gray-200 dark:border-gray-600 text-sm"
+            <Field label="Canonical name">
+              <input
+                value={canonicalName}
+                onChange={e => setCanonicalName(e.target.value)}
+                placeholder="Best display name for this person"
+                className={FIELD}
               />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchIdentities(identitySearch || undefined)}
-              className="border-orange-200 dark:border-orange-700 text-orange-700 dark:text-orange-400"
+            </Field>
+
+            <button
+              type="button"
+              onClick={createIdentity}
+              disabled={creating || pendingPlayers.length < 2 || !canonicalName.trim()}
+              className={`${BTN_PRIMARY} ${TALL} w-full`}
             >
-              <Search className="h-4 w-4" />
-            </Button>
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+              Link {pendingPlayers.length} players as one identity
+            </button>
           </div>
+        )}
+      </div>
 
-          {loadingIdentities ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
-            </div>
-          ) : identities.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-              No identity groups yet. Create one above.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {identities.map(identity => (
-                <div key={identity.id} className="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => toggleExpand(identity.id)}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      {(identity.photo_path_bg_removed || identity.photo_path) ? (
-                        <img
-                          src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${identity.photo_path_bg_removed || identity.photo_path}`}
-                          alt={identity.canonical_name}
-                          className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-gray-600"
-                          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
-                      ) : (
-                        <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400 text-xs font-bold">
-                          {identity.canonical_name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <span className="font-medium text-gray-900 dark:text-white text-sm">{identity.canonical_name}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={e => { e.stopPropagation(); deleteIdentity(identity.id, identity.canonical_name); }}
-                        disabled={deletingId === identity.id}
-                        className="p-1 text-red-400 hover:text-red-600 dark:hover:text-red-400"
-                        title="Delete identity group"
-                      >
-                        {deletingId === identity.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                      </button>
-                      {expandedId === identity.id ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
-                    </div>
-                  </button>
-
-                  {expandedId === identity.id && (
-                    <div className="border-t border-gray-200 dark:border-gray-600 px-4 py-3 space-y-3 bg-gray-50 dark:bg-gray-700/30">
-                      {loadingMembersFor === identity.id ? (
-                        <div className="flex justify-center py-2">
-                          <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Linked player records:</p>
-                          {(membersMap[identity.id] || []).length === 0 ? (
-                            <p className="text-xs text-gray-400">No members loaded.</p>
-                          ) : (
-                            <div className="space-y-1.5">
-                              {(membersMap[identity.id] || []).map(m => (
-                                <div
-                                  key={m.playerId}
-                                  className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-md px-3 py-2 border border-gray-100 dark:border-gray-600"
-                                >
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                      {m.player?.full_name || m.playerId}
-                                    </div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                                      {m.player?.team_name || "–"} · {m.player?.league_id?.slice(0, 8)}
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => removeMember(identity.id, m.playerId)}
-                                    disabled={removing === m.playerId}
-                                    className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
-                                    title="Unlink this player"
-                                  >
-                                    {removing === m.playerId
-                                      ? <Loader2 className="h-4 w-4 animate-spin" />
-                                      : <Unlink className="h-4 w-4" />}
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {addingToId === identity.id ? (
-                            <div className="space-y-2 pt-1">
-                              <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <Input
-                                  placeholder="Search player to add…"
-                                  value={addPlayerSearch}
-                                  onChange={e => setAddPlayerSearch(e.target.value)}
-                                  className="pl-10 text-sm border-gray-200 dark:border-gray-600"
-                                  autoFocus
-                                />
-                              </div>
-                              {(searchingAdd || addPlayerResults.length > 0) && (
-                                <div className="border border-gray-200 dark:border-gray-600 rounded-md max-h-36 overflow-y-auto bg-white dark:bg-gray-800">
-                                  {searchingAdd ? (
-                                    <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-orange-500" /></div>
-                                  ) : addPlayerResults.map(p => (
-                                    <button
-                                      key={p.id}
-                                      onClick={() => addMemberToGroup(identity.id, p)}
-                                      className="w-full text-left px-3 py-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 border-b border-gray-100 dark:border-gray-700 last:border-b-0 text-sm"
-                                    >
-                                      <div className="font-medium text-gray-900 dark:text-white">{p.full_name}</div>
-                                      <div className="text-xs text-gray-500 dark:text-gray-400">{p.team_name || "–"}</div>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => { setAddingToId(null); setAddPlayerSearch(""); setAddPlayerResults([]); }}
-                                className="text-xs"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setAddingToId(identity.id)}
-                              className="text-xs border-orange-200 dark:border-orange-700 text-orange-700 dark:text-orange-400"
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Add player to this group
-                            </Button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+      {/* ── Existing identity groups ── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className={searchIcon} />
+            <input
+              placeholder="Search identities…"
+              value={identitySearch}
+              onChange={e => { setIdentitySearch(e.target.value); fetchIdentities(e.target.value || undefined); }}
+              className={`${FIELD} pl-9`}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchIdentities(identitySearch || undefined)}
+            aria-label="Search identities"
+            className={`${BTN_GHOST} !h-10 !w-10 flex-none !px-0`}
+          >
+            <Search className="h-4 w-4" />
+          </button>
         </div>
-      </CardContent>
-    </Card>
+
+        {loadingIdentities ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-accent)]" />
+          </div>
+        ) : identities.length === 0 ? (
+          <p className="py-4 text-center text-sm text-[color:var(--ch-text-2)]">
+            No identity groups yet. Create one above.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {identities.map(identity => (
+              <div key={identity.id} className="ch-tile overflow-hidden">
+                <div className="flex items-center gap-1 pr-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(identity.id)}
+                    aria-expanded={expandedId === identity.id}
+                    className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left hover:bg-[color:var(--ch-surface-3)]"
+                  >
+                    {(identity.photo_path_bg_removed || identity.photo_path) ? (
+                      <img
+                        src={playerPhotoUrl((identity.photo_path_bg_removed || identity.photo_path)!)}
+                        alt={identity.canonical_name}
+                        className="h-8 w-8 flex-none rounded-full border border-[color:var(--ch-border)] object-cover"
+                        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : (
+                      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[color:var(--ch-accent-soft)] text-xs font-bold text-[color:var(--ch-accent)]">
+                        {identity.canonical_name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[color:var(--ch-text)]">{identity.canonical_name}</span>
+                    {expandedId === identity.id
+                      ? <ChevronUp className="h-4 w-4 flex-none text-[color:var(--ch-muted)]" />
+                      : <ChevronDown className="h-4 w-4 flex-none text-[color:var(--ch-muted)]" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteIdentity(identity.id, identity.canonical_name)}
+                    disabled={deletingId === identity.id}
+                    className={iconBtn}
+                    title="Delete identity group"
+                    aria-label={`Delete the ${identity.canonical_name} identity group`}
+                  >
+                    {deletingId === identity.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </button>
+                </div>
+
+                {expandedId === identity.id && (
+                  <div className="space-y-3 border-t border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] px-3 py-3">
+                    {loadingMembersFor === identity.id ? (
+                      <div className="flex justify-center py-2">
+                        <Loader2 className="h-5 w-5 animate-spin text-[color:var(--ch-accent)]" />
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs font-medium text-[color:var(--ch-text-2)]">Linked player records:</p>
+                        {(membersMap[identity.id] || []).length === 0 ? (
+                          <p className={HINT}>No members loaded.</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {(membersMap[identity.id] || []).map(m => (
+                              <div
+                                key={m.playerId}
+                                className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)] px-3 py-2"
+                              >
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium text-[color:var(--ch-text)]">
+                                    {m.player?.full_name || m.playerId}
+                                  </div>
+                                  <div className="truncate text-xs text-[color:var(--ch-muted)]">
+                                    {m.player?.team_name || "–"} · {m.player?.league_id?.slice(0, 8)}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeMember(identity.id, m.playerId)}
+                                  disabled={removing === m.playerId}
+                                  className={iconBtn}
+                                  title="Unlink this player"
+                                  aria-label={`Unlink ${m.player?.full_name || "this player"}`}
+                                >
+                                  {removing === m.playerId
+                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                    : <Unlink className="h-4 w-4" />}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {addingToId === identity.id ? (
+                          <div className="space-y-2 pt-1">
+                            <div className="relative">
+                              <Search className={searchIcon} />
+                              <input
+                                placeholder="Search player to add…"
+                                value={addPlayerSearch}
+                                onChange={e => setAddPlayerSearch(e.target.value)}
+                                className={`${FIELD} pl-9`}
+                                autoFocus
+                              />
+                            </div>
+                            {(searchingAdd || addPlayerResults.length > 0) && (
+                              <div className={`${results} max-h-36`}>
+                                {searchingAdd ? (
+                                  <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-[color:var(--ch-accent)]" /></div>
+                                ) : addPlayerResults.map(p => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => addMemberToGroup(identity.id, p)}
+                                    className={resultRow}
+                                  >
+                                    <div className="text-sm font-medium text-[color:var(--ch-text)]">{p.full_name}</div>
+                                    <div className="text-xs text-[color:var(--ch-muted)]">{p.team_name || "–"}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => { setAddingToId(null); setAddPlayerSearch(""); setAddPlayerResults([]); }}
+                              className={BTN_GHOST}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => setAddingToId(identity.id)} className={BTN_GHOST}>
+                            <Plus className="h-3.5 w-3.5" />
+                            Add player to this group
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Panel>
   );
 }

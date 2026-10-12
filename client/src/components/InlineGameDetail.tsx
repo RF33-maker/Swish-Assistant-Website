@@ -14,6 +14,7 @@ import GameScoreHero, { useMatchupColors } from "./game/GameScoreHero";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "./game/GameOverview";
 import { playerPath, teamPath } from "@shared/seo";
 import { gameRecap } from "@shared/recaps";
+import { normalizeEventPeriods, normalizeShotPeriods, periodLabel } from "@/lib/periodLabel";
 
 export interface GameInfo {
   date: string;
@@ -100,6 +101,7 @@ interface LiveEvent {
 
 interface LiveClock {
   period: number | null;
+  periodType: string | null;
   clock: string | null;
 }
 
@@ -362,6 +364,8 @@ export function InlineGameDetail({
             ssteals: r.steals ?? r.ssteals,
             sblocks: r.blocks ?? r.sblocks,
             sturnovers: r.turnovers ?? r.sturnovers,
+            // v_box_score names this column `fouls`; the player_stats fallback keeps `sfoulspersonal`.
+            sfoulspersonal: r.fouls ?? r.sfoulspersonal ?? 0,
           });
 
           const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
@@ -477,8 +481,9 @@ export function InlineGameDetail({
         supabase.from("live_events").select("*").eq("game_key", gameKey).order("action_number", { ascending: true }),
         supabase.from("shot_chart").select("id, action_number, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key").eq("game_key", gameKey),
       ]);
-      if (events) { setLiveEvents(events); setEventsLoaded(true); }
-      if (shots) setShotData(shots as ShotData[]);
+      const normalized = events ? normalizeEventPeriods(events) : null;
+      if (normalized) { setLiveEvents(normalized); setEventsLoaded(true); }
+      if (shots) setShotData(normalizeShotPeriods(shots as ShotData[], normalized ?? []));
     } finally {
       setEventsLoading(false);
       setShotLoading(false);
@@ -503,13 +508,13 @@ export function InlineGameDetail({
     const fetchLiveClock = async () => {
       const { data } = await supabase
         .from("live_events")
-        .select("period,clock")
+        .select("period,period_type,clock")
         .eq("game_key", gameKey)
         .order("action_number", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (active && data) {
-        setLiveClock({ period: data.period ?? null, clock: data.clock ?? null });
+        setLiveClock({ period: data.period ?? null, periodType: data.period_type ?? null, clock: data.clock ?? null });
       }
     };
 
@@ -539,8 +544,9 @@ export function InlineGameDetail({
         supabase.from("shot_chart").select("id, action_number, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key").eq("game_key", gameKey),
       ]);
       if (!active) return;
-      if (events) setLiveEvents(events);
-      if (shots) setShotData(shots as ShotData[]);
+      const normalized = events ? normalizeEventPeriods(events) : null;
+      if (normalized) setLiveEvents(normalized);
+      if (shots) setShotData(normalizeShotPeriods(shots as ShotData[], normalized ?? []));
     };
     const tick = () => {
       if (document.visibilityState !== "visible") return;
@@ -656,14 +662,15 @@ export function InlineGameDetail({
       })
     : [];
   const liveLabel = isLive && liveClock
-    ? [liveClock.period ? (liveClock.period <= 4 ? `Q${liveClock.period}` : `OT${liveClock.period - 4}`) : null, formatLiveClock(liveClock.clock)]
+    ? [periodLabel(liveClock.period, liveClock.periodType), formatLiveClock(liveClock.clock)]
         .filter(Boolean).join(" · ")
     : null;
-  const BoxScoreTable = ({ players, teamName, score, color }: { players: PlayerStat[]; teamName: string; score: number; color: string }) => (
+  const BoxScoreTable = ({ players, teamName, score, color, totals }: { players: PlayerStat[]; teamName: string; score: number; color: string; totals: TeamStatRow | null }) => (
     <SharedBoxScore
       players={players.map(linked)}
       teamName={teamName}
       teamHref={teamHref(teamName)}
+      teamTotals={totals}
       score={score}
       leagueId={leagueId ?? undefined}
       headerColor={color}
@@ -758,8 +765,8 @@ export function InlineGameDetail({
 
             {/* BOX SCORE TAB */}
             <TabsContent value="boxscore" className="mt-0 space-y-5">
-              <BoxScoreTable players={homePlayerStats} teamName={hometeam} score={homeScore} color={colors.homeFill} />
-              <BoxScoreTable players={awayPlayerStats} teamName={awayteam} score={awayScore} color={colors.awayFill} />
+              <BoxScoreTable players={homePlayerStats} teamName={hometeam} score={homeScore} color={colors.homeFill} totals={homeTeamStats} />
+              <BoxScoreTable players={awayPlayerStats} teamName={awayteam} score={awayScore} color={colors.awayFill} totals={awayTeamStats} />
             </TabsContent>
 
             {/* TEAM STATS TAB */}

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
 import { formatDistanceToNow } from "date-fns";
@@ -9,6 +10,7 @@ import {
   Copy,
   ExternalLink,
   KeyRound,
+  Mail,
   Loader2,
   RefreshCw,
   Search,
@@ -29,10 +31,18 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 import {
   type AdminClaimRow,
   type AdminPlayerRow,
   type RowCandidate,
+  PENDING_CLAIMS_QUERY_KEY,
+  type ClaimEmailStatus,
+  type DobStatus,
+  type ContactRequest,
+  adminContactRequest,
+  type EmailOutcome,
+  adminClaimRequest,
   ageFromDob,
   formatDob,
   maxDobInputValue,
@@ -43,7 +53,110 @@ import {
 // also checked server-side by is_app_admin(), so an admin who isn't in
 // app_admins sees "Admin only" errors rather than gaining access.
 
-type Tab = "pending" | "find" | "approved" | "history" | "names";
+type Tab = "requests" | "pending" | "find" | "approved" | "history" | "names";
+
+/** A claim request being answered from the Find tab: pre-fills the search and the account email. */
+interface RequestPrefill {
+  requestId: string;
+  name: string;
+  email: string;
+  playerName: string;
+}
+
+type SortKey = "oldest" | "newest" | "name" | "team" | "flagged" | "dob";
+
+const SORT_OPTIONS: { id: SortKey; label: string }[] = [
+  { id: "oldest", label: "Oldest first" },
+  { id: "newest", label: "Newest first" },
+  { id: "name", label: "Player A–Z" },
+  { id: "team", label: "Team A–Z" },
+  { id: "flagged", label: "Needs a look first" },
+  { id: "dob", label: "DOB to verify first" },
+];
+
+const byText = (a: string | null, b: string | null) => (a ?? "").localeCompare(b ?? "", undefined, { sensitivity: "base" });
+const byDate = (c: AdminClaimRow) => new Date(c.created_at).getTime();
+
+/** Search matches the player, the account email, the team and the competition. */
+function filterAndSort(
+  rows: AdminClaimRow[],
+  query: string,
+  sort: SortKey,
+  dobRank: (c: AdminClaimRow) => number = () => 0,
+): AdminClaimRow[] {
+  const q = query.trim().toLowerCase();
+  const matched = q
+    ? rows.filter((c) =>
+        [c.player_name, c.user_email, c.team_name, c.competition_name].some((v) => v?.toLowerCase().includes(q)),
+      )
+    : rows;
+  const flagged = (c: AdminClaimRow) => (c.tier_change ? 2 : 0) + (c.dob_mismatch ? 1 : 0);
+  return [...matched].sort((a, b) => {
+    switch (sort) {
+      case "newest":
+        return byDate(b) - byDate(a);
+      case "name":
+        return byText(a.player_name, b.player_name) || byDate(a) - byDate(b);
+      case "team":
+        return byText(a.team_name, b.team_name) || byText(a.player_name, b.player_name);
+      case "flagged":
+        return flagged(b) - flagged(a) || byDate(a) - byDate(b);
+      case "dob":
+        return dobRank(b) - dobRank(a) || byDate(a) - byDate(b);
+      default:
+        return byDate(a) - byDate(b);
+    }
+  });
+}
+
+function SortSearchBar({
+  query,
+  onQuery,
+  sort,
+  onSort,
+  shown,
+  total,
+  extraOption,
+}: {
+  query: string;
+  onQuery: (v: string) => void;
+  sort: SortKey;
+  onSort: (v: SortKey) => void;
+  shown: number;
+  total: number;
+  /** The tab-specific sort to offer: "flagged" on Pending, "dob" on Approved. */
+  extraOption: SortKey | null;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2">
+      <label className="relative flex-1 min-w-[220px]">
+        <span className="sr-only">Search claims</span>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--ch-muted)]" />
+        <input
+          className={`${INPUT} pl-9`}
+          value={query}
+          placeholder="Search player, email, team or competition"
+          onChange={(e) => onQuery(e.target.value)}
+        />
+      </label>
+      <label className="flex items-center gap-2 text-[13px] text-[color:var(--ch-text-2)]">
+        Sort
+        <select className={`${INPUT} !w-auto`} value={sort} onChange={(e) => onSort(e.target.value as SortKey)}>
+          {SORT_OPTIONS.filter((o) => (o.id !== "flagged" && o.id !== "dob") || o.id === extraOption).map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {query.trim() && (
+        <span className="text-[12px] text-[color:var(--ch-muted)]">
+          {shown} of {total}
+        </span>
+      )}
+    </div>
+  );
+}
 
 const INPUT = "ch-input h-10 px-3 text-sm w-full";
 const BTN = "ch-btn h-9 px-3.5 text-[13px] disabled:opacity-50";
@@ -209,9 +322,17 @@ function CoveredSummary({ rows }: { rows: AdminClaimRow["covered_rows"] }) {
 
 export default function PlayerClaimsAdminPage() {
   const [tab, setTab] = useState<Tab>("pending");
+  const [requests, setRequests] = useState<ContactRequest[] | null>(null);
+  const [requestsError, setRequestsError] = useState("");
+  const [prefill, setPrefill] = useState<RequestPrefill | null>(null);
+  const [pickedTab, setPickedTab] = useState(false);
   const [claims, setClaims] = useState<AdminClaimRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [emailStatus, setEmailStatus] = useState<Record<string, ClaimEmailStatus>>({});
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("oldest");
+  const queryClient = useQueryClient();
 
   const loadClaims = useCallback(async () => {
     setLoading(true);
@@ -223,18 +344,61 @@ export default function PlayerClaimsAdminPage() {
     } else {
       setClaims((data ?? []) as AdminClaimRow[]);
     }
+    adminContactRequest<ContactRequest[]>("?topic=player-page")
+      .then((rows) => {
+        setRequests(rows);
+        setRequestsError("");
+      })
+      .catch((e) => setRequestsError(e instanceof Error ? e.message : "Couldn't load requests"));
+    // The list works without this; it only adds the Emailed / Not emailed badges.
+    adminClaimRequest<Record<string, ClaimEmailStatus>>("/email-status")
+      .then(setEmailStatus)
+      .catch(() => setEmailStatus({}));
     setLoading(false);
-  }, []);
+    // Keeps the sidebar's pending badge in step with what was just approved or rejected.
+    void queryClient.invalidateQueries({ queryKey: PENDING_CLAIMS_QUERY_KEY });
+  }, [queryClient]);
 
   useEffect(() => {
     void loadClaims();
   }, [loadClaims]);
 
-  const pending = claims?.filter((c) => c.status === "pending") ?? [];
-  const approved = claims?.filter((c) => c.status === "approved") ?? [];
-  const history = claims?.filter((c) => c.status === "rejected" || c.status === "revoked") ?? [];
+  const newRequests = useMemo(() => requests?.filter((r) => r.status === "new") ?? [], [requests]);
+
+  // Land on the work: requests waiting for an answer, otherwise pending claims. Once only,
+  // so loading in the background never moves someone who has already chosen a tab.
+  useEffect(() => {
+    if (pickedTab || !claims || !requests) return;
+    setPickedTab(true);
+    if (requests.some((r) => r.status === "new")) setTab("requests");
+  }, [claims, requests, pickedTab]);
+
+  const pending = useMemo(() => claims?.filter((c) => c.status === "pending") ?? [], [claims]);
+  const approved = useMemo(() => claims?.filter((c) => c.status === "approved") ?? [], [claims]);
+  const history = useMemo(() => claims?.filter((c) => c.status === "rejected" || c.status === "revoked") ?? [], [claims]);
+
+  const source = tab === "pending" ? pending : tab === "approved" ? approved : history;
+  // "Needs a look first" only exists on the pending tab, "DOB to verify first" on the approved one.
+  const extraOption: SortKey | null = tab === "pending" ? "flagged" : tab === "approved" ? "dob" : null;
+  const activeSort: SortKey = (sort === "flagged" || sort === "dob") && sort !== extraOption ? "oldest" : sort;
+  const dobRank = useCallback(
+    (c: AdminClaimRow) => {
+      const st = emailStatus[c.claim_id]?.dobStatus;
+      return st === "unverified" ? 2 : st === "adult" ? 1 : 0;
+    },
+    [emailStatus],
+  );
+  const visible = useMemo(() => filterAndSort(source, query, activeSort, dobRank), [source, query, activeSort, dobRank]);
+  const emptyText = query.trim()
+    ? "No claims match that search."
+    : tab === "pending"
+      ? "No claims waiting for verification."
+      : tab === "approved"
+        ? "No approved profiles yet."
+        : "Nothing rejected or revoked.";
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: "requests", label: `Requests${requests ? ` (${newRequests.length})` : ""}` },
     { id: "pending", label: `Pending${claims ? ` (${pending.length})` : ""}` },
     { id: "find", label: "Find a player" },
     { id: "approved", label: `Approved${claims ? ` (${approved.length})` : ""}` },
@@ -273,7 +437,10 @@ export default function PlayerClaimsAdminPage() {
               type="button"
               data-active={tab === t.id}
               aria-current={tab === t.id ? "page" : undefined}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                setPickedTab(true);
+                setTab(t.id);
+              }}
               className="ch-chip inline-flex items-center h-8 px-3.5 text-[13px]"
             >
               {t.label}
@@ -289,28 +456,178 @@ export default function PlayerClaimsAdminPage() {
 
         {tab === "names" ? (
           <NameRequestsAdmin />
+        ) : tab === "requests" ? (
+          <RequestsTab
+            requests={requests}
+            error={requestsError}
+            onChanged={loadClaims}
+            onFind={(r) => {
+              setPrefill({ requestId: r.id, name: r.name, email: r.email, playerName: r.player_name ?? "" });
+              setTab("find");
+            }}
+          />
         ) : tab === "find" ? (
-          <FindPlayers onChanged={loadClaims} />
+          <FindPlayers onChanged={loadClaims} prefill={prefill} onClearPrefill={() => setPrefill(null)} />
         ) : !claims && loading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-muted)]" />
           </div>
-        ) : tab === "pending" ? (
-          <ClaimList
-            rows={pending}
-            empty="No claims waiting for verification."
-            render={(c) => <PendingClaim key={c.claim_id} claim={c} onDone={loadClaims} />}
-          />
-        ) : tab === "approved" ? (
-          <ClaimList
-            rows={approved}
-            empty="No approved profiles yet."
-            render={(c) => <ApprovedClaim key={c.claim_id} claim={c} onDone={loadClaims} />}
-          />
         ) : (
-          <ClaimList rows={history} empty="Nothing rejected or revoked." render={(c) => <HistoryClaim key={c.claim_id} claim={c} />} />
+          <>
+            <SortSearchBar
+              query={query}
+              onQuery={setQuery}
+              sort={activeSort}
+              onSort={setSort}
+              shown={visible.length}
+              total={source.length}
+              extraOption={extraOption}
+            />
+            <ClaimList
+              rows={visible}
+              empty={emptyText}
+              render={(c) =>
+                tab === "pending" ? (
+                  <PendingClaim key={c.claim_id} claim={c} onDone={loadClaims} />
+                ) : tab === "approved" ? (
+                  <ApprovedClaim key={c.claim_id} claim={c} email={emailStatus[c.claim_id]} onDone={loadClaims} />
+                ) : (
+                  <HistoryClaim key={c.claim_id} claim={c} />
+                )
+              }
+            />
+          </>
         )}
       </main>
+    </div>
+  );
+}
+
+function RequestsTab({
+  requests,
+  error,
+  onChanged,
+  onFind,
+}: {
+  requests: ContactRequest[] | null;
+  error: string;
+  onChanged: () => Promise<void>;
+  onFind: (r: ContactRequest) => void;
+}) {
+  const [showHandled, setShowHandled] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
+
+  const setStatus = async (r: ContactRequest, status: "new" | "handled") => {
+    setBusyId(r.id);
+    setActionError("");
+    try {
+      await adminContactRequest(`/${r.id}`, { method: "PATCH", body: { status } });
+      await onChanged();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Couldn't update the request");
+    }
+    setBusyId(null);
+  };
+
+  if (error && !requests) {
+    return (
+      <div className="ch-card p-4">
+        <ErrorLine message={error} />
+      </div>
+    );
+  }
+  if (!requests) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-muted)]" />
+      </div>
+    );
+  }
+
+  const fresh = requests.filter((r) => r.status === "new");
+  const handled = requests.filter((r) => r.status === "handled");
+
+  const card = (r: ContactRequest) => (
+    <div key={r.id} className={`ch-card p-4 md:p-5 space-y-3 ${r.status === "handled" ? "opacity-70" : ""}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-[15px] text-[color:var(--ch-text)] truncate">{r.name}</p>
+          <p className="text-[13px] text-[color:var(--ch-text-2)] truncate">
+            <a className="hover:underline" href={`mailto:${r.email}`}>{r.email}</a> ·{" "}
+            {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
+          </p>
+        </div>
+        {r.status === "handled" && (
+          <Badge tone="green">
+            <Check className="h-3 w-3" /> Handled
+          </Badge>
+        )}
+      </div>
+
+      {(r.player_name || r.page_url) && (
+        <p className="text-[13px] text-[color:var(--ch-text-2)]">
+          Wants to claim{" "}
+          <span className="font-semibold text-[color:var(--ch-text)]">{r.player_name || "a player page"}</span>
+          {r.page_url && (
+            <>
+              {" · "}
+              <a className="inline-flex items-center gap-1 text-[color:var(--ch-accent)] hover:underline" href={r.page_url} target="_blank" rel="noopener noreferrer">
+                their page <ExternalLink className="h-3 w-3" />
+              </a>
+            </>
+          )}
+        </p>
+      )}
+
+      <p className="whitespace-pre-wrap rounded-xl bg-[color:var(--ch-surface-3)] p-3 text-[13px] leading-relaxed text-[color:var(--ch-text)]">
+        {r.message}
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        {r.status === "new" ? (
+          <>
+            <button type="button" className={BTN_PRIMARY} onClick={() => onFind(r)}>
+              <KeyRound className="h-4 w-4" /> Find player &amp; answer
+            </button>
+            <a
+              className={BTN_GHOST}
+              href={`mailto:${r.email}?subject=${encodeURIComponent("Your Swish Assistant claim request")}`}
+            >
+              <Mail className="h-4 w-4" /> Reply
+            </a>
+            <button type="button" className={BTN_GHOST} disabled={busyId === r.id} onClick={() => void setStatus(r, "handled")}>
+              {busyId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Mark handled
+            </button>
+          </>
+        ) : (
+          <button type="button" className={BTN_GHOST} disabled={busyId === r.id} onClick={() => void setStatus(r, "new")}>
+            Reopen
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      <ErrorLine message={actionError} />
+      {fresh.length === 0 ? (
+        <div className="ch-card p-8 text-center text-sm text-[color:var(--ch-text-2)]">
+          No claim requests waiting. New ones from the “Claim this page” form show up here.
+        </div>
+      ) : (
+        fresh.map(card)
+      )}
+      {handled.length > 0 && (
+        <>
+          <button type="button" className={BTN_GHOST} onClick={() => setShowHandled((v) => !v)}>
+            {showHandled ? "Hide" : "Show"} handled ({handled.length})
+          </button>
+          {showHandled && handled.map(card)}
+        </>
+      )}
     </div>
   );
 }
@@ -353,17 +670,33 @@ function PendingClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => P
   const [error, setError] = useState("");
   const [extraRows, setExtraRows] = useState<string[] | null>(null);
 
+  const { toast } = useToast();
+
   const approve = async (dob: string) => {
     setBusy(true);
     setError("");
-    const { error } = await supabase.rpc("approve_claim", {
-      p_claim_id: claim.claim_id,
-      p_verified_dob: dob,
-      // null keeps the rows from the code; the picker always reports a list once loaded.
-      p_player_ids: extraRows,
-    });
+    try {
+      // Goes through the server so the player is emailed as part of approving.
+      // A null row list keeps the rows from the code; the picker always reports a list once loaded.
+      const result = await adminClaimRequest<EmailOutcome>(`/${claim.claim_id}/approve`, {
+        method: "POST",
+        body: { verifiedDob: dob, playerIds: extraRows },
+      });
+      toast(
+        result.emailSent
+          ? { title: `${claim.player_name} approved`, description: `Email sent to ${claim.user_email ?? "the player"}.` }
+          : {
+              title: `${claim.player_name} approved, but the email didn't send`,
+              description: `${result.emailError ?? "Unknown error"}. Use "Resend email" on the Approved tab.`,
+              variant: "destructive",
+              duration: 12000,
+            },
+      );
+    } catch (e) {
+      setBusy(false);
+      return setError(e instanceof Error ? e.message : "Couldn't approve");
+    }
     setBusy(false);
-    if (error) return setError(rpcErrorMessage(error, "Couldn't approve"));
     await onDone();
   };
 
@@ -506,11 +839,38 @@ function PendingClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => P
   );
 }
 
-function ApprovedClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => Promise<void> }) {
+function ApprovedClaim({
+  claim,
+  email,
+  onDone,
+}: {
+  claim: AdminClaimRow;
+  email: ClaimEmailStatus | undefined;
+  onDone: () => Promise<void>;
+}) {
+  const { toast } = useToast();
+  const [resending, setResending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [editingRows, setEditingRows] = useState(false);
+  const [addingDob, setAddingDob] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Without the server's answer, assume the usual case: a verified DOB is on file.
+  const dobStatus: DobStatus = email?.dobStatus ?? (claim.verified_dob ? "verified" : "unverified");
+
+  const resend = async () => {
+    setResending(true);
+    setError("");
+    try {
+      const result = await adminClaimRequest<EmailOutcome>(`/${claim.claim_id}/resend-email`, { method: "POST" });
+      if (result.emailSent) toast({ title: "Email sent", description: `Sent to ${claim.user_email ?? "the player"}.` });
+      else setError(result.emailError ?? "The email didn't send");
+      await onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The email didn't send");
+    }
+    setResending(false);
+  };
 
   const revoke = async () => {
     setBusy(true);
@@ -532,6 +892,18 @@ function ApprovedClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => 
               <ExternalLink className="h-4 w-4" /> Profile
             </Link>
           )}
+          <button
+            type="button"
+            className={BTN_GHOST}
+            onClick={() => void resend()}
+            disabled={busy || resending || !claim.user_email}
+          >
+            {resending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+            {email?.sentAt ? "Resend email" : "Send email"}
+          </button>
+          <button type="button" className={BTN_GHOST} onClick={() => setAddingDob(true)} disabled={busy}>
+            {dobStatus === "verified" ? "Correct DOB" : "Add DOB"}
+          </button>
           <button type="button" className={BTN_GHOST} onClick={() => setEditingRows(true)} disabled={busy}>
             Edit rows
           </button>
@@ -541,11 +913,37 @@ function ApprovedClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => 
         </div>
       </div>
       <CoveredSummary rows={claim.covered_rows} />
-      <p className="text-[13px] text-[color:var(--ch-text-2)]">
-        Verified DOB <span className="font-semibold text-[color:var(--ch-text)]">{dobLine(claim.verified_dob)}</span> ·{" "}
-        <TierBadge tier={claim.verified_dob ? (ageFromDob(claim.verified_dob)! >= 18 ? "adult" : "u18") : null} />
+      <p className="flex flex-wrap items-center gap-1.5 text-[13px] text-[color:var(--ch-text-2)]">
+        {dobStatus === "verified" ? (
+          <>
+            Verified DOB <span className="font-semibold text-[color:var(--ch-text)]">{dobLine(claim.verified_dob)}</span> ·{" "}
+            <TierBadge tier={claim.verified_dob ? (ageFromDob(claim.verified_dob)! >= 18 ? "adult" : "u18") : null} />
+          </>
+        ) : dobStatus === "adult" ? (
+          <>
+            No DOB on file · <Badge tone="green">Over 18, confirmed by you</Badge>
+          </>
+        ) : (
+          <>
+            No DOB on file · <Badge tone="amber">DOB still to verify · restricted profile</Badge>
+          </>
+        )}
         {claim.approved_at && <> · approved {formatDistanceToNow(new Date(claim.approved_at), { addSuffix: true })}</>}
       </p>
+      {email && (
+        <p className="flex flex-wrap items-center gap-1.5 text-[12px]">
+          {email.sentAt ? (
+            <Badge tone="green">
+              <Mail className="h-3 w-3" /> Emailed {formatDistanceToNow(new Date(email.sentAt), { addSuffix: true })}
+            </Badge>
+          ) : (
+            <Badge tone="amber">
+              <Mail className="h-3 w-3" /> Not emailed
+            </Badge>
+          )}
+          {!email.sentAt && email.error && <span className="text-[color:var(--ch-muted)]">{email.error}</span>}
+        </p>
+      )}
       <ErrorLine message={error} />
 
       <AlertDialog open={confirming} onOpenChange={setConfirming}>
@@ -574,6 +972,18 @@ function ApprovedClaim({ claim, onDone }: { claim: AdminClaimRow; onDone: () => 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {addingDob && (
+        <AddDobDialog
+          claim={claim}
+          status={dobStatus}
+          onClose={() => setAddingDob(false)}
+          onSaved={async () => {
+            setAddingDob(false);
+            await onDone();
+          }}
+        />
+      )}
 
       {editingRows && (
         <EditRowsDialog
@@ -632,6 +1042,75 @@ function EditRowsDialog({
   );
 }
 
+function AddDobDialog({
+  claim,
+  status,
+  onClose,
+  onSaved,
+}: {
+  claim: AdminClaimRow;
+  status: DobStatus;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [dob, setDob] = useState(claim.verified_dob ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.rpc("admin_verify_claim_dob", { p_claim_id: claim.claim_id, p_dob: dob });
+    setBusy(false);
+    if (error) return setError(rpcErrorMessage(error, "Couldn't save the date of birth"));
+    await onSaved();
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sa-pro max-h-[90vh] overflow-y-auto bg-[color:var(--ch-surface)] text-[color:var(--ch-text)] border-[color:var(--ch-border)]">
+        <DialogHeader>
+          <DialogTitle>{status === "verified" ? "Correct" : "Add"} {claim.player_name}'s date of birth</DialogTitle>
+          <DialogDescription className="text-[color:var(--ch-text-2)]">
+            Saved as verified on all {claim.covered_rows?.length ?? 1} of their rows. The profile is then adult or under-18 by
+            this date, whatever it was before.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <label className="block">
+            <span className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Verified date of birth</span>
+            <input
+              type="date"
+              required
+              className={INPUT}
+              value={dob}
+              min="1920-01-01"
+              max={maxDobInputValue()}
+              onChange={(e) => setDob(e.target.value)}
+            />
+            {dob && (
+              <span className="mt-1 block text-[12px] text-[color:var(--ch-muted)]">
+                Age {ageFromDob(dob)} — {ageFromDob(dob)! >= 18 ? "full public profile" : "under-18 privacy"}
+              </span>
+            )}
+          </label>
+          <ErrorLine message={error} />
+          <button type="submit" className={`${BTN_PRIMARY} w-full justify-center`} disabled={busy || !dob}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+            Save verified date of birth
+          </button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function HistoryClaim({ claim }: { claim: AdminClaimRow }) {
   const when = claim.status === "revoked" ? claim.revoked_at : claim.rejected_at;
   return (
@@ -651,8 +1130,16 @@ function HistoryClaim({ claim }: { claim: AdminClaimRow }) {
   );
 }
 
-function FindPlayers({ onChanged }: { onChanged: () => Promise<void> }) {
-  const [query, setQuery] = useState("");
+function FindPlayers({
+  onChanged,
+  prefill,
+  onClearPrefill,
+}: {
+  onChanged: () => Promise<void>;
+  prefill: RequestPrefill | null;
+  onClearPrefill: () => void;
+}) {
+  const [query, setQuery] = useState(prefill?.playerName ?? "");
   const [rows, setRows] = useState<AdminPlayerRow[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
@@ -681,12 +1168,28 @@ function FindPlayers({ onChanged }: { onChanged: () => Promise<void> }) {
     return () => clearTimeout(t);
   }, [query, search]);
 
+  // Answering a request (issuing a code or assigning) is what closes it, so
+  // it leaves the queue without a separate click.
   const refresh = async () => {
+    if (prefill) {
+      await adminContactRequest(`/${prefill.requestId}`, { method: "PATCH", body: { status: "handled" } }).catch(() => undefined);
+    }
     await Promise.all([search(query), onChanged()]);
   };
 
   return (
     <div className="space-y-4">
+      {prefill && (
+        <div className="ch-card p-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[13px] text-[color:var(--ch-text-2)]">
+            Answering <span className="font-semibold text-[color:var(--ch-text)]">{prefill.name}</span> ({prefill.email}). Issue a
+            code or assign the right player below and the request closes itself.
+          </p>
+          <button type="button" className={BTN_GHOST} onClick={onClearPrefill}>
+            Clear
+          </button>
+        </div>
+      )}
       <div className="ch-card p-3 flex items-center gap-2">
         <Search className="h-4 w-4 text-[color:var(--ch-muted)] shrink-0 ml-1" />
         <input
@@ -754,18 +1257,21 @@ function FindPlayers({ onChanged }: { onChanged: () => Promise<void> }) {
         </div>
       )}
 
-      {issueFor && <IssueCodeDialog player={issueFor} onClose={() => setIssueFor(null)} onIssued={refresh} />}
-      {assignFor && <AssignDialog player={assignFor} onClose={() => setAssignFor(null)} onAssigned={refresh} />}
+      {issueFor && <IssueCodeDialog player={issueFor} requesterEmail={prefill?.email} onClose={() => setIssueFor(null)} onIssued={refresh} />}
+      {assignFor && <AssignDialog player={assignFor} defaultEmail={prefill?.email} onClose={() => setAssignFor(null)} onAssigned={refresh} />}
     </div>
   );
 }
 
 function IssueCodeDialog({
   player,
+  requesterEmail,
   onClose,
   onIssued,
 }: {
   player: AdminPlayerRow;
+  /** Set when answering a claim request: adds an "Email this code" button. */
+  requesterEmail?: string;
   onClose: () => void;
   onIssued: () => Promise<void>;
 }) {
@@ -830,6 +1336,16 @@ function IssueCodeDialog({
               Covers {1 + (extraRows?.length ?? 0)} {1 + (extraRows?.length ?? 0) === 1 ? "competition" : "competitions"}.
               Expires {formatDob(issued.expires_at.slice(0, 10))}. Single use. Issuing another code for any of these rows cancels this one.
             </p>
+            {requesterEmail && (
+              <a
+                className={`${BTN_GHOST} w-full justify-center`}
+                href={`mailto:${requesterEmail}?subject=${encodeURIComponent("Your Swish Assistant claim code")}&body=${encodeURIComponent(
+                  `Hi,\n\nThanks for your request. Your claim code for ${player.full_name} is:\n\n${issued.code}\n\nGo to https://swishassistant.com/claim, sign in, and enter the code with your date of birth. The code is single use and expires on ${formatDob(issued.expires_at.slice(0, 10))}.\n\nSwish Assistant`,
+                )}`}
+              >
+                <Mail className="h-4 w-4" /> Email this code to {requesterEmail}
+              </a>
+            )}
             <button type="button" className={`${BTN_PRIMARY} w-full justify-center`} onClick={onClose}>
               Done
             </button>
@@ -873,31 +1389,55 @@ function IssueCodeDialog({
 
 function AssignDialog({
   player,
+  defaultEmail,
   onClose,
   onAssigned,
 }: {
   player: AdminPlayerRow;
+  /** The requester's email when answering a claim request. */
+  defaultEmail?: string;
   onClose: () => void;
   onAssigned: () => Promise<void>;
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(defaultEmail ?? "");
   const [dob, setDob] = useState(player.date_of_birth ?? "");
+  // 'verified' needs a date. The other two approve without one; see the options below.
+  const [dobMode, setDobMode] = useState<DobStatus>("verified");
+  // A recorded under-18 DOB can't be overridden by saying "over 18".
+  const recordedMinor = !!player.date_of_birth && ageFromDob(player.date_of_birth) !== null && ageFromDob(player.date_of_birth)! < 18;
   const [extraRows, setExtraRows] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [notify, setNotify] = useState(true);
+  const [emailNote, setEmailNote] = useState("");
 
   const assign = async () => {
     setBusy(true);
     setError("");
-    const { error } = await supabase.rpc("admin_assign_claim", {
+    const { data: claimId, error } = await supabase.rpc("admin_assign_claim", {
       p_player_id: player.player_id,
       p_user_email: email.trim(),
-      p_verified_dob: dob,
+      p_verified_dob: dobMode === "verified" ? dob : null,
       p_also_player_ids: extraRows ?? [],
+      // Only sent for the no-DOB options, so the usual path still works on a database
+      // that hasn't had the DOB-bypass migration yet.
+      ...(dobMode === "verified" ? {} : { p_dob_status: dobMode }),
     });
+    if (error) {
+      setBusy(false);
+      return setError(rpcErrorMessage(error, "Couldn't assign"));
+    }
+    // The claim is approved either way; a failed email is reported, not an error.
+    if (notify && typeof claimId === "string") {
+      try {
+        const result = await adminClaimRequest<EmailOutcome>(`/${claimId}/resend-email`, { method: "POST" });
+        setEmailNote(result.emailSent ? "We've emailed them." : `The email didn't send: ${result.emailError ?? "unknown error"}. Use "Send email" on the Approved tab.`);
+      } catch (e) {
+        setEmailNote(`The email didn't send: ${e instanceof Error ? e.message : "unknown error"}. Use "Send email" on the Approved tab.`);
+      }
+    }
     setBusy(false);
-    if (error) return setError(rpcErrorMessage(error, "Couldn't assign"));
     setDone(true);
     void onAssigned();
   };
@@ -915,8 +1455,9 @@ function AssignDialog({
         {done ? (
           <div className="space-y-3">
             <p className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-300">
-              <ShieldCheck className="h-4 w-4" /> Assigned to {email.trim()}. They can edit their profile now.
+              <ShieldCheck className="h-4 w-4 shrink-0" /> Assigned to {email.trim()}. They can edit their profile now.
             </p>
+            {emailNote && <p className="text-[13px] text-[color:var(--ch-text-2)]">{emailNote}</p>}
             <button type="button" className={`${BTN_PRIMARY} w-full justify-center`} onClick={onClose}>
               Done
             </button>
@@ -941,32 +1482,83 @@ function AssignDialog({
               />
               <span className="mt-1 block text-[12px] text-[color:var(--ch-muted)]">The player must have signed up already.</span>
             </label>
-            <label className="block">
-              <span className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Verified date of birth</span>
-              <input
-                type="date"
-                required
-                className={INPUT}
-                value={dob}
-                min="1920-01-01"
-                max={maxDobInputValue()}
-                onChange={(e) => setDob(e.target.value)}
-              />
-              {dob && (
-                <span className="mt-1 block text-[12px] text-[color:var(--ch-muted)]">
-                  Age {ageFromDob(dob)} — {ageFromDob(dob)! >= 18 ? "full public profile" : "under-18 privacy"}
-                </span>
+            <fieldset className="space-y-2">
+              <legend className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Date of birth</legend>
+              {(
+                [
+                  ["verified", "I have their date of birth", "Verified. The profile is adult or under-18 by this date."],
+                  [
+                    "adult",
+                    "No DOB, but I know they're 18 or over",
+                    "Full adult profile (real name, indexed by search engines). No date of birth or age is shown.",
+                  ],
+                  [
+                    "unverified",
+                    "No DOB, and I'm not sure",
+                    "Approved now, but the profile stays restricted (masked name, not indexed) until you add a DOB.",
+                  ],
+                ] as [DobStatus, string, string][]
+              ).map(([id, label, hint]) => {
+                const blocked = id === "adult" && recordedMinor;
+                return (
+                  <label
+                    key={id}
+                    className={`flex items-start gap-3 rounded-xl border border-[color:var(--ch-border)] p-3 ${blocked ? "opacity-50" : "cursor-pointer hover:bg-[color:var(--ch-surface-3)]"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="dob-mode"
+                      className="mt-0.5 h-4 w-4 accent-[color:var(--ch-accent)]"
+                      checked={dobMode === id}
+                      disabled={blocked}
+                      onChange={() => setDobMode(id)}
+                    />
+                    <span className="min-w-0 flex-1 text-[13px]">
+                      <span className="block font-medium text-[color:var(--ch-text)]">{label}</span>
+                      <span className="block text-[12px] text-[color:var(--ch-text-2)]">
+                        {blocked ? "The record shows this player is under 18." : hint}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+              {dobMode === "verified" && (
+                <label className="block">
+                  <input
+                    type="date"
+                    required
+                    className={INPUT}
+                    value={dob}
+                    min="1920-01-01"
+                    max={maxDobInputValue()}
+                    onChange={(e) => setDob(e.target.value)}
+                  />
+                  {dob && (
+                    <span className="mt-1 block text-[12px] text-[color:var(--ch-muted)]">
+                      Age {ageFromDob(dob)} — {ageFromDob(dob)! >= 18 ? "full public profile" : "under-18 privacy"}
+                    </span>
+                  )}
+                </label>
               )}
-            </label>
+            </fieldset>
             <div>
               <span className="block text-[12px] font-medium text-[color:var(--ch-text-2)] mb-1">Rows on their profile</span>
               <RowPicker playerId={player.player_id} onChange={setExtraRows} />
             </div>
+            <label className="flex items-center gap-2 text-[13px] text-[color:var(--ch-text-2)]">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-[color:var(--ch-accent)]"
+                checked={notify}
+                onChange={(e) => setNotify(e.target.checked)}
+              />
+              Email them to say their profile is ready
+            </label>
             <ErrorLine message={error} />
             <button
               type="submit"
               className={`${BTN_PRIMARY} w-full justify-center`}
-              disabled={busy || !email || !dob || extraRows === null}
+              disabled={busy || !email || (dobMode === "verified" && !dob) || extraRows === null}
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               Assign and approve

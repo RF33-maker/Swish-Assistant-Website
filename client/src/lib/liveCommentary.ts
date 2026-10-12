@@ -231,7 +231,8 @@ export function buildCommentary(input: CommentaryInput): CommentaryItem[] {
           line: null, shot: null, homeScore: home, awayScore: away, playerKey: null });
       } else if (e.sub_type === "start" && period > 4) {
         moments.push({ event: e, kind: "period-start", importance: 50, emoji: "⏱️", notes: [],
-          headline: `Overtime. ${home === away ? `Tied at ${home}` : `${teamName(home > away ? 1 : 2)} lead ${Math.max(home, away)}-${Math.min(home, away)}`} after regulation.`,
+          // The first overtime follows regulation; later ones follow the one before.
+          headline: `${period === 5 ? "Overtime" : periodName(period)}. ${home === away ? `Tied at ${home}` : `${teamName(home > away ? 1 : 2)} lead ${Math.max(home, away)}-${Math.min(home, away)}`} after ${period === 5 ? "regulation" : periodName(period - 1)}.`,
           line: null, shot: null, homeScore: home, awayScore: away, playerKey: null });
       } else if (e.sub_type === "end") {
         const isLast = period === lastPeriod;

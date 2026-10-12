@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Field } from "@/components/social/studioUi";
 import { CARD_STYLES, type CardStyle } from "@/lib/cardStyle";
 
 // One choice across Swish Social, so the leaders cards and Team of the Week come out as a set.
@@ -44,9 +45,12 @@ type Props = {
 
 export default function CardStylePicker({ value, onChange, primaryHex }: Props) {
   const hex = /^#[0-9a-f]{6}$/i.test(primaryHex) ? primaryHex : "#f97316";
+  const hint = CARD_STYLES.find((s) => s.id === value)?.hint;
   return (
-    <div className="space-y-1.5">
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Style</span>
+    <Field
+      label="Style"
+      hint={value === "swish" ? `${hint}. It always uses Swish orange, whatever the competition's colour.` : `${hint}.`}
+    >
       <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Card style">
         {CARD_STYLES.map((s) => {
           const on = s.id === value;
@@ -59,24 +63,20 @@ export default function CardStylePicker({ value, onChange, primaryHex }: Props) 
               title={s.hint}
               onClick={() => onChange(s.id)}
               data-testid={`style-${s.id}`}
-              className={`rounded-lg border p-1.5 text-center transition ${
+              className={`rounded-lg border bg-[color:var(--ch-surface)] p-1.5 text-center transition ${
                 on
-                  ? "border-orange-500 ring-2 ring-orange-500/40"
-                  : "border-orange-200 hover:border-orange-400 dark:border-orange-800 dark:hover:border-orange-600"
+                  ? "border-[color:var(--ch-accent)] ring-1 ring-[color:var(--ch-accent)]"
+                  : "border-[color:var(--ch-border)] hover:border-[color:var(--ch-border-strong)]"
               }`}
             >
               <span className="block h-12 rounded-md" style={{ background: swatch(s.id, hex) }} />
-              <span className={`mt-1 block text-xs font-medium ${on ? "text-orange-700 dark:text-orange-400" : "text-gray-700 dark:text-gray-300"}`}>
+              <span className={`mt-1 block text-xs font-medium ${on ? "text-[color:var(--ch-text)]" : "text-[color:var(--ch-text-2)]"}`}>
                 {s.label}
               </span>
             </button>
           );
         })}
       </div>
-      <p className="text-xs text-gray-500 dark:text-gray-400">{CARD_STYLES.find((s) => s.id === value)?.hint}.</p>
-      {value === "swish" && (
-        <p className="text-xs text-gray-500 dark:text-gray-400">The Swish style always uses Swish orange, whatever the competition's colour.</p>
-      )}
-    </div>
+    </Field>
   );
 }
