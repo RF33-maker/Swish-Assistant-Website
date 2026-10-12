@@ -38,6 +38,7 @@ import {
 } from "@/components/skeletons/LoadingSkeleton";
 import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
+import { LeagueLandscape } from "@/components/LeagueLandscape";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName, buildFuzzyTeamAliasMap } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName, strictNamesMatch, normalizeName } from "@/lib/fuzzyMatch";
@@ -653,7 +654,7 @@ export default function LeaguePage() {
     navigate(`/competition/${slug}`);
   }, [slug, navigate, previousSection]);
 
-  const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
+  const [comparisonMode, setComparisonMode] = useState<'player' | 'team' | 'landscape'>('player'); // Player comparison, team comparison, or the league landscape
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
   const [filteredPlayerAverages, setFilteredPlayerAverages] = useState<any[]>([]);
   const [statsSearch, setStatsSearch] = useState("");
@@ -5654,7 +5655,7 @@ export default function LeaguePage() {
               <div className="space-y-4 md:space-y-6">
                 {/* Toggle between Player and Team Comparison */}
                 <div className="ch-card p-3 md:p-4">
-                  <div className="flex items-center justify-center gap-2">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
                     <button
                       onClick={() => setComparisonMode('player')}
                       className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
@@ -5679,11 +5680,34 @@ export default function LeaguePage() {
                     >
                       Team Comparison
                     </button>
+                    <button
+                      onClick={() => setComparisonMode('landscape')}
+                      className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
+                        comparisonMode === 'landscape'
+                          ? 'text-white shadow-md'
+                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                      }`}
+                      style={comparisonMode === 'landscape' ? { backgroundColor: brandColor } : {}}
+                      data-testid="button-league-landscape"
+                    >
+                      League Landscape
+                    </button>
                   </div>
                 </div>
 
                 {/* Render appropriate comparison component */}
-                {comparisonMode === 'player' ? (
+                {comparisonMode === 'landscape' ? (
+                  <LeagueLandscape
+                    slug={slug || ""}
+                    brandColor={brandColorHex}
+                    scopedLeagueIds={isParentLeague ? selectedAgeGroupLeagueIds : undefined}
+                    onTeamSelect={(teamName) => {
+                      setPreviousSection(activeSection);
+                      setSelectedTeamName(teamName);
+                      setActiveSection('team');
+                    }}
+                  />
+                ) : comparisonMode === 'player' ? (
                   <PlayerComparison 
                     leagueId={league?.league_id || ""} 
                     allPlayers={allPlayerAverages}

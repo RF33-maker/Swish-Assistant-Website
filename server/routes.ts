@@ -4427,6 +4427,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Team landscape: every team's season numbers for the Swish Social scatter cards, which plot
+  // one against another (offence against defence, pace against three-point rate, and so on).
+  // Possessions are estimated from the box score and shared between the two teams in a game,
+  // so both sides of a game are measured over the same number. Formulas match formComparison.ts.
+  app.get("/api/league/:slug/landscape", async (req: Request, res: Response) => {
+    try {
+      const { slug } = req.params;
+      const family = await resolvePublicLeagueFamily(slug, "LeagueLandscape");
+      if (!family) return res.status(404).json({ error: "League not found or not public" });
+      const { leagueIds, name, leagueNames } = family;
+
+      const STATS = {
+        pts: "tot_spoints",
+        fga: "tot_sfieldgoalsattempted",
+        fgm: "tot_sfieldgoalsmade",
+        tpa: "tot_sthreepointersattempted",
+        tpm: "tot_sthreepointersmade",
+        fta: "tot_sfreethrowsattempted",
+        oreb: "tot_sreboundsoffensive",
+        dreb: "tot_sreboundsdefensive",
+        tov: "tot_sturnovers",
+        paint: "tot_spointsinthepaint",
+        fastbreak: "tot_spointsfastbreak",
+        offTov: "tot_spointsfromturnovers",
+        bench: "tot_sbenchpoints",
+      } as const;
+      type Stat = keyof typeof STATS;
+      type Line = Record<Stat, number>;
+      const STAT_KEYS = Object.keys(STATS) as Stat[];
+      const num = (v: unknown) => Number(v) || 0;
+      const emptyLine = () => Object.fromEntries(STAT_KEYS.map((k) => [k, 0])) as Line;
+      const lineOf = (r: Record<string, any>) => Object.fromEntries(STAT_KEYS.map((k) => [k, num(r[STATS[k]])])) as Line;
+      const add = (into: Line, from: Line) => STAT_KEYS.forEach((k) => (into[k] += from[k]));
+      const possessions = (l: Line) => l.fga + 0.44 * l.fta - l.oreb + l.tov;
+
+      const rows = await fetchAllLeagueRows("team_stats", ["team_id", "name", "league_id", "game_key", ...Object.values(STATS)].join(","), leagueIds);
+      const byGame = new Map<string, Record<string, any>[]>();
+      for (const r of rows) byGame.set(r.game_key, [...(byGame.get(r.game_key) || []), r]);
+
+      type Agg = { id: string; name: string; team_id: string | null; league_id: string; games: number; poss: number; own: Line; opp: Line };
+      const aggs = new Map<string, Agg>();
+      const league = { games: 0, poss: 0, own: emptyLine() };
+      let gamesCounted = 0;
+      for (const pair of Array.from(byGame.values())) {
+        // A game only counts once both box scores are in and it has actually been played.
+        if (pair.length !== 2) continue;
+        const lines = [lineOf(pair[0]), lineOf(pair[1])];
+        const poss = (possessions(lines[0]) + possessions(lines[1])) / 2;
+        if (poss < 20 || lines[0].pts + lines[1].pts <= 0) continue;
+        gamesCounted += 1;
+        pair.forEach((r, i) => {
+          const id = r.team_id || r.name;
+          if (!id) return;
+          let a = aggs.get(id);
+          if (!a) aggs.set(id, (a = { id, name: r.name, team_id: r.team_id, league_id: r.league_id, games: 0, poss: 0, own: emptyLine(), opp: emptyLine() }));
+          a.games += 1;
+          a.name = r.name ?? a.name;
+          a.poss += poss;
+          add(a.own, lines[i]);
+          add(a.opp, lines[1 - i]);
+          league.games += 1;
+          league.poss += poss;
+          add(league.own, lines[i]);
+        });
+      }
+
+      // Some feeds leave the scoring breakdowns empty; a stat nobody has is not recorded, rather than zero.
+      const recorded = (k: Stat) => league.own[k] > 0;
+      const round1 = (v: number | null) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
+      const pct = (a: number, b: number) => (b > 0 ? (a / b) * 100 : null);
+      const metricsOf = (own: Line, opp: Line, games: number, poss: number) => {
+        const perGame = (k: Stat) => (games > 0 && recorded(k) ? own[k] / games : null);
+        const ortg = poss > 0 ? (100 * own.pts) / poss : null;
+        const drtg = poss > 0 ? (100 * opp.pts) / poss : null;
+        const raw: Record<string, number | null> = {
+          ortg,
+          drtg,
+          net: ortg != null && drtg != null ? ortg - drtg : null,
+          pace: games > 0 ? poss / games : null,
+          margin: games > 0 ? (own.pts - opp.pts) / games : null,
+          efg: pct(own.fgm + 0.5 * own.tpm, own.fga),
+          oppEfg: pct(opp.fgm + 0.5 * opp.tpm, opp.fga),
+          tovPct: pct(own.tov, own.fga + 0.44 * own.fta + own.tov),
+          forcedTovPct: pct(opp.tov, opp.fga + 0.44 * opp.fta + opp.tov),
+          orebPct: pct(own.oreb, own.oreb + opp.dreb),
+          drebPct: pct(own.dreb, own.dreb + opp.oreb),
+          threeRate: pct(own.tpa, own.fga),
+          threePct: pct(own.tpm, own.tpa),
+          threeAttPg: perGame("tpa"),
+          threeMadePg: perGame("tpm"),
+          paintPpg: perGame("paint"),
+          fastbreakPpg: perGame("fastbreak"),
+          offTovPpg: perGame("offTov"),
+          benchPpg: perGame("bench"),
+        };
+        return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, round1(v)]));
+      };
+
+      const all = Array.from(aggs.values());
+      const maxGames = Math.max(0, ...all.map((a) => a.games));
+      const requestedMin = Number(req.query.minGames);
+      const minGames = Number.isFinite(requestedMin) && requestedMin >= 1 ? Math.floor(requestedMin) : Math.max(1, Math.ceil(maxGames * 0.5));
+
+      const teams = all
+        .filter((a) => a.games >= minGames && a.poss > 0)
+        .map((a) => ({ id: a.id, name: a.name, team_id: a.team_id, league_id: a.league_id, games: a.games, metrics: metricsOf(a.own, a.opp, a.games, a.poss) }))
+        .sort((x, y) => (y.metrics.net ?? 0) - (x.metrics.net ?? 0) || y.games - x.games);
+
+      // The crosshairs: the league as one team playing itself, so every game counts once on each side.
+      const averages = metricsOf(league.own, league.own, league.games, league.poss);
+
+      // Pools or conferences entered as child competitions, so a card can show one at a time.
+      const groups = leagueIds
+        .filter((id) => teams.some((t) => t.league_id === id))
+        .map((id) => ({ id, name: leagueNames[id] || name || slug }));
+
+      return res.json({
+        league: { name: name || slug },
+        averages,
+        minGames,
+        maxGames,
+        gamesCounted,
+        groups: groups.length > 1 ? groups : [],
+        teams,
+      });
+    } catch (err: any) {
+      console.error("[LeagueLandscape] error", err?.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Competitions the signed-in admin/owner can use in Swish Social, including private ones the
   // browser's own query can't see because of row-level security.
   app.get("/api/social/competitions", async (req: Request, res: Response) => {
