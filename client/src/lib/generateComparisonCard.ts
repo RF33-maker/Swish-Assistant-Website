@@ -5,18 +5,22 @@
  */
 
 import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
-import { SIDE, drawBackdrop, drawCrest, drawHeader, drawSpaced, drawVignette, themeFor, type Theme } from "@/lib/cardStyle";
+import { SIDE, drawBackdrop, drawCrest, drawGlow, drawHeader, drawSpaced, drawVignette, themeFor, type Theme } from "@/lib/cardStyle";
 import {
   CARD_H,
   CARD_W,
   canvasToBlob,
   capHeight,
   drawFooter,
+  drawContain,
   drawTextTop,
   ensureDisplayFont,
   fetchImg,
   fitSize,
   initialsOf,
+  shade,
+  verticalGradient,
+  withAlpha,
   type TextOpts,
 } from "@/lib/generateWeeklyCards";
 
@@ -47,7 +51,13 @@ export type ComparisonCardOptions = {
   results?: string[];
   leagueName: string;
   leagueLogoUrl?: string | null;
+  /** The league's colour: the whole card when there is no split, and the fallback for a side without a colour. */
   primaryHex: string;
+  /**
+   * Each side in its own club's colour, with black down the middle. A side left out
+   * (a club with no crest to take a colour from) falls back to the league's colour.
+   */
+  split?: { left?: string | null; right?: string | null };
 };
 
 const LEFT_X = 250;
@@ -57,6 +67,40 @@ const FACE_R = 104;
 const ROWS_TOP = 706;
 const ROWS_BOTTOM = 1196;
 const MAX_ROWS = 16;
+
+/**
+ * The split backdrop: one club's colour pouring in from each side and meeting in black down
+ * the middle, sinking to black under the stat rows so the numbers hold up on any two colours.
+ */
+function drawSplitBackdrop(ctx: CanvasRenderingContext2D, left: Theme, right: Theme, leagueLogo: HTMLImageElement | null) {
+  ctx.fillStyle = "#050505";
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  const wash = (theme: Theme, fromX: number, toX: number) => {
+    const g = ctx.createLinearGradient(fromX, 0, toX, 0);
+    g.addColorStop(0, shade(theme.base, 0.04));
+    g.addColorStop(0.45, withAlpha(shade(theme.base, -0.25), 0.7));
+    g.addColorStop(0.82, withAlpha(shade(theme.base, -0.5), 0.14));
+    g.addColorStop(1, withAlpha(theme.base, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(Math.min(fromX, toX), 0, Math.abs(toX - fromX), CARD_H);
+  };
+  wash(left, 0, CARD_W / 2);
+  wash(right, CARD_W, CARD_W / 2);
+  // A light behind each side's crest, in its own colour.
+  drawGlow(ctx, LEFT_X, FACE_Y, 380, left.accent, 0.32);
+  drawGlow(ctx, RIGHT_X, FACE_Y, 380, right.accent, 0.32);
+  ctx.fillStyle = verticalGradient(ctx, 0, CARD_H, [
+    [0, "rgba(0,0,0,0.1)"],
+    [0.42, "rgba(0,0,0,0.3)"],
+    [0.7, "rgba(0,0,0,0.62)"],
+    [1, "rgba(0,0,0,0.9)"],
+  ]);
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  if (leagueLogo) {
+    drawContain(ctx, leagueLogo, -20, -30, 300, 300, 0.1);
+    drawContain(ctx, leagueLogo, CARD_W - 280, -30, 300, 300, 0.1);
+  }
+}
 
 /** A photo cropped to a circle, kept towards the top of the picture where the face is. */
 function drawFace(ctx: CanvasRenderingContext2D, img: HTMLImageElement, cx: number, cy: number, r: number, ring: string) {
@@ -117,7 +161,7 @@ function drawSide(
 }
 
 /** How many stats each side leads, either end of one bar. */
-function drawSummary(ctx: CanvasRenderingContext2D, rows: ComparisonCardRow[], theme: Theme) {
+function drawSummary(ctx: CanvasRenderingContext2D, rows: ComparisonCardRow[], accents: [string, string]) {
   const leads1 = rows.filter((r) => r.lead === 1).length;
   const leads2 = rows.filter((r) => r.lead === 2).length;
   const level = rows.length - leads1 - leads2;
@@ -126,16 +170,16 @@ function drawSummary(ctx: CanvasRenderingContext2D, rows: ComparisonCardRow[], t
   const barR = CARD_W - 190;
   const big: TextOpts = { size: 58, weight: 700 };
   const cap = capHeight(ctx, big);
-  drawTextTop(ctx, String(leads1), barL - 26, top, { ...big, align: "right", color: theme.accent });
-  drawTextTop(ctx, String(leads2), barR + 26, top, { ...big, align: "left" });
+  drawTextTop(ctx, String(leads1), barL - 26, top, { ...big, align: "right", color: accents[0] });
+  drawTextTop(ctx, String(leads2), barR + 26, top, { ...big, align: "left", color: accents[1] });
   drawSpaced(ctx, `STATS LED, OF ${rows.length}`, CARD_W / 2, top, 3, { size: 17, weight: 500, align: "center", alpha: 0.6 });
 
   const y = top + cap - 12;
   const gap = 4;
   const parts: [number, string][] = [
-    [leads1, theme.accent],
+    [leads1, accents[0]],
     [level, "rgba(255,255,255,0.22)"],
-    [leads2, "rgba(255,255,255,0.78)"],
+    [leads2, accents[1]],
   ];
   const shown = parts.filter(([n]) => n > 0);
   const width = barR - barL - gap * Math.max(0, shown.length - 1);
@@ -148,7 +192,7 @@ function drawSummary(ctx: CanvasRenderingContext2D, rows: ComparisonCardRow[], t
   }
 }
 
-function drawRows(ctx: CanvasRenderingContext2D, rows: ComparisonCardRow[], theme: Theme) {
+function drawRows(ctx: CanvasRenderingContext2D, rows: ComparisonCardRow[], accents: [string, string]) {
   const rowH = Math.min(50, (ROWS_BOTTOM - ROWS_TOP) / rows.length);
   const valueSize = Math.min(31, Math.round(rowH * 0.66));
   const labelSize = Math.min(21, Math.round(rowH * 0.46));
@@ -176,7 +220,7 @@ function drawRows(ctx: CanvasRenderingContext2D, rows: ComparisonCardRow[], them
       ctx.fillStyle = "rgba(255,255,255,0.1)";
       ctx.fillRect(trackX, midY - barH / 2, barLen, barH);
       const w = Math.max(6, barLen * Math.min(1, s.share));
-      ctx.fillStyle = s.lit ? theme.accent : "rgba(255,255,255,0.34)";
+      ctx.fillStyle = s.lit ? accents[k] : "rgba(255,255,255,0.34)";
       ctx.fillRect(k === 0 ? innerL - w : innerR, midY - barH / 2, w, barH);
     });
     const label: TextOpts = { size: labelSize, weight: 600, align: "center", alpha: 0.92 };
@@ -206,13 +250,21 @@ export async function renderComparisonCard(opts: ComparisonCardOptions): Promise
   canvas.height = CARD_H;
   const ctx = canvas.getContext("2d")!;
   const theme = themeFor("league", primaryHex);
+  const leftTheme = opts.split ? themeFor("league", opts.split.left || primaryHex) : theme;
+  const rightTheme = opts.split ? themeFor("league", opts.split.right || primaryHex) : theme;
+  // Without a split the right side has no colour of its own, so it is set in white against the league's.
+  const accents: [string, string] = [leftTheme.accent, opts.split ? rightTheme.accent : "rgba(255,255,255,0.8)"];
 
-  drawBackdrop(ctx, theme, leagueLogo, { x: CARD_W / 2, y: 0 });
-  drawVignette(ctx, theme);
+  if (opts.split) {
+    drawSplitBackdrop(ctx, leftTheme, rightTheme, leagueLogo);
+  } else {
+    drawBackdrop(ctx, theme, leagueLogo, { x: CARD_W / 2, y: 0 });
+    drawVignette(ctx, theme);
+  }
   drawHeader(ctx, kind === "player" ? "PLAYER COMPARISON" : "TEAM COMPARISON", banner, leagueName, theme);
 
-  drawSide(ctx, left, LEFT_X, photo1, crest1, theme.accent, theme);
-  drawSide(ctx, right, RIGHT_X, photo2, crest2, "rgba(255,255,255,0.85)", theme);
+  drawSide(ctx, left, LEFT_X, photo1, crest1, accents[0], leftTheme);
+  drawSide(ctx, right, RIGHT_X, photo2, crest2, accents[1], rightTheme);
 
   const mid = centre ?? { text: "VS" };
   const midOpts: TextOpts = { size: fitSize(ctx, mid.text, 190, 76, 40, 700), weight: 700, align: "center", alpha: centre ? 1 : 0.5 };
@@ -223,8 +275,8 @@ export async function renderComparisonCard(opts: ComparisonCardOptions): Promise
   }
 
   if (rows.length > 0) {
-    drawSummary(ctx, rows, theme);
-    drawRows(ctx, rows, theme);
+    drawSummary(ctx, rows, accents);
+    drawRows(ctx, rows, accents);
   } else {
     // Nothing to compare in this category (some games carry no advanced stats): show the games themselves instead.
     const results = (opts.results ?? []).slice(0, 7);

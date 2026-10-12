@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { generateComparisonCardBlob } from "@/lib/generateComparisonCard";
+import { extractTeamColors } from "@/lib/colorExtractor";
 import ShareableCard from "@/components/ShareableCard";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
@@ -38,6 +39,15 @@ interface TeamComparisonProps {
   /** For the downloadable card. */
   leagueName?: string;
   leagueLogoUrl?: string | null;
+}
+
+/** A club's colour for the card, taken from its crest as elsewhere on the site; null when there is no crest. */
+async function clubColour(teamName: string | null | undefined, leagueId: string): Promise<string | null> {
+  if (!teamName || !leagueId) return null;
+  const colours = await extractTeamColors(teamName, leagueId).catch(() => null);
+  if (!colours) return null;
+  const { r, g, b } = colours.primaryRgb;
+  return `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds, standings, preselectTeam, leagueName, leagueLogoUrl }: TeamComparisonProps) {
@@ -303,11 +313,14 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
   };
 
   // The downloadable card: drawn on a canvas in the Swish Social look, from whichever view is on show.
-  const generateCardBlob = () => {
+  const generateCardBlob = async () => {
     const inH2H = view === 'h2h' && h2h.team1Stats && h2h.team2Stats;
     const s1 = inH2H ? h2h.team1Stats : team1Stats;
     const s2 = inH2H ? h2h.team2Stats : team2Stats;
+    // Each half of the card in its own club's colour.
+    const [leftColour, rightColour] = await Promise.all([clubColour(s1.name, leagueId), clubColour(s2.name, leagueId)]);
     return generateComparisonCardBlob({
+      split: { left: leftColour, right: rightColour },
       kind: 'team',
       left: { name: shortTeamName(s1.name) || s1.name, games: s1.games, logoUrl: team1LogoUrl },
       right: { name: shortTeamName(s2.name) || s2.name, games: s2.games, logoUrl: team2LogoUrl },

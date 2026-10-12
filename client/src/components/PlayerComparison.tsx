@@ -5,6 +5,7 @@ import ShareableCard from "@/components/ShareableCard";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 import { generateComparisonCardBlob } from "@/lib/generateComparisonCard";
+import { extractTeamColors } from "@/lib/colorExtractor";
 import {
   CATEGORY_OPTIONS,
   ChipRow,
@@ -215,6 +216,15 @@ function getPlayerComparisonRows(
     default:
       return [];
   }
+}
+
+/** A club's colour for the card, taken from its crest as elsewhere on the site; null when there is no crest. */
+async function clubColour(teamName: string | null | undefined, leagueId: string): Promise<string | null> {
+  if (!teamName || !leagueId) return null;
+  const colours = await extractTeamColors(teamName, leagueId).catch(() => null);
+  if (!colours) return null;
+  const { r, g, b } = colours.primaryRgb;
+  return `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function PlayerComparison({ leagueId, allPlayers, brandColor, preselectSlug, leagueName, leagueLogoUrl }: PlayerComparisonProps) {
@@ -600,14 +610,17 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor, preselectSl
   };
 
   // The downloadable card: drawn on a canvas in the Swish Social look, from whichever view is on show.
-  const generateCardBlob = () => {
+  const generateCardBlob = async () => {
     const inH2H = view === 'h2h' && h2h.p1Stats && h2h.p2Stats;
     const s1 = inH2H ? h2h.p1Stats : player1Stats;
     const s2 = inH2H ? h2h.p2Stats : player2Stats;
+    // Each half of the card in that player's club colour.
+    const [leftColour, rightColour] = await Promise.all([clubColour(s1.team, leagueId), clubColour(s2.team, leagueId)]);
     const side = (s: any, photoUrl: string | null, logoUrl: string | null) => ({
       name: s.name, sub: shortTeamName(s.team), games: s.games, photoUrl, logoUrl,
     });
     return generateComparisonCardBlob({
+      split: { left: leftColour, right: rightColour },
       kind: 'player',
       left: side(s1, player1PhotoUrl, player1TeamLogoUrl),
       right: side(s2, player2PhotoUrl, player2TeamLogoUrl),
