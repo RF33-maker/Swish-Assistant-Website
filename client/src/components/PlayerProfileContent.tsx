@@ -23,6 +23,7 @@ import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@
 import { formatPlayerDisplayName } from "@/lib/playerName";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
+import { generateShotChartCardBlob, generateStatTilesCardBlob } from "@/lib/generateProfileCards";
 import ShareableCard from "@/components/ShareableCard";
 import { withAlpha } from "@/lib/colorContrast";
 import { extractColorsFromImage } from "@/lib/colorExtractor";
@@ -1898,6 +1899,34 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     return playerPhotoUrl;
   }, [playerInfo?.sharePhotoPath, playerPhotoUrl, photoCacheBuster]);
 
+  // What the downloadable cards say about the player; they are drawn in the club's colour.
+  const sharePlayer = {
+    name: playerInfo?.name || "Player",
+    team: playerInfo?.team || "",
+    // The social photo where there is one (as on the leaders cards); the focus point belongs to the banner cut-out.
+    photoUrl: playerSharePhotoUrl,
+    photoFocusY: playerInfo?.sharePhotoPath ? null : playerInfo?.photoFocusY,
+    teamLogoUrl: shareTeamLogoUrl,
+    primaryColor,
+  };
+  const shareFilterLabel = selectedLeagueIds.size === 1
+    ? (leagueNames.get(Array.from(selectedLeagueIds)[0]) || null)
+    : selectedLeagueIds.size > 1 ? `${selectedLeagueIds.size} competitions` : null;
+  /** The stretch of games the shot chart is showing, for its card. */
+  const shotRangeLabel = (): string | undefined => {
+    if (playerShotChartRange === "season") return "Full Season";
+    if (playerShotChartRange === "last10") return "Last 10 Games";
+    if (playerShotChartRange === "last5") return "Last 5 Games";
+    if (playerShotChartRange.startsWith("game:")) {
+      const key = playerShotChartRange.replace("game:", "");
+      const g = playerShotGamesWithKeys.find((g) => g.game_key === key);
+      return g
+        ? `vs ${g.opponent} • ${new Date(g.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+        : "Selected Game";
+    }
+    return undefined;
+  };
+
   const careerStats = useMemo(() => {
     if (!playerStats || playerStats.length === 0) return [];
 
@@ -2564,84 +2593,19 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
             { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
           ];
-          // Derive border / pill / track colours from the contrast-safe
-          // `onWhite` accent so very light team colours (white, pale yellow)
-          // still produce a visible tinted border, badge and progress track
-          // instead of vanishing into the white tile.
-          const shareAccent = readablePrimary.onWhite;
-          const shareTileBorder = withAlpha(shareAccent, 0.18);
-          const sharePillBg = withAlpha(shareAccent, 0.12);
           const filterLabel = selectedLeagueIds.size === 1
             ? (leagueNames.get(Array.from(selectedLeagueIds)[0]) || 'Filtered')
             : selectedLeagueIds.size > 1 ? `${selectedLeagueIds.size} Leagues` : null;
 
-          const shareBlock = (
-            <div className="flex flex-col" style={{ gap: 20 }}>
-              {/* No repeated "Season Averages" label here — the card's
-                  header band already shows that as the title, right above
-                  the player's name. Only the league-filter pill (when
-                  present) needs a home in the body. */}
-              {filterLabel && (
-                <div className="flex items-center justify-end">
-                  <span
-                    className="font-bold uppercase rounded-full"
-                    style={{
-                      backgroundColor: sharePillBg,
-                      color: shareAccent,
-                      fontSize: 14,
-                      letterSpacing: "0.1em",
-                      padding: "6px 14px",
-                    }}
-                  >
-                    {filterLabel}
-                  </span>
-                </div>
-              )}
-              <div className="grid grid-cols-3" style={{ gap: 18 }}>
-                {seasonStats.map((stat, i) => (
-                  <div
-                    key={i}
-                    className="rounded-2xl flex flex-col items-center text-center bg-white"
-                    style={{
-                      border: `1px solid ${shareTileBorder}`,
-                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
-                      padding: "28px 16px",
-                    }}
-                  >
-                    <div
-                      className="font-bold uppercase text-slate-500"
-                      style={{ fontSize: 16, letterSpacing: "0.14em", marginBottom: 14 }}
-                    >
-                      {stat.label}
-                    </div>
-                    <div
-                      className="font-black tabular-nums leading-none"
-                      style={{ color: shareAccent, fontSize: 72 }}
-                    >
-                      {stat.value.toFixed(1)}
-                    </div>
-                    <div
-                      className="flex items-center"
-                      style={{ marginTop: 16, height: 40 }}
-                    >
-                      {stat.rank ? (
-                        <span
-                          className="font-bold tabular-nums"
-                          style={{
-                            color: shareAccent,
-                            fontSize: 18,
-                            letterSpacing: "0.06em",
-                          }}
-                        >
-                          {getOrdinalSuffix(stat.rank)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
+          // The downloadable card: drawn on a canvas in the Swish Social look, in the club's colour.
+          const generateCardBlob = () =>
+            generateStatTilesCardBlob({
+              player: sharePlayer,
+              title: "SEASON AVERAGES",
+              banner: shareFilterLabel || "All competitions",
+              games: filteredSeasonAverages.games_played,
+              tiles: seasonStats.map((stat) => ({ label: stat.label, value: stat.value.toFixed(1), rank: stat.rank })),
+            });
 
           return (
             <ShareableCard
@@ -2655,8 +2619,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 primaryColor,
                 teamLogoUrl: shareTeamLogoUrl,
               }}
-              shareContent={shareBlock}
-              wide
+              generateCardBlob={generateCardBlob}
+              // The image is drawn by generateCardBlob, so the hidden capture layout isn't needed.
+              shareContent={<></>}
             >
               <div className="ch-card p-4 md:p-5">
                 <div className="flex items-center justify-between gap-3 mb-3 pr-10">
@@ -2698,61 +2663,19 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             { value: filteredSeasonAverages.three_point_percentage, label: "3PT%", rank: playerRankings?.three_point_percentage },
             { value: filteredSeasonAverages.ft_percentage, label: "FT%", rank: playerRankings?.ft_percentage },
           ];
-          // Derive accents from the contrast-safe `onWhite` variant so light
-          // team colours (white / pale yellow) still produce a visible
-          // border on the white tile.
-          const shareAccent = readablePrimary.onWhite;
-          const shareTileBorder = withAlpha(shareAccent, 0.18);
-
-          const shareBlock = (
-            // No repeated "Shooting" label — the card's header band already
-            // shows "Shooting Splits" as the title above the player's name.
-            <div className="flex flex-col" style={{ gap: 24 }}>
-              <div className="grid grid-cols-3" style={{ gap: 22 }}>
-                {shootingStats.map((stat, i) => (
-                  <div
-                    key={i}
-                    className="rounded-2xl flex flex-col items-center text-center bg-white"
-                    style={{
-                      border: `1px solid ${shareTileBorder}`,
-                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
-                      padding: "32px 18px",
-                    }}
-                  >
-                    <div
-                      className="font-bold uppercase text-slate-500"
-                      style={{ fontSize: 18, letterSpacing: "0.14em", marginBottom: 16 }}
-                    >
-                      {stat.label}
-                    </div>
-                    <div
-                      className="font-black tabular-nums leading-none"
-                      style={{ color: shareAccent, fontSize: 84 }}
-                    >
-                      {formatPercentage(stat.value)}
-                    </div>
-                    <div
-                      className="flex items-center"
-                      style={{ marginTop: 18, height: 40 }}
-                    >
-                      {stat.rank ? (
-                        <span
-                          className="font-bold tabular-nums"
-                          style={{
-                            color: shareAccent,
-                            fontSize: 18,
-                            letterSpacing: "0.06em",
-                          }}
-                        >
-                          {getOrdinalSuffix(stat.rank)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
+          const generateCardBlob = () =>
+            generateStatTilesCardBlob({
+              player: sharePlayer,
+              title: "SHOOTING SPLITS",
+              banner: shareFilterLabel || "All competitions",
+              games: filteredSeasonAverages.games_played,
+              tiles: shootingStats.map((stat) => ({
+                label: stat.label,
+                value: `${stat.value.toFixed(1)}%`,
+                rank: stat.rank,
+                fill: stat.value / 100,
+              })),
+            });
 
           return (
             <ShareableCard
@@ -2766,8 +2689,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 primaryColor,
                 teamLogoUrl: shareTeamLogoUrl,
               }}
-              shareContent={shareBlock}
-              wide
+              generateCardBlob={generateCardBlob}
+              shareContent={<></>}
             >
               <div className="ch-card p-4 md:p-5">
                 <h3 className="ch-eyebrow mb-3 pr-10">Shooting</h3>
@@ -3045,42 +2968,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             primaryColor,
             teamLogoUrl: shareTeamLogoUrl,
           }}
-          shareCaption={(() => {
-            if (playerShotChartRange === "season") return "Full Season";
-            if (playerShotChartRange === "last10") return "Last 10 Games";
-            if (playerShotChartRange === "last5") return "Last 5 Games";
-            if (playerShotChartRange.startsWith("game:")) {
-              const key = playerShotChartRange.replace("game:", "");
-              const g = playerShotGamesWithKeys.find((g) => g.game_key === key);
-              return g
-                ? `vs ${g.opponent} • ${new Date(g.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
-                : "Selected Game";
-            }
-            return undefined;
-          })()}
-          shareContent={
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px 0", width: "100%" }}>
-              <span
-                style={{
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.18em",
-                  fontSize: 17,
-                  color: "#64748b",
-                }}
-              >
-                Shot Chart
-              </span>
-              <ShotChart
-                shots={playerShotData || []}
-                loading={playerShotsLoading}
-                emptyMessage="No shot data available for this player."
-                shareMode
-              />
-            </div>
+          shareCaption={shotRangeLabel()}
+          generateCardBlob={() =>
+            generateShotChartCardBlob({ player: sharePlayer, shots: playerShotData || [], banner: shotRangeLabel() || "Full season" })
           }
-          wide
+          // The image is drawn by generateCardBlob, so the hidden capture layout isn't needed.
+          shareContent={<></>}
         >
         <div className="ch-card p-4 md:p-5">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 md:pr-10">
