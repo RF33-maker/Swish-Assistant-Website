@@ -366,9 +366,10 @@ export default function TradingCard({
 
           {/* Name, matchup and the stat line */}
           <div className="flex-1 min-h-0 flex flex-col px-[5.5cqw] pt-[3.6cqw] pb-[4.2cqw]">
-            <h3 className="ch-display uppercase font-bold leading-[0.95] tracking-tight text-[max(15px,7.4cqw)] text-[color:var(--ch-text)] line-clamp-2">
+            {/* Not an <h3>: inside a news story the article stylesheet restyles every h3 (top margin, size) and pushes the name out of the card. */}
+            <div role="heading" aria-level={3} className="ch-display uppercase font-bold leading-[0.95] tracking-tight text-[max(15px,7.4cqw)] text-[color:var(--ch-text)] line-clamp-2">
               {perf.playerName}
-            </h3>
+            </div>
             <div className="mt-[1.8cqw] flex items-center gap-[1.8cqw] min-w-0 text-[max(10px,3.5cqw)] text-[color:var(--ch-text-2)]">
               {perf.teamName && (
                 <>
