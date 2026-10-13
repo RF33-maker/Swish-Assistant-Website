@@ -55,6 +55,7 @@ import {
   type AdvancedLeaderDef,
 } from "@/lib/advancedStats";
 import LeagueTrendingPerformances from "@/components/league/LeagueTrendingPerformances";
+import LeagueNews from "@/components/league/LeagueNews";
 import { getImportedPlayerName, resolvePlayerDisplayName } from "@/lib/playerName";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
@@ -6381,6 +6382,9 @@ export default function LeaguePage() {
                     />
                   </div>
                 )}
+
+                {/* Weekend match reports and other stories tagged to this competition */}
+                {slug && <LeagueNews competitionSlug={slug} />}
 
                 {/* League Leaders Quick View */}
                 <div className="ch-card p-4 md:p-6">

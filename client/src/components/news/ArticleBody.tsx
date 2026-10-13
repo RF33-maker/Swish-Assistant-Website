@@ -1,8 +1,10 @@
 import { Fragment, type ReactNode } from "react";
 import { Link } from "wouter";
 import GameEmbed from "@/components/GameEmbed";
+import WeekendReportBlock from "@/components/news/WeekendReportBlock";
 import { gamePath } from "@shared/seo";
 import { isArticleImageSrc, isSafeArticleHref, type ArticleDoc, type ArticleNode } from "@shared/newsArticle";
+import { sanitizeWeekendReport } from "@shared/weekendReport";
 
 /**
  * Renders an article's structured body. Built node by node from the document
@@ -70,6 +72,10 @@ function Block({ node }: { node: ArticleNode }) {
     case "gameEmbed": {
       const gameKey = node.attrs?.gameKey;
       return gameKey ? <GameEmbed gameKey={gameKey} href={gamePath(node.attrs?.competitionSlug, gameKey)} /> : null;
+    }
+    case "weekendReport": {
+      const data = sanitizeWeekendReport(node.attrs?.data);
+      return data ? <WeekendReportBlock data={data} /> : null;
     }
     default:
       return null;

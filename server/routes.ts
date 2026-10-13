@@ -12,6 +12,7 @@ import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "
 import { getTeamCompetitions } from "./teamCompetitions";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerNewsArticleRoutes } from "./newsArticles";
+import { registerWeekendReportRoutes } from "./weekendReports";
 import { registerPreferredNameRoutes } from "./preferredNames";
 import { registerClaimEmailRoutes } from "./claimEmail";
 import { registerContactRequestRoutes } from "./contactRequests";
@@ -2671,6 +2672,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // News article create/update API
   registerNewsArticleRoutes(app, requireAdmin);
+  registerWeekendReportRoutes(app, { requireAdmin, formatName: formatCanonicalPlayerName });
   registerClaimEmailRoutes(app, { requireAdmin });
   registerContactRequestRoutes(app, { requireAdmin });
   registerPreferredNameRoutes(app, { requireAdmin, authenticate: authenticateSupabaseUser, withAliases, formatName: formatCanonicalPlayerName });

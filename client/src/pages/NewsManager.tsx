@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
-import { ArrowLeft, ExternalLink, ImageOff, Loader2, Newspaper, PenLine, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, ImageOff, Loader2, Newspaper, PenLine, Plus, Trophy, Trash2 } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import {
   AlertDialog,
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import { NEWS_QUERY_KEY, deleteArticle, invalidateNewsQueries } from "@/lib/newsArticles";
+import { NEWS_QUERY_KEY, deleteArticle, invalidateNewsQueries, runWeekendReports } from "@/lib/newsArticles";
 import { articleTypeLabel } from "@shared/newsArticle";
 import type { NewsArticle } from "@shared/schema";
 
@@ -74,6 +74,24 @@ export default function NewsManager() {
     },
   });
 
+  const reportsMutation = useMutation({
+    mutationFn: runWeekendReports,
+    onSuccess: ({ results }) => {
+      invalidateNewsQueries();
+      const made = results.filter((r) => r.outcome === "created").length;
+      const refreshed = results.filter((r) => r.outcome === "updated").length;
+      toast({
+        title: results.length ? "Weekend reports ready" : "No games to report on",
+        description: results.length
+          ? `${made} new ${made === 1 ? "draft" : "drafts"}, ${refreshed} refreshed. New reports are drafts until you publish them.`
+          : "No completed games were found for the weekend just gone.",
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "Couldn't build the reports", description: err?.message, variant: "destructive" });
+    },
+  });
+
   return (
     <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
       <Helmet>
@@ -98,9 +116,21 @@ export default function NewsManager() {
               </h1>
               <p className="mt-2 text-sm text-[color:var(--ch-text-2)]">Write, edit and publish the stories on the news page.</p>
             </div>
-            <Link href={NEW_ARTICLE_PATH} className="ch-btn ch-btn-primary h-10 px-4 text-[14px]" data-testid="button-new-article">
-              <Plus className="h-4 w-4" /> New article
-            </Link>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => reportsMutation.mutate()}
+                disabled={reportsMutation.isPending}
+                className="ch-btn h-10 px-4 text-[14px]"
+                title="Builds a match report for each competition that played over the weekend, as drafts"
+                data-testid="button-weekend-reports"
+              >
+                {reportsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trophy className="h-4 w-4" />} Weekend reports
+              </button>
+              <Link href={NEW_ARTICLE_PATH} className="ch-btn ch-btn-primary h-10 px-4 text-[14px]" data-testid="button-new-article">
+                <Plus className="h-4 w-4" /> New article
+              </Link>
+            </div>
           </div>
         </header>
 
