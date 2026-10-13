@@ -66,6 +66,13 @@ const CORNER_END_Y =
   BASKET_CY +
   Math.sqrt(Math.max(0, TP_R * TP_R - (CENTER_X - CORNER_LINE_X_L) ** 2));
 
+/** The half court's measurements in viewBox units, for anything that draws the same court off the page (the download card). */
+export const COURT_GEOMETRY = {
+  width: CW, height: CH, centerX: CENTER_X, basketY: BASKET_CY, rimR: RIM_R, backboardHalf: BB_HALF, backboardY: BB_Y,
+  restrictedR: RA_R, paintLeft: PAINT_L, paintWidth: PAINT_W, paintBottom: PAINT_BOT, freeThrowR: FT_RADIUS,
+  threeR: TP_R, cornerLeftX: CORNER_LINE_X_L, cornerRightX: CORNER_LINE_X_R, cornerEndY: CORNER_END_Y,
+} as const;
+
 const PPP_BASELINE_KEY = "shot-chart-ppp-baseline";
 
 export const COLOR_MADE = "#f59e3b";

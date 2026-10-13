@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ImagePlus, Layers, Medal, ScatterChart, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
+import { ClipboardList, ImagePlus, Layers, Medal, ScatterChart, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
 import AdminPageShell from "@/components/layout/AdminPageShell";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TopPerformancesStudio from "@/components/social/TopPerformancesStudio";
@@ -7,11 +7,12 @@ import WeeklyAwardsStudio from "@/components/social/WeeklyAwardsStudio";
 import LeadersStudio from "@/components/social/LeadersStudio";
 import LineupsStudio from "@/components/social/LineupsStudio";
 import LandscapeStudio from "@/components/social/LandscapeStudio";
+import ScoresStudio from "@/components/social/ScoresStudio";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 import { FIELD, SELECT_MENU } from "@/components/social/studioUi";
 
-type SectionId = "performances" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "best-lineup" | "photos";
+type SectionId = "performances" | "d2-results" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "best-lineup" | "photos";
 
 type Group = "Game cards" | "Weekly awards" | "League leaders" | "Lineups" | "Tools";
 
@@ -27,6 +28,7 @@ const GROUPS: Group[] = ["Game cards", "Weekly awards", "League leaders", "Lineu
 
 const SECTIONS: Section[] = [
   { id: "performances", group: "Game cards", label: "Top performances", icon: Trophy },
+  { id: "d2-results", group: "Game cards", label: "Division Two results", icon: ClipboardList },
   { id: "team-of-the-week", group: "Weekly awards", label: "Team of the Week", icon: Users },
   { id: "player-of-the-week", group: "Weekly awards", label: "Player of the Week", icon: Star },
   { id: "player-leaders", group: "League leaders", label: "Player leaders", icon: Medal },
@@ -135,6 +137,11 @@ export default function SocialToolsPage() {
         {visited.has("performances") && (
           <div className={show("performances")}>
             <TopPerformancesStudio />
+          </div>
+        )}
+        {visited.has("d2-results") && (
+          <div className={show("d2-results")}>
+            <ScoresStudio />
           </div>
         )}
         {visited.has("team-of-the-week") && (

@@ -1,28 +1,56 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import { Search } from "lucide-react";
-import { TeamLogo } from "@/components/TeamLogo";
+import { generateComparisonCardBlob } from "@/lib/generateComparisonCard";
+import { extractTeamColors } from "@/lib/colorExtractor";
 import ShareableCard from "@/components/ShareableCard";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { aggregateTeamStats, getTeamComparisonRows } from "@/lib/teamStatsAggregate";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+  CATEGORY_OPTIONS,
+  ChipRow,
+  CompareEmpty,
+  CompareError,
+  CompareHeader,
+  CompareLoading,
+  ComparePicker,
+  CompareRows,
+  CopyLinkButton,
+  readCompareParam,
+  scoreRows,
+  shortTeamName,
+  Suggestions,
+  VIEW_OPTIONS,
+  writeCompareParams,
+  type CompareCategory,
+  type CompareView,
+  type Suggestion,
+} from "@/components/compare/compareUi";
 
 interface TeamComparisonProps {
   leagueId: string;
   allTeams: any[];
   brandColor?: string;
   scopedLeagueIds?: string[];
+  /** The league table, best first, for the "top of the table" suggestion. */
+  standings?: { team: string }[];
+  /** A team to start with on the left (from "Compare" on a team's page). */
+  preselectTeam?: string | null;
+  /** For the downloadable card. */
+  leagueName?: string;
+  leagueLogoUrl?: string | null;
 }
 
-export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds }: TeamComparisonProps) {
+/** A club's colour for the card, taken from its crest as elsewhere on the site; null when there is no crest. */
+async function clubColour(teamName: string | null | undefined, leagueId: string): Promise<string | null> {
+  if (!teamName || !leagueId) return null;
+  const colours = await extractTeamColors(teamName, leagueId).catch(() => null);
+  if (!colours) return null;
+  const { r, g, b } = colours.primaryRgb;
+  return `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
+}
+
+export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds, standings, preselectTeam, leagueName, leagueLogoUrl }: TeamComparisonProps) {
   const [team1Name, setTeam1Name] = useState<string>("");
   const [team2Name, setTeam2Name] = useState<string>("");
   const [team1Stats, setTeam1Stats] = useState<any>(null);
@@ -31,8 +59,11 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
   const [team2Raw, setTeam2Raw] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [comparisonCategory, setComparisonCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional');
-  const [view, setView] = useState<'season' | 'h2h'>('season');
+  // The category and view can arrive in the page's address, with the two teams (see the effects below).
+  const [comparisonCategory, setComparisonCategory] = useState<CompareCategory>(
+    () => CATEGORY_OPTIONS.find((c) => c.value.toLowerCase() === readCompareParam('cat'))?.value ?? 'Traditional',
+  );
+  const [view, setView] = useState<CompareView>(() => (readCompareParam('view') === 'h2h' ? 'h2h' : 'season'));
   const [team1LogoUrl, setTeam1LogoUrl] = useState<string | null>(null);
   const [team2LogoUrl, setTeam2LogoUrl] = useState<string | null>(null);
 
@@ -63,25 +94,6 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
 
   const [search1, setSearch1] = useState("");
   const [search2, setSearch2] = useState("");
-  const [showDropdown1, setShowDropdown1] = useState(false);
-  const [showDropdown2, setShowDropdown2] = useState(false);
-
-  const dropdown1Ref = useRef<HTMLDivElement>(null);
-  const dropdown2Ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdown1Ref.current && !dropdown1Ref.current.contains(event.target as Node)) {
-        setShowDropdown1(false);
-      }
-      if (dropdown2Ref.current && !dropdown2Ref.current.contains(event.target as Node)) {
-        setShowDropdown2(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const fetchAllTeamStats = async (): Promise<any[]> => {
     const ids = scopedLeagueIds && scopedLeagueIds.length > 0 ? scopedLeagueIds : [leagueId];
     let query = supabase.from("team_stats").select("*");
@@ -127,25 +139,82 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [team1Name, team2Name, scopedIdsKey]);
 
-  const filteredTeams1 = allTeams.filter(team =>
-    team.teamName?.toLowerCase().includes(search1.toLowerCase())
-  ).slice(0, 10);
-
-  const filteredTeams2 = allTeams.filter(team =>
-    team.teamName?.toLowerCase().includes(search2.toLowerCase())
-  ).slice(0, 10);
-
-  const selectTeam1 = (team: any) => {
-    setTeam1Name(team.teamName);
-    setSearch1(team.teamName);
-    setShowDropdown1(false);
+  const optionsFor = (search: string, selectedName: string) => {
+    const text = search.toLowerCase().trim();
+    // With a team already in the box, the list offers the others rather than only that name.
+    const matches = !text || selectedName.toLowerCase() === text
+      ? allTeams
+      : allTeams.filter((team) => team.teamName?.toLowerCase().includes(text));
+    return matches.slice(0, 12).map((team) => ({
+      key: String(team.teamName),
+      title: shortTeamName(team.teamName) || team.teamName,
+      sub: [team.age_group, team.ppg ? `${team.ppg} PPG` : null].filter(Boolean).join(' · ') || undefined,
+    }));
   };
 
-  const selectTeam2 = (team: any) => {
-    setTeam2Name(team.teamName);
-    setSearch2(team.teamName);
-    setShowDropdown2(false);
+  // A comparison can be opened from a link (?t1=…&t2=…) or from a team's page; each side waits
+  // here until its team turns up in the list.
+  const pendingRef = useRef<{ first: string | null; second: string | null }>({
+    first: preselectTeam ?? readCompareParam('t1'),
+    second: preselectTeam ? null : readCompareParam('t2'),
+  });
+
+  const selectTeam1 = (teamName: string) => {
+    pendingRef.current.first = null;
+    setTeam1Name(teamName);
+    setSearch1(shortTeamName(teamName) || teamName);
   };
+
+  const selectTeam2 = (teamName: string) => {
+    pendingRef.current.second = null;
+    setTeam2Name(teamName);
+    setSearch2(shortTeamName(teamName) || teamName);
+  };
+
+  useEffect(() => {
+    const known = (name: string | null) => {
+      if (!name) return null;
+      const norm = normalizeTeamName(name);
+      return allTeams.find((t) => t.teamName === name || normalizeTeamName(t.teamName) === norm)?.teamName ?? null;
+    };
+    const first = known(pendingRef.current.first);
+    const second = known(pendingRef.current.second);
+    if (first) selectTeam1(first);
+    if (second) selectTeam2(second);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTeams]);
+
+  // Keep the page's address in step, so the comparison on show can be copied as a link.
+  useEffect(() => {
+    writeCompareParams({
+      section: 'comparison',
+      compare: 'team',
+      t1: team1Name || pendingRef.current.first,
+      t2: team2Name || pendingRef.current.second,
+      cat: comparisonCategory === 'Traditional' ? null : comparisonCategory.toLowerCase(),
+      view: view === 'season' ? null : view,
+    });
+  }, [team1Name, team2Name, comparisonCategory, view]);
+  useEffect(() => () => writeCompareParams({ t1: null, t2: null, cat: null, view: null }), []);
+
+  // One-tap matchups for the empty state.
+  const suggestions = useMemo<Suggestion[]>(() => {
+    const out: Suggestion[] = [];
+    const pair = (label: string, a: any, b: any) => {
+      if (!a || !b || a.teamName === b.teamName) return;
+      if (out.some((s) => (s.first === a.teamName && s.second === b.teamName) || (s.first === b.teamName && s.second === a.teamName))) return;
+      out.push({ label, detail: `${shortTeamName(a.teamName)} vs ${shortTeamName(b.teamName)}`, first: a.teamName, second: b.teamName });
+    };
+    const inTable = (standings || [])
+      .map((row) => allTeams.find((t) => normalizeTeamName(t.teamName) === normalizeTeamName(row.team)))
+      .filter(Boolean);
+    pair('Top of the table', inTable[0], inTable[1]);
+    const byScoring = allTeams.slice().sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
+    pair('Top two scoring teams', byScoring[0], byScoring[1]);
+    const defended = allTeams.filter((t) => parseFloat(t.avgOppPoints) > 0).sort((a, b) => parseFloat(a.avgOppPoints) - parseFloat(b.avgOppPoints));
+    pair('Best attack vs best defence', byScoring[0], defended[0]?.teamName === byScoring[0]?.teamName ? defended[1] : defended[0]);
+    return out;
+  }, [allTeams, standings]);
 
   // Build head-to-head data from the two raw arrays
   type TeamH2HGame = {
@@ -215,108 +284,25 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
     };
   }, [team1Raw, team2Raw, team1Name, team2Name]);
 
-  const ComparisonRow = ({
-    label,
-    value1,
-    value2,
-    lowerIsBetter = false
-  }: {
-    label: string;
-    value1: string | number;
-    value2: string | number;
-    lowerIsBetter?: boolean;
-  }) => {
-    const num1 = parseFloat(String(value1));
-    const num2 = parseFloat(String(value2));
-    const t1Better = lowerIsBetter ? num1 < num2 : num1 > num2;
-    const t2Better = lowerIsBetter ? num2 < num1 : num2 > num1;
+  const crest = (name: string, logoUrl: string | null) =>
+    logoUrl ? <img src={logoUrl} alt={`${name} logo`} className="h-[78%] w-[78%] object-contain" /> : undefined;
 
-    return (
-      <tr className="border-b border-gray-100 dark:border-neutral-700">
-        <td className={`py-3 px-4 text-right font-medium ${t1Better ? 'text-orange-600' : t2Better ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
-          {value1}
-        </td>
-        <td className="py-3 px-4 text-center font-semibold text-slate-800 dark:text-white bg-gray-50 dark:bg-neutral-800">
-          {label}
-        </td>
-        <td className={`py-3 px-4 text-left font-medium ${t2Better ? 'text-orange-600' : t1Better ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
-          {value2}
-        </td>
-      </tr>
-    );
-  };
-
-  const renderHeaderRow = (s1: any, s2: any) => (
-    <div className="flex flex-col md:flex-row items-center justify-between mb-6 md:mb-8 gap-4 md:gap-0">
-      <div className="flex flex-col items-center space-y-2 md:space-y-3 w-full md:w-1/3">
-        <div className="w-16 h-16 md:w-32 md:h-32">
-          <TeamLogo
-            teamName={s1.name}
-            leagueId={leagueId}
-            size={64}
-            className="border-2 md:border-4 border-orange-300 shadow-lg md:hidden"
-          />
-          <TeamLogo
-            teamName={s1.name}
-            leagueId={leagueId}
-            size={128}
-            className="border-4 border-orange-300 shadow-lg hidden md:block"
-          />
-        </div>
-        <div className="text-center">
-          <h3 className="text-base md:text-lg font-bold text-slate-800 dark:text-white">{s1.name}</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{s1.games} games</p>
-        </div>
-      </div>
-      <div className="flex items-center justify-center w-full md:w-1/3">
-        <div className="text-2xl md:text-3xl font-black text-orange-500 tracking-wider">VS</div>
-      </div>
-      <div className="flex flex-col items-center space-y-2 md:space-y-3 w-full md:w-1/3">
-        <div className="w-16 h-16 md:w-32 md:h-32">
-          <TeamLogo
-            teamName={s2.name}
-            leagueId={leagueId}
-            size={64}
-            className="border-2 md:border-4 border-slate-300 shadow-lg md:hidden"
-          />
-          <TeamLogo
-            teamName={s2.name}
-            leagueId={leagueId}
-            size={128}
-            className="border-4 border-slate-300 shadow-lg hidden md:block"
-          />
-        </div>
-        <div className="text-center">
-          <h3 className="text-base md:text-lg font-bold text-slate-800 dark:text-white">{s2.name}</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{s2.games} games</p>
-        </div>
-      </div>
-    </div>
+  const renderHeaderRow = (s1: any, s2: any, caption?: string) => (
+    <CompareHeader
+      caption={caption}
+      accent={brandColor}
+      left={{ name: shortTeamName(s1.name) || s1.name, games: s1.games, media: crest(s1.name, team1LogoUrl) }}
+      right={{ name: shortTeamName(s2.name) || s2.name, games: s2.games, media: crest(s2.name, team2LogoUrl) }}
+    />
   );
 
   const renderStatsTable = (s1: any, s2: any) => (
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
-            <th className="py-3 px-4 text-right font-bold text-slate-800 dark:text-white">{s1.name}</th>
-            <th className="py-3 px-4 text-center font-bold text-slate-600 dark:text-slate-300">Stat</th>
-            <th className="py-3 px-4 text-left font-bold text-slate-800 dark:text-white">{s2.name}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {getTeamComparisonRows(comparisonCategory, s1, s2).map((row, index) => (
-            <ComparisonRow
-              key={index}
-              label={row.label}
-              value1={row.value1}
-              value2={row.value2}
-              lowerIsBetter={row.lowerIsBetter}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <CompareRows
+      rows={getTeamComparisonRows(comparisonCategory, s1, s2)}
+      leftName={shortTeamName(s1.name) || s1.name}
+      rightName={shortTeamName(s2.name) || s2.name}
+      accent={brandColor}
+    />
   );
 
   const formatDate = (raw: string | null) => {
@@ -326,372 +312,87 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  // Share-card layout — sized for the wide (1080px) social-friendly capture
-  // surface in ShareableCard. Uses generous logos, full-text team names that
-  // wrap rather than truncate, and a tall stats table so the export reads
-  // cleanly when shared on Instagram / X.
-  const renderShareVsTeam = (s: any, accent: 'orange' | 'slate') => (
-    <div className="flex flex-col items-center gap-3 min-w-0">
-      <div
-        className={`rounded-full bg-white shadow flex items-center justify-center overflow-hidden ${
-          accent === 'orange' ? 'border-4 border-orange-300' : 'border-4 border-slate-300'
-        }`}
-        style={{ width: 140, height: 140, padding: 6 }}
-      >
-        <TeamLogo
-          teamName={s.name}
-          leagueId={leagueId}
-          size={124}
-          className="!w-[124px] !h-[124px]"
-          crossOrigin="anonymous"
-        />
-      </div>
-      <div className="text-center w-full px-1">
-        <div
-          className="font-black text-slate-800"
-          style={{
-            fontSize: 26,
-            lineHeight: 1.15,
-            wordBreak: 'break-word',
-            hyphens: 'auto',
-          }}
-        >
-          {s.name}
-        </div>
-        <div className="text-slate-500 mt-1 font-medium" style={{ fontSize: 15 }}>
-          {s.games} game{s.games !== 1 ? 's' : ''}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderShareVsHeader = (s1: any, s2: any) => (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-5">
-      {renderShareVsTeam(s1, 'orange')}
-      <div
-        className="font-black text-orange-500 tracking-widest self-center"
-        style={{ fontSize: 48 }}
-      >
-        VS
-      </div>
-      {renderShareVsTeam(s2, 'slate')}
-    </div>
-  );
-
-  const renderShareTable = (s1: any, s2: any, captionText?: string) => {
-    const rows = getTeamComparisonRows(comparisonCategory, s1, s2);
-    return (
-      <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-        {captionText && (
-          <div
-            className="text-center font-bold uppercase tracking-widest text-orange-700 bg-orange-50 border-b border-orange-100"
-            style={{ fontSize: 14, padding: '10px 12px', letterSpacing: '0.18em' }}
-          >
-            {captionText}
-          </div>
-        )}
-        <table className="w-full" style={{ fontSize: 18 }}>
-          <thead className="bg-slate-50">
-            <tr>
-              <th
-                className="text-right font-black text-slate-800 align-bottom"
-                style={{ padding: '14px 16px', width: '38%', wordBreak: 'break-word', lineHeight: 1.15, fontSize: 18 }}
-              >
-                {s1.name}
-              </th>
-              <th
-                className="text-center font-bold text-slate-500 uppercase tracking-wider align-bottom"
-                style={{ padding: '14px 8px', fontSize: 12, letterSpacing: '0.16em' }}
-              >
-                Stat
-              </th>
-              <th
-                className="text-left font-black text-slate-800 align-bottom"
-                style={{ padding: '14px 16px', width: '38%', wordBreak: 'break-word', lineHeight: 1.15, fontSize: 18 }}
-              >
-                {s2.name}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => {
-              const num1 = parseFloat(String(row.value1));
-              const num2 = parseFloat(String(row.value2));
-              const t1Better = row.lowerIsBetter ? num1 < num2 : num1 > num2;
-              const t2Better = row.lowerIsBetter ? num2 < num1 : num2 > num1;
-              return (
-                <tr
-                  key={i}
-                  className={`border-t border-slate-100 ${i % 2 === 1 ? 'bg-slate-50/60' : ''}`}
-                >
-                  <td
-                    className={`text-right tabular-nums font-bold ${t1Better ? 'text-orange-600' : 'text-slate-700'}`}
-                    style={{ padding: '8px 16px', fontSize: 20 }}
-                  >
-                    {row.value1}
-                  </td>
-                  <td
-                    className="text-center font-semibold text-slate-600 uppercase tracking-wider"
-                    style={{ padding: '8px 8px', fontSize: 12, letterSpacing: '0.16em' }}
-                  >
-                    {row.label}
-                  </td>
-                  <td
-                    className={`text-left tabular-nums font-bold ${t2Better ? 'text-orange-600' : 'text-slate-700'}`}
-                    style={{ padding: '8px 16px', fontSize: 20 }}
-                  >
-                    {row.value2}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
+  // The downloadable card: drawn on a canvas in the Swish Social look, from whichever view is on show.
+  const generateCardBlob = async () => {
+    const inH2H = view === 'h2h' && h2h.team1Stats && h2h.team2Stats;
+    const s1 = inH2H ? h2h.team1Stats : team1Stats;
+    const s2 = inH2H ? h2h.team2Stats : team2Stats;
+    // Each half of the card in its own club's colour.
+    const [leftColour, rightColour] = await Promise.all([clubColour(s1.name, leagueId), clubColour(s2.name, leagueId)]);
+    return generateComparisonCardBlob({
+      split: { left: leftColour, right: rightColour },
+      kind: 'team',
+      left: { name: shortTeamName(s1.name) || s1.name, games: s1.games, logoUrl: team1LogoUrl },
+      right: { name: shortTeamName(s2.name) || s2.name, games: s2.games, logoUrl: team2LogoUrl },
+      rows: scoreRows(getTeamComparisonRows(comparisonCategory, s1, s2)).map((r) => ({ ...r, value1: String(r.value1), value2: String(r.value2) })),
+      banner: `${inH2H ? 'Head-to-head only' : 'Season averages'} · ${comparisonCategory}`,
+      // In the head-to-head view the middle of the card carries the series score.
+      centre: inH2H ? { text: `${h2h.team1Wins}–${h2h.team2Wins}`, caption: 'Series' } : undefined,
+      results: inH2H
+        ? h2h.games.map((g) => {
+            const [home, away] = g.homeIsTeam1 ? [s1.name, s2.name] : [s2.name, s1.name];
+            const [homeScore, awayScore] = g.homeIsTeam1 ? [g.score1, g.score2] : [g.score2, g.score1];
+            return `${formatDate(g.date)} · ${shortTeamName(home) || home} ${homeScore}–${awayScore} ${shortTeamName(away) || away}`;
+          })
+        : undefined,
+      leagueName: leagueName || '',
+      leagueLogoUrl,
+      primaryHex: brandColor || '#f97316',
+    });
   };
 
-  const renderShareContent = () => {
-    if (!team1Stats || !team2Stats) return null;
-    // Body fills the 4:5 frame: roughly 1080w × 982h after header/footer.
-    const bodyMinHeight = 980;
-    if (view === 'season') {
-      return (
-        <div className="flex flex-col gap-7" style={{ minHeight: bodyMinHeight }}>
-          {renderShareVsHeader(team1Stats, team2Stats)}
-          {renderShareTable(team1Stats, team2Stats, `${comparisonCategory} • Season Averages`)}
-        </div>
-      );
-    }
-    // Head-to-Head
-    if (h2h.games.length === 0) {
-      return (
-        <div className="flex flex-col gap-7" style={{ minHeight: bodyMinHeight }}>
-          {renderShareVsHeader(team1Stats, team2Stats)}
-          <div className="rounded-xl bg-slate-50 border border-slate-200 text-center" style={{ padding: 32 }}>
-            <p className="font-bold text-slate-700" style={{ fontSize: 22 }}>
-              No head-to-head matchups yet
-            </p>
-            <p className="text-slate-500 mt-2" style={{ fontSize: 16 }}>
-              {team1Stats.name} and {team2Stats.name} haven't played each other.
-            </p>
-          </div>
-        </div>
-      );
-    }
-    const recordText = h2h.team1Wins > h2h.team2Wins
-      ? `${team1Stats.name} leads ${h2h.team1Wins}-${h2h.team2Wins}`
-      : h2h.team2Wins > h2h.team1Wins
-        ? `${team2Stats.name} leads ${h2h.team2Wins}-${h2h.team1Wins}`
-        : `Series tied ${h2h.team1Wins}-${h2h.team2Wins}`;
-    const recentGames = h2h.games.slice(0, 6);
-    return (
-      <div className="flex flex-col gap-6" style={{ minHeight: bodyMinHeight }}>
-        {renderShareVsHeader(team1Stats, team2Stats)}
-        <div
-          className="text-center rounded-xl bg-orange-50 border border-orange-200"
-          style={{ padding: '18px 24px' }}
-        >
-          <div
-            className="uppercase tracking-widest text-slate-500 font-bold"
-            style={{ fontSize: 13, letterSpacing: '0.2em' }}
-          >
-            Series Record
-          </div>
-          <div className="font-black text-slate-800 mt-1.5" style={{ fontSize: 30, lineHeight: 1.15, wordBreak: 'break-word' }}>
-            {recordText}
-          </div>
-          <div className="text-slate-500 mt-1" style={{ fontSize: 14 }}>
-            {h2h.games.length} game{h2h.games.length !== 1 ? 's' : ''} played
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-          <div
-            className="text-center font-bold uppercase tracking-widest text-orange-700 bg-orange-50 border-b border-orange-100"
-            style={{ fontSize: 13, padding: '10px 12px', letterSpacing: '0.18em' }}
-          >
-            Recent Matchups
-          </div>
-          <table className="w-full" style={{ fontSize: 16 }}>
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="text-left font-bold text-slate-600" style={{ padding: '10px 14px' }}>Date</th>
-                <th className="text-center font-bold text-slate-600" style={{ padding: '10px 14px' }}>Score</th>
-                <th className="text-left font-bold text-slate-600" style={{ padding: '10px 14px' }}>Winner</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentGames.map((g, idx) => {
-                const scoreText = g.homeIsTeam1
-                  ? `${g.score1} - ${g.score2}`
-                  : `${g.score2} - ${g.score1}`;
-                return (
-                  <tr key={g.game_key || idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/60' : ''}`}>
-                    <td className="text-slate-700 whitespace-nowrap" style={{ padding: '10px 14px' }}>{formatDate(g.date)}</td>
-                    <td className="text-center font-bold tabular-nums text-slate-800" style={{ padding: '10px 14px', fontSize: 18 }}>{scoreText}</td>
-                    <td className="font-semibold text-orange-600" style={{ padding: '10px 14px', wordBreak: 'break-word' }}>{g.winner ?? 'Tie'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {h2h.games.length > recentGames.length && (
-            <div className="text-center text-slate-500 bg-slate-50" style={{ fontSize: 13, padding: '8px 12px' }}>
-              +{h2h.games.length - recentGames.length} more game{h2h.games.length - recentGames.length !== 1 ? 's' : ''}
-            </div>
-          )}
-        </div>
-        {h2h.team1Stats && h2h.team2Stats && (
-          renderShareTable(h2h.team1Stats, h2h.team2Stats, `${comparisonCategory} • H2H Only`)
-        )}
-      </div>
-    );
+  const clearTeam1 = () => {
+    setTeam1Name("");
+    setTeam1Stats(null);
+    setTeam1Raw([]);
   };
+  const clearTeam2 = () => {
+    setTeam2Name("");
+    setTeam2Stats(null);
+    setTeam2Raw([]);
+  };
+  const cell = "py-2 px-3";
+  const short = (name: string) => shortTeamName(name) || name;
 
   return (
-    <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-6">
-      <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-6">Team Comparison</h2>
-
-      {/* View Toggle */}
-      <div className="mb-6">
-        <Tabs value={view} onValueChange={(v) => setView(v as 'season' | 'h2h')}>
-          <TabsList className="grid w-full md:w-96 grid-cols-2">
-            <TabsTrigger value="season" data-testid="tab-team-season">Season Averages</TabsTrigger>
-            <TabsTrigger value="h2h" data-testid="tab-team-h2h">Head-to-Head</TabsTrigger>
-          </TabsList>
-        </Tabs>
+    <div className="ch-card p-4 md:p-6" data-testid="team-comparison">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Team comparison</h2>
+        {team1Stats && team2Stats && <CopyLinkButton testId="button-team-compare-link" />}
       </div>
 
-      {/* Category Selector */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Comparison Category
-        </label>
-        <Select
-          value={comparisonCategory}
-          onValueChange={(value) => setComparisonCategory(value as typeof comparisonCategory)}
-        >
-          <SelectTrigger className="w-full md:w-64 bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500">
-            <SelectValue placeholder="Select category" />
-          </SelectTrigger>
-          <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-            <SelectItem value="Traditional">Traditional</SelectItem>
-            <SelectItem value="Advanced">Advanced</SelectItem>
-            <SelectItem value="Scoring">Scoring</SelectItem>
-            <SelectItem value="Misc">Misc</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <ComparePicker
+          label="Team 1"
+          search={search1}
+          onSearch={setSearch1}
+          options={optionsFor(search1, short(team1Name))}
+          onSelect={selectTeam1}
+          onClear={clearTeam1}
+          placeholder="Search for a team..."
+          testId="team1"
+        />
+        <ComparePicker
+          label="Team 2"
+          search={search2}
+          onSearch={setSearch2}
+          options={optionsFor(search2, short(team2Name))}
+          onSelect={selectTeam2}
+          onClear={clearTeam2}
+          placeholder="Search for a team..."
+          testId="team2"
+        />
       </div>
 
-      {/* Team Selection */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="relative" ref={dropdown1Ref}>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Team 1
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={search1}
-              onChange={(e) => {
-                setSearch1(e.target.value);
-                setShowDropdown1(true);
-                if (!e.target.value) {
-                  setTeam1Name("");
-                  setTeam1Stats(null);
-                  setTeam1Raw([]);
-                }
-              }}
-              onFocus={() => setShowDropdown1(true)}
-              placeholder="Search for a team..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              data-testid="input-team1-search"
-            />
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-          </div>
-          {showDropdown1 && search1 && filteredTeams1.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-              {filteredTeams1.map((team, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => selectTeam1(team)}
-                  className="px-4 py-2 hover:bg-orange-50 dark:hover:bg-neutral-700 cursor-pointer border-b border-gray-100 dark:border-neutral-700 last:border-b-0"
-                  data-testid={`option-team1-${idx}`}
-                >
-                  <div className="font-medium text-slate-800 dark:text-white">{team.teamName}</div>
-                  {team.age_group && (
-                    <div className="text-xs text-slate-600 dark:text-slate-400">{team.age_group}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="relative" ref={dropdown2Ref}>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Team 2
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              value={search2}
-              onChange={(e) => {
-                setSearch2(e.target.value);
-                setShowDropdown2(true);
-                if (!e.target.value) {
-                  setTeam2Name("");
-                  setTeam2Stats(null);
-                  setTeam2Raw([]);
-                }
-              }}
-              onFocus={() => setShowDropdown2(true)}
-              placeholder="Search for a team..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-              data-testid="input-team2-search"
-            />
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-          </div>
-          {showDropdown2 && search2 && filteredTeams2.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-              {filteredTeams2.map((team, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => selectTeam2(team)}
-                  className="px-4 py-2 hover:bg-orange-50 dark:hover:bg-neutral-700 cursor-pointer border-b border-gray-100 dark:border-neutral-700 last:border-b-0"
-                  data-testid={`option-team2-${idx}`}
-                >
-                  <div className="font-medium text-slate-800 dark:text-white">{team.teamName}</div>
-                  {team.age_group && (
-                    <div className="text-xs text-slate-600 dark:text-slate-400">{team.age_group}</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+        <ChipRow label="View" options={VIEW_OPTIONS} value={view} onChange={setView} testIdPrefix="tab-team" />
+        <ChipRow label="Stat category" options={CATEGORY_OPTIONS} value={comparisonCategory} onChange={setComparisonCategory} testIdPrefix="category-team" />
       </div>
 
-      {/* Comparison Results */}
       {isLoading ? (
-        <div className="text-center py-8">
-          <div className="inline-block w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">Loading comparison...</p>
-        </div>
+        <CompareLoading />
       ) : fetchError ? (
-        <div className="text-center py-10 px-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg" data-testid="error-team-compare">
-          <p className="text-base font-semibold text-red-700 dark:text-red-300">{fetchError}</p>
-          {team1Name && team2Name && (
-            <button
-              type="button"
-              onClick={() => handleCompare()}
-              className="mt-3 inline-flex items-center px-4 py-2 rounded-md bg-orange-500 text-white text-sm font-medium hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-              data-testid="button-team-compare-retry"
-            >
-              Try again
-            </button>
-          )}
-        </div>
+        <CompareError message={fetchError} onRetry={team1Name && team2Name ? () => handleCompare() : undefined} testId="error-team-compare" />
       ) : team1Stats && team2Stats ? (
         <ShareableCard
           title={view === 'season' ? 'Season Averages' : 'Head-to-Head'}
@@ -702,81 +403,69 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
             primaryColor: brandColor,
           }}
           shareCaption={comparisonCategory.toUpperCase()}
-          shareContent={renderShareContent()}
+          generateCardBlob={generateCardBlob}
+          // The image is drawn by generateCardBlob, so the hidden capture layout isn't needed.
+          shareContent={<></>}
           teamLogos={[
             { name: team1Stats.name, logoUrl: team1LogoUrl },
             { name: team2Stats.name, logoUrl: team2LogoUrl },
           ]}
           wide
         >
-        <div className="max-w-5xl mx-auto pt-6">
-          <Tabs value={view} onValueChange={(v) => setView(v as 'season' | 'h2h')}>
-            <TabsContent value="season" className="mt-0">
+        <div className="mx-auto max-w-4xl pt-6">
+          {view === 'season' ? (
+            <>
               {renderHeaderRow(team1Stats, team2Stats)}
               {renderStatsTable(team1Stats, team2Stats)}
-              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-neutral-700">
-                <div className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                  <span className="text-orange-600 font-semibold">Orange</span> = Better stat
-                  <span className="mx-2">•</span>
-                  <span className="text-slate-600 dark:text-slate-400">Gray</span> = Lower stat
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="h2h" className="mt-0" data-testid="content-team-h2h">
+            </>
+          ) : (
+            <div data-testid="content-team-h2h">
               {h2h.games.length === 0 ? (
-                <div className="text-center py-12 px-4 bg-gray-50 dark:bg-neutral-800 rounded-lg">
-                  <p className="text-base font-semibold text-slate-700 dark:text-slate-200">
-                    No head-to-head matchups yet
-                  </p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    {team1Stats.name} and {team2Stats.name} haven't played each other in this league.
-                  </p>
-                </div>
+                <CompareEmpty title="No head-to-head matchups yet">
+                  {short(team1Stats.name)} and {short(team2Stats.name)} haven't played each other in this league.
+                </CompareEmpty>
               ) : (
                 <>
-                  {/* Series record */}
-                  <div className="mb-6 text-center">
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">Series Record</p>
-                    <p className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white" data-testid="text-team-h2h-record">
+                  <div className="mb-5 text-center">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--ch-muted)]">Series record</p>
+                    <p className="mt-1 text-2xl font-black text-[color:var(--ch-text)] md:text-3xl" data-testid="text-team-h2h-record">
                       {h2h.team1Wins > h2h.team2Wins ? (
-                        <><span className="text-orange-600">{team1Stats.name}</span> leads {h2h.team1Wins}-{h2h.team2Wins}</>
+                        <>{short(team1Stats.name)} leads {h2h.team1Wins}-{h2h.team2Wins}</>
                       ) : h2h.team2Wins > h2h.team1Wins ? (
-                        <><span className="text-orange-600">{team2Stats.name}</span> leads {h2h.team2Wins}-{h2h.team1Wins}</>
+                        <>{short(team2Stats.name)} leads {h2h.team2Wins}-{h2h.team1Wins}</>
                       ) : (
                         <>Series tied {h2h.team1Wins}-{h2h.team2Wins}</>
                       )}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="mt-1 text-xs text-[color:var(--ch-muted)]">
                       {h2h.games.length} game{h2h.games.length !== 1 ? 's' : ''} played
                     </p>
                   </div>
 
-                  {/* Matchup list */}
-                  <div className="mb-8 overflow-x-auto">
+                  <div className="mb-7 overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
-                          <th className="py-2 px-3 text-left font-semibold text-slate-600 dark:text-slate-300">Date</th>
-                          <th className="py-2 px-3 text-left font-semibold text-slate-600 dark:text-slate-300">Matchup</th>
-                          <th className="py-2 px-3 text-center font-semibold text-slate-600 dark:text-slate-300">Score</th>
-                          <th className="py-2 px-3 text-left font-semibold text-slate-600 dark:text-slate-300">Winner</th>
+                        <tr className="border-b border-[color:var(--ch-border-strong)] text-xs text-[color:var(--ch-text-2)]">
+                          <th className={`${cell} text-left font-semibold`}>Date</th>
+                          <th className={`${cell} text-left font-semibold`}>Matchup</th>
+                          <th className={`${cell} text-center font-semibold`}>Score</th>
+                          <th className={`${cell} text-left font-semibold`}>Winner</th>
                         </tr>
                       </thead>
                       <tbody>
                         {h2h.games.map((g, idx) => {
                           const matchupText = g.homeIsTeam1
-                            ? `${team1Stats.name} (H) vs ${team2Stats.name} (A)`
-                            : `${team2Stats.name} (H) vs ${team1Stats.name} (A)`;
+                            ? `${short(team1Stats.name)} (H) vs ${short(team2Stats.name)} (A)`
+                            : `${short(team2Stats.name)} (H) vs ${short(team1Stats.name)} (A)`;
                           const scoreText = g.homeIsTeam1
                             ? `${g.score1} - ${g.score2}`
                             : `${g.score2} - ${g.score1}`;
                           return (
-                            <tr key={g.game_key || idx} className="border-b border-gray-100 dark:border-neutral-700" data-testid={`row-team-h2h-game-${idx}`}>
-                              <td className="py-2 px-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">{formatDate(g.date)}</td>
-                              <td className="py-2 px-3 text-slate-700 dark:text-slate-300">{matchupText}</td>
-                              <td className="py-2 px-3 text-center font-semibold tabular-nums text-slate-800 dark:text-white">{scoreText}</td>
-                              <td className="py-2 px-3 font-medium text-orange-600">{g.winner ?? 'Tie'}</td>
+                            <tr key={g.game_key || idx} className="border-b border-[color:var(--ch-border)]" data-testid={`row-team-h2h-game-${idx}`}>
+                              <td className={`${cell} whitespace-nowrap text-[color:var(--ch-text-2)]`}>{formatDate(g.date)}</td>
+                              <td className={`${cell} text-[color:var(--ch-text-2)]`}>{matchupText}</td>
+                              <td className={`${cell} ch-num text-center font-semibold text-[color:var(--ch-text)]`}>{scoreText}</td>
+                              <td className={`${cell} font-medium text-[color:var(--ch-text)]`}>{g.winner ? short(g.winner) : 'Tie'}</td>
                             </tr>
                           );
                         })}
@@ -784,38 +473,32 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
                     </table>
                   </div>
 
-                  {/* H2H averages */}
                   {h2h.team1Stats && h2h.team2Stats && (
                     <>
-                      <div className="mb-3 text-center">
-                        <p className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                          In head-to-head games only
-                        </p>
-                      </div>
-                      {renderHeaderRow(h2h.team1Stats, h2h.team2Stats)}
+                      {renderHeaderRow(h2h.team1Stats, h2h.team2Stats, 'In head-to-head games only')}
                       {renderStatsTable(h2h.team1Stats, h2h.team2Stats)}
-                      <div className="mt-8 pt-6 border-t border-gray-200 dark:border-neutral-700">
-                        <div className="text-xs text-slate-500 dark:text-slate-400 text-center">
-                          <span className="text-orange-600 font-semibold">Orange</span> = Better stat
-                          <span className="mx-2">•</span>
-                          <span className="text-slate-600 dark:text-slate-400">Gray</span> = Lower stat
-                        </div>
-                      </div>
                     </>
                   )}
                 </>
               )}
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
         </div>
         </ShareableCard>
       ) : (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          <p className="text-sm">Search and select two teams to compare their stats</p>
-          {allTeams.length === 0 && (
-            <p className="text-xs text-orange-500 mt-2">Loading teams...</p>
-          )}
-        </div>
+        <Suggestions
+          loading={allTeams.length === 0}
+          intro={
+            team1Name || team2Name
+              ? "Pick a second team to see the comparison."
+              : "Pick two teams above, or start with one of these."
+          }
+          suggestions={team1Name || team2Name ? [] : suggestions}
+          onPick={(s) => {
+            selectTeam1(s.first);
+            selectTeam2(s.second);
+          }}
+        />
       )}
     </div>
   );

@@ -76,7 +76,7 @@ const ROW_H = 89;
  * player rather than along straight sides. The photo is free to be zoomed out or nudged;
  * the haze and the falloff follow it.
  */
-function drawHeroPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, focusY: number, framing: PhotoFraming, theme: Theme) {
+export function drawHeroPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, focusY: number, framing: PhotoFraming, theme: Theme) {
   const x = -40;
   const w = 680;
   const h = 716;
@@ -122,7 +122,7 @@ function drawHeroPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, foc
 }
 
 /** A soft pool of shadow under the hero's name and number, so they hold up over the tail of a bright photo. */
-function drawTextShade(ctx: CanvasRenderingContext2D) {
+export function drawTextShade(ctx: CanvasRenderingContext2D) {
   const cx = (HERO_TEXT_X + CARD_W - SIDE) / 2 + 20;
   const cy = (HERO_TOP + HERO_BOTTOM) / 2;
   ctx.save();
