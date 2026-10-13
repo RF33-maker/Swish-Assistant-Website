@@ -194,6 +194,19 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
           ? identityGame.home_team_id
           : identityGame.away_team_id
         : null;
+      // Schedule rows can still point at the team's id from an earlier season
+      // (fixtures are created before a game is played); only trust the id if it
+      // is a team in the season being viewed, else the profile reads as empty
+      // and falls back to last season's squad.
+      if (resolvedTeamId) {
+        const { data: seasonTeam } = await supabase
+          .from("teams")
+          .select("team_id")
+          .eq("team_id", resolvedTeamId)
+          .in("league_id", effectiveLeagueIds)
+          .limit(1);
+        if (!seasonTeam || seasonTeam.length === 0) resolvedTeamId = null;
+      }
       if (!resolvedTeamId) {
         const { data: linkedStats } = await supabase
           .from("player_stats")
