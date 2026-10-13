@@ -70,6 +70,26 @@ export async function saveArticle(id: string | null, payload: ArticlePayload): P
   return json as EditableArticle;
 }
 
+export interface WeekendReportRun {
+  from: string;
+  to: string;
+  results: { competition: string; slug: string; games: number; outcome: "created" | "updated" | "skipped"; published: boolean; note?: string }[];
+}
+
+/** Builds (or refreshes) the weekend match reports for the weekend just gone. New ones are saved as drafts. */
+export async function runWeekendReports(): Promise<WeekendReportRun> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  const res = await fetch("/api/admin/weekend-reports", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: "{}",
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || "Couldn't build the weekend reports.");
+  return json as WeekendReportRun;
+}
+
 export async function deleteArticle(id: string) {
   const { data: article } = await supabase.from("news_articles").select("image_url, content").eq("id", id).maybeSingle();
   // Delete the row first: RLS returns no error when it blocks a delete, so

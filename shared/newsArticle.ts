@@ -1,4 +1,5 @@
 import { gamePath } from "./seo";
+import { sanitizeWeekendReport, weekendReportToHtml, weekendReportToPlainText } from "./weekendReport";
 
 /**
  * What a news article can contain, shared by the editor, the public article
@@ -150,9 +151,20 @@ export function isArticleImageSrc(src: unknown): src is string {
   );
 }
 
+/**
+ * A cover image is an uploaded news image, or a competition's own banner (the
+ * automatic weekend reports use it). Inline images stay news-bucket only.
+ */
+export function isCoverImageSrc(src: unknown): src is string {
+  return (
+    isArticleImageSrc(src) ||
+    (typeof src === "string" && /^https:\/\/[a-z0-9-]+\.supabase\.co\/storage\/v1\/object\/public\/league-banners\/[\w./%-]+$/i.test(src))
+  );
+}
+
 const INLINE_CONTAINERS = new Set(["paragraph", "heading"]);
 const BLOCK_CHILDREN: Record<string, Set<string>> = {
-  doc: new Set(["paragraph", "heading", "bulletList", "orderedList", "blockquote", "horizontalRule", "figure", "gameEmbed"]),
+  doc: new Set(["paragraph", "heading", "bulletList", "orderedList", "blockquote", "horizontalRule", "figure", "gameEmbed", "weekendReport"]),
   blockquote: new Set(["paragraph", "bulletList", "orderedList"]),
   bulletList: new Set(["listItem"]),
   orderedList: new Set(["listItem"]),
@@ -235,6 +247,11 @@ export function sanitizeArticleDoc(input: unknown): ArticleDoc | null {
       };
     }
 
+    if (node.type === "weekendReport") {
+      const data = sanitizeWeekendReport(node.attrs?.data);
+      return data ? { type: "weekendReport", attrs: { data } } : null;
+    }
+
     const content = children.map((child) => block(child, node.type, depth + 1)).filter((n): n is ArticleNode => !!n);
     if (!content.length) return null;
     const out: ArticleNode = { type: node.type, content };
@@ -300,6 +317,11 @@ export function articleDocToPlainText(doc: ArticleDoc | null | undefined): strin
         case "gameEmbed":
           blocks.push(gameEmbedLabel(node.attrs));
           break;
+        case "weekendReport": {
+          const data = sanitizeWeekendReport(node.attrs?.data);
+          if (data) blocks.push(weekendReportToPlainText(data));
+          break;
+        }
       }
     });
   };
@@ -392,6 +414,10 @@ export function articleDocToHtml(doc: ArticleDoc | null | undefined): string {
         return node.attrs?.gameKey
           ? `<p><a href="${escapeHtml(gamePath(node.attrs.competitionSlug, String(node.attrs.gameKey)))}">${escapeHtml(gameEmbedLabel(node.attrs))}</a></p>`
           : "";
+      case "weekendReport": {
+        const data = sanitizeWeekendReport(node.attrs?.data);
+        return data ? weekendReportToHtml(data) : "";
+      }
       default:
         return "";
     }

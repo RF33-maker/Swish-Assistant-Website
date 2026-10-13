@@ -22,7 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { isImageFile, uploadNewsImage } from "@/lib/newsArticles";
 import { isSafeArticleHref, type ArticleDoc } from "@shared/newsArticle";
-import { Figure, GameEmbedNode } from "./extensions";
+import { Figure, GameEmbedNode, WeekendReportNode } from "./extensions";
 import GamePickerDialog from "./GamePickerDialog";
 import type { PickedGame } from "./tagSearch";
 
@@ -114,6 +114,7 @@ export default function ArticleEditor({
       Placeholder.configure({ placeholder: "Tell the story…" }),
       Figure,
       GameEmbedNode,
+      WeekendReportNode,
     ],
     content: initialContent,
     editorProps: {

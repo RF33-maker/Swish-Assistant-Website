@@ -4,6 +4,8 @@ import { Trash2 } from "lucide-react";
 import GameEmbed from "@/components/GameEmbed";
 import { gamePath } from "@shared/seo";
 import { gameEmbedLabel } from "@shared/newsArticle";
+import WeekendReportBlock from "@/components/news/WeekendReportBlock";
+import { sanitizeWeekendReport } from "@shared/weekendReport";
 
 /**
  * The two article blocks that aren't plain text: an image with its caption,
@@ -213,5 +215,63 @@ export const GameEmbedNode = Node.create({
         ({ commands }) =>
           commands.insertContent({ type: this.name, attrs }),
     };
+  },
+});
+
+function WeekendReportView({ node, deleteNode, selected }: NodeViewProps) {
+  const data = sanitizeWeekendReport(node.attrs.data);
+  return (
+    <NodeViewWrapper className={`group relative ${selected ? "ProseMirror-selectednode" : ""}`} data-drag-handle>
+      <div
+        contentEditable={false}
+        // The report is shown as readers see it; its links would leave the editor, so they're held back here.
+        onClickCapture={(e) => {
+          if ((e.target as HTMLElement).closest("a")) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+      >
+        <div className="mb-3 rounded-lg bg-[color:var(--ch-surface-2)] py-2 pl-3 pr-12 text-[12px] text-[color:var(--ch-text-2)]">
+          Automatic weekend report, built from the box scores and refreshed for you. It can't be edited here: add your own words above or below it.
+        </div>
+        {data ? (
+          <WeekendReportBlock data={data} />
+        ) : (
+          <div className="rounded-xl border border-dashed border-[color:var(--ch-border-strong)] px-4 py-5 text-sm text-[color:var(--ch-text-2)]">
+            This report's data couldn't be read.
+          </div>
+        )}
+      </div>
+      <RemoveBlockButton label="Remove report" onClick={deleteNode} />
+    </NodeViewWrapper>
+  );
+}
+
+/**
+ * The automatic weekend report. It is kept in the document so that opening a
+ * report in the editor and saving it doesn't drop it, but its contents are
+ * not editable: the generator owns them (server/weekendReports.ts).
+ */
+export const WeekendReportNode = Node.create({
+  name: "weekendReport",
+  group: "block",
+  atom: true,
+  draggable: true,
+
+  addAttributes() {
+    return { data: { default: null, rendered: false } };
+  },
+
+  parseHTML() {
+    return [{ tag: "div[data-weekend-report]", getAttrs: () => false }];
+  },
+
+  renderHTML() {
+    return ["div", mergeAttributes({ "data-weekend-report": "" }), "Weekend match report"];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(WeekendReportView);
   },
 });
