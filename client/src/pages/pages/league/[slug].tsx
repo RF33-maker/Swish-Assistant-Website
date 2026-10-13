@@ -5974,7 +5974,7 @@ export default function LeaguePage() {
                           leagueName={displayLeagueName || 'League Leaders'}
                           contextLabel={contextLabel || baseContextFallback}
                           brandColor={brandColorHex}
-                          leagueLogoUrl={displayLogoUrl}
+                          leagueLogoUrl={cardLogoUrl}
                           footnote={footnote}
                           fileSlug={`league-${slug}-${subject}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
                         >
@@ -6551,7 +6551,7 @@ export default function LeaguePage() {
                         leagueName={displayLeagueName || 'League Leaders'}
                         contextLabel={quickContextLabel}
                         brandColor={brandColorHex}
-                        leagueLogoUrl={displayLogoUrl}
+                        leagueLogoUrl={cardLogoUrl}
                         footnote={quickFootnote}
                         fileSlug={`league-${slug}-quick-league-leaders`}
                       >

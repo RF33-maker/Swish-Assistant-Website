@@ -481,6 +481,35 @@ function isLightLogo(img: HTMLImageElement): boolean {
   return light;
 }
 
+/** A photo cropped to a circle with a ring round it, kept towards the top of the picture where the face is. */
+export function drawFace(ctx: CanvasRenderingContext2D, img: HTMLImageElement, cx: number, cy: number, r: number, ring: string) {
+  const scale = Math.max((r * 2) / img.naturalWidth, (r * 2) / img.naturalHeight);
+  const dw = img.naturalWidth * scale;
+  const dh = img.naturalHeight * scale;
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.5)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 10;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = "#15100f";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(img, cx - dw / 2, cy - r - (dh - r * 2) * 0.12, dw, dh);
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = ring;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** A club logo on a clean disc, so any crest reads on the dark card whatever its own colours. */
 export function drawCrest(
   ctx: CanvasRenderingContext2D,
