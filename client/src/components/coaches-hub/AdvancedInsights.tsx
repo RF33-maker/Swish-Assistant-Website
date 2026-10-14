@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LineChart, Users2, Activity, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { bestPlayerName, canonicalLineupKey, playerNameKey } from '@shared/playerNameKey';
 
 interface Props {
   leagueId: string;
@@ -56,6 +57,8 @@ const TIME_RANGE_OPTIONS: { key: TimeRange; label: string }[] = [
 interface LineupAgg {
   lineupKey: string;
   players: string[];
+  /** Every spelling seen for each player in this lineup, by player name key — used to pick the fullest name to show. */
+  variants?: Map<string, Set<string>>;
   pointsFor: number;
   pointsAgainst: number;
   possessionsFor: number;
@@ -232,55 +235,76 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
         minutesQuery = minutesQuery.in('game_key', recentGameKeys);
       }
 
-      const [lineupRes, onCourtRes, minutesRes] = await Promise.all([lineupQuery, onCourtQuery, minutesQuery]);
+      // The team's roster, so a player the play-by-play only knows as "M. Ball" still shows
+      // under the full name the box score uses ("Marlee Ann Ball").
+      let rosterQuery = supabase.from('players').select('team_id, full_name').limit(1000);
+      rosterQuery = teamId ? rosterQuery.eq('team_id', teamId) : rosterQuery.eq('league_id', leagueId);
+
+      const [lineupRes, onCourtRes, minutesRes, rosterRes] = await Promise.all([lineupQuery, onCourtQuery, minutesQuery, rosterQuery]);
 
       if (cancelled) return;
 
+      const rosterNames = new Map<string, string[]>();
+      ((rosterRes.data || []) as { team_id: string | null; full_name: string | null }[]).forEach(p => {
+        const k = playerNameKey(p.full_name);
+        if (!k || !p.full_name) return;
+        const mapKey = `${p.team_id ?? ''}|${k}`;
+        rosterNames.set(mapKey, [...(rosterNames.get(mapKey) ?? []), p.full_name]);
+      });
+
       // ── Lineups: aggregate stints sharing the same 5-man lineup ──────────
+      // The same person can have a record per spelling ("Dzana Crnac" in the box score,
+      // "D. Crnac" in the play-by-play), so lineup_key — built from player ids — splits one
+      // five into several. Group by name instead, and fall back to lineup_key for any row
+      // whose names can't identify five distinct people.
       const lineupMap = new Map<string, LineupAgg>();
       ((lineupRes.data || []) as LineupRow[]).forEach(row => {
         if (!row.lineup_key) return;
-        const existing = lineupMap.get(row.lineup_key);
-        if (existing) {
-          existing.pointsFor += row.points_for ?? 0;
-          existing.pointsAgainst += row.points_against ?? 0;
-          existing.possessionsFor += row.possessions_for ?? 0;
-          existing.possessionsAgainst += row.possessions_against ?? 0;
-          existing.fg2Made += row.fg2_made ?? 0;
-          existing.fg2Attempted += row.fg2_attempted ?? 0;
-          existing.fg3Made += row.fg3_made ?? 0;
-          existing.fg3Attempted += row.fg3_attempted ?? 0;
-          existing.ftMade += row.ft_made ?? 0;
-          existing.ftAttempted += row.ft_attempted ?? 0;
-          existing.oreb += row.oreb ?? 0;
-          existing.dreb += row.dreb ?? 0;
-          existing.assists += row.assists ?? 0;
-          existing.turnovers += row.turnovers ?? 0;
-          existing.steals += row.steals ?? 0;
-          existing.blocks += row.blocks ?? 0;
-          existing.stints += 1;
-        } else {
-          lineupMap.set(row.lineup_key, {
-            lineupKey: row.lineup_key,
+        const groupKey = canonicalLineupKey(row.team_id, row.lineup_names) ?? row.lineup_key;
+        let agg = lineupMap.get(groupKey);
+        if (!agg) {
+          agg = {
+            lineupKey: groupKey,
             players: row.lineup_names || [],
-            pointsFor: row.points_for ?? 0,
-            pointsAgainst: row.points_against ?? 0,
-            possessionsFor: row.possessions_for ?? 0,
-            possessionsAgainst: row.possessions_against ?? 0,
-            fg2Made: row.fg2_made ?? 0,
-            fg2Attempted: row.fg2_attempted ?? 0,
-            fg3Made: row.fg3_made ?? 0,
-            fg3Attempted: row.fg3_attempted ?? 0,
-            ftMade: row.ft_made ?? 0,
-            ftAttempted: row.ft_attempted ?? 0,
-            oreb: row.oreb ?? 0,
-            dreb: row.dreb ?? 0,
-            assists: row.assists ?? 0,
-            turnovers: row.turnovers ?? 0,
-            steals: row.steals ?? 0,
-            blocks: row.blocks ?? 0,
-            stints: 1,
+            variants: new Map(),
+            pointsFor: 0, pointsAgainst: 0, possessionsFor: 0, possessionsAgainst: 0,
+            fg2Made: 0, fg2Attempted: 0, fg3Made: 0, fg3Attempted: 0, ftMade: 0, ftAttempted: 0,
+            oreb: 0, dreb: 0, assists: 0, turnovers: 0, steals: 0, blocks: 0,
+            stints: 0,
+          };
+          lineupMap.set(groupKey, agg);
+        }
+        agg.pointsFor += row.points_for ?? 0;
+        agg.pointsAgainst += row.points_against ?? 0;
+        agg.possessionsFor += row.possessions_for ?? 0;
+        agg.possessionsAgainst += row.possessions_against ?? 0;
+        agg.fg2Made += row.fg2_made ?? 0;
+        agg.fg2Attempted += row.fg2_attempted ?? 0;
+        agg.fg3Made += row.fg3_made ?? 0;
+        agg.fg3Attempted += row.fg3_attempted ?? 0;
+        agg.ftMade += row.ft_made ?? 0;
+        agg.ftAttempted += row.ft_attempted ?? 0;
+        agg.oreb += row.oreb ?? 0;
+        agg.dreb += row.dreb ?? 0;
+        agg.assists += row.assists ?? 0;
+        agg.turnovers += row.turnovers ?? 0;
+        agg.steals += row.steals ?? 0;
+        agg.blocks += row.blocks ?? 0;
+        agg.stints += 1;
+        if (groupKey !== row.lineup_key) {
+          (row.lineup_names || []).forEach(name => {
+            const k = playerNameKey(name);
+            const set = agg!.variants!.get(k) ?? new Set<string>();
+            set.add(name);
+            agg!.variants!.set(k, set);
           });
+        }
+      });
+      lineupMap.forEach(agg => {
+        if (agg.variants && agg.variants.size > 0) {
+          const teamKey = agg.lineupKey.split('|')[0];
+          agg.players = Array.from(agg.variants.entries()).map(([k, names]) =>
+            bestPlayerName([...Array.from(names), ...(rosterNames.get(`${teamKey}|${k}`) ?? [])]));
         }
       });
       const lineupList = Array.from(lineupMap.values())
@@ -288,36 +312,49 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
         .sort((a, b) => netRatingOf(b) - netRatingOf(a));
 
       // ── Plus-minus: aggregate on-court stints per player ──────────────────
-      const nameByPlayerId = new Map<string, string>();
+      // Players are grouped by team + name key rather than player_id, for the same reason as
+      // lineups: one person can have a record per spelling of their name.
+      const personOf = new Map<string, string>();
+      const spellings = new Map<string, Set<string>>();
       const pmMap = new Map<string, { plusMinus: number; stints: number }>();
       ((onCourtRes.data || []) as OnCourtRow[]).forEach(row => {
         if (!row.player_id) return;
-        if (row.player_name) nameByPlayerId.set(row.player_id, row.player_name);
-        const existing = pmMap.get(row.player_id) || { plusMinus: 0, stints: 0 };
+        const nameKey = playerNameKey(row.player_name);
+        const person = nameKey ? `${row.team_id ?? ''}|${nameKey}` : row.player_id;
+        personOf.set(row.player_id, person);
+        if (row.player_name) {
+          const set = spellings.get(person) ?? new Set<string>();
+          set.add(row.player_name);
+          spellings.set(person, set);
+        }
+        const existing = pmMap.get(person) || { plusMinus: 0, stints: 0 };
         existing.plusMinus += (row.points_for ?? 0) - (row.points_against ?? 0);
         existing.stints += 1;
-        pmMap.set(row.player_id, existing);
+        pmMap.set(person, existing);
       });
+      const nameOfPerson = (person: string) =>
+        bestPlayerName([...Array.from(spellings.get(person) ?? []), ...(rosterNames.get(person) ?? [])]) || 'Unknown Player';
       const plusMinusList = Array.from(pmMap.entries())
         .filter(([, v]) => v.stints >= MIN_PLAYER_STINTS)
         .map(([playerId, v]) => ({
           playerId,
-          name: nameByPlayerId.get(playerId) || 'Unknown Player',
+          name: nameOfPerson(playerId),
           plusMinus: v.plusMinus,
           stints: v.stints,
         }))
         .sort((a, b) => b.plusMinus - a.plusMinus);
 
-      // ── Minutes: total seconds on court per player ─────────────────────
+      // ── Minutes: total seconds on court per person ─────────────────────
       const secondsMap = new Map<string, number>();
       ((minutesRes.data || []) as MinutesRow[]).forEach(row => {
         if (!row.player_id) return;
-        secondsMap.set(row.player_id, (secondsMap.get(row.player_id) || 0) + (row.seconds_on_court ?? 0));
+        const person = personOf.get(row.player_id) ?? row.player_id;
+        secondsMap.set(person, (secondsMap.get(person) || 0) + (row.seconds_on_court ?? 0));
       });
       const minutesList = Array.from(secondsMap.entries())
         .map(([playerId, seconds]) => ({
           playerId,
-          name: nameByPlayerId.get(playerId) || 'Unknown Player',
+          name: nameOfPerson(playerId),
           minutes: seconds / 60,
         }))
         .sort((a, b) => b.minutes - a.minutes);

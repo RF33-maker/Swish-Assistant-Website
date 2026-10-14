@@ -3,6 +3,8 @@
  * appears five times). Kept free of I/O so it can be tested against real rows.
  */
 
+import { playerNameKey } from "@shared/playerNameKey";
+
 export type StintRow = {
   stint_id: string;
   game_key: string;
@@ -43,25 +45,8 @@ export type UnitMetrics = {
 
 export type LineupMetric = "net" | "plusminus" | "minutes";
 
-const NAME_SUFFIXES = new Set(["jr", "sr", "ii", "iii", "iv", "v"]);
-
-/**
- * "Ben Baker" / "B. Baker" / "Benedict Baker" all become "b baker", so a player who has more than
- * one record (a roster placeholder next to the full-name row) is counted once in a unit. Hyphens
- * and generational suffixes are ignored, so "Raheem May-Thompson" matches "R May Thompson" and
- * "Rodney Glasgow Jr" matches "R. Glasgow".
- */
-export function playerNameKey(name: string | null | undefined): string {
-  const parts = (name || "")
-    .toLowerCase()
-    .replace(/[^a-z\s'-]/g, " ")
-    .replace(/-/g, " ")
-    .split(/\s+/)
-    .filter(Boolean);
-  while (parts.length > 1 && NAME_SUFFIXES.has(parts[parts.length - 1])) parts.pop();
-  if (parts.length === 0) return "";
-  return `${parts[0][0]} ${parts[parts.length - 1]}`;
-}
+// One key per person however the feed spelled them; shared with the Coaches Hub (see the module).
+export { playerNameKey };
 
 /** Groups stint rows into units per team. Stints that don't have exactly five people are skipped. */
 export function buildUnits(rows: StintRow[]): { units: Unit[]; stintsUsed: number; stintsSkipped: number } {
