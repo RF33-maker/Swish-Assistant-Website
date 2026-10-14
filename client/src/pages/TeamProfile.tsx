@@ -42,6 +42,7 @@ import { ProfileChip } from "@/components/ProfileChip";
 import { PillTabBar } from "@/components/PillTabBar";
 import { computeClubAccolades, computeTeamAccolades, topAccolades } from "@/lib/accolades";
 import { useTeamCompetitions } from "@/hooks/useTeamCompetitions";
+import { AdminCoachViewLink } from "@/components/coaches-hub/AdminTeamPicker";
 import { TeamLineupsPanel } from "@/components/TeamLineupsPanel";
 import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
@@ -1464,6 +1465,11 @@ export default function TeamProfile() {
                         Instagram
                       </a>
                     )}
+                    <AdminCoachViewLink
+                      teamName={team.name}
+                      leagueIds={[...selectedLeagueIds, team.league?.league_id, currentLeagueId]}
+                      className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border text-xs font-semibold transition-colors ${glass}`}
+                    />
                   </div>
                 </div>
                 {competitionOptions.length > 1 && (

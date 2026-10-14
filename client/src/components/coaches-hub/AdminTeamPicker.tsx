@@ -25,7 +25,8 @@ export default function AdminTeamPicker({ teamName, leagueName }: { teamName?: s
   const [query, setQuery] = useState('');
   const [matches, setMatches] = useState<Match[]>([]);
   const [searching, setSearching] = useState(false);
-  const [open, setOpen] = useState(false);
+  // Open by default: it is the way into the coach view, so it should not need finding.
+  const [open, setOpen] = useState(true);
   const latest = useRef(0);
 
   useEffect(() => {
@@ -171,5 +172,43 @@ export function AdminOpponentPicker({ opponents, onOpen }: { opponents: string[]
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * Admin-only, on a team's page: jump to that team's coach view. Finds the
+ * team's id in whichever of the page's competitions holds it, and shows
+ * nothing if it can't (or for anyone who isn't an admin).
+ */
+export function AdminCoachViewLink({ teamName, leagueIds, className = '' }: { teamName: string; leagueIds: Array<string | null | undefined>; className?: string }) {
+  const { isRealAdmin } = useAuth();
+  const [teamId, setTeamId] = useState<string | null>(null);
+  const idsKey = leagueIds.filter(Boolean).join(',');
+
+  useEffect(() => {
+    const ids = idsKey ? idsKey.split(',') : [];
+    if (!isRealAdmin || !teamName || ids.length === 0) { setTeamId(null); return; }
+    let cancelled = false;
+    supabase
+      .from('teams')
+      .select('team_id')
+      .in('league_id', ids)
+      .eq('name', teamName)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => { if (!cancelled) setTeamId(data?.team_id ?? null); });
+    return () => { cancelled = true; };
+  }, [isRealAdmin, teamName, idsKey]);
+
+  if (!isRealAdmin || !teamId) return null;
+  return (
+    <a
+      href={`/coaches-hub?viewAsTeam=${encodeURIComponent(teamId)}`}
+      className={className || 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border text-xs font-semibold'}
+      title="Admin only: open the Coaches Hub as this team's coach"
+    >
+      <Eye className="h-3.5 w-3.5" />
+      View as this team&apos;s coach
+    </a>
   );
 }

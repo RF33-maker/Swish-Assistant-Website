@@ -2,6 +2,7 @@ import { createContext, useContext, ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { resolveRoles, previewAllowed } from "@/lib/authRoles";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 
@@ -116,18 +117,8 @@ function useAuthProviderValue(): AuthContextType {
   // Derive admin/coach and email-confirmed state from the Supabase user object.
   // app_metadata is authoritative — it can only be written server-side via the
   // service-role key, so it cannot be spoofed from the browser.
-  const realIsAdmin = realUser?.app_metadata?.role === "admin";
-  const devViewAsTeam = readViewAsTeam(import.meta.env.DEV || realIsAdmin);
-  const user = devViewAsTeam
-    ? {
-        ...(realUser ?? { id: "00000000-0000-0000-0000-000000000000", email: "coach-preview@localhost" }),
-        email_confirmed_at: realUser?.email_confirmed_at ?? new Date(0).toISOString(),
-        app_metadata: { ...(realUser?.app_metadata ?? {}), role: "coach", team_id: devViewAsTeam },
-      }
-    : realUser;
-  const isAdmin = user?.app_metadata?.role === "admin";
-  const isCoach = user?.app_metadata?.role === "coach";
-  const teamId = isCoach ? (user?.app_metadata?.team_id ?? null) : null;
+  const viewAsTeam = readViewAsTeam(previewAllowed(realUser, import.meta.env.DEV));
+  const { user, isAdmin, isCoach, isRealAdmin: realIsAdmin, teamId } = resolveRoles({ realUser, viewAsTeam });
   const emailConfirmed = !!user?.email_confirmed_at;
   // A member is a verified account: logged in + email confirmed, or admin.
   const isMember = !!user && (emailConfirmed || isAdmin);
@@ -206,7 +197,7 @@ function useAuthProviderValue(): AuthContextType {
     isCoach,
     teamId,
     isRealAdmin: realIsAdmin,
-    viewingAsTeamId: devViewAsTeam,
+    viewingAsTeamId: viewAsTeam,
     emailConfirmed,
     isMember,
     chatbotEnabled,
