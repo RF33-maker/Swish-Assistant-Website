@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { isSameTeam } from "./teamIdentityService";
+import { getLeagueSides } from "./teamSides";
 
 // Every competition one club has played in, with its record and game-level
 // team totals in each. Each competition gives the club its own team_id (and
@@ -53,6 +54,7 @@ const TEAM_STAT_COLUMNS =
 function searchCore(name: string): string {
   return name
     .replace(/\s+Senior\s+(Men|Women)\b.*$/i, "")
+    .replace(/\s+Women$/i, "")
     .replace(/\s+I$/i, "")
     .replace(/[%_]/g, "")
     .trim();
@@ -60,9 +62,21 @@ function searchCore(name: string): string {
 
 const num = (value: unknown) => Number(value) || 0;
 
-export async function getTeamCompetitions(teamName: string): Promise<TeamCompetition[]> {
+/**
+ * `competitionSlug` says which competition the name was read from. A women's competition's
+ * "London Lions" is the women's side, not the men's, so the same name matches different rows
+ * depending on where it came from; without it the name is taken as it stands.
+ */
+export async function getTeamCompetitions(teamName: string, competitionSlug?: string | null): Promise<TeamCompetition[]> {
   const core = searchCore(teamName);
   if (core.length < 3) return [];
+
+  const sides = await getLeagueSides();
+  let wantedSide = teamName;
+  if (competitionSlug) {
+    const { data: origin } = await supabaseAdmin.from("competitions").select("league_id").eq("slug", competitionSlug).maybeSingle();
+    if (origin?.league_id) wantedSide = sides.name(teamName, origin.league_id);
+  }
 
   // Only rows already public at row level (the same rule anon RLS applies),
   // so a private competition shows up only for data its owner has published.
@@ -75,7 +89,7 @@ export async function getTeamCompetitions(teamName: string): Promise<TeamCompeti
     .limit(2000);
   if (error) throw new Error(error.message);
 
-  const matched = (ownRows || []).filter((row: any) => isSameTeam(row.name || "", teamName));
+  const matched = (ownRows || []).filter((row: any) => isSameTeam(sides.name(row.name, row.league_id), wantedSide));
   if (matched.length === 0) return [];
 
   const gameKeys = Array.from(new Set(matched.map((row: any) => row.game_key)));

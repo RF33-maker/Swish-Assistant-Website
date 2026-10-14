@@ -10,6 +10,7 @@ import { computeLineups } from "./lineupsService";
 import type { LineupMetric } from "./lineups";
 import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "./teamIdentityService";
 import { getTeamCompetitions } from "./teamCompetitions";
+import { getLeagueSides } from "./teamSides";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerNewsArticleRoutes } from "./newsArticles";
 import { registerWeekendReportRoutes } from "./weekendReports";
@@ -1163,7 +1164,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const team = String(req.query.team || "").trim();
       if (!team) return res.status(400).json({ error: "team is required" });
-      const competitions = await getTeamCompetitions(team);
+      const competition = String(req.query.competition || "").trim() || null;
+      const competitions = await getTeamCompetitions(team, competition);
       res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=600");
       res.json(competitions);
     } catch (err: any) {
@@ -1461,6 +1463,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from("teams")
         .select("league_id")
         .eq("name", homeTeam.name);
+      // The same name in a women's competition is the other side of the club: a coach for the
+      // women's "London Lions" must not be shown the men's competitions.
+      const sides = await getLeagueSides();
+      const homeSide = sides.name(homeTeam.name, homeTeam.league_id);
       if (siblingError) {
         console.error("team-competitions: sibling lookup failed:", siblingError.message);
         return res.status(500).json({ error: "Failed to resolve competitions" });
@@ -1468,7 +1474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const leagueIds = Array.from(
         new Set((siblingTeams || []).map((t: any) => t.league_id).filter(Boolean))
-      ) as string[];
+      ).filter((id) => sides.name(homeTeam.name, id as string) === homeSide) as string[];
       const allowedIds = await filterLeagueIdsForPublicScope(leagueIds);
       if (allowedIds.length === 0) {
         return res.json({ teamName: homeTeam.name, homeLeagueId: homeTeam.league_id, competitions: [] });
@@ -4726,6 +4732,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function buildTeamsDirectory(): Promise<TeamsDirectoryPayload> {
     const scope = await fetchHomeCompetitionScope();
     if (scope.sourceIds.length === 0) return { clubs: [], competitions: [] };
+    // A women's competition's "London Lions" is its own club, apart from the men's.
+    const sides = await getLeagueSides();
 
     const [teams, boxScores, schedule, { data: comps, error: compsError }, logoIndex] = await Promise.all([
       selectPaged((from, to) =>
@@ -4751,7 +4759,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     type Activity = { last: number | null; next: number | null; games: number };
     const activity = new Map<string, Activity>();
     const touch = (leagueId: string, side: string) => {
-      const id = `${leagueId}|${teamClubKey(side)}`;
+      const id = `${leagueId}|${teamClubKey(sides.name(side, leagueId))}`;
       let a = activity.get(id);
       if (!a) activity.set(id, (a = { last: null, next: null, games: 0 }));
       return a;
@@ -4770,7 +4778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const counted = new Set<string>();
     for (const row of boxScores) {
       if (!row.name) continue;
-      const id = `${row.league_id}|${row.game_key}|${teamClubKey(row.name)}`;
+      const id = `${row.league_id}|${row.game_key}|${teamClubKey(sides.name(row.name, row.league_id))}`;
       if (counted.has(id)) continue;
       counted.add(id);
       const a = touch(row.league_id, row.name);
@@ -4786,7 +4794,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const display = scope.sourceToDisplay.get(team.league_id);
       const slug = slugById.get(team.league_id) || display?.slug;
       if (!display?.name || !slug) continue;
-      const key = teamClubKey(team.name);
+      const key = teamClubKey(sides.name(team.name, team.league_id));
       // A side with no fixtures has nothing to show on its page yet.
       const act = activity.get(`${team.league_id}|${key}`);
       if (!act) continue;
@@ -4835,7 +4843,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // The name it goes by most, preferring its latest spelling on a tie.
       const tally = new Map<string, number>();
       for (const e of entries) {
-        const n = directoryClubName(e.team.name);
+        const n = directoryClubName(sides.name(e.team.name, e.team.league_id));
         tally.set(n, (tally.get(n) || 0) + 1);
       }
       const name = Array.from(tally.entries()).sort((a, b) => b[1] - a[1])[0][0];

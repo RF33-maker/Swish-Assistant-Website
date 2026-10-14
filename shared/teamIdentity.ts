@@ -36,6 +36,26 @@ export function teamLevel(name: string): string {
   return `${age}|${reserve}|${gender}`;
 }
 
+/**
+ * A women's competition's team, named the way the NBL's women's sides already are
+ * ("Barking Abbey Senior Women"): with "Women" in the name. Plain feeds ("London Lions" in
+ * both the men's and the women's SLB) otherwise read as one club, and the men's and women's
+ * games land on one team page. `gender` is the competition's gender, "Women" for those.
+ *
+ * Only identity rules should see this name — grouping, slugs, the page title. Queries against
+ * the stored rows keep using the name as the feed spells it.
+ */
+export function sideName(name: string, gender?: string | null): string {
+  const base = (name || "").trim();
+  if (!base || !/^women/i.test((gender || "").trim())) return base;
+  return /\b(women|women's|ladies)\b/i.test(base) ? base : `${base} Women`;
+}
+
+/** A club's name as the feed spells it: "London Lions Women" back to "London Lions". */
+export function feedName(sided: string): string {
+  return (sided || "").replace(/\s+Women$/i, "").trim() || sided;
+}
+
 // One key per club side, so names can be grouped rather than compared in
 // pairs: teamClubKey(a) === teamClubKey(b) exactly when isSameTeam(a, b).
 export function teamClubKey(name: string): string {

@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { identityKey, teamLevel } from "@shared/teamIdentity";
+import { getLeagueSides } from "./teamSides";
 
 type TeamRow = {
   team_id: string;
@@ -240,6 +241,10 @@ export async function syncTeamIdentitiesForLeague(
   options: { dryRun?: boolean } = {},
 ): Promise<TeamIdentitySyncResult> {
   const { target, competitions } = await getCompetitionScope(leagueId);
+  // A brand can hold both a men's and a women's competition under plain names (SLB), and a
+  // women's "London Lions" must not return as the men's team: candidates are compared by the
+  // name identity sees ("London Lions Women"), each read in its own competition.
+  const sides = await getLeagueSides();
   const scopeIds = competitions.map((competition) => competition.league_id);
   const competitionById = new Map(competitions.map((competition) => [competition.league_id, competition]));
 
@@ -274,7 +279,9 @@ export async function syncTeamIdentitiesForLeague(
     ].filter(Boolean),
   )) as string[];
   const currentTeams = ((allTeams || []) as TeamRow[]).filter((team) => team.league_id === leagueId);
-  const historicalTeams = ((allTeams || []) as TeamRow[]).filter((team) => team.league_id !== leagueId);
+  const historicalTeams = ((allTeams || []) as TeamRow[])
+    .filter((team) => team.league_id !== leagueId)
+    .map((team) => ({ ...team, name: sides.name(team.name, team.league_id) }));
   const decisions: TeamIdentityDecision[] = [];
   const resolved = new Map<string, TeamRow>();
   let createdTeams = 0;
@@ -289,7 +296,7 @@ export async function syncTeamIdentitiesForLeague(
       continue;
     }
 
-    const candidates = pickCandidate(teamName, historicalTeams, competitionById);
+    const candidates = pickCandidate(sides.name(teamName, leagueId), historicalTeams, competitionById);
     const best = candidates[0];
     const runnerUp = candidates.find((candidate) => candidate.team_id !== best?.team_id);
     const exact = best?.score === 1;

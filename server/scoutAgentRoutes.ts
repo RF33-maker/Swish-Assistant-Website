@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { isSameTeam } from "./teamIdentityService";
+import { getLeagueSides } from "./teamSides";
 
 /**
  * Site-side API for the scouting agent (supabase/functions/scout-agent).
@@ -44,8 +45,11 @@ async function resolveAccess(req: Request, leagueId: string, forTeam: string | n
   if (role === "coach") {
     const teamId = user.app_metadata?.team_id;
     if (!teamId || !forTeam) return { userId: user.id, full: false };
-    const { data: team } = await supabaseAdmin.from("teams").select("name").eq("team_id", teamId).maybeSingle();
-    return { userId: user.id, full: !!team?.name && isSameTeam(team.name, forTeam) };
+    const { data: team } = await supabaseAdmin.from("teams").select("name, league_id").eq("team_id", teamId).maybeSingle();
+    // The coach's club and the plan's club can be in different competitions, so each name is
+    // read in its own: a women's "London Lions" plan is not the men's coach's.
+    const sides = await getLeagueSides();
+    return { userId: user.id, full: !!team?.name && isSameTeam(sides.name(team.name, team.league_id), sides.name(forTeam, leagueId)) };
   }
   const { data: comp } = await supabaseAdmin
     .from("competitions").select("user_id, created_by").eq("league_id", leagueId).maybeSingle();

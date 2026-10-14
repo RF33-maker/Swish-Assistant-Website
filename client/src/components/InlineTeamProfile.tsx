@@ -534,7 +534,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
 
   // Club-wide (every competition the club has played in), matching the full
   // team profile — falls back to this competition's games when unmatched.
-  const { data: clubCompetitions = [] } = useTeamCompetitions(normalizedTeamName);
+  const { data: clubCompetitions = [] } = useTeamCompetitions(normalizedTeamName, leagueSlug);
   const teamAccolades = useMemo(() => {
     if (clubCompetitions.length > 0) return computeClubAccolades(clubCompetitions);
     return teamData?.games ? computeTeamAccolades(teamData.games, teamRecordMaxes, activeSeason?.label) : [];
