@@ -28,6 +28,14 @@ type AuthContextType = {
   isCoach: boolean;
   /** The team this account is scoped to, when isCoach is true. Null otherwise. */
   teamId: string | null;
+  /**
+   * True for a signed-in admin account, even while previewing as a team's coach
+   * (when `isAdmin` is false). Use it for admin-only tools that must stay
+   * reachable during a preview; the server checks the real login on every call.
+   */
+  isRealAdmin: boolean;
+  /** The team an admin is previewing as (their coach view), or null. */
+  viewingAsTeamId: string | null;
   /** True when the Supabase user has confirmed their email address. */
   emailConfirmed: boolean;
   /**
@@ -50,17 +58,21 @@ type AuthContextType = {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ── Local "view as team" (dev server only) ────────────────────────────────
-// Lets you build coach features from a team's point of view without signing
-// in to that team's account: open any page with `?viewAsTeam=<team_id>` and
-// the app treats you as that team's coach until `?viewAsTeam=off`. Gated on
-// import.meta.env.DEV, so production builds drop it entirely. It only changes
-// what the browser *thinks* the role is — the server never trusts it (coach
-// data is read through public endpoints, admin endpoints check the real JWT).
+// ── "View as team" ─────────────────────────────────────────────────────────
+// Lets you see the app from a team's coach's point of view without signing in
+// to that team's account: open any page with `?viewAsTeam=<team_id>` and the
+// app treats you as that team's coach until `?viewAsTeam=off`.
+//
+// Allowed on the dev server, and on the live site only for a signed-in admin
+// (app_metadata.role === "admin", which can only be written server-side). It
+// only changes what the browser *thinks* the role is: the server never trusts
+// it. Coach data is read through public endpoints, and admin or paid
+// endpoints (such as the scouting agent) check the real login token, so an
+// admin previewing a team gets the admin's access and nobody else gets any.
 const DEV_VIEW_AS_KEY = "swish:devViewAsTeam";
 
-function readDevViewAsTeam(): string | null {
-  if (!import.meta.env.DEV || typeof window === "undefined") return null;
+function readViewAsTeam(allowed: boolean): string | null {
+  if (!allowed || typeof window === "undefined") return null;
   try {
     const param = new URLSearchParams(window.location.search).get("viewAsTeam");
     if (param === "off") window.localStorage.removeItem(DEV_VIEW_AS_KEY);
@@ -104,7 +116,8 @@ function useAuthProviderValue(): AuthContextType {
   // Derive admin/coach and email-confirmed state from the Supabase user object.
   // app_metadata is authoritative — it can only be written server-side via the
   // service-role key, so it cannot be spoofed from the browser.
-  const devViewAsTeam = readDevViewAsTeam();
+  const realIsAdmin = realUser?.app_metadata?.role === "admin";
+  const devViewAsTeam = readViewAsTeam(import.meta.env.DEV || realIsAdmin);
   const user = devViewAsTeam
     ? {
         ...(realUser ?? { id: "00000000-0000-0000-0000-000000000000", email: "coach-preview@localhost" }),
@@ -192,6 +205,8 @@ function useAuthProviderValue(): AuthContextType {
     isAdmin,
     isCoach,
     teamId,
+    isRealAdmin: realIsAdmin,
+    viewingAsTeamId: devViewAsTeam,
     emailConfirmed,
     isMember,
     chatbotEnabled,
@@ -208,13 +223,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={value}>
       {children}
-      {import.meta.env.DEV && value.isCoach && value.user?.app_metadata?.team_id && readDevViewAsTeam() && (
+      {value.viewingAsTeamId && (import.meta.env.DEV || value.isRealAdmin) && (
         <a
           href="?viewAsTeam=off"
           className="fixed bottom-3 right-3 z-[10000] rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-amber-600"
-          title="Local-only coach preview. Click to exit."
+          title="Admin preview: you are seeing the app as this team's coach. Click to exit."
         >
-          Viewing as team coach (local) · Exit
+          {value.isRealAdmin ? "Admin preview: viewing as a team's coach" : "Viewing as team coach (local)"} · Exit
         </a>
       )}
     </AuthContext.Provider>

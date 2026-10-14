@@ -16,6 +16,7 @@ import PlayerDetail from '@/components/coaches-hub/PlayerDetail';
 import TeamDetail from '@/components/coaches-hub/TeamDetail';
 import CoachTeamOverview from '@/components/coaches-hub/CoachTeamOverview';
 import CoachTeamBanner from '@/components/coaches-hub/CoachTeamBanner';
+import AdminTeamPicker, { AdminOpponentPicker } from '@/components/coaches-hub/AdminTeamPicker';
 import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
 import { Link } from 'wouter';
@@ -224,7 +225,7 @@ async function fetchTeamAdvancedAverages(leagueId: string): Promise<Map<string, 
 }
 
 export default function CoachesHub() {
-  const { user, isCoach, teamId: coachTeamId, logoutMutation } = useAuth();
+  const { user, isCoach, isRealAdmin, teamId: coachTeamId, logoutMutation } = useAuth();
   const [, navigate] = useLocation();
   const { query: search, setQuery: setSearch, suggestions, handleSelect: handleSelectSearch, handleSubmit: handleSubmitSearch } = useGlobalSearch();
   const [leagues, setLeagues] = useState<any[]>([]);
@@ -1196,6 +1197,9 @@ export default function CoachesHub() {
       </header>
 
       <main className="max-w-[1440px] mx-auto px-4 md:px-8 pt-5 md:pt-8 pb-28">
+        {/* Admin-only: open the hub as any team's coach to try it before coaches do. */}
+        {isRealAdmin && <AdminTeamPicker teamName={coachTeamName} leagueName={selectedLeague?.name} />}
+
         {/* A coach's own team, once resolved, gets a persistent branded
             banner instead of the generic title — visible above every tab,
             not just Overview, so it reads as "this is my team's hub" rather
@@ -1241,6 +1245,14 @@ export default function CoachesHub() {
               </div>
             </div>
           </section>
+        )}
+
+        {/* Admin-only, inside a team preview: scout any opponent, not just the next fixture. */}
+        {isRealAdmin && isCoach && myTeam && !detailView && (
+          <AdminOpponentPicker
+            opponents={teamSeasonAverages.map((t) => t.team_name).filter((n) => n && n !== myTeam.team_name).sort((a, b) => a.localeCompare(b))}
+            onOpen={(opponentName) => setDetailView({ type: 'scoutReport', opponentName })}
+          />
         )}
 
         {/* Shortcuts — top public leagues, for fast navigation while no

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'wouter';
-import { Lock, RefreshCw, Sparkles, Shield, Swords, Target, Users, Timer, AlertTriangle } from 'lucide-react';
+import { Lock, RefreshCw, Sparkles, Shield, Swords, Target, Users, Timer, AlertTriangle, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/use-auth';
+import { printScoutPlan } from '@/lib/printScoutPlan';
 
 /**
  * The scouting agent's game plan, shown at the top of the opponent scout report.
@@ -108,6 +110,8 @@ export default function AgentGamePlan({
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
   const polls = useRef(0);
+  // Admin-only while the report is tested: a printable copy to save as a PDF.
+  const { isRealAdmin } = useAuth();
 
   const load = useCallback(async () => {
     try {
@@ -187,6 +191,25 @@ export default function AgentGamePlan({
             {report.gamesAnalysed ? ` · ${report.gamesAnalysed} games` : ''}
             {report.dataThrough ? ` through ${new Date(report.dataThrough).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}
           </span>
+        )}
+        {isRealAdmin && full && plan && (
+          <button
+            onClick={() => {
+              const ok = printScoutPlan(plan, {
+                opponentName,
+                forTeamName: myTeamName || null,
+                gamesAnalysed: report?.gamesAnalysed ?? null,
+                dataThrough: report?.dataThrough ?? null,
+                generatedAt: report?.generatedAt ?? null,
+                brandColor: color,
+              });
+              if (!ok) setRequestError('Allow pop-ups for this site to download the report.');
+            }}
+            className="flex items-center gap-1 font-medium hover:text-gray-800 dark:hover:text-white"
+            title="Admin only: opens a printable copy. Choose Save as PDF in the print dialog."
+          >
+            <Download className="w-3.5 h-3.5" /> Download PDF
+          </button>
         )}
         {full && data.canBuild && report?.status === 'ready' && !building && (
           <button onClick={() => build(true)} className="flex items-center gap-1 font-medium hover:text-gray-800 dark:hover:text-white">
