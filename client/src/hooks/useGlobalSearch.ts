@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { teamPath } from "@shared/seo";
+import { clubSlug } from "@shared/teamIdentity";
 
 export type SearchSuggestion =
   | { type: "competition"; name: string; slug: string; logo_url: string | null }
@@ -19,6 +20,7 @@ interface LeagueRef {
   name: string;
   slug: string;
   is_public: boolean;
+  created_at: string | null;
 }
 
 interface TeamRow {
@@ -38,6 +40,22 @@ interface PlayerRow {
 interface PlayerStatRow {
   player_id: string | number;
   team_name: string | null;
+}
+
+// One row per kind, so the list stays short and every kind gets a look-in.
+const MAX_LEAGUES = 3;
+const MAX_COMPETITIONS = 3;
+const MAX_TEAMS = 4;
+const MAX_PLAYERS = 5;
+
+// Matches that start with what was typed come first, then the shortest names.
+function byRelevance(query: string) {
+  const q = query.trim().toLowerCase();
+  return (a: { name: string }, b: { name: string }) => {
+    const aStarts = a.name.toLowerCase().startsWith(q) ? 0 : 1;
+    const bStarts = b.name.toLowerCase().startsWith(q) ? 0 : 1;
+    return aStarts - bStarts || a.name.length - b.name.length || a.name.localeCompare(b.name);
+  };
 }
 
 function isAbbreviated(name: string): boolean {
@@ -93,22 +111,23 @@ export function useGlobalSearch() {
           .eq("is_public", true),
         supabase
           .from("teams")
-          .select("name, league_id, competitions:league_id(name, slug, is_public)")
+          .select("name, league_id, competitions:league_id(name, slug, is_public, created_at)")
           .ilike("name", `%${query}%`)
-          .limit(20),
+          .limit(120),
       ]);
 
       const playersResponse = await supabase
         .from("players")
         .select("id, full_name, slug, photo_path_bg_removed, league_id")
         .ilike("full_name", `%${query}%`)
-        .limit(30);
+        .limit(60);
 
       // Brand league results (top-level series)
       const leagueBrands: LeagueRow[] = (leaguesResponse.data as any) || [];
       // Only surface standalone competitions (seasons not grouped under a brand league)
+      const leagueNames = new Set(leagueBrands.map((l) => l.name.trim().toLowerCase()));
       const standaloneCompetitions: LeagueRow[] = ((competitionsResponse.data as any[] | null) || []).filter(
-        (c: any) => !c.competition_id
+        (c: any) => !c.competition_id && c.slug && !/\s/.test(c.slug) && !leagueNames.has(String(c.name).trim().toLowerCase())
       );
       const players: PlayerRow[] = (playersResponse.data as PlayerRow[] | null) || [];
       const teams: TeamRow[] = (teamsResponse.data as TeamRow[] | null) || [];
@@ -143,7 +162,7 @@ export function useGlobalSearch() {
         }
       });
 
-      const uniquePlayers: SearchSuggestion[] = playerGroups.map((group) => {
+      const uniquePlayers: SearchSuggestion[] = playerGroups.slice(0, 60).map((group) => {
         group.sort((a, b) => {
           if (a.photo_path_bg_removed && !b.photo_path_bg_removed) return -1;
           if (!a.photo_path_bg_removed && b.photo_path_bg_removed) return 1;
@@ -172,25 +191,41 @@ export function useGlobalSearch() {
         } satisfies SearchSuggestion;
       });
 
-      const uniqueTeams: SearchSuggestion[] = teams.reduce<SearchSuggestion[]>((acc, team) => {
-        const leagueJoin: LeagueRef | null = Array.isArray((team as any).competitions)
+      // A club is one record however many competitions it has played in
+      // (league, cup, trophy, past seasons): grouped by its permanent page,
+      // shown with the most recently created competition.
+      const clubs = new Map<string, { latest: { row: TeamRow; league: LeagueRef | null }; leagueIds: Set<string> }>();
+      teams.forEach((team) => {
+        const league: LeagueRef | null = Array.isArray((team as any).competitions)
           ? ((team as any).competitions[0] ?? null)
           : (team as any).competitions;
-        if (leagueJoin?.is_public === false) return acc;
-        const alreadyPresent = acc.some(
-          (t) => t.type === "team" && t.name === team.name && t.league_id === team.league_id
-        );
-        if (!alreadyPresent) {
-          acc.push({
-            type: "team",
-            name: team.name,
-            league_id: team.league_id,
-            league_name: leagueJoin?.name || "",
-            league_slug: leagueJoin?.slug || "",
-          } satisfies SearchSuggestion);
+        if (league?.is_public === false) return;
+        const key = clubSlug(team.name);
+        if (!key) return;
+        const club = clubs.get(key);
+        if (!club) {
+          clubs.set(key, { latest: { row: team, league }, leagueIds: new Set([team.league_id]) });
+          return;
         }
-        return acc;
-      }, []);
+        club.leagueIds.add(team.league_id);
+        if ((league?.created_at || "") > (club.latest.league?.created_at || "")) {
+          club.latest = { row: team, league };
+        }
+      });
+
+      const uniqueTeams: SearchSuggestion[] = Array.from(clubs.values())
+        .map(({ latest, leagueIds }): Extract<SearchSuggestion, { type: "team" }> => {
+          const leagueName = latest.league?.name || "";
+          return {
+            type: "team",
+            name: latest.row.name,
+            league_id: latest.row.league_id,
+            league_name: leagueIds.size > 1 ? `${leagueIds.size} competitions` : leagueName,
+            league_slug: latest.league?.slug || "",
+          };
+        })
+        .sort(byRelevance(query))
+        .slice(0, MAX_TEAMS);
 
       const formattedLeagues: SearchSuggestion[] = leagueBrands.map(
         (l): SearchSuggestion => ({
@@ -210,7 +245,12 @@ export function useGlobalSearch() {
         })
       );
 
-      const combined = [...formattedLeagues, ...formattedCompetitions, ...uniqueTeams, ...uniquePlayers].slice(0, 10);
+      const combined = [
+        ...formattedLeagues.sort(byRelevance(query)).slice(0, MAX_LEAGUES),
+        ...formattedCompetitions.sort(byRelevance(query)).slice(0, MAX_COMPETITIONS),
+        ...uniqueTeams,
+        ...uniquePlayers.sort(byRelevance(query)).slice(0, MAX_PLAYERS),
+      ];
       setSuggestions(combined);
     };
 
@@ -227,7 +267,8 @@ export function useGlobalSearch() {
     } else if (item.type === "league") {
       setLocation(`/league/${item.slug}`);
     } else if (item.type === "team") {
-      setLocation(teamPath(item.name, item.league_slug) || `/team/${encodeURIComponent(item.name)}`);
+      // The permanent team page opens on its most recent competition.
+      setLocation(teamPath(item.name) || `/team/${encodeURIComponent(item.name)}`);
     } else if (item.type === "player") {
       const identifier = item.player_slug || item.player_id;
       setLocation(`/player/${identifier}`);
