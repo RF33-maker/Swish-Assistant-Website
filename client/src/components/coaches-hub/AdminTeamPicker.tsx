@@ -18,6 +18,7 @@ interface Match {
   league_id: string;
   competition: string;
   season: string | null;
+  createdAt: string;
 }
 
 export default function AdminTeamPicker({ teamName, leagueName }: { teamName?: string | null; leagueName?: string | null }) {
@@ -42,7 +43,7 @@ export default function AdminTeamPicker({ teamName, leagueName }: { teamName?: s
         .limit(40);
       const ids = Array.from(new Set((teams || []).map((t: any) => t.league_id).filter(Boolean)));
       const { data: comps } = ids.length
-        ? await supabase.from('competitions').select('league_id, name, season, is_public').in('league_id', ids)
+        ? await supabase.from('competitions').select('league_id, name, season, is_public, created_at').in('league_id', ids)
         : { data: [] as any[] };
       if (run !== latest.current) return;
       const byId = new Map((comps || []).map((c: any) => [c.league_id, c]));
@@ -50,8 +51,9 @@ export default function AdminTeamPicker({ teamName, leagueName }: { teamName?: s
         (teams || [])
           .map((t: any) => ({ t, c: byId.get(t.league_id) as any }))
           .filter(({ c }) => c && c.is_public)
-          .map(({ t, c }) => ({ team_id: t.team_id, name: t.name, league_id: t.league_id, competition: c.name, season: c.season ?? null }))
-          .sort((a, b) => a.name.localeCompare(b.name) || a.competition.localeCompare(b.competition))
+          .map(({ t, c }) => ({ team_id: t.team_id, name: t.name, league_id: t.league_id, competition: c.name, season: c.season ?? null, createdAt: String(c.created_at || '') }))
+          // A club's newest competition first, so the current season is the top result.
+          .sort((a, b) => a.name.localeCompare(b.name) || b.createdAt.localeCompare(a.createdAt))
           .slice(0, 12),
       );
       setSearching(false);

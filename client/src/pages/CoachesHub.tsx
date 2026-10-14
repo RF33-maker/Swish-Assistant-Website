@@ -17,6 +17,7 @@ import TeamDetail from '@/components/coaches-hub/TeamDetail';
 import CoachTeamOverview from '@/components/coaches-hub/CoachTeamOverview';
 import CoachTeamBanner from '@/components/coaches-hub/CoachTeamBanner';
 import AdminTeamPicker, { AdminOpponentPicker } from '@/components/coaches-hub/AdminTeamPicker';
+import { findCoachTeam } from '@/lib/coachTeam';
 import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
 import { Link } from 'wouter';
@@ -467,7 +468,9 @@ export default function CoachesHub() {
   // competition the account was originally provisioned against. A coach can
   // now switch to any sibling competition their team also plays in (see
   // fetchUserLeagues), where the same real team has a different team_id.
-  const myTeam = isCoach && coachTeamName ? teamSeasonAverages.find((t) => t.team_name === coachTeamName) : undefined;
+  // Same-club match, not exact name: the NBL's teams row says "Senior Men" where its
+  // match stats say "Senior Men I" (see lib/coachTeam).
+  const myTeam = isCoach && coachTeamName ? findCoachTeam(teamSeasonAverages, coachTeamName) : undefined;
 
   // League standings (win-loss based, not the points-per-game sort Rankings
   // uses) — computed client-side from completed results, the same approach
