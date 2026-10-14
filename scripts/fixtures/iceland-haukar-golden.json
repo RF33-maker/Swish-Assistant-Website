@@ -1,0 +1,325 @@
+{
+ "poolSize": 75,
+ "sizes": {
+  "pts": 75,
+  "fg": 56,
+  "2p": 52,
+  "3p": 57,
+  "ft": 49,
+  "fta": 75,
+  "reb": 75,
+  "oreb": 75,
+  "ast": 75,
+  "tov": 75,
+  "stocks": 75,
+  "pf": 75
+ },
+ "players": {
+  "Sigrún Björg Ólafsdóttir": {
+   "strengths": [
+    [
+     "Offensive rebounding",
+     96,
+     75,
+     "4.3 a game"
+    ],
+    [
+     "Steals and blocks",
+     95,
+     75,
+     "3.7 steals and 0.7 blocks a game"
+    ],
+    [
+     "Rebounding",
+     92,
+     75,
+     "10.3 a game"
+    ]
+   ],
+   "weaknesses": [
+    [
+     "Three-point shooting",
+     5,
+     57,
+     "6.7% (1 of 15)"
+    ],
+    [
+     "Shooting from the field",
+     7,
+     56,
+     "25% on 28 shots"
+    ],
+    [
+     "Scoring",
+     9,
+     75,
+     "5.7 points a game"
+    ]
+   ]
+  },
+  "Tinna Guðrún Alexandersdóttir": {
+   "strengths": [
+    [
+     "Free throws",
+     96,
+     49,
+     "100% (4 of 4)"
+    ],
+    [
+     "Passing",
+     96,
+     75,
+     "5 assists a game"
+    ],
+    [
+     "Scoring",
+     91,
+     75,
+     "18 points a game"
+    ]
+   ],
+   "weaknesses": [
+    [
+     "Rebounding",
+     12,
+     75,
+     "2.7 a game"
+    ],
+    [
+     "Shooting from the field",
+     35,
+     56,
+     "37% on 54 shots"
+    ],
+    [
+     "Getting to the line",
+     35,
+     75,
+     "1.3 free throws a game"
+    ]
+   ]
+  },
+  "Agnes Jónudóttir": {
+   "strengths": [
+    [
+     "Passing",
+     92,
+     75,
+     "2.3 assists a game"
+    ],
+    [
+     "Ball security",
+     72,
+     75,
+     "0.7 turnovers a game"
+    ]
+   ],
+   "weaknesses": [
+    [
+     "Steals and blocks",
+     1,
+     75,
+     "0 steals and 0 blocks a game"
+    ],
+    [
+     "Fouling",
+     5,
+     75,
+     "2.3 fouls a game"
+    ],
+    [
+     "Rebounding",
+     11,
+     75,
+     "1.3 a game"
+    ]
+   ]
+  },
+  "Eloise Stéphanie Pavrette": {
+   "strengths": [
+    [
+     "Steals and blocks",
+     99,
+     75,
+     "1.7 steals and 2 blocks a game"
+    ],
+    [
+     "Offensive rebounding",
+     95,
+     75,
+     "3 a game"
+    ],
+    [
+     "Rebounding",
+     93,
+     75,
+     "8 a game"
+    ]
+   ],
+   "weaknesses": [
+    [
+     "Two-point shooting",
+     4,
+     52,
+     "28.6% (10 of 35)"
+    ],
+    [
+     "Shooting from the field",
+     15,
+     56,
+     "31.1% on 45 shots"
+    ],
+    [
+     "Fouling",
+     32,
+     75,
+     "2.3 fouls a game"
+    ]
+   ]
+  },
+  "Rósa Björk Pétursdóttir": {
+   "strengths": [
+    [
+     "Rebounding",
+     78,
+     75,
+     "5.3 a game"
+    ],
+    [
+     "Offensive rebounding",
+     78,
+     75,
+     "2 a game"
+    ]
+   ],
+   "weaknesses": [
+    [
+     "Getting to the line",
+     7,
+     75,
+     "0 free throws a game"
+    ],
+    [
+     "Fouling",
+     8,
+     75,
+     "3.3 fouls a game"
+    ],
+    [
+     "Scoring",
+     20,
+     75,
+     "5.7 points a game"
+    ]
+   ]
+  },
+  "Sólrún Inga Gísladóttir": {
+   "strengths": [
+    [
+     "Three-point shooting",
+     83,
+     57,
+     "41.7% (10 of 24)"
+    ],
+    [
+     "Ball security",
+     76,
+     75,
+     "1 turnover a game"
+    ],
+    [
+     "Scoring",
+     74,
+     75,
+     "11.7 points a game"
+    ]
+   ],
+   "weaknesses": [
+    [
+     "Getting to the line",
+     15,
+     75,
+     "0.3 free throws a game"
+    ],
+    [
+     "Rebounding",
+     16,
+     75,
+     "2.7 a game"
+    ]
+   ]
+  },
+  "Jadakiss Nashi Guinn": {
+   "strengths": [
+    [
+     "Passing",
+     99,
+     75,
+     "6 assists a game"
+    ],
+    [
+     "Getting to the line",
+     96,
+     75,
+     "6.3 free throws a game"
+    ],
+    [
+     "Rebounding",
+     89,
+     75,
+     "9 a game"
+    ]
+   ],
+   "weaknesses": [
+    [
+     "Three-point shooting",
+     2,
+     57,
+     "0% (0 of 7)"
+    ]
+   ]
+  },
+  "Arnheiður Ísleif Ólafsdóttir": {
+   "strengths": [
+    [
+     "Ball security",
+     100,
+     75,
+     "0 turnovers a game"
+    ],
+    [
+     "Offensive rebounding",
+     76,
+     75,
+     "1.3 a game"
+    ],
+    [
+     "Shooting from the field",
+     69,
+     56,
+     "43.8% on 16 shots"
+    ]
+   ],
+   "weaknesses": [
+    [
+     "Fouling",
+     18,
+     75,
+     "2 fouls a game"
+    ],
+    [
+     "Passing",
+     24,
+     75,
+     "0.7 assists a game"
+    ],
+    [
+     "Getting to the line",
+     30,
+     75,
+     "0.7 free throws a game"
+    ]
+   ]
+  }
+ }
+}
