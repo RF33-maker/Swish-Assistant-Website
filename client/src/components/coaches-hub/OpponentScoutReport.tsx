@@ -6,6 +6,9 @@ import ShotChart, { type ShotData } from '@/components/ShotChart';
 import { ComparisonBarRow, NarrativeSummary, RankTrack, SectionNarrative } from './reportVisuals';
 import { useReportNarrative } from '@/hooks/useReportNarrative';
 import AgentGamePlan from './AgentGamePlan';
+import ScoutRoster from './ScoutRoster';
+import { TeamLogo } from '@/components/TeamLogo';
+import { useScoutRoster } from '@/hooks/useScoutRoster';
 import { num, ordinal, toPlayerLine, type PlayerGameRow, type PlayerLine } from '@/lib/gameReport';
 import type { PlayerSeasonAverage, StandingRow, TeamSeasonAverage } from '@/pages/CoachesHub';
 
@@ -29,6 +32,15 @@ interface RecentGame {
   oppName: string;
   efg: number | null;
   tov: number | null;
+}
+
+/** A club crest on a white tile, so any logo reads on the team-coloured banner. */
+function Crest({ teamName, leagueId }: { teamName: string; leagueId: string }) {
+  return (
+    <span className="shrink-0 w-[68px] h-[68px] md:w-[84px] md:h-[84px] rounded-2xl bg-white ring-1 ring-black/5 shadow-[0_8px_24px_-10px_rgba(0,0,0,0.55)] flex items-center justify-center p-2 overflow-hidden">
+      <TeamLogo teamName={teamName} leagueId={leagueId} size="lg" className="!w-full !h-full object-contain" />
+    </span>
+  );
 }
 
 function Section({ n, title, subtitle, color, children, narrative }: {
@@ -72,7 +84,9 @@ export default function OpponentScoutReport({
   const [leagueHasShots, setLeagueHasShots] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   // Branded to the coach's own team, not the opponent -- this is their document.
-  const { primaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: myTeamName, leagueId });
+  const { primaryColor, secondaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: myTeamName, leagueId });
+  // The opponent's roster and league-percentile profiles (public box-score data).
+  const { data: rosterData } = useScoutRoster(leagueId, opponentName, myTeamName);
   const brand = brandLoading || !primaryColor ? brandColor : primaryColor;
 
   // The feed lists some clubs under two names in one competition (sponsor
@@ -288,19 +302,38 @@ export default function OpponentScoutReport({
         <ArrowLeft className="w-4 h-4" /> Back to overview
       </button>
 
-      <div className="ch-hero p-5 md:p-7 text-white" /* Solid rather than a gradient: useTeamBranding resolves some teams to
-             an rgb() string, and appending an alpha suffix to that produces
-             invalid CSS, which silently drops the whole background. */
-          style={{ backgroundColor: brand }}>
-        <div className="text-[11px] md:text-xs font-semibold uppercase tracking-wide text-white/70 mb-1">Pre-game scout report</div>
-        <h2 className="ch-display uppercase text-3xl md:text-5xl font-bold tracking-tight">{opponentName}</h2>
-        <p className="text-sm text-white/80 mt-1">
-          {oppStanding ? `${oppStanding.wins}-${oppStanding.losses}, ${ordinal(oppStanding.rank)} of ${standings.length}` : 'Record unavailable'}
+      <div
+        className="ch-hero p-5 md:p-7 text-white"
+        /* Solid rather than a gradient: useTeamBranding resolves some teams to
+           an rgb() string, and appending an alpha suffix to that produces
+           invalid CSS, which silently drops the whole background. The coach's
+           own colours carry the page, the second colour sits as a base line. */
+        style={{ backgroundColor: brand, borderBottom: `5px solid ${brandLoading || !secondaryColor || secondaryColor === brand ? 'rgba(255,255,255,0.35)' : secondaryColor}` }}
+      >
+        <div className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.12em] text-white/75">
+          {myTeamName ? `${myTeamName} scouting report` : 'Pre-game scout report'}
+          {rosterData?.leagueName ? ` · ${rosterData.leagueName}` : ''}
+        </div>
+        <div className="mt-3 flex items-center gap-3 md:gap-5 flex-wrap">
+          {myTeamName && (
+            <>
+              <Crest teamName={myTeamName} leagueId={leagueId} />
+              <h2 className="ch-display uppercase text-[1.75rem] md:text-5xl font-bold tracking-tight leading-none">{myTeamName}</h2>
+              <span className="ch-display uppercase text-xl md:text-3xl text-white/60 leading-none">v</span>
+            </>
+          )}
+          <h2 className="ch-display uppercase text-[1.75rem] md:text-5xl font-bold tracking-tight leading-none">{opponentName}</h2>
+          <Crest teamName={opponentName} leagueId={leagueId} />
+        </div>
+        <p className="text-sm text-white/80 mt-3">
+          {oppStanding ? `${opponentName}: ${oppStanding.wins}-${oppStanding.losses}, ${ordinal(oppStanding.rank)} of ${standings.length}` : 'Record unavailable'}
           {opponent.games_played ? ` · ${opponent.games_played} games played` : ''}
         </p>
       </div>
 
-      <AgentGamePlan leagueId={leagueId} opponentName={opponentName} myTeamName={myTeamName} color={brand} />
+      <AgentGamePlan leagueId={leagueId} opponentName={opponentName} myTeamName={myTeamName} color={brand} roster={rosterData ?? null} />
+
+      {rosterData && <ScoutRoster data={rosterData} opponentName={opponentName} color={brand} />}
 
       <NarrativeSummary
         headline={narrative?.headline}

@@ -4,6 +4,7 @@ import { Lock, RefreshCw, Sparkles, Shield, Swords, Target, Users, Timer, AlertT
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { printScoutPlan } from '@/lib/printScoutPlan';
+import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
 
 /**
  * The scouting agent's game plan, shown at the top of the opponent scout report.
@@ -103,8 +104,8 @@ function CallList({ calls }: { calls: Call[] }) {
 }
 
 export default function AgentGamePlan({
-  leagueId, opponentName, myTeamName, color,
-}: { leagueId: string; opponentName: string; myTeamName: string; color: string }) {
+  leagueId, opponentName, myTeamName, color, roster,
+}: { leagueId: string; opponentName: string; myTeamName: string; color: string; roster?: ScoutRosterResponse | null }) {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
@@ -202,6 +203,8 @@ export default function AgentGamePlan({
                 dataThrough: report?.dataThrough ?? null,
                 generatedAt: report?.generatedAt ?? null,
                 brandColor: color,
+                competitionName: roster?.leagueName ?? null,
+                roster: roster ?? null,
               });
               if (!ok) setRequestError('Allow pop-ups for this site to download the report.');
             }}
