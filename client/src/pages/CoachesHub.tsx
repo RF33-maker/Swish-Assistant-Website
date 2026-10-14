@@ -17,7 +17,7 @@ import TeamDetail from '@/components/coaches-hub/TeamDetail';
 import CoachTeamOverview from '@/components/coaches-hub/CoachTeamOverview';
 import CoachTeamBanner from '@/components/coaches-hub/CoachTeamBanner';
 import AdminTeamPicker, { AdminOpponentPicker } from '@/components/coaches-hub/AdminTeamPicker';
-import { findCoachTeam } from '@/lib/coachTeam';
+import { findCoachTeam, nextFixtureFor, opponentIn } from '@/lib/coachTeam';
 import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
 import { Link } from 'wouter';
@@ -415,16 +415,19 @@ export default function CoachesHub() {
           .order('match_time', { ascending: false }),
         // Next scheduled game for a coach's own team — league owners viewing
         // generally don't need this, so it's skipped for them.
+        // Found by any id the club is known by or by its identity, not one team id
+        // (see lib/coachTeam): a fixture list can link one club under two ids.
         isCoach && coachTeamId
-          ? supabase
-              .from('game_schedule')
-              .select('game_key, hometeam, awayteam, home_team_id, away_team_id, matchtime, status')
-              .eq('league_id', leagueId)
-              .or(`home_team_id.eq.${coachTeamId},away_team_id.eq.${coachTeamId}`)
-              .gt('matchtime', new Date().toISOString())
-              .order('matchtime', { ascending: true })
-              .limit(1)
-              .maybeSingle()
+          ? (async () => {
+              const { data, error } = await supabase
+                .from('game_schedule')
+                .select('game_key, hometeam, awayteam, home_team_id, away_team_id, matchtime, status')
+                .eq('league_id', leagueId)
+                .gt('matchtime', new Date().toISOString())
+                .order('matchtime', { ascending: true })
+                .limit(500);
+              return { data: nextFixtureFor((data || []) as NextGameRow[], { ids: [coachTeamId], name: coachTeamName }) ?? null, error };
+            })()
           : Promise.resolve({ data: null, error: null }),
       ]);
 
@@ -676,7 +679,7 @@ export default function CoachesHub() {
   // query needed.
   const opponentLastGame = useMemo(() => {
     if (!nextGame || !myTeam) return null;
-    const opponentName = nextGame.home_team_id === myTeam.team_id ? nextGame.awayteam : nextGame.hometeam;
+    const opponentName = opponentIn(nextGame, { ids: [myTeam.team_id, coachTeamId], name: myTeam.team_name });
     const game = leagueGameResults.find(
       (g) => (g.home_team === opponentName || g.away_team === opponentName) && g.home_score != null && g.away_score != null
     );
@@ -1543,7 +1546,7 @@ export default function CoachesHub() {
                       standings={standings}
                       gameResults={leagueGameResults}
                       nextOpponentName={
-                        nextGame ? (nextGame.home_team_id === myTeam.team_id ? nextGame.awayteam : nextGame.hometeam) : null
+                        nextGame ? opponentIn(nextGame, { ids: [myTeam.team_id, coachTeamId], name: myTeam.team_name }) : null
                       }
                       brandColor={readableBrand}
                     />
