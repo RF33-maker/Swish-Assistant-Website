@@ -39,3 +39,38 @@ test("brand colour only accepts a plain hex colour", () => {
 test("without a team the title is the opponent", () => {
   assert.ok(buildPlanHtml(plan, { opponentName: "Haukar" }).includes("<title>Scouting report: Haukar</title>"));
 });
+
+import { readFileSync } from "node:fs";
+import { buildScoutRoster, type BoxScoreRow } from "../shared/scoutRoster";
+
+const rows = JSON.parse(readFileSync(new URL("./fixtures/iceland-womens-2026-27-box-scores.json", import.meta.url), "utf8")) as BoxScoreRow[];
+const haukar = buildScoutRoster(rows, (t) => t === "Haukar");
+const roster = { ...haukar, leagueName: "Icelandic Women's Premier League 2026-27", logos: { opponent: "https://example.com/haukar.jpg", forTeam: "https://example.com/valur.png" } };
+
+test("the printable report carries the roster, profiles, percentile bars and crests", () => {
+  const html = buildPlanHtml(plan, { opponentName: "Haukar", forTeamName: "Valur", roster });
+  for (const part of ["Haukar roster", "Player profiles", "How to read this", "Strengths", "Weaknesses", "percentile", "Ahead of", "Jadakiss Nashi Guinn", "https://example.com/haukar.jpg", "https://example.com/valur.png", "Valur scouting report"]) {
+    assert.ok(html.includes(part), `missing: ${part}`);
+  }
+  assert.equal((html.match(/class="pro"/g) || []).length, haukar.profiles.length);
+  assert.equal((html.match(/<tr class=/g) || []).length, haukar.roster.length);
+});
+
+test("the guide's pool numbers come from the data", () => {
+  const html = buildPlanHtml(plan, { opponentName: "Haukar", forTeamName: "Valur", roster });
+  assert.ok(html.includes(`In a pool of ${haukar.poolSize}`));
+  assert.ok(html.includes(`of the other ${haukar.poolSize - 1}`));
+});
+
+test("only http(s) crest links are used", () => {
+  const html = buildPlanHtml(plan, { opponentName: "Haukar", forTeamName: "Valur", roster: { ...roster, logos: { opponent: "javascript:alert(1)", forTeam: "data:text/html,x" } } });
+  assert.ok(!html.includes("javascript:alert"));
+  assert.ok(!html.includes("data:text/html"));
+  assert.ok(!html.includes("<img"));
+});
+
+test("without a roster the printout still builds", () => {
+  const html = buildPlanHtml(plan, { opponentName: "Haukar", forTeamName: "Valur", roster: null });
+  assert.ok(html.includes("Game plan"));
+  assert.ok(!html.includes("Player profiles"));
+});
