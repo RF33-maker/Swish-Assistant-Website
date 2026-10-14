@@ -1,3 +1,4 @@
+import { isHomeFor, opponentIn } from '@/lib/coachTeam';
 import type { ReactNode } from 'react';
 import { Link } from 'wouter';
 import { BarChart2, Calendar, ClipboardList, Clock, FileText, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Video } from 'lucide-react';
@@ -126,8 +127,9 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
   // longer than five games; below that the two windows are the same games.
   const hasTrendBaseline = Number(team.games_played ?? 0) > 5;
 
-  const nextIsHome = nextGame ? nextGame.home_team_id === team.team_id : false;
-  const nextOpponent = nextGame ? (nextIsHome ? nextGame.awayteam : nextGame.hometeam) : '';
+  // Home or away by any id the club is known by, or its name (see lib/coachTeam).
+  const nextIsHome = nextGame ? isHomeFor(nextGame, { ids: [team.team_id], name: team.team_name }) : false;
+  const nextOpponent = nextGame ? opponentIn(nextGame, { ids: [team.team_id], name: team.team_name }) : '';
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-5">
