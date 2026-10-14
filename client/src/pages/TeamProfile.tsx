@@ -805,6 +805,18 @@ export default function TeamProfile() {
             ? identityGame.home_team_id
             : identityGame.away_team_id
           : null;
+        // Schedule rows can still point at the team's id from an earlier season
+        // (fixtures are created before a game is played); only trust the id if
+        // it is a team in the competition being viewed.
+        if (linkedTeamId && selectedLeagueIds.length > 0) {
+          const { data: seasonTeam } = await supabase
+            .from("teams")
+            .select("team_id")
+            .eq("team_id", linkedTeamId)
+            .in("league_id", selectedLeagueIds)
+            .limit(1);
+          if (!seasonTeam || seasonTeam.length === 0) linkedTeamId = null;
+        }
         if (!linkedTeamId && leagueId) {
           const { data: linkedStats } = await supabase
             .from("player_stats")
