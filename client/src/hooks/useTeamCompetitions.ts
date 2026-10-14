@@ -32,11 +32,15 @@ export interface TeamCompetition {
 // Every competition this club has played in, newest first — matched on club
 // identity server-side, since each competition gives the club its own
 // team_id (and often its own spelling of the name).
-export function useTeamCompetitions(teamName: string | null | undefined) {
+//
+// `competitionSlug` is the competition the name came from: a women's competition's
+// "London Lions" is the women's side, so the same name matches different rows there.
+export function useTeamCompetitions(teamName: string | null | undefined, competitionSlug?: string | null) {
   return useQuery<TeamCompetition[]>({
-    queryKey: ["team-competitions", teamName],
+    queryKey: ["team-competitions", teamName, competitionSlug ?? null],
     queryFn: async () => {
-      const response = await fetch(`/api/public/team-competitions?team=${encodeURIComponent(teamName || "")}`);
+      const competition = competitionSlug ? `&competition=${encodeURIComponent(competitionSlug)}` : "";
+      const response = await fetch(`/api/public/team-competitions?team=${encodeURIComponent(teamName || "")}${competition}`);
       if (!response.ok) return [];
       return response.json();
     },

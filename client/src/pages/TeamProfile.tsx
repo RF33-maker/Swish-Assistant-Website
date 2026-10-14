@@ -408,9 +408,11 @@ export default function TeamProfile() {
   // season-specific routes still work.
   const isPermanentRoute = !competitionSlug && !legacyLeagueSlug;
   const { data: teamPage, isLoading: teamPageLoading } = useQuery({
-    queryKey: ["team-page", routeTeamName],
+    queryKey: ["team-page", routeTeamName, competitionQuery],
     queryFn: async (): Promise<TeamPageInfo | null> => {
-      const res = await fetch(`/api/public/team-page/${encodeURIComponent(routeTeamName || "")}`);
+      // The competition says which side of a shared name is meant (the women's "London Lions").
+      const competition = competitionQuery ? `?competition=${encodeURIComponent(competitionQuery)}` : "";
+      const res = await fetch(`/api/public/team-page/${encodeURIComponent(routeTeamName || "")}${competition}`);
       return res.ok ? res.json() : null;
     },
     enabled: isPermanentRoute && !!routeTeamName,
@@ -462,7 +464,7 @@ export default function TeamProfile() {
   // Every competition this club has played in (league, cup, trophy, past
   // seasons) — drives the competition switcher and the club-wide accolades.
   const decodedTeamName = teamName ? safeDecode(teamName) : "";
-  const { data: clubCompetitions = [] } = useTeamCompetitions(decodedTeamName);
+  const { data: clubCompetitions = [] } = useTeamCompetitions(decodedTeamName, leagueSlug);
   const permanentSlug = teamPage?.slug || clubSlug(decodedTeamName);
   // An old slug or a team name in the URL: show the canonical one.
   useEffect(() => {
