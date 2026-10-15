@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { isSameTeam } from "./teamIdentityService";
 import { getLeagueSides } from "./teamSides";
-import { cleanNote, isNoteKind, parseWindow, type CoachNote, type ScoutWindow } from "@shared/coachNotes";
+import { cleanEdit, cleanNote, isEditablePath, isNoteKind, parseWindow, type CoachNote, type PlanEdits, type ScoutWindow } from "@shared/coachNotes";
 import { playerNameKey } from "@shared/playerNameKey";
 
 /**
@@ -76,7 +76,7 @@ async function agentSecret(): Promise<string | null> {
 async function findReport(leagueId: string, opponent: string, forTeam: string, window: ScoutWindow = "season") {
   const { data, error } = await supabaseAdmin
     .from("scout_agent_reports")
-    .select("id, league_id, opponent_name, for_team_name, tier, window, game_key, match_time, status, teaser, plan, facts, model, error, games_analysed, data_through, generated_at, updated_at")
+    .select("id, league_id, opponent_name, for_team_name, tier, window, edits, game_key, match_time, status, teaser, plan, facts, model, error, games_analysed, data_through, generated_at, updated_at")
     .eq("league_id", leagueId)
     .limit(500);
   if (error) throw new Error(error.message);
@@ -104,13 +104,20 @@ async function dispatch(body: Record<string, unknown>) {
 
 const MAX_NOTES = 60;
 
+function currentEdits(row: any): PlanEdits | null {
+  const e = row?.edits;
+  if (!e || !row.generated_at || typeof e.basedOn !== "string") return null;
+  if (new Date(e.basedOn).getTime() !== new Date(row.generated_at).getTime()) return null;
+  return Object.keys(e.fields || {}).length ? { basedOn: e.basedOn, fields: e.fields } : null;
+}
+
 /** Notes between one coach's club and one opponent, matched on club identity like the reports. */
 async function notesFor(forTeam: string, opponent: string): Promise<any[]> {
   const core = forTeam.replace(/\s+Senior\s+(Men|Women)\b.*$/i, "").replace(/\s+I$/i, "").replace(/[%_,]/g, "").trim();
   if (core.length < 3) return [];
   const { data, error } = await supabaseAdmin
     .from("scout_coach_notes")
-    .select("id, for_team_name, opponent_name, scope, player_name, player_key, kind, note, updated_at")
+    .select("id, for_team_name, opponent_name, scope, player_name, player_key, kind, aspect_label, note, updated_at")
     .ilike("for_team_name", `%${core}%`)
     .limit(500);
   if (error) throw new Error(error.message);
@@ -118,7 +125,8 @@ async function notesFor(forTeam: string, opponent: string): Promise<any[]> {
 }
 
 function shapeNote(r: any): CoachNote {
-  return { id: r.id, scope: r.scope, playerName: r.player_name ?? null, kind: r.kind ?? null, note: r.note, updatedAt: r.updated_at };
+  const aspect = r.scope === "aspect" ? String(r.player_key).split("#")[1] ?? null : null;
+  return { id: r.id, scope: r.scope, playerName: r.player_name ?? null, aspect, aspectLabel: r.aspect_label ?? null, kind: r.kind ?? null, note: r.note, updatedAt: r.updated_at };
 }
 
 function shape(row: any, full: boolean) {
@@ -136,6 +144,8 @@ function shape(row: any, full: boolean) {
     dataThrough: row.data_through,
     teaser: row.teaser,
     plan: full ? row.plan : null,
+    // The coach's wording, only while it still belongs to this plan (a rebuild leaves it dormant).
+    edits: full ? currentEdits(row) : null,
     facts: full ? row.facts : null,
     error: full && row.status === "failed" ? row.error : null,
   };
@@ -263,13 +273,16 @@ export function registerScoutAgentRoutes(app: Express) {
     try {
       const { leagueId, opponent, forTeam, scope, playerName, kind } = req.body || {};
       if (!leagueId || !opponent || !forTeam) return res.status(400).json({ error: "leagueId, opponent and forTeam are required" });
-      if (scope !== "team" && scope !== "player") return res.status(400).json({ error: "scope must be team or player" });
+      if (scope !== "team" && scope !== "player" && scope !== "aspect") return res.status(400).json({ error: "scope must be team, player or aspect" });
+      const aspect = scope === "aspect" ? String(req.body?.aspect || "") : "";
+      if (scope === "aspect" && !/^[A-Za-z0-9_-]{1,40}$/.test(aspect)) return res.status(400).json({ error: "aspect is required for an aspect note" });
       const access = await resolveAccess(req, leagueId, forTeam);
       if (!access.userId) return res.status(401).json({ error: "Sign in to add notes" });
       if (!access.full) return res.status(403).json({ error: "Coach notes are part of the coach plan" });
 
-      const playerKey = scope === "player" ? playerNameKey(String(playerName || "")) : "";
-      if (scope === "player" && !playerKey) return res.status(400).json({ error: "playerName is required for a player note" });
+      const nameKey = scope === "team" ? "" : playerNameKey(String(playerName || ""));
+      if (scope !== "team" && !nameKey) return res.status(400).json({ error: "playerName is required for a player note" });
+      const playerKey = scope === "aspect" ? `${nameKey}#${aspect}` : nameKey;
       const note = cleanNote(req.body?.note);
 
       const rows = await notesFor(forTeam, opponent);
@@ -283,6 +296,7 @@ export function registerScoutAgentRoutes(app: Express) {
       const values = {
         note,
         kind: scope === "player" && isNoteKind(kind) ? kind : null,
+        aspect_label: scope === "aspect" ? String(req.body?.aspectLabel || "").slice(0, 80) || null : null,
         league_id: leagueId,
         updated_at: new Date().toISOString(),
       };
@@ -293,7 +307,7 @@ export function registerScoutAgentRoutes(app: Express) {
             for_team_name: forTeam,
             opponent_name: opponent,
             scope,
-            player_name: scope === "player" ? String(playerName).slice(0, 120) : null,
+            player_name: scope === "team" ? null : String(playerName).slice(0, 120),
             player_key: playerKey,
             created_by: access.userId,
           });
@@ -302,6 +316,37 @@ export function registerScoutAgentRoutes(app: Express) {
     } catch (err: any) {
       console.error("[scout-agent] note save failed:", err?.message);
       return res.status(500).json({ error: "Failed to save the note" });
+    }
+  });
+  // PUT /api/scout-agent/edits { leagueId, opponent, forTeam, window, fields: { path: text | null } }
+  // The coach's wording over the AI's, kept with the plan it was written against. null or empty puts the AI's text back.
+  app.put("/api/scout-agent/edits", async (req: Request, res: Response) => {
+    try {
+      const { leagueId, opponent, forTeam, fields } = req.body || {};
+      const window = parseWindow(req.body?.window);
+      if (!leagueId || !opponent || !forTeam || !fields || typeof fields !== "object") return res.status(400).json({ error: "leagueId, opponent, forTeam and fields are required" });
+      const access = await resolveAccess(req, leagueId, forTeam);
+      if (!access.userId) return res.status(401).json({ error: "Sign in to edit the report" });
+      if (!access.full) return res.status(403).json({ error: "Editing is part of the coach plan" });
+
+      const { exact } = await findReport(leagueId, opponent, forTeam, window);
+      if (!exact || exact.status !== "ready" || !exact.generated_at) return res.status(409).json({ error: "There is no finished plan to edit yet" });
+
+      const keep: Record<string, string> = currentEdits(exact)?.fields ?? {};
+      const next = { ...keep };
+      for (const [path, raw] of Object.entries(fields as Record<string, unknown>)) {
+        if (!isEditablePath(path)) return res.status(400).json({ error: `${String(path).slice(0, 60)} cannot be edited` });
+        const text = cleanEdit(raw);
+        if (text) next[path] = text; else delete next[path];
+      }
+      if (Object.keys(next).length > 80) return res.status(400).json({ error: "Too many edits on one plan" });
+      const edits: PlanEdits | null = Object.keys(next).length ? { basedOn: exact.generated_at, fields: next } : null;
+      const { error } = await supabaseAdmin.from("scout_agent_reports").update({ edits }).eq("id", exact.id);
+      if (error) throw new Error(error.message);
+      return res.json({ edits });
+    } catch (err: any) {
+      console.error("[scout-agent] edit failed:", err?.message);
+      return res.status(500).json({ error: "Failed to save your edit" });
     }
   });
 }

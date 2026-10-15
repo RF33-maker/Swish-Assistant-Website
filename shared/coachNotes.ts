@@ -29,8 +29,12 @@ export function noteKindLabel(kind: NoteKind | null | undefined): string {
 
 export interface CoachNote {
   id: string;
-  scope: "team" | "player";
+  /** "aspect" is context on one strength or weakness of one player (see aspect). */
+  scope: "team" | "player" | "aspect";
   playerName: string | null;
+  /** For an aspect note: the area's key (Aspect.key) and the name the report shows it under. */
+  aspect: string | null;
+  aspectLabel: string | null;
   kind: NoteKind | null;
   note: string;
   updatedAt: string;
@@ -62,4 +66,54 @@ export function windowGames(window: ScoutWindow): number | null {
 
 export function windowLabel(window: ScoutWindow): string {
   return window === "last3" ? "last 3 games" : window === "last5" ? "last 5 games" : "this season";
+}
+
+
+// ---------- editing the plan's wording ----------
+
+/**
+ * A coach's changes to the AI's wording, keyed by where the text sits in the
+ * plan ("headline", "gamePlan.0.target", "playersToStop.1.plan"). `basedOn` is
+ * the generated_at of the plan that was edited: the edits apply only to that
+ * plan, so a rebuilt plan is never overwritten with wording from an old one.
+ */
+export interface PlanEdits {
+  basedOn: string;
+  fields: Record<string, string>;
+}
+
+export const EDIT_MAX = 800;
+
+const EDITABLE_PATH = new RegExp(
+  "^(?:" +
+    ["headline", "summary", "howTheyPlay", "lateGame", "defendingThem\\.summary", "attackingThem\\.summary", "lineupsAndRotation\\.summary"].join("|") +
+    "|gamePlan\\.\\d{1,2}\\.(?:call|why|target)" +
+    "|(?:defendingThem|attackingThem)\\.keys\\.\\d{1,2}\\.(?:call|why)" +
+    "|playersToStop\\.\\d{1,2}\\.(?:threat|plan)" +
+    "|lineupsAndRotation\\.watchFor\\.\\d{1,2}" +
+    ")$",
+);
+
+/** Only wording the plan really has can be edited: nothing else is accepted from the browser. */
+export function isEditablePath(path: unknown): path is string {
+  return typeof path === "string" && EDITABLE_PATH.test(path);
+}
+
+export function cleanEdit(text: unknown): string {
+  return String(text ?? "").replace(/\s+/g, " ").trim().slice(0, EDIT_MAX);
+}
+
+/** The plan with the coach's wording laid over the AI's. Paths that don't exist in this plan are ignored. */
+export function applyEdits<T>(plan: T, edits: PlanEdits | null | undefined): T {
+  if (!plan || !edits) return plan;
+  const copy = JSON.parse(JSON.stringify(plan));
+  for (const [path, text] of Object.entries(edits.fields || {})) {
+    if (!isEditablePath(path) || typeof text !== "string" || !text) continue;
+    const parts = path.split(".");
+    let node: any = copy;
+    for (let i = 0; i < parts.length - 1 && node != null; i++) node = node[parts[i]];
+    const last = parts[parts.length - 1];
+    if (node != null && typeof node === "object" && typeof node[last] === "string") node[last] = text;
+  }
+  return copy;
 }

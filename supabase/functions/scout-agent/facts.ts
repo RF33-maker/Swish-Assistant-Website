@@ -109,6 +109,8 @@ export interface LeagueTeamRow {
 export interface CoachNotes {
   general: string | null;
   players: Array<{ name: string; kind: string; note: string }>;
+  /** Context the coach added to one strength or weakness of one player ("Three-point shooting"). */
+  areas?: Array<{ name: string; area: string; note: string }>;
   updatedAt: string | null;
 }
 
@@ -880,11 +882,13 @@ const KIND_MEANING: Record<string, string> = {
 
 /** The coach's notes, each tied to the player's numbers when we have them so the plan can weigh one against the other. */
 export function coachNotesBlock(notes: CoachNotes | null | undefined, cards: Array<{ name: string; gp: number; mpg: number | null; onRecentRoster: boolean }>) {
-  if (!notes || (!notes.general && notes.players.length === 0)) return null;
+  const areas = notes?.areas ?? [];
+  if (!notes || (!notes.general && notes.players.length === 0 && areas.length === 0)) return null;
   const byKey = new Map(cards.map((c) => [nameKey(c.name), c]));
   return {
     note: "Written by the coach for their own use. It is first-hand knowledge the data cannot see: treat it as true, let it outweigh a small sample, and say where a call rests on it.",
     aboutTheOpponent: notes.general,
+    aboutPlayerAreas: areas.map((a) => ({ name: byKey.get(nameKey(a.name))?.name ?? a.name, area: a.area, coachNote: a.note })),
     aboutPlayers: notes.players.map((p) => {
       const card = byKey.get(nameKey(p.name));
       return {

@@ -17,8 +17,13 @@ const toneOf = (kind: NoteKind | null) =>
   kind === 'stronger' ? 'var(--ch-win)' : kind === 'weaker' || kind === 'out' ? 'var(--ch-loss)' : 'var(--ch-muted)';
 
 function Editor({
-  api, scope, playerName, existing, color, onDone,
-}: { api: CoachNotesApi; scope: 'team' | 'player'; playerName?: string; existing: CoachNote | null; color: string; onDone: () => void }) {
+  api, scope, playerName, aspect, existing, color, onDone,
+}: {
+  api: CoachNotesApi; scope: 'team' | 'player' | 'aspect'; playerName?: string;
+  /** For scope "aspect": the strength or weakness this note is about. */
+  aspect?: { key: string; label: string };
+  existing: CoachNote | null; color: string; onDone: () => void;
+}) {
   const [text, setText] = useState(existing?.note ?? '');
   const [kind, setKind] = useState<NoteKind>(existing?.kind ?? 'stronger');
   const [failed, setFailed] = useState<string | null>(null);
@@ -26,7 +31,7 @@ function Editor({
   const submit = async (note: string) => {
     setFailed(null);
     try {
-      await api.save({ scope, playerName: playerName ?? null, kind: scope === 'player' ? kind : null, note });
+      await api.save({ scope, playerName: playerName ?? null, aspect: aspect?.key ?? null, aspectLabel: aspect?.label ?? null, kind: scope === 'player' ? kind : null, note });
       onDone();
     } catch (err: any) {
       setFailed(err?.message || 'Could not save the note');
@@ -60,11 +65,13 @@ function Editor({
         onChange={(e) => setText(e.target.value.slice(0, NOTE_MAX))}
         rows={3}
         autoFocus
-        aria-label={scope === 'team' ? 'Note about the team' : `Note about ${playerName}`}
+        aria-label={scope === 'team' ? 'Note about the team' : scope === 'aspect' ? `Context on ${playerName}'s ${aspect?.label}` : `Note about ${playerName}`}
         placeholder={
           scope === 'team'
             ? 'e.g. Their point guard is out for the month, so the second unit now starts the fourth quarter.'
-            : NOTE_KINDS.find((k) => k.key === kind)?.hint ?? 'What should the plan know?'
+            : scope === 'aspect'
+              ? `Context on ${aspect?.label?.toLowerCase()}, e.g. normally shoots 40%, this is a cold start.`
+              : NOTE_KINDS.find((k) => k.key === kind)?.hint ?? 'What should the plan know?'
         }
         className="w-full rounded-lg border border-[color:var(--ch-border)] bg-transparent px-3 py-2 text-sm text-slate-900 dark:text-white"
       />
@@ -222,5 +229,38 @@ export default function CoachNotesPanel({
         )}
       </div>
     </section>
+  );
+}
+
+
+/** Context on one strength or weakness of one player, shown under its bar on the report and in the PDF. */
+export function AspectNote({ api, playerName, aspect, color }: { api: CoachNotesApi; playerName: string; aspect: { key: string; label: string }; color: string }) {
+  const [editing, setEditing] = useState(false);
+  const note = api.aspectNoteFor(playerName, aspect.key);
+  if (!api.canEdit && !note) return null;
+  if (editing && api.canEdit) {
+    return (
+      <div className="mt-2 rounded-lg bg-[color:var(--ch-surface-2)] p-2.5">
+        <Editor api={api} scope="aspect" playerName={playerName} aspect={aspect} existing={note} color={color} onDone={() => setEditing(false)} />
+      </div>
+    );
+  }
+  if (note) {
+    return (
+      <div className="mt-2 flex items-start gap-2 rounded-md bg-[color:var(--ch-surface-2)] px-2.5 py-2 text-[12.5px] leading-snug">
+        <MessageSquareText className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[color:var(--ch-muted)]" />
+        <span className="min-w-0 flex-1 text-slate-900 dark:text-white"><b className="font-semibold">Your context: </b>{note.note}</span>
+        {api.canEdit && (
+          <button type="button" onClick={() => setEditing(true)} aria-label={`Edit your context on ${aspect.label}`} className="shrink-0 text-[color:var(--ch-muted)] hover:text-slate-900 dark:hover:text-white">
+            <Pencil className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <button type="button" onClick={() => setEditing(true)} className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-medium text-[color:var(--ch-muted)] hover:text-slate-900 dark:hover:text-white">
+      <Plus className="w-3 h-3" /> Add context
+    </button>
   );
 }

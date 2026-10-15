@@ -195,7 +195,7 @@ export async function loadCoachNotes(o: LoadOptions): Promise<CoachNotes | null>
   const core = searchCore(forTeam);
   if (core.length < 3) return null;
   const { data, error } = await o.db.from("scout_coach_notes")
-    .select("scope, player_name, kind, note, updated_at, for_team_name, opponent_name")
+    .select("scope, player_name, kind, aspect_label, note, updated_at, for_team_name, opponent_name")
     .ilike("for_team_name", `%${core}%`).limit(500);
   if (error) {
     console.error("coach notes unavailable:", error.message);
@@ -206,6 +206,7 @@ export async function loadCoachNotes(o: LoadOptions): Promise<CoachNotes | null>
   return {
     general: mine.find((r: any) => r.scope === "team")?.note ?? null,
     players: mine.filter((r: any) => r.scope === "player" && r.player_name).map((r: any) => ({ name: r.player_name, kind: r.kind ?? "other", note: r.note })),
+    areas: mine.filter((r: any) => r.scope === "aspect" && r.player_name && r.aspect_label).map((r: any) => ({ name: r.player_name, area: r.aspect_label, note: r.note })),
     updatedAt: mine.map((r: any) => r.updated_at).sort().pop() ?? null,
   };
 }
