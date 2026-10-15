@@ -17,8 +17,11 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 export interface NoteInput {
-  scope: "team" | "player";
+  scope: "team" | "player" | "aspect";
   playerName?: string | null;
+  /** For an aspect note: the strength or weakness it is about (Aspect.key) and its name on the report. */
+  aspect?: string | null;
+  aspectLabel?: string | null;
   kind?: NoteKind | null;
   /** Empty removes the note. */
   note: string;
@@ -65,6 +68,14 @@ export function useCoachNotes(leagueId: string, opponentName: string, forTeamNam
     [query.data],
   );
 
+  const aspectNoteFor = useCallback(
+    (playerName: string, aspectKey: string) => {
+      const key = playerNameKey(playerName);
+      return (query.data || []).find((n) => n.scope === "aspect" && n.aspect === aspectKey && n.playerName && playerNameKey(n.playerName) === key) ?? null;
+    },
+    [query.data],
+  );
+
   return {
     /** null when the viewer can't have notes for this report (not this coach's club). */
     notes: query.data ?? null,
@@ -74,6 +85,7 @@ export function useCoachNotes(leagueId: string, opponentName: string, forTeamNam
     error: save.error instanceof Error ? save.error.message : null,
     save: save.mutateAsync,
     noteFor,
+    aspectNoteFor,
     teamNote: (query.data || []).find((n) => n.scope === "team") ?? null,
     updatedAt: (query.data || []).map((n) => n.updatedAt).sort().pop() ?? null,
   };

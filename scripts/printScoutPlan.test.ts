@@ -154,3 +154,17 @@ test("colour helpers", () => {
   assert.equal(readableOn("#3b82f6"), "#ffffff");
   assert.equal(readableOn("#fb923c"), "#101623");
 });
+
+import { playerNameKey } from "../shared/playerNameKey";
+
+test("coach's context sits under the strength or weakness it is about, escaped", () => {
+  const profiled = haukar.profiles.find((p) => p.strengths.length > 0)!;
+  const area = profiled.strengths[0];
+  const html = buildPlanHtml(plan, {
+    opponentName: "Haukar", forTeamName: "Valur", roster,
+    coachNotes: [{ id: "9", scope: "aspect", playerName: profiled.name, aspect: area.key, aspectLabel: area.label, kind: null, note: "Normally better <b>still</b>", updatedAt: "2026-10-15" }],
+  });
+  assert.ok(html.includes("Coach's context"));
+  assert.ok(html.includes("Normally better &lt;b&gt;still&lt;/b&gt;"));
+  assert.equal((html.match(/class="ctx"/g) || []).length, 1, `only ${playerNameKey(profiled.name)}'s ${area.key} gets it`);
+});

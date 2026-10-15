@@ -1,5 +1,5 @@
 import { Plus, Minus, Users, Target, CalendarRange, MessageSquareText } from 'lucide-react';
-import { PlayerNote, type CoachNotesApi } from './CoachNotes';
+import { AspectNote, PlayerNote, type CoachNotesApi } from './CoachNotes';
 import { PlayerHeadshot } from '@/components/PlayerHeadshot';
 import { describeStanding, ordinalOf, type Aspect, type Headshot, type PlayerProfile, type RosterEntry } from '@shared/scoutRoster';
 import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
@@ -57,7 +57,7 @@ export function Avatar({ photo, shirt, name, color, size }: { photo?: Headshot |
   );
 }
 
-function AspectRow({ a, kind }: { a: Aspect; kind: 'up' | 'down' }) {
+function AspectRow({ a, kind, notes, playerName, color }: { a: Aspect; kind: 'up' | 'down'; notes?: CoachNotesApi | null; playerName: string; color: string }) {
   const tone = kind === 'up' ? 'var(--ch-win)' : 'var(--ch-loss)';
   return (
     <li className="grid grid-cols-[22px_1fr] gap-2.5 items-start">
@@ -80,6 +80,7 @@ function AspectRow({ a, kind }: { a: Aspect; kind: 'up' | 'down' }) {
         <p className="text-[12px] text-[color:var(--ch-muted)] mt-0.5">
           <span className="font-semibold" style={{ color: tone }}>{a.tier}</span> · {describeStanding(a)}
         </p>
+        {notes && <AspectNote api={notes} playerName={playerName} aspect={{ key: a.key, label: a.label }} color={color} />}
       </div>
     </li>
   );
@@ -101,7 +102,7 @@ function ProfileCard({ p, color, notes }: { p: PlayerProfile; color: string; not
         <div className="min-w-0">
           <h5 className="ch-eyebrow mb-2">Strengths</h5>
           <ul className="space-y-3">
-            {p.strengths.map((a) => <AspectRow key={a.key} a={a} kind="up" />)}
+            {p.strengths.map((a) => <AspectRow key={a.key} a={a} kind="up" notes={notes} playerName={p.name} color={color} />)}
             {p.strengths.length === 0 && <li className="text-[13px] italic text-[color:var(--ch-muted)]">No league-level strength yet in this sample.</li>}
             {p.strengths.length > 0 && p.strengths.length < 3 && (
               <li className="text-[12.5px] italic text-[color:var(--ch-muted)]">Only {p.strengths.length} area{p.strengths.length === 1 ? '' : 's'} above the 60th percentile.</li>
@@ -111,7 +112,7 @@ function ProfileCard({ p, color, notes }: { p: PlayerProfile; color: string; not
         <div className="min-w-0">
           <h5 className="ch-eyebrow mb-2">Weaknesses</h5>
           <ul className="space-y-3">
-            {p.weaknesses.map((a) => <AspectRow key={a.key} a={a} kind="down" />)}
+            {p.weaknesses.map((a) => <AspectRow key={a.key} a={a} kind="down" notes={notes} playerName={p.name} color={color} />)}
             {p.weaknesses.length === 0 && <li className="text-[13px] italic text-[color:var(--ch-muted)]">No league-level weakness yet in this sample.</li>}
             {p.weaknesses.length > 0 && p.weaknesses.length < 3 && (
               <li className="text-[12.5px] italic text-[color:var(--ch-muted)]">Only {p.weaknesses.length} area{p.weaknesses.length === 1 ? '' : 's'} below the 40th percentile.</li>

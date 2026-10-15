@@ -125,10 +125,10 @@ const KEY_LABELS: Record<string, string> = {
 // A small target mark for the bench-target callouts, drawn in the club's ink.
 const TARGET_ICON = `<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.5"/><circle cx="8" cy="8" r=".9" class="dot"/></svg>`;
 
-function aspectHtml(a: Aspect, kind: "up" | "down"): string {
+function aspectHtml(a: Aspect, kind: "up" | "down", context?: CoachNote): string {
   return `<li><span class="mk ${kind}">${kind === "up" ? "+" : "&minus;"}</span><div><p class="aspect">${esc(a.label)}</p><p class="val">${esc(a.text)}</p>
 <div class="pbar"><span class="track"><span class="fill ${kind}" style="width:${Math.max(a.percentile, 3)}%"></span></span><b>${ordinalOf(a.percentile)} percentile</b></div>
-<p class="gloss"><span class="tier ${kind}">${esc(a.tier)}</span> ${esc(describeStanding(a))}</p></div></li>`;
+<p class="gloss"><span class="tier ${kind}">${esc(a.tier)}</span> ${esc(describeStanding(a))}</p>${context ? `<p class="ctx"><b>Coach's context</b> ${esc(context.note)}</p>` : ""}</div></li>`;
 }
 
 const dash = (v: number | null) => (v == null ? "&ndash;" : String(v));
@@ -154,13 +154,13 @@ function noteLine(n: CoachNote | undefined): string {
   return n ? `<p class="pnote"><b>Your note${n.kind ? ` &middot; ${esc(noteKindLabel(n.kind))}` : ""}</b>${esc(n.note)}</p>` : "";
 }
 
-function profilesSection(r: PrintableRoster, notes: Map<string, CoachNote>): string {
+function profilesSection(r: PrintableRoster, notes: Map<string, CoachNote>, areas: Map<string, CoachNote>): string {
   if (!r.profiles.length) return "";
   const [lo, hi] = r.poolRange;
   const cards = r.profiles
     .map((p) => `<article class="pro"><header>${headshot(p.photo, p.name, p.shirt, "lg")}<div><h3>${esc(p.name)}</h3><p class="line"><b>${p.pts}</b> pts <b>${p.reb}</b> reb <b>${p.ast}</b> ast <span>&middot;</span> ${p.mpg} min <span>&middot;</span> ${p.gp} games</p></div></header>
-${noteLine(notes.get(playerNameKey(p.name)))}<div class="two"><div><h4>Strengths</h4><ul class="aspects">${p.strengths.map((a) => aspectHtml(a, "up")).join("") || '<li class="none">No league-level strength yet in this sample.</li>'}${p.strengths.length > 0 && p.strengths.length < 3 ? `<li class="none">Only ${p.strengths.length} area${p.strengths.length === 1 ? "" : "s"} above the 60th percentile.</li>` : ""}</ul></div>
-<div><h4>Weaknesses</h4><ul class="aspects">${p.weaknesses.map((a) => aspectHtml(a, "down")).join("") || '<li class="none">No league-level weakness yet in this sample.</li>'}${p.weaknesses.length > 0 && p.weaknesses.length < 3 ? `<li class="none">Only ${p.weaknesses.length} area${p.weaknesses.length === 1 ? "" : "s"} below the 40th percentile.</li>` : ""}</ul></div></div></article>`)
+${noteLine(notes.get(playerNameKey(p.name)))}<div class="two"><div><h4>Strengths</h4><ul class="aspects">${p.strengths.map((a) => aspectHtml(a, "up", areas.get(`${playerNameKey(p.name)}#${a.key}`))).join("") || '<li class="none">No league-level strength yet in this sample.</li>'}${p.strengths.length > 0 && p.strengths.length < 3 ? `<li class="none">Only ${p.strengths.length} area${p.strengths.length === 1 ? "" : "s"} above the 60th percentile.</li>` : ""}</ul></div>
+<div><h4>Weaknesses</h4><ul class="aspects">${p.weaknesses.map((a) => aspectHtml(a, "down", areas.get(`${playerNameKey(p.name)}#${a.key}`))).join("") || '<li class="none">No league-level weakness yet in this sample.</li>'}${p.weaknesses.length > 0 && p.weaknesses.length < 3 ? `<li class="none">Only ${p.weaknesses.length} area${p.weaknesses.length === 1 ? "" : "s"} below the 40th percentile.</li>` : ""}</ul></div></div></article>`)
     .join("");
   return `<section class="profiles"><div class="keep"><h2><span>Players</span>Strengths and weaknesses</h2>
 <div class="guide"><h3>How to read this</h3><p>A percentile counts how many league players this player is ahead of. In a pool of ${r.poolSize}, the 96th percentile means ahead of about ${Math.round(0.96 * (r.poolSize - 1))} of the other ${r.poolSize - 1}, and the 5th means ahead of only about ${Math.round(0.05 * (r.poolSize - 1))}. Shooting percentages have fewer qualifying players (${lo} to ${hi} depending on the stat). A longer bar is always better: green is a strength, red a weakness. For turnovers and fouls the bar already counts fewer as better. Counting stats are compared per 40 minutes. Strengths are above the 60th percentile and weaknesses below the 40th.</p>
@@ -202,6 +202,9 @@ export function buildPlanHtml(plan: PrintablePlan, meta: PrintableMeta): string 
 
   const noteByPlayer = new Map<string, CoachNote>();
   for (const n of meta.coachNotes ?? []) if (n.scope === "player" && n.playerName) noteByPlayer.set(playerNameKey(n.playerName), n);
+  // Context on one strength or weakness, keyed player#area.
+  const noteByArea = new Map<string, CoachNote>();
+  for (const n of meta.coachNotes ?? []) if (n.scope === "aspect" && n.playerName && n.aspect) noteByArea.set(`${playerNameKey(n.playerName)}#${n.aspect}`, n);
   const teamNote = (meta.coachNotes ?? []).find((n) => n.scope === "team");
   const notesBlock = meta.coachNotes && meta.coachNotes.length
     ? `<section class="notes"><h2 class="mini">Your notes on ${esc(meta.opponentName)}, which this plan was told</h2>
@@ -366,6 +369,7 @@ ${numbers.slice(0, 5).map((k) => {
   .notes{margin:0 0 4px;background:var(--tint);border-left:3px solid var(--brand);border-radius:0 10px 10px 0;padding:11px 15px;break-inside:avoid}
   .notes h2.mini{margin:0 0 6px}.notes h2.mini::after{display:none}
   .nt{font-size:.9rem;margin-top:5px;color:var(--ink)}.nt b,.pnote b{display:block;font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .ctx{margin-top:4px;padding:4px 9px;background:var(--tint);border-left:2px solid var(--brand);border-radius:0 5px 5px 0;font-size:.78rem;color:var(--ink)}.ctx b{font-size:.56rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-right:4px}
   .pnote{background:var(--tint);border-left:3px solid var(--brand);border-radius:0 6px 6px 0;padding:6px 11px;margin:-2px 0 10px;font-size:.88rem;color:var(--ink)}
   .hs{position:relative;flex:none;display:inline-block;border-radius:10px;background:var(--tint2);overflow:visible}
   .hs img{width:100%;height:100%;object-fit:cover;border-radius:10px;display:block}
@@ -418,7 +422,7 @@ ${notesBlock}
 <p class="confidence"><strong>Confidence: ${esc(plan.confidence)}</strong><span>${esc(plan.confidenceReason)}</span></p></section>
 </div>
 ${meta.roster && meta.roster.roster.length ? rosterSection(meta.roster, meta.opponentName) : ""}
-${meta.roster ? profilesSection(meta.roster, noteByPlayer) : ""}
+${meta.roster ? profilesSection(meta.roster, noteByPlayer, noteByArea) : ""}
 <footer class="colophon">${logo ? `<img src="${logo}" alt="">` : ""}<div><b>Prepared by Swish Assistant</b>${esc(title)}${competition ? ` &middot; ${esc(competition)}` : ""}${built ? ` &middot; Built ${esc(built)}` : ""}</div></footer>
 </body></html>`;
 }

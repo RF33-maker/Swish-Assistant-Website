@@ -5,10 +5,11 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { printScoutPlan } from '@/lib/printScoutPlan';
 import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
-import { windowLabel, type CoachNote, type ScoutWindow } from '@shared/coachNotes';
+import { applyEdits, windowLabel, type CoachNote, type PlanEdits, type ScoutWindow } from '@shared/coachNotes';
 import { ordinalOf, type RosterEntry } from '@shared/scoutRoster';
 import { playerNameKey } from '@shared/playerNameKey';
 import { Avatar } from './ScoutRoster';
+import { Ed, EditProvider, type EditApi } from './EditableText';
 
 /**
  * The scouting agent's game plan, shown at the top of the opponent scout report.
@@ -52,6 +53,8 @@ interface Report {
   dataThrough: string | null;
   teaser: Teaser | null;
   plan: GamePlan | null;
+  /** The coach's own wording over the AI's, for this plan only. */
+  edits?: PlanEdits | null;
   /** Only the coach's own report carries the fact pack; here, just to see whether notes went into it. */
   facts?: { coachNotes?: unknown } | null;
   error: string | null;
@@ -89,6 +92,13 @@ function timeAgo(iso: string | null): string {
 const ink = (color: string) => `var(--sr-ink, ${color})`;
 const fill = (color: string): React.CSSProperties => ({ backgroundColor: `var(--sr-brand, ${color})`, color: 'var(--sr-on, #fff)' });
 
+/** What sits at a plan path like "gamePlan.0.target". */
+function textAt(plan: unknown, path: string): string {
+  let node: any = plan;
+  for (const part of path.split('.')) node = node?.[part];
+  return typeof node === 'string' ? node : '';
+}
+
 function Card({ icon, title, color, children, className = '' }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode; className?: string }) {
   return (
     <section className={`ch-card p-5 md:p-6 ${className}`}>
@@ -103,15 +113,15 @@ function Card({ icon, title, color, children, className = '' }: { icon: React.Re
   );
 }
 
-function CallList({ calls, color }: { calls: Call[]; color: string }) {
+function CallList({ calls, color, path }: { calls: Call[]; color: string; path: string }) {
   return (
     <ol className="border-t border-[color:var(--ch-border)]">
       {calls.map((c, i) => (
         <li key={i} className="grid grid-cols-[22px_1fr] gap-2 py-3 border-b border-[color:var(--ch-border)] last:border-b-0 last:pb-0">
           <span className="ch-display text-[17px] font-bold leading-[1.25] tabular-nums" style={{ color: ink(color) }}>{i + 1}</span>
           <div className="min-w-0">
-            <p className="text-[14px] font-semibold leading-snug text-slate-900 dark:text-white">{c.call}</p>
-            <p className="text-[13.5px] leading-relaxed text-[color:var(--ch-text-2)] mt-0.5">{c.why}</p>
+            <Ed as="p" path={`${path}.${i}.call`} value={c.call} color={color} className="text-[14px] font-semibold leading-snug text-slate-900 dark:text-white" />
+            <Ed as="p" path={`${path}.${i}.why`} value={c.why} color={color} className="text-[13.5px] leading-relaxed text-[color:var(--ch-text-2)] mt-0.5" />
           </div>
         </li>
       ))}
@@ -166,13 +176,18 @@ function KeyNumbers({ teaser, opponentName }: { teaser: Teaser; opponentName: st
 }
 
 /** One of the numbered calls, with its bench target set apart so it reads from the sideline. */
-function PlanCall({ n, call, color }: { n: number; call: Call & { target?: string }; color: string }) {
+function PlanCall({ n, call, color, path }: { n: number; call: Call & { target?: string }; color: string; path?: string }) {
+  const at = (field: string) => (path ? `${path}.${field}` : '');
   return (
     <li className="grid grid-cols-[34px_1fr] md:grid-cols-[48px_1fr] gap-x-2 py-4 border-b border-[color:var(--ch-border)] last:border-b-0 last:pb-0">
       <span className="ch-display text-[30px] md:text-[36px] font-bold leading-[0.85] tabular-nums" style={{ color: ink(color) }}>{n}</span>
       <div className="min-w-0">
-        <p className="text-[15px] md:text-[16px] font-semibold tracking-tight leading-snug text-slate-900 dark:text-white">{call.call}</p>
-        <p className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mt-1">{call.why}</p>
+        {path
+          ? <Ed as="p" path={at('call')} value={call.call} color={color} className="text-[15px] md:text-[16px] font-semibold tracking-tight leading-snug text-slate-900 dark:text-white" />
+          : <p className="text-[15px] md:text-[16px] font-semibold tracking-tight leading-snug text-slate-900 dark:text-white">{call.call}</p>}
+        {path
+          ? <Ed as="p" path={at('why')} value={call.why} color={color} className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mt-1" />
+          : <p className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mt-1">{call.why}</p>}
         {call.target && (
           <div
             className="mt-3 flex items-start gap-2.5 rounded-r-lg pl-3 pr-3.5 py-2 w-fit max-w-full"
@@ -181,7 +196,9 @@ function PlanCall({ n, call, color }: { n: number; call: Call & { target?: strin
             <Crosshair className="w-4 h-4 mt-0.5 shrink-0" style={{ color: ink(color) }} aria-hidden="true" />
             <p className="text-[13.5px] leading-snug min-w-0">
               <span className="block sm:inline text-[10.5px] font-bold uppercase tracking-[0.12em] sm:mr-2" style={{ color: ink(color) }}>Bench target</span>
-              <span className="font-semibold text-slate-900 dark:text-white">{call.target}</span>
+              {path
+                ? <Ed path={at('target')} value={call.target} color={color} className="font-semibold text-slate-900 dark:text-white" />
+                : <span className="font-semibold text-slate-900 dark:text-white">{call.target}</span>}
             </p>
           </div>
         )}
@@ -261,6 +278,18 @@ export default function AgentGamePlan({
     }
   };
 
+  // Saves one edit (or, with empty text, puts the AI's wording back) and shows the result straight away.
+  const saveEdit = async (path: string, text: string) => {
+    const res = await fetch('/api/scout-agent/edits', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+      body: JSON.stringify({ leagueId, opponent: opponentName, forTeam: myTeamName || null, window: scoutWindow, fields: { [path]: text } }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `save returned ${res.status}`);
+    setData((d) => (d?.report ? { ...d, report: { ...d.report, edits: json.edits ?? null } } : d));
+  };
+
   if (loading) {
     return <div className="h-32 rounded-lg bg-gray-100 dark:bg-neutral-800 animate-pulse" aria-label="Loading game plan" />;
   }
@@ -268,7 +297,22 @@ export default function AgentGamePlan({
 
   const full = data.access === 'full';
   const report = full ? data.report : data.preview;
-  const plan = report?.plan ?? null;
+  const aiPlan = report?.plan ?? null;
+  // The coach's own wording over the AI's; the PDF prints this version too.
+  const edits = full ? report?.edits ?? null : null;
+  const plan = aiPlan && edits ? applyEdits(aiPlan, edits) : aiPlan;
+  const editCount = Object.keys(edits?.fields ?? {}).length;
+  const editApi: EditApi = {
+    canEdit: full && data.canBuild && report?.status === 'ready' && !!aiPlan && !building,
+    isEdited: (path) => !!edits?.fields?.[path],
+    original: (path) => textAt(aiPlan, path),
+    save: saveEdit,
+  };
+  // A rebuild writes a new plan, so wording edited on the old one does not carry over (notes do).
+  const rebuild = () => {
+    if (editCount > 0 && !window.confirm(`Rebuilding writes a new plan, so your ${editCount} edit${editCount === 1 ? '' : 's'} to the wording will not carry over. Your notes are kept and used. Rebuild?`)) return;
+    build(true);
+  };
   const teaser = report?.teaser ?? null;
   // Notes saved after the plan was built haven't reached it yet.
   const notesStale = full && !!notesUpdatedAt && !!report?.generatedAt && new Date(notesUpdatedAt).getTime() > new Date(report.generatedAt).getTime();
@@ -296,6 +340,7 @@ export default function AgentGamePlan({
             Built {timeAgo(report.generatedAt)}
             {report.gamesAnalysed ? ` · ${report.gamesAnalysed} games` : ''}
             {report.dataThrough ? ` through ${new Date(report.dataThrough).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}
+            {editCount > 0 ? ` · ${editCount} edited by you` : ''}
           </span>
         )}
         {isRealAdmin && full && plan && (
@@ -324,7 +369,7 @@ export default function AgentGamePlan({
           </button>
         )}
         {full && data.canBuild && report?.status === 'ready' && !building && (
-          <button onClick={() => build(true)} className="flex items-center gap-1 font-medium hover:text-slate-900 dark:hover:text-white">
+          <button onClick={rebuild} className="flex items-center gap-1 font-medium hover:text-slate-900 dark:hover:text-white">
             <RefreshCw className="w-3.5 h-3.5" /> Rebuild
           </button>
         )}
@@ -436,6 +481,7 @@ export default function AgentGamePlan({
 
   // ----- full plan -----
   return (
+    <EditProvider value={editApi}>
     <div className="space-y-4">
       <section className="ch-card overflow-hidden">
         <div className="flex h-1" aria-hidden="true">
@@ -447,7 +493,7 @@ export default function AgentGamePlan({
           {notesStale && !building && (
             <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2 text-[13px] bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
               <span>You've added notes since this plan was built, so it doesn't reflect them yet.</span>
-              <button onClick={() => build(true)} className="font-semibold underline underline-offset-2">Rebuild with my notes</button>
+              <button onClick={rebuild} className="font-semibold underline underline-offset-2">Rebuild with my notes</button>
             </div>
           )}
           {!notesStale && !!report?.facts?.coachNotes && (
@@ -455,8 +501,8 @@ export default function AgentGamePlan({
           )}
 
           <div className="pl-4 md:pl-5" style={{ borderLeft: `3px solid ${ink(color)}` }}>
-            <p className="ch-display text-[26px] md:text-[34px] font-semibold leading-[1.06] text-slate-900 dark:text-white">{plan.headline}</p>
-            <p className="mt-3 text-[15px] leading-relaxed text-[color:var(--ch-text-2)] max-w-[72ch]">{plan.summary}</p>
+            <Ed as="p" path="headline" value={plan.headline} color={color} className="ch-display text-[26px] md:text-[34px] font-semibold leading-[1.06] text-slate-900 dark:text-white" />
+            <Ed as="p" path="summary" value={plan.summary} color={color} className="mt-3 text-[15px] leading-relaxed text-[color:var(--ch-text-2)] max-w-[72ch]" />
           </div>
 
           {teaser && <div className="mt-7"><KeyNumbers teaser={teaser} opponentName={opponentName} /></div>}
@@ -464,7 +510,7 @@ export default function AgentGamePlan({
           <div className="mt-7">
             <p className="ch-eyebrow mb-2">The calls</p>
             <ol className="border-t-2 border-[color:var(--ch-text)]">
-              {plan.gamePlan.map((g, i) => <PlanCall key={i} n={i + 1} call={g} color={color} />)}
+              {plan.gamePlan.map((g, i) => <PlanCall key={i} n={i + 1} call={g} color={color} path={`gamePlan.${i}`} />)}
             </ol>
           </div>
           {plan.confidence !== 'high' && (
@@ -476,23 +522,23 @@ export default function AgentGamePlan({
       </section>
 
       <Card icon={<Sparkles className="w-4 h-4" />} title={`How ${opponentName} play`} color={color}>
-        <p className="text-[15px] leading-relaxed text-[color:var(--ch-text-2)]">{plan.howTheyPlay}</p>
+        <Ed as="p" path="howTheyPlay" value={plan.howTheyPlay} color={color} className="text-[15px] leading-relaxed text-[color:var(--ch-text-2)]" />
       </Card>
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card icon={<Shield className="w-4 h-4" />} title="Defending them" color={color}>
-          <p className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mb-4">{plan.defendingThem.summary}</p>
-          <CallList calls={plan.defendingThem.keys} color={color} />
+          <Ed as="p" path="defendingThem.summary" value={plan.defendingThem.summary} color={color} className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mb-4" />
+          <CallList calls={plan.defendingThem.keys} color={color} path="defendingThem.keys" />
         </Card>
         <Card icon={<Swords className="w-4 h-4" />} title="Attacking them" color={color}>
-          <p className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mb-4">{plan.attackingThem.summary}</p>
-          <CallList calls={plan.attackingThem.keys} color={color} />
+          <Ed as="p" path="attackingThem.summary" value={plan.attackingThem.summary} color={color} className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mb-4" />
+          <CallList calls={plan.attackingThem.keys} color={color} path="attackingThem.keys" />
         </Card>
       </div>
 
       <Card icon={<Target className="w-4 h-4" />} title="Players to stop" color={color}>
         <div className="grid md:grid-cols-2 gap-3">
-          {plan.playersToStop.map((p) => {
+          {plan.playersToStop.map((p, pi) => {
             const r = rosterByKey.get(playerNameKey(p.name));
             return (
               <article key={p.name} className="ch-tile p-4 min-w-0">
@@ -505,9 +551,9 @@ export default function AgentGamePlan({
                 </header>
                 <dl className="grid grid-cols-[50px_1fr] gap-x-2 gap-y-2.5 text-[13.5px] leading-relaxed">
                   <dt className="text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--ch-muted)] pt-[3px]">Threat</dt>
-                  <dd className="text-[color:var(--ch-text-2)]">{p.threat}</dd>
+                  <Ed as="dd" path={`playersToStop.${pi}.threat`} value={p.threat} color={color} className="text-[color:var(--ch-text-2)]" />
                   <dt className="text-[10px] font-bold uppercase tracking-[0.12em] pt-[3px]" style={{ color: ink(color) }}>Plan</dt>
-                  <dd className="font-medium text-slate-900 dark:text-white">{p.plan}</dd>
+                  <Ed as="dd" path={`playersToStop.${pi}.plan`} value={p.plan} color={color} className="font-medium text-slate-900 dark:text-white" />
                 </dl>
               </article>
             );
@@ -517,7 +563,7 @@ export default function AgentGamePlan({
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card icon={<Users className="w-4 h-4" />} title="Lineups and rotation" color={color}>
-          <p className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)]">{plan.lineupsAndRotation.summary}</p>
+          <Ed as="p" path="lineupsAndRotation.summary" value={plan.lineupsAndRotation.summary} color={color} className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)]" />
           {plan.lineupsAndRotation.watchFor.length > 0 && (
             <>
               <p className="ch-eyebrow mt-4 mb-1">Watch for</p>
@@ -525,7 +571,7 @@ export default function AgentGamePlan({
                 {plan.lineupsAndRotation.watchFor.map((w, i) => (
                   <li key={i} className="flex gap-2 py-2.5 border-b border-[color:var(--ch-border)] last:border-b-0 last:pb-0 text-[14px] leading-relaxed text-slate-800 dark:text-neutral-200">
                     <ChevronRight className="w-4 h-4 mt-[3px] shrink-0" style={{ color: ink(color) }} aria-hidden="true" />
-                    {w}
+                    <Ed path={`lineupsAndRotation.watchFor.${i}`} value={w} color={color} className="min-w-0 flex-1" />
                   </li>
                 ))}
               </ul>
@@ -533,9 +579,10 @@ export default function AgentGamePlan({
           )}
         </Card>
         <Card icon={<Timer className="w-4 h-4" />} title="Late game" color={color}>
-          <p className="text-[14px] leading-relaxed text-slate-800 dark:text-neutral-200 rounded-lg p-4" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-2))' }}>{plan.lateGame}</p>
+          <Ed as="p" path="lateGame" value={plan.lateGame} color={color} className="block text-[14px] leading-relaxed text-slate-800 dark:text-neutral-200 rounded-lg p-4" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-2))' }} />
         </Card>
       </div>
     </div>
+    </EditProvider>
   );
 }
