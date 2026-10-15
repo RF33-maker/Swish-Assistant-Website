@@ -106,3 +106,51 @@ test("the season note names every competition counted", () => {
   const html = buildPlanHtml(plan, { opponentName: "Haukar", roster: { ...roster, season } });
   assert.ok(html.includes("5 games this season") && html.includes("BCB Trophy 4") && html.includes("5 games analysed"));
 });
+
+test("every page's footer carries the Swish Assistant name and logo, from a safe origin only", () => {
+  const html = buildPlanHtml(plan, { opponentName: "Haukar", forTeamName: "Valur", siteOrigin: "https://swishassistant.com" });
+  assert.match(html, /@bottom-left\{content:"Swish Assistant";[^}]*background:url\("https:\/\/swishassistant\.com\/icon-512\.png"\)/);
+  assert.ok(html.includes('counter(page) " of " counter(pages)'));
+  assert.ok(html.includes("Prepared by Swish Assistant"));
+  for (const bad of ["javascript:alert(1)", 'https://x.com/");}</style><script>x</script>', "data:image/png;base64,AAAA", "https://evil.com/path"]) {
+    const out = buildPlanHtml(plan, { opponentName: "Haukar", siteOrigin: bad });
+    assert.ok(out.includes('@bottom-left{content:"Swish Assistant"'), "the name stays without a logo");
+    assert.ok(!out.includes("icon-512.png"), `logo must not be built from ${bad}`);
+    assert.ok(!out.includes("javascript:") && !out.includes("data:image") && !out.includes("<script>x"));
+  }
+});
+
+test("the second club colour is sanitised and only used when it differs from the first", () => {
+  const css = (html: string, v: string) => html.match(new RegExp(`--${v}:(#[0-9a-f]{6})`))?.[1];
+  assert.equal(css(buildPlanHtml(plan, { opponentName: "A", brandColor: "#12427f", secondaryColor: "#d4202a" }), "accent"), "#d4202a");
+  const evil = buildPlanHtml(plan, { opponentName: "A", brandColor: "#12427f", secondaryColor: "red;} body{display:none" });
+  assert.ok(!evil.includes("body{display:none") && !evil.includes("red;}"));
+  assert.notEqual(css(evil, "accent"), undefined);
+  // Too close to the first colour to tell apart, so a shade of the first stands in.
+  assert.notEqual(css(buildPlanHtml(plan, { opponentName: "A", brandColor: "#12427f", secondaryColor: "#13437f" }), "accent"), "#13437f");
+});
+
+test("text in the club colour stays readable on paper for very light and very dark clubs", () => {
+  const css = (html: string, v: string) => html.match(new RegExp(`--${v}:(#[0-9a-f]{6})`))![1];
+  const yellow = buildPlanHtml(plan, { opponentName: "A", brandColor: "#f5d000" });
+  assert.equal(css(yellow, "on"), "#101623", "dark text on a yellow cover");
+  assert.ok(contrastRatio(css(yellow, "ink-b"), "#ffffff") >= 4.5, "yellow ink is deepened");
+  // A yellow club with a navy second colour uses the navy for ink.
+  assert.equal(css(buildPlanHtml(plan, { opponentName: "A", brandColor: "#f5d000", secondaryColor: "#1d3c8f" }), "ink-b"), "#1d3c8f");
+  const dark = buildPlanHtml(plan, { opponentName: "A", brandColor: "#101820" });
+  assert.equal(css(dark, "on"), "#ffffff");
+  assert.equal(css(dark, "ink-b"), "#101820");
+});
+
+import { contrastRatio, inkOn, readableOn, secondColor } from "../client/src/lib/brandColor";
+
+test("colour helpers", () => {
+  assert.ok(contrastRatio(inkOn("#f5d000", "#ffffff"), "#ffffff") >= 4.5);
+  assert.ok(contrastRatio(inkOn("#101820", "#111317", 3), "#111317") >= 3, "a near-black club is lightened on a dark surface");
+  assert.equal(secondColor("#12427f", null), null);
+  assert.equal(secondColor("#12427f", "rgb(212, 32, 42)"), "#d4202a");
+  // White lettering while it reads at display size, dark text on orange and yellow.
+  assert.equal(readableOn("#d4202a"), "#ffffff");
+  assert.equal(readableOn("#3b82f6"), "#ffffff");
+  assert.equal(readableOn("#fb923c"), "#101623");
+});

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'wouter';
-import { Lock, RefreshCw, Sparkles, Shield, Swords, Target, Users, Timer, AlertTriangle, Download } from 'lucide-react';
+import { Lock, RefreshCw, Sparkles, Shield, Swords, Target, Users, Timer, AlertTriangle, Download, ChevronRight, Crosshair } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { printScoutPlan } from '@/lib/printScoutPlan';
 import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
 import { windowLabel, type CoachNote, type ScoutWindow } from '@shared/coachNotes';
+import { ordinalOf, type RosterEntry } from '@shared/scoutRoster';
+import { playerNameKey } from '@shared/playerNameKey';
+import { Avatar } from './ScoutRoster';
 
 /**
  * The scouting agent's game plan, shown at the top of the opponent scout report.
@@ -81,35 +84,118 @@ function timeAgo(iso: string | null): string {
   return `${Math.round(hours / 24)} days ago`;
 }
 
-function Card({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
+// The club colour as ink and fill. OpponentScoutReport sets these (index.css,
+// .sr-brand) so they read on either theme; the passed colour is the fallback.
+const ink = (color: string) => `var(--sr-ink, ${color})`;
+const fill = (color: string): React.CSSProperties => ({ backgroundColor: `var(--sr-brand, ${color})`, color: 'var(--sr-on, #fff)' });
+
+function Card({ icon, title, color, children, className = '' }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="ch-card p-4 md:p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <span style={{ color }}>{icon}</span>
-        <h4 className="text-sm font-semibold uppercase tracking-wide text-slate-700 dark:text-neutral-200">{title}</h4>
-      </div>
+    <section className={`ch-card p-5 md:p-6 ${className}`}>
+      <header className="flex items-center gap-2.5 mb-4">
+        <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-3))', color: ink(color) }}>
+          {icon}
+        </span>
+        <h4 className="text-[15px] font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h4>
+      </header>
       {children}
+    </section>
+  );
+}
+
+function CallList({ calls, color }: { calls: Call[]; color: string }) {
+  return (
+    <ol className="border-t border-[color:var(--ch-border)]">
+      {calls.map((c, i) => (
+        <li key={i} className="grid grid-cols-[22px_1fr] gap-2 py-3 border-b border-[color:var(--ch-border)] last:border-b-0 last:pb-0">
+          <span className="ch-display text-[17px] font-bold leading-[1.25] tabular-nums" style={{ color: ink(color) }}>{i + 1}</span>
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold leading-snug text-slate-900 dark:text-white">{c.call}</p>
+            <p className="text-[13.5px] leading-relaxed text-[color:var(--ch-text-2)] mt-0.5">{c.why}</p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** How sure the agent is, as three bars and a word. */
+function ConfidenceChip({ level }: { level: string }) {
+  const filled = level === 'high' ? 3 : level === 'medium' ? 2 : 1;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] px-2 py-1 rounded-full bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)]">
+      <span className="flex items-end gap-[2px]" aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <span key={i} className="w-[3px] rounded-sm" style={{ height: 5 + i * 2.5, backgroundColor: i < filled ? 'currentColor' : 'var(--ch-border-strong)' }} />
+        ))}
+      </span>
+      {level} confidence
+    </span>
+  );
+}
+
+/** The opponent's headline numbers: a ruled strip, rank coloured where a rank is good or bad. */
+function KeyNumbers({ teaser, opponentName }: { teaser: Teaser; opponentName: string }) {
+  const numbers = (teaser.keyNumbers ?? []).filter((k) => k.value != null);
+  if (!numbers.length && !teaser.record) return null;
+  const cells = [
+    ...(teaser.record ? [{ key: 'record', value: teaser.record, label: 'Record', sub: teaser.gamesAnalysed ? `${teaser.gamesAnalysed} games` : '', tone: '' }] : []),
+    ...numbers.slice(0, teaser.record ? 5 : 6).map((k) => {
+      const ofN = k.of ?? 0;
+      // Pace and three-point rate are styles, not strengths, so they stay neutral.
+      const judged = !!k.rank && !!ofN && k.key !== 'pace' && k.key !== 'threeRate';
+      const third = Math.ceil(ofN / 3);
+      const tone = !judged ? '' : k.rank! <= third ? 'var(--ch-win)' : k.rank! > ofN - third ? 'var(--ch-loss)' : '';
+      return { key: k.key, value: String(k.value), label: KEY_LABELS[k.key] ?? k.key, sub: k.rank && ofN ? `${ordinalOf(k.rank)} of ${ofN}` : '', tone };
+    }),
+  ];
+  return (
+    <div>
+      <p className="ch-eyebrow mb-2">{opponentName} at a glance</p>
+      <dl className="grid grid-cols-3 md:grid-cols-6 gap-px bg-[color:var(--ch-border)] border-t-2 border-b border-t-[color:var(--ch-text)] border-b-[color:var(--ch-border)]">
+        {cells.map((c) => (
+          <div key={c.key} className="bg-[color:var(--ch-surface)] px-2.5 md:px-3 py-3 min-w-0">
+            <dd className="ch-display text-[26px] md:text-[30px] font-bold leading-none tabular-nums text-slate-900 dark:text-white">{c.value}</dd>
+            <dt className="mt-1.5 text-[10px] md:text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)] truncate">{c.label}</dt>
+            {c.sub && <p className="text-[11.5px] font-semibold mt-0.5 tabular-nums" style={{ color: c.tone || 'var(--ch-text-2)' }}>{c.sub}</p>}
+          </div>
+        ))}
+      </dl>
     </div>
   );
 }
 
-function CallList({ calls }: { calls: Call[] }) {
+/** One of the numbered calls, with its bench target set apart so it reads from the sideline. */
+function PlanCall({ n, call, color }: { n: number; call: Call & { target?: string }; color: string }) {
   return (
-    <ul className="space-y-3">
-      {calls.map((c, i) => (
-        <li key={i}>
-          <p className="text-sm font-semibold text-slate-800 dark:text-white">{c.call}</p>
-          <p className="text-sm text-gray-600 dark:text-neutral-400">{c.why}</p>
-        </li>
-      ))}
-    </ul>
+    <li className="grid grid-cols-[34px_1fr] md:grid-cols-[48px_1fr] gap-x-2 py-4 border-b border-[color:var(--ch-border)] last:border-b-0 last:pb-0">
+      <span className="ch-display text-[30px] md:text-[36px] font-bold leading-[0.85] tabular-nums" style={{ color: ink(color) }}>{n}</span>
+      <div className="min-w-0">
+        <p className="text-[15px] md:text-[16px] font-semibold tracking-tight leading-snug text-slate-900 dark:text-white">{call.call}</p>
+        <p className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mt-1">{call.why}</p>
+        {call.target && (
+          <div
+            className="mt-3 flex items-start gap-2.5 rounded-r-lg pl-3 pr-3.5 py-2 w-fit max-w-full"
+            style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-2))', borderLeft: `3px solid ${ink(color)}` }}
+          >
+            <Crosshair className="w-4 h-4 mt-0.5 shrink-0" style={{ color: ink(color) }} aria-hidden="true" />
+            <p className="text-[13.5px] leading-snug min-w-0">
+              <span className="block sm:inline text-[10.5px] font-bold uppercase tracking-[0.12em] sm:mr-2" style={{ color: ink(color) }}>Bench target</span>
+              <span className="font-semibold text-slate-900 dark:text-white">{call.target}</span>
+            </p>
+          </div>
+        )}
+      </div>
+    </li>
   );
 }
 
 export default function AgentGamePlan({
-  leagueId, opponentName, myTeamName, color, roster, window: scoutWindow = 'season', notes = null, notesUpdatedAt = null,
+  leagueId, opponentName, myTeamName, color, secondaryColor = null, roster, window: scoutWindow = 'season', notes = null, notesUpdatedAt = null,
 }: {
   leagueId: string; opponentName: string; myTeamName: string; color: string; roster?: ScoutRosterResponse | null;
+  /** The club's second colour, for the printed report. */
+  secondaryColor?: string | null;
   /** The games the plan is built on: the whole season, or the last 5 or 3. */
   window?: ScoutWindow;
   /** The coach's notes on this opponent, for the printed report and the "rebuild to apply" prompt. */
@@ -188,24 +274,25 @@ export default function AgentGamePlan({
   const notesStale = full && !!notesUpdatedAt && !!report?.generatedAt && new Date(notesUpdatedAt).getTime() > new Date(report.generatedAt).getTime();
 
   const header = (
-    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-4 h-4" style={{ color }} />
-        <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Game plan</h3>
-        {plan && (
-          <span className="text-[11px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300">
-            {plan.confidence} confidence
-          </span>
-        )}
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
+        <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ring-1 ring-inset ring-[color:var(--ch-border)]" style={fill(color)}>
+          <Sparkles className="w-[18px] h-[18px]" />
+        </span>
+        <div className="min-w-0">
+          <p className="ch-eyebrow leading-none">{full ? `For ${myTeamName || 'your team'}` : 'Scouting agent'}</p>
+          <h3 className="text-[17px] md:text-[18px] font-semibold tracking-tight text-slate-900 dark:text-white mt-1">Game plan</h3>
+        </div>
+        {plan && <ConfidenceChip level={plan.confidence} />}
         {full && scoutWindow !== 'season' && (
-          <span className="text-[11px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: color }}>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] px-2 py-1 rounded-full ring-1 ring-inset ring-[color:var(--ch-border)]" style={fill(color)}>
             {windowLabel(scoutWindow)}
           </span>
         )}
       </div>
-      <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-neutral-400">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[color:var(--ch-muted)]">
         {report?.generatedAt && (
-          <span>
+          <span className="tabular-nums">
             Built {timeAgo(report.generatedAt)}
             {report.gamesAnalysed ? ` · ${report.gamesAnalysed} games` : ''}
             {report.dataThrough ? ` through ${new Date(report.dataThrough).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}
@@ -221,21 +308,23 @@ export default function AgentGamePlan({
                 dataThrough: report?.dataThrough ?? null,
                 generatedAt: report?.generatedAt ?? null,
                 brandColor: color,
+                secondaryColor,
                 competitionName: roster?.leagueName ?? null,
                 roster: roster ?? null,
+                teaser: report?.teaser ?? null,
                 windowLabel: scoutWindow === 'season' ? null : windowLabel(scoutWindow),
                 coachNotes: notes ?? null,
               });
               if (!ok) setRequestError('Allow pop-ups for this site to download the report.');
             }}
-            className="flex items-center gap-1 font-medium hover:text-gray-800 dark:hover:text-white"
+            className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]"
             title="Admin only: opens a printable copy. Choose Save as PDF in the print dialog."
           >
             <Download className="w-3.5 h-3.5" /> Download PDF
           </button>
         )}
         {full && data.canBuild && report?.status === 'ready' && !building && (
-          <button onClick={() => build(true)} className="flex items-center gap-1 font-medium hover:text-gray-800 dark:hover:text-white">
+          <button onClick={() => build(true)} className="flex items-center gap-1 font-medium hover:text-slate-900 dark:hover:text-white">
             <RefreshCw className="w-3.5 h-3.5" /> Rebuild
           </button>
         )}
@@ -244,7 +333,7 @@ export default function AgentGamePlan({
   );
 
   const locked = (
-    <div className="relative rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 p-4">
+    <div className="relative min-h-[168px] rounded-xl border border-dashed border-[color:var(--ch-border-strong)] p-4">
       <div className="space-y-2 blur-sm select-none pointer-events-none" aria-hidden>
         <div className="h-3 w-3/4 bg-gray-200 dark:bg-neutral-700 rounded" />
         <div className="h-3 w-2/3 bg-gray-200 dark:bg-neutral-700 rounded" />
@@ -256,7 +345,7 @@ export default function AgentGamePlan({
         <p className="text-sm font-medium text-slate-800 dark:text-white">
           The full game plan (defensive and offensive keys, players to stop, lineup triggers and late-game calls, written for your team) is part of the coach plan.
         </p>
-        <Link href="/contact-sales" className="text-sm font-semibold text-white px-4 py-2 rounded-md" style={{ backgroundColor: color }}>
+        <Link href="/contact-sales" className="text-sm font-semibold px-4 py-2 rounded-md" style={fill(color)}>
           Unlock full scouting reports
         </Link>
       </div>
@@ -267,22 +356,16 @@ export default function AgentGamePlan({
   if (!full) {
     const ready = report?.status === 'ready' && plan;
     return (
-      <div className="ch-card p-4 md:p-6 space-y-4">
+      <div className="ch-card p-5 md:p-7 space-y-5">
         {header}
         {ready ? (
           <>
-            <p className="text-lg font-semibold text-slate-800 dark:text-white">{plan!.headline}</p>
-            <p className="text-sm text-gray-700 dark:text-neutral-300">{plan!.summary}</p>
-            <ol className="space-y-3">
-              {plan!.gamePlan.slice(0, 2).map((g, i) => (
-                <li key={i} className="flex gap-3">
-                  <span className="flex-none w-7 h-7 rounded-full text-white text-sm font-bold flex items-center justify-center" style={{ backgroundColor: color }}>{i + 1}</span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-white">{g.call}</p>
-                    <p className="text-sm text-gray-600 dark:text-neutral-400">{g.why}</p>
-                  </div>
-                </li>
-              ))}
+            <div>
+              <p className="ch-display text-[24px] md:text-[30px] font-semibold leading-[1.08] text-slate-900 dark:text-white">{plan!.headline}</p>
+              <p className="mt-2.5 text-[15px] leading-relaxed text-[color:var(--ch-text-2)] max-w-[72ch]">{plan!.summary}</p>
+            </div>
+            <ol className="border-t-2 border-[color:var(--ch-text)]">
+              {plan!.gamePlan.slice(0, 2).map((g, i) => <PlanCall key={i} n={i + 1} call={{ call: g.call, why: g.why }} color={color} />)}
             </ol>
           </>
         ) : building ? (
@@ -294,7 +377,7 @@ export default function AgentGamePlan({
         ) : data.canPreview ? (
           <div className="space-y-2">
             <p className="text-sm text-gray-600 dark:text-neutral-300">Get a free AI read on {opponentName}: how they play and the two things that decide the game.</p>
-            <button onClick={() => build(false, 'preview')} className="text-sm font-semibold text-white px-4 py-2 rounded-md" style={{ backgroundColor: color }}>
+            <button onClick={() => build(false, 'preview')} className="text-sm font-semibold px-4 py-2 rounded-md" style={fill(color)}>
               Get a free look
             </button>
           </div>
@@ -303,17 +386,7 @@ export default function AgentGamePlan({
             <Link href="/auth" className="font-semibold underline">Sign in</Link> to get a free AI read on {opponentName}.
           </p>
         )}
-        {!!teaser?.keyNumbers?.length && (
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-            {teaser.keyNumbers.map((k) => (
-              <div key={k.key} className="rounded-md bg-gray-50 dark:bg-neutral-800 p-2">
-                <div className="text-[11px] text-gray-500 dark:text-neutral-400">{KEY_LABELS[k.key] ?? k.key}</div>
-                <div className="text-base font-semibold text-slate-800 dark:text-white tabular-nums">{k.value}</div>
-                {k.rank != null && k.of != null && <div className="text-[11px] text-gray-500 dark:text-neutral-400">{k.rank} of {k.of}</div>}
-              </div>
-            ))}
-          </div>
-        )}
+        {teaser && <KeyNumbers teaser={teaser} opponentName={opponentName} />}
         {requestError && <p className="text-sm text-red-600">{requestError}</p>}
         {locked}
       </div>
@@ -325,7 +398,7 @@ export default function AgentGamePlan({
     const failed = report?.status === 'failed';
     const noData = report?.status === 'no_data';
     return (
-      <div className="ch-card p-4 md:p-6">
+      <div className="ch-card p-5 md:p-7">
         {header}
         {building ? (
           <p className="text-sm text-gray-600 dark:text-neutral-300 flex items-center gap-2">
@@ -345,7 +418,7 @@ export default function AgentGamePlan({
                 ? 'Plans for your fixtures are built automatically a few days out; you can also build one now.'
                 : 'Build one to read their recent form on its own.'}
             </p>
-            <button onClick={() => build(failed)} className="text-sm font-semibold text-white px-4 py-2 rounded-md" style={{ backgroundColor: color }}>
+            <button onClick={() => build(failed)} className="text-sm font-semibold px-4 py-2 rounded-md" style={fill(color)}>
               Build game plan
             </button>
           </div>
@@ -357,82 +430,110 @@ export default function AgentGamePlan({
 
   if (!plan) return null;
 
+  // The roster's photos and numbers, to put a face on "players to stop".
+  const rosterByKey = new Map<string, RosterEntry>();
+  for (const r of roster?.roster ?? []) rosterByKey.set(playerNameKey(r.name), r);
+
   // ----- full plan -----
   return (
     <div className="space-y-4">
-      <div className="ch-card p-4 md:p-6">
-        {header}
-        {notesStale && !building && (
-          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2 text-[13px] bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
-            <span>You've added notes since this plan was built, so it doesn't reflect them yet.</span>
-            <button onClick={() => build(true)} className="font-semibold underline underline-offset-2">Rebuild with my notes</button>
+      <section className="ch-card overflow-hidden">
+        <div className="flex h-1" aria-hidden="true">
+          <span className="flex-[3]" style={{ backgroundColor: `var(--sr-brand, ${color})` }} />
+          <span className="flex-1" style={{ backgroundColor: `var(--sr-accent, ${color})` }} />
+        </div>
+        <div className="p-5 md:p-7">
+          {header}
+          {notesStale && !building && (
+            <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2 text-[13px] bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+              <span>You've added notes since this plan was built, so it doesn't reflect them yet.</span>
+              <button onClick={() => build(true)} className="font-semibold underline underline-offset-2">Rebuild with my notes</button>
+            </div>
+          )}
+          {!notesStale && !!report?.facts?.coachNotes && (
+            <p className="mb-4 text-[12.5px] text-[color:var(--ch-muted)]">This plan takes your notes into account.</p>
+          )}
+
+          <div className="pl-4 md:pl-5" style={{ borderLeft: `3px solid ${ink(color)}` }}>
+            <p className="ch-display text-[26px] md:text-[34px] font-semibold leading-[1.06] text-slate-900 dark:text-white">{plan.headline}</p>
+            <p className="mt-3 text-[15px] leading-relaxed text-[color:var(--ch-text-2)] max-w-[72ch]">{plan.summary}</p>
           </div>
-        )}
-        {!notesStale && !!report?.facts?.coachNotes && (
-          <p className="mb-3 text-[12.5px] text-gray-500 dark:text-neutral-400">This plan takes your notes into account.</p>
-        )}
-        <p className="text-lg md:text-xl font-semibold text-slate-800 dark:text-white">{plan.headline}</p>
-        <p className="text-sm text-gray-700 dark:text-neutral-300 mt-2">{plan.summary}</p>
 
-        <ol className="mt-4 space-y-3">
-          {plan.gamePlan.map((g, i) => (
-            <li key={i} className="flex gap-3">
-              <span className="flex-none w-7 h-7 rounded-full text-white text-sm font-bold flex items-center justify-center" style={{ backgroundColor: color }}>{i + 1}</span>
-              <div className="min-w-0">
-                <p className="text-sm md:text-base font-semibold text-slate-800 dark:text-white">{g.call}</p>
-                <p className="text-sm text-gray-600 dark:text-neutral-400">{g.why}</p>
-                <p className="text-xs font-medium mt-1 inline-flex items-center gap-1 text-slate-700 dark:text-neutral-300">
-                  <Target className="w-3.5 h-3.5" /> Bench target: {g.target}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-        {plan.confidence !== 'high' && (
-          <p className="text-xs text-gray-500 dark:text-neutral-400 mt-4 flex items-start gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-none" /> {plan.confidenceReason}
-          </p>
-        )}
-      </div>
+          {teaser && <div className="mt-7"><KeyNumbers teaser={teaser} opponentName={opponentName} /></div>}
 
-      <Card icon={<Sparkles className="w-4 h-4" />} title="How they play" color={color}>
-        <p className="text-sm text-gray-700 dark:text-neutral-300">{plan.howTheyPlay}</p>
+          <div className="mt-7">
+            <p className="ch-eyebrow mb-2">The calls</p>
+            <ol className="border-t-2 border-[color:var(--ch-text)]">
+              {plan.gamePlan.map((g, i) => <PlanCall key={i} n={i + 1} call={g} color={color} />)}
+            </ol>
+          </div>
+          {plan.confidence !== 'high' && (
+            <p className="text-[12.5px] text-[color:var(--ch-muted)] mt-5 pt-4 border-t border-[color:var(--ch-border)] flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-none" /> {plan.confidenceReason}
+            </p>
+          )}
+        </div>
+      </section>
+
+      <Card icon={<Sparkles className="w-4 h-4" />} title={`How ${opponentName} play`} color={color}>
+        <p className="text-[15px] leading-relaxed text-[color:var(--ch-text-2)]">{plan.howTheyPlay}</p>
       </Card>
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card icon={<Shield className="w-4 h-4" />} title="Defending them" color={color}>
-          <p className="text-sm text-gray-700 dark:text-neutral-300 mb-3">{plan.defendingThem.summary}</p>
-          <CallList calls={plan.defendingThem.keys} />
+          <p className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mb-4">{plan.defendingThem.summary}</p>
+          <CallList calls={plan.defendingThem.keys} color={color} />
         </Card>
         <Card icon={<Swords className="w-4 h-4" />} title="Attacking them" color={color}>
-          <p className="text-sm text-gray-700 dark:text-neutral-300 mb-3">{plan.attackingThem.summary}</p>
-          <CallList calls={plan.attackingThem.keys} />
+          <p className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)] mb-4">{plan.attackingThem.summary}</p>
+          <CallList calls={plan.attackingThem.keys} color={color} />
         </Card>
       </div>
 
       <Card icon={<Target className="w-4 h-4" />} title="Players to stop" color={color}>
         <div className="grid md:grid-cols-2 gap-3">
-          {plan.playersToStop.map((p) => (
-            <div key={p.name} className="rounded-md bg-gray-50 dark:bg-neutral-800 p-3">
-              <p className="text-sm font-semibold text-slate-800 dark:text-white">{p.name}</p>
-              <p className="text-sm text-gray-600 dark:text-neutral-400 mt-1">{p.threat}</p>
-              <p className="text-sm text-slate-800 dark:text-neutral-200 mt-2"><span className="font-medium">Plan: </span>{p.plan}</p>
-            </div>
-          ))}
+          {plan.playersToStop.map((p) => {
+            const r = rosterByKey.get(playerNameKey(p.name));
+            return (
+              <article key={p.name} className="ch-tile p-4 min-w-0">
+                <header className="flex items-center gap-3 pb-3 mb-3 border-b border-[color:var(--ch-border)]">
+                  <Avatar photo={r?.photo} shirt={r?.shirt ?? null} name={p.name} color={color} size={52} />
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-semibold tracking-tight leading-snug text-slate-900 dark:text-white">{p.name}</p>
+                    {r && <p className="text-[12.5px] text-[color:var(--ch-text-2)] tabular-nums">{r.pts} pts · {r.reb} reb · {r.ast} ast · {r.mpg} min</p>}
+                  </div>
+                </header>
+                <dl className="grid grid-cols-[50px_1fr] gap-x-2 gap-y-2.5 text-[13.5px] leading-relaxed">
+                  <dt className="text-[10px] font-bold uppercase tracking-[0.12em] text-[color:var(--ch-muted)] pt-[3px]">Threat</dt>
+                  <dd className="text-[color:var(--ch-text-2)]">{p.threat}</dd>
+                  <dt className="text-[10px] font-bold uppercase tracking-[0.12em] pt-[3px]" style={{ color: ink(color) }}>Plan</dt>
+                  <dd className="font-medium text-slate-900 dark:text-white">{p.plan}</dd>
+                </dl>
+              </article>
+            );
+          })}
         </div>
       </Card>
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card icon={<Users className="w-4 h-4" />} title="Lineups and rotation" color={color}>
-          <p className="text-sm text-gray-700 dark:text-neutral-300">{plan.lineupsAndRotation.summary}</p>
+          <p className="text-[14px] leading-relaxed text-[color:var(--ch-text-2)]">{plan.lineupsAndRotation.summary}</p>
           {plan.lineupsAndRotation.watchFor.length > 0 && (
-            <ul className="mt-3 space-y-1.5 list-disc pl-5 text-sm text-gray-700 dark:text-neutral-300">
-              {plan.lineupsAndRotation.watchFor.map((w, i) => <li key={i}>{w}</li>)}
-            </ul>
+            <>
+              <p className="ch-eyebrow mt-4 mb-1">Watch for</p>
+              <ul className="border-t border-[color:var(--ch-border)]">
+                {plan.lineupsAndRotation.watchFor.map((w, i) => (
+                  <li key={i} className="flex gap-2 py-2.5 border-b border-[color:var(--ch-border)] last:border-b-0 last:pb-0 text-[14px] leading-relaxed text-slate-800 dark:text-neutral-200">
+                    <ChevronRight className="w-4 h-4 mt-[3px] shrink-0" style={{ color: ink(color) }} aria-hidden="true" />
+                    {w}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </Card>
         <Card icon={<Timer className="w-4 h-4" />} title="Late game" color={color}>
-          <p className="text-sm text-gray-700 dark:text-neutral-300">{plan.lateGame}</p>
+          <p className="text-[14px] leading-relaxed text-slate-800 dark:text-neutral-200 rounded-lg p-4" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-2))' }}>{plan.lateGame}</p>
         </Card>
       </div>
     </div>

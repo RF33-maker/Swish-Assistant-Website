@@ -91,7 +91,7 @@ test("the printed report shows the window and the notes, escaped", () => {
       { id: "2", scope: "player", playerName: "J. Guinn", kind: "stronger", note: "Normally a 40% shooter", updatedAt: "2026-10-15" },
     ],
   });
-  assert.ok(html.includes("Read on the last 5 games"));
+  assert.ok(html.includes("Last 5 games"));
   assert.ok(html.includes("Better than the numbers show") && html.includes("Normally a 40% shooter"));
   assert.ok(!html.includes("<script>x</script>"));
   assert.ok(html.includes("Point guard out &lt;script&gt;"));
