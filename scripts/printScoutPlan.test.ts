@@ -168,3 +168,16 @@ test("coach's context sits under the strength or weakness it is about, escaped",
   assert.ok(html.includes("Normally better &lt;b&gt;still&lt;/b&gt;"));
   assert.equal((html.match(/class="ctx"/g) || []).length, 1, `only ${playerNameKey(profiled.name)}'s ${area.key} gets it`);
 });
+
+test("crests the screen resolved are used in the PDF, ahead of the roster endpoint's, and only if http(s)", () => {
+  const html = buildPlanHtml(plan, {
+    opponentName: "Haukar", forTeamName: "Valur", roster,
+    crests: { opponent: "https://logos.example/haukar-db.png", forTeam: "javascript:alert(1)" },
+  });
+  assert.ok(html.includes("https://logos.example/haukar-db.png"));
+  assert.ok(!html.includes("https://example.com/haukar.jpg"), "the screen's crest wins");
+  assert.ok(!html.includes("javascript:alert"));
+  assert.ok(html.includes("https://example.com/valur.png"), "an unusable crest falls back to the roster endpoint's");
+  const none = buildPlanHtml(plan, { opponentName: "Haukar", forTeamName: "Valur", roster: null, crests: { opponent: "https://logos.example/x.png", forTeam: null } });
+  assert.ok(none.includes("https://logos.example/x.png"));
+});
