@@ -31,7 +31,7 @@ Pay-first policy: access starts at once. Anything private to a team later should
 1. Put your **test** secret key in `.env` as `STRIPE_SECRET_KEY`.
 2. `npx tsx scripts/stripe-setup.ts` creates the product, the two prices (found by lookup key, so you can change prices later in Stripe), and the customer portal. Run it again any time; it only creates what is missing.
 3. Apply `supabase/migrations/20261017_coach_billing.sql`.
-4. Local webhooks: install the Stripe CLI, `stripe login`, then `stripe listen --forward-to localhost:<port>/api/stripe/webhook` and put the `whsec_...` it prints in `.env` as `STRIPE_WEBHOOK_SECRET`.
+4. Local webhooks, without installing anything: put any `STRIPE_WEBHOOK_SECRET=whsec_...` value in `.env`, pay on Stripe's test checkout, then run `npx tsx scripts/stripe-replay.ts`. It takes your real test events from Stripe and delivers them to the local site, signed with that secret (test keys only). Or, with the Stripe CLI: install the Stripe CLI, `stripe login`, then `stripe listen --forward-to localhost:<port>/api/stripe/webhook` and put the `whsec_...` it prints in `.env` as `STRIPE_WEBHOOK_SECRET`.
 5. Restart the dev server.
 
 ## Test the whole thing (about 5 minutes)
