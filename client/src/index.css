@@ -477,6 +477,28 @@
   color: var(--ch-muted);
 }
 
+/* Scouting report, branded to the coach's club. OpponentScoutReport sets the
+   --sr-* colours inline (brandVars in lib/brandColor.ts); the ink is the club
+   colour made readable on this theme's surface, so a yellow or near-black club
+   still reads in both themes. Fills use --sr-brand with --sr-on for text. */
+.sa-pro .sr-brand {
+  --sr-ink: var(--sr-ink-l, var(--ch-text));
+  --sr-tint: color-mix(in srgb, var(--sr-brand, var(--ch-accent)) 7%, var(--ch-surface));
+}
+.dark .sa-pro .sr-brand,
+.sa-pro .ch-force-dark .sr-brand {
+  --sr-ink: var(--sr-ink-d, var(--ch-text));
+  --sr-tint: color-mix(in srgb, var(--sr-ink-d, var(--ch-accent)) 11%, var(--ch-surface));
+}
+.sa-pro .sr-court { position: absolute; inset: 0; pointer-events: none; }
+.sa-pro .sr-court::before,
+.sa-pro .sr-court::after { content: ''; position: absolute; left: 50%; border: 0 solid currentColor; opacity: 0.16; }
+.sa-pro .sr-court::before { top: -100%; bottom: 0; border-left-width: 1.5px; }
+.sa-pro .sr-court::after { top: 50%; width: 9.5rem; height: 9.5rem; transform: translate(-50%, -50%); border-width: 1.5px; border-radius: 50%; }
+@media (min-width: 768px) {
+  .sa-pro .sr-court::after { width: 12rem; height: 12rem; }
+}
+
 /* Controls */
 .sa-pro .ch-seg {
   display: inline-flex;

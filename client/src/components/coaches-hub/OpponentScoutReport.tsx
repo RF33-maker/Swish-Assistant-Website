@@ -14,6 +14,7 @@ import { useScoutRoster } from '@/hooks/useScoutRoster';
 import { useCoachNotes } from '@/hooks/useCoachNotes';
 import { useAuth } from '@/hooks/use-auth';
 import type { ScoutWindow } from '@shared/coachNotes';
+import { brandVars } from '@/lib/brandColor';
 import { num, ordinal, toPlayerLine, type PlayerGameRow, type PlayerLine } from '@/lib/gameReport';
 import type { PlayerSeasonAverage, StandingRow, TeamSeasonAverage } from '@/pages/CoachesHub';
 
@@ -42,9 +43,32 @@ interface RecentGame {
 /** A club crest on a white tile, so any logo reads on the team-coloured banner. */
 function Crest({ teamName, leagueId }: { teamName: string; leagueId: string }) {
   return (
-    <span className="shrink-0 w-[68px] h-[68px] md:w-[84px] md:h-[84px] rounded-2xl bg-white ring-1 ring-black/5 shadow-[0_8px_24px_-10px_rgba(0,0,0,0.55)] flex items-center justify-center p-2 overflow-hidden">
+    <span className="shrink-0 w-[60px] h-[60px] md:w-[84px] md:h-[84px] rounded-2xl bg-white ring-1 ring-black/5 shadow-[0_8px_24px_-10px_rgba(0,0,0,0.55)] flex items-center justify-center p-2 overflow-hidden">
       <TeamLogo teamName={teamName} leagueId={leagueId} size="lg" className="!w-full !h-full object-contain" />
     </span>
+  );
+}
+
+/** One side of the matchup on the banner: crest, then whose side it is, then the name. */
+function MatchSide({ teamName, leagueId, role }: { teamName: string; leagueId: string; role: string }) {
+  return (
+    <div className="relative flex flex-col items-center text-center min-w-0">
+      <Crest teamName={teamName} leagueId={leagueId} />
+      <span className="mt-3 text-[10px] md:text-[10.5px] font-semibold uppercase tracking-[0.16em] opacity-75">{role}</span>
+      <h2 className="ch-display uppercase font-bold tracking-tight leading-[0.95] mt-1 max-w-full break-words text-[1.45rem] sm:text-[2rem] md:text-[2.75rem]">{teamName}</h2>
+    </div>
+  );
+}
+
+/** The quiet sign-off under the report. */
+function PreparedBy() {
+  return (
+    <footer className="flex items-center gap-3 pt-2 pb-1 text-[12px] text-[color:var(--ch-muted)]">
+      <span className="h-px flex-1 bg-[color:var(--ch-border)]" />
+      <img src="/icon-512.png" alt="" className="w-6 h-6" />
+      <span>Prepared by <span className="font-semibold text-[color:var(--ch-text)]">Swish Assistant</span></span>
+      <span className="h-px flex-1 bg-[color:var(--ch-border)]" />
+    </footer>
   );
 }
 
@@ -54,7 +78,7 @@ function Section({ n, title, subtitle, color, children, narrative }: {
   return (
     <div className="ch-card p-4 md:p-6">
       <div className="flex items-center gap-2.5 mb-1">
-        <span className="ch-kicker-n" style={{ color }}>{n}</span>
+        <span className="ch-kicker-n" style={{ color: `var(--sr-ink, ${color})` }}>{n}</span>
         <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h3>
       </div>
       {subtitle && <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">{subtitle}</p>}
@@ -89,7 +113,7 @@ export default function OpponentScoutReport({
   const [leagueHasShots, setLeagueHasShots] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   // Branded to the coach's own team, not the opponent -- this is their document.
-  const { primaryColor, secondaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: myTeamName, leagueId });
+  const { colors, primaryColor, secondaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: myTeamName, leagueId });
   // The opponent's roster and league-percentile profiles (public box-score data).
   // Which of the opponent's games the plan, roster and percentiles are read over.
   const [scoutWindow, setScoutWindow] = useState<ScoutWindow>('season');
@@ -98,6 +122,9 @@ export default function OpponentScoutReport({
   const { isCoach, isRealAdmin } = useAuth();
   const notes = useCoachNotes(leagueId, opponentName, myTeamName, isCoach || isRealAdmin);
   const brand = brandLoading || !primaryColor ? brandColor : primaryColor;
+  // The hook falls back to a stock blue when a club has no colours of its own, so only a loaded second colour counts.
+  const secondBrand = !brandLoading && colors ? secondaryColor : null;
+  const brandStyle = useMemo(() => brandVars(brand, secondBrand) as React.CSSProperties, [brand, secondBrand]);
 
   // The feed lists some clubs under two names in one competition (sponsor
   // prefixes and abbreviations), which would make the rank denominator here
@@ -306,45 +333,60 @@ export default function OpponentScoutReport({
     );
   }
 
+  const bannerFacts = [
+    oppStanding ? { label: 'Their record', value: `${oppStanding.wins}-${oppStanding.losses}` } : null,
+    oppStanding ? { label: 'Standing', value: `${ordinal(oppStanding.rank)} of ${standings.length}` } : null,
+    opponent.games_played ? { label: 'Games', value: String(opponent.games_played) } : null,
+  ].filter((f): f is { label: string; value: string } => !!f);
+
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="sr-brand space-y-4 md:space-y-6" style={brandStyle}>
       <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
         <ArrowLeft className="w-4 h-4" /> Back to overview
       </button>
 
-      <div
-        className="ch-hero p-5 md:p-7 text-white"
-        /* Solid rather than a gradient: useTeamBranding resolves some teams to
-           an rgb() string, and appending an alpha suffix to that produces
-           invalid CSS, which silently drops the whole background. The coach's
-           own colours carry the page, the second colour sits as a base line. */
-        style={{ backgroundColor: brand, borderBottom: `5px solid ${brandLoading || !secondaryColor || secondaryColor === brand ? 'rgba(255,255,255,0.35)' : secondaryColor}` }}
-      >
-        <div className="text-[11px] md:text-xs font-semibold uppercase tracking-[0.12em] text-white/75">
-          {myTeamName ? `${myTeamName} scouting report` : 'Pre-game scout report'}
-          {rosterData?.leagueName ? ` · ${rosterData.leagueName}` : ''}
-        </div>
-        <div className="mt-3 flex items-center gap-3 md:gap-5 flex-wrap">
-          {myTeamName && (
-            <>
-              <Crest teamName={myTeamName} leagueId={leagueId} />
-              <h2 className="ch-display uppercase text-[1.75rem] md:text-5xl font-bold tracking-tight leading-none">{myTeamName}</h2>
-              <span className="ch-display uppercase text-xl md:text-3xl text-white/60 leading-none">v</span>
-            </>
+      {/* Solid colours rather than gradients: useTeamBranding resolves some
+          teams to an rgb() string, and brandVars turns both into hex. The
+          coach's own colours carry the banner, the second sits as a base line. */}
+      <div className="ch-hero" style={{ backgroundColor: 'var(--sr-brand)', color: 'var(--sr-on)' }}>
+        <div className="px-5 pt-5 md:px-8 md:pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[10.5px] md:text-[11px] font-semibold uppercase tracking-[0.14em] opacity-80">
+            <span>{myTeamName ? `${myTeamName} scouting report` : 'Pre-game scout report'}</span>
+            {rosterData?.leagueName && <span>{rosterData.leagueName}</span>}
+          </div>
+          {myTeamName ? (
+            <div className="relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 md:gap-6 py-6 md:py-8">
+              <i className="sr-court" aria-hidden="true" />
+              <MatchSide teamName={myTeamName} leagueId={leagueId} role="Prepared for" />
+              <span
+                className="relative w-9 h-9 md:w-12 md:h-12 rounded-full flex items-center justify-center ch-display uppercase text-lg md:text-2xl font-semibold"
+                style={{ backgroundColor: 'var(--sr-brand)', boxShadow: '0 0 0 1.5px color-mix(in srgb, var(--sr-on) 32%, transparent)' }}
+              >
+                v
+              </span>
+              <MatchSide teamName={opponentName} leagueId={leagueId} role="Opponent" />
+            </div>
+          ) : (
+            <div className="py-6 md:py-8"><MatchSide teamName={opponentName} leagueId={leagueId} role="Opponent" /></div>
           )}
-          <h2 className="ch-display uppercase text-[1.75rem] md:text-5xl font-bold tracking-tight leading-none">{opponentName}</h2>
-          <Crest teamName={opponentName} leagueId={leagueId} />
         </div>
-        <p className="text-sm text-white/80 mt-3">
-          {oppStanding ? `${opponentName}: ${oppStanding.wins}-${oppStanding.losses}, ${ordinal(oppStanding.rank)} of ${standings.length}` : 'Record unavailable'}
-          {opponent.games_played ? ` · ${opponent.games_played} games played` : ''}
-        </p>
+        <dl className="grid grid-cols-3 px-5 md:px-8 py-3" style={{ backgroundColor: 'var(--sr-band)' }}>
+          {bannerFacts.length === 0 ? (
+            <div className="col-span-3 text-[13px] opacity-80">Record unavailable</div>
+          ) : bannerFacts.map((f, i) => (
+            <div key={f.label} className={`min-w-0 ${i > 0 ? 'pl-3 md:pl-5 border-l' : ''}`} style={{ borderColor: 'color-mix(in srgb, var(--sr-on) 22%, transparent)' }}>
+              <dt className="text-[9.5px] md:text-[10px] font-semibold uppercase tracking-[0.14em] opacity-70">{f.label}</dt>
+              <dd className="text-[14px] md:text-[15px] font-semibold tabular-nums mt-0.5">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="h-1.5" style={{ backgroundColor: 'var(--sr-accent)' }} />
       </div>
 
       <WindowToggle value={scoutWindow} onChange={setScoutWindow} color={brand} games={rosterData?.season.wholeSeason ? rosterData.season.games : null} />
 
       <AgentGamePlan
-        leagueId={leagueId} opponentName={opponentName} myTeamName={myTeamName} color={brand}
+        leagueId={leagueId} opponentName={opponentName} myTeamName={myTeamName} color={brand} secondaryColor={secondBrand}
         roster={rosterData ?? null} window={scoutWindow} notes={notes.canEdit ? notes.notes : null} notesUpdatedAt={notes.canEdit ? notes.updatedAt : null}
       />
 
@@ -378,7 +420,7 @@ export default function OpponentScoutReport({
           <div className="space-y-2">
             {keys.map((k, i) => (
               <div key={i} className="flex items-start gap-2.5 ch-tile p-3">
-                <k.icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color: brand }} />
+                <k.icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--sr-ink)' }} />
                 <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed">{k.text}</p>
               </div>
             ))}
@@ -477,14 +519,14 @@ export default function OpponentScoutReport({
             {theirPlayers.map((p, i) => (
               <div key={p.name} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-100 dark:border-neutral-800 last:border-0">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{ backgroundColor: i === 0 ? brand : OPP_COLOR }}>
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0" style={i === 0 ? { backgroundColor: 'var(--sr-brand)', color: 'var(--sr-on)' } : { backgroundColor: OPP_COLOR, color: '#fff' }}>
                     {i + 1}
                   </span>
                   <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{p.name}</span>
                 </div>
                 <div className="flex items-center gap-3 shrink-0 text-right">
                   <div>
-                    <div className="text-sm font-bold tabular-nums" style={{ color: brand }}>{p.points?.toFixed(1) ?? '—'}</div>
+                    <div className="text-sm font-bold tabular-nums" style={{ color: 'var(--sr-ink)' }}>{p.points?.toFixed(1) ?? '—'}</div>
                     <div className="text-[10px] text-gray-400 dark:text-neutral-500">PPG</div>
                   </div>
                   <div>
@@ -528,6 +570,8 @@ export default function OpponentScoutReport({
           />
         )}
       </Section>
+
+      <PreparedBy />
     </div>
   );
 }

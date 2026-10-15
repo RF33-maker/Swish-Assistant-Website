@@ -46,9 +46,9 @@ function Editor({
               onClick={() => setKind(k.key)}
               title={k.hint}
               className={`text-[12px] font-medium px-2.5 py-1 rounded-full border transition-colors ${
-                kind === k.key ? 'text-white border-transparent' : 'border-[color:var(--ch-border)] text-[color:var(--ch-text-2)] hover:bg-[color:var(--ch-surface-2)]'
+                kind === k.key ? 'border-transparent' : 'border-[color:var(--ch-border)] text-[color:var(--ch-text-2)] hover:bg-[color:var(--ch-surface-2)]'
               }`}
-              style={kind === k.key ? { backgroundColor: color } : undefined}
+              style={kind === k.key ? { backgroundColor: `var(--sr-brand, ${color})`, color: 'var(--sr-on, #fff)' } : undefined}
             >
               {k.label}
             </button>
@@ -73,8 +73,8 @@ function Editor({
           type="button"
           disabled={api.saving || !text.trim()}
           onClick={() => submit(text)}
-          className="text-[13px] font-semibold text-white px-3.5 py-1.5 rounded-md disabled:opacity-40"
-          style={{ backgroundColor: color }}
+          className="text-[13px] font-semibold px-3.5 py-1.5 rounded-md disabled:opacity-40"
+          style={{ backgroundColor: `var(--sr-brand, ${color})`, color: 'var(--sr-on, #fff)' }}
         >
           {api.saving ? 'Saving…' : 'Save note'}
         </button>
@@ -155,10 +155,12 @@ export default function CoachNotesPanel({
   return (
     <section className="ch-card p-4 md:p-6 space-y-4" aria-label={`Your notes on ${opponentName}`}>
       <div>
-        <div className="flex items-center gap-2.5 mb-1">
-          <MessageSquareText className="w-4 h-4" style={{ color }} />
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mb-2">
+          <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-3))', color: `var(--sr-ink, ${color})` }}>
+            <MessageSquareText className="w-4 h-4" />
+          </span>
           <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Your notes on {opponentName}</h3>
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-[color:var(--ch-muted)]"><Lock className="w-3 h-3" /> Private to your club</span>
+          <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-[0.08em] px-2 py-0.5 rounded-full bg-[color:var(--ch-surface-3)] text-[color:var(--ch-muted)]"><Lock className="w-3 h-3" /> Private to your club</span>
         </div>
         <p className="text-[13px] text-[color:var(--ch-text-2)]">
           The numbers can't tell a cold spell from a bad shooter, or know who is injured. Add what you know and your next game plan treats it as true and says where it leaned on it. Notes are used the next time you rebuild the plan.

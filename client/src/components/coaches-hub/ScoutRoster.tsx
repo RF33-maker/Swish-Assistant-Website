@@ -3,6 +3,7 @@ import { PlayerNote, type CoachNotesApi } from './CoachNotes';
 import { PlayerHeadshot } from '@/components/PlayerHeadshot';
 import { describeStanding, ordinalOf, type Aspect, type Headshot, type PlayerProfile, type RosterEntry } from '@shared/scoutRoster';
 import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
+import { readableOn, toHexColor } from '@/lib/brandColor';
 
 /**
  * The opponent's roster, and each rotation player's strengths and weaknesses
@@ -20,12 +21,12 @@ const initialsOf = (name: string) =>
  * back to the original), otherwise their shirt number on the team colour.
  * `size` is the tile in px; the shirt number rides on the corner of a photo.
  */
-function Avatar({ photo, shirt, name, color, size }: { photo?: Headshot | null; shirt: string | null; name: string; color: string; size: number }) {
+export function Avatar({ photo, shirt, name, color, size }: { photo?: Headshot | null; shirt: string | null; name: string; color: string; size: number }) {
   if (!photo) {
     return (
       <span
-        className="shrink-0 rounded-[10px] flex items-center justify-center text-white font-bold ch-display"
-        style={{ backgroundColor: color, width: size, height: size, fontSize: size * 0.45 }}
+        className="shrink-0 rounded-[10px] flex items-center justify-center font-bold ch-display"
+        style={{ backgroundColor: color, color: readableOn(toHexColor(color)), width: size, height: size, fontSize: size * 0.45 }}
         aria-label={`${name}, number ${shirt || 'unknown'}`}
       >
         {shirt || initialsOf(name)}
@@ -46,8 +47,8 @@ function Avatar({ photo, shirt, name, color, size }: { photo?: Headshot | null; 
       </span>
       {shirt && (
         <span
-          className="absolute -bottom-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-md text-[10.5px] leading-[18px] text-center font-bold text-white ch-display"
-          style={{ backgroundColor: color, boxShadow: '0 0 0 2px var(--ch-surface)' }}
+          className="absolute -bottom-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-md text-[10.5px] leading-[18px] text-center font-bold ch-display"
+          style={{ backgroundColor: color, color: readableOn(toHexColor(color)), boxShadow: '0 0 0 2px var(--ch-surface)' }}
         >
           {shirt}
         </span>
@@ -87,7 +88,7 @@ function AspectRow({ a, kind }: { a: Aspect; kind: 'up' | 'down' }) {
 function ProfileCard({ p, color, notes }: { p: PlayerProfile; color: string; notes?: CoachNotesApi | null }) {
   return (
     <article className="ch-tile p-4 flex flex-col gap-4 min-w-0">
-      <header className="flex items-center gap-3">
+      <header className="flex items-center gap-3 pb-3 border-b border-[color:var(--ch-border)]">
         <Avatar photo={p.photo} shirt={p.shirt} name={p.name} color={color} size={56} />
         <div className="min-w-0">
           <h4 className="text-[15px] font-semibold tracking-tight text-slate-900 dark:text-white truncate">{p.name}</h4>
@@ -135,8 +136,8 @@ const SCALE = [
 function SeasonNote({ season, color }: { season: ScoutRosterResponse['season']; color: string }) {
   if (!season.wholeSeason || season.competitions.length === 0) return null;
   return (
-    <div className="ch-tile flex items-start gap-2.5 p-3 mb-3 text-[13px] text-[color:var(--ch-text-2)]" style={{ borderLeft: `3px solid ${color}` }}>
-      <CalendarRange className="w-4 h-4 mt-0.5 shrink-0" style={{ color }} />
+    <div className="ch-tile flex items-start gap-2.5 p-3 mb-3 text-[13px] text-[color:var(--ch-text-2)]" style={{ borderLeft: `3px solid var(--sr-ink, ${color})` }}>
+      <CalendarRange className="w-4 h-4 mt-0.5 shrink-0" style={{ color: `var(--sr-ink, ${color})` }} />
       <p>
         <strong className="text-slate-900 dark:text-white">{season.window === 'season'
           ? `${season.games} game${season.games === 1 ? '' : 's'} this season`
@@ -210,8 +211,10 @@ export default function ScoutRoster({ data, opponentName, color, notes }: { data
   return (
     <>
       <section className="ch-card p-4 md:p-6" aria-label={`${opponentName} roster`}>
-        <div className="flex items-center gap-2.5 mb-1">
-          <Users className="w-4 h-4" style={{ color }} />
+        <div className="flex items-center gap-2.5 mb-2">
+          <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-3))', color: `var(--sr-ink, ${color})` }}>
+            <Users className="w-4 h-4" />
+          </span>
           <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{opponentName} roster</h3>
         </div>
         <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">
@@ -223,15 +226,17 @@ export default function ScoutRoster({ data, opponentName, color, notes }: { data
 
       {data.profiles.length > 0 && (
         <section className="ch-card p-4 md:p-6" aria-label={`${opponentName} player profiles`}>
-          <div className="flex items-center gap-2.5 mb-1">
-            <Target className="w-4 h-4" style={{ color }} />
+          <div className="flex items-center gap-2.5 mb-2">
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-3))', color: `var(--sr-ink, ${color})` }}>
+            <Target className="w-4 h-4" />
+          </span>
             <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Player profiles</h3>
           </div>
           <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">
             Each player with 10+ minutes a game over 2+ games {data.season.window === 'season' ? 'this season' : `in the ${data.season.windowLabel}`}, set against all {data.poolSize} such players from the clubs in {data.leagueName || 'this league'}, with their games across competitions counted together.
           </p>
 
-          <div className="ch-tile p-3.5 md:p-4 mb-4 space-y-3" style={{ borderLeft: `3px solid ${color}` }}>
+          <div className="ch-tile p-3.5 md:p-4 mb-4 space-y-3" style={{ borderLeft: `3px solid var(--sr-ink, ${color})` }}>
             <h4 className="text-[13.5px] font-semibold text-slate-900 dark:text-white">How to read this</h4>
             <p className="text-[13px] text-[color:var(--ch-text-2)] leading-relaxed">
               A percentile counts how many league players this player is ahead of. In a pool of {data.poolSize}, the 96th percentile means ahead of about {Math.round(0.96 * (data.poolSize - 1))} of the other {data.poolSize - 1}, and the 5th means ahead of only about {Math.round(0.05 * (data.poolSize - 1))}. Shooting percentages have fewer qualifying players ({lo} to {hi} depending on the stat), and each line under a bar uses its own pool. A longer bar is always better: green bars are strengths and red bars are weaknesses. For turnovers and fouls the bar already counts fewer as better.
