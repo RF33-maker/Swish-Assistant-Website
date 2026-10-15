@@ -13,6 +13,7 @@ import { getTeamCompetitions } from "./teamCompetitions";
 import { getLeagueSides } from "./teamSides";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerScoutRosterRoutes } from "./scoutRoster";
+import { registerBillingRoutes } from "./billing/billingRoutes";
 import { registerNewsArticleRoutes } from "./newsArticles";
 import { registerWeekendReportRoutes } from "./weekendReports";
 import { registerNblScoreRoutes } from "./nblScores";
@@ -433,6 +434,7 @@ async function fetchLatestPodcast(): Promise<PodcastResponse> {
 export async function registerRoutes(app: Express): Promise<Server> {
   registerScoutAgentRoutes(app);
   registerScoutRosterRoutes(app, { filterLeagueIdsForPublicScope });
+  registerBillingRoutes(app);
 
   // Test endpoint to verify routes are working
   app.get("/api/test", (req, res) => {

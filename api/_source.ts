@@ -4,6 +4,7 @@ import { registerRoutes } from "../server/routes";
 import { config } from "dotenv";
 import { servePublicSeo, serveSpaShellFallback } from "../server/publicSeo";
 import { newsArticleBodyParser } from "../server/newsArticles";
+import { stripeWebhookBodyParser } from "../server/billing/billingRoutes";
 
 config();
 
@@ -12,6 +13,8 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || "keyboard_cat";
 const app = express();
 // Article saves carry the whole document, which can pass the 100kb default.
 app.use("/api/news-articles", newsArticleBodyParser);
+// Stripe signs the exact bytes it sends, so the webhook needs the body unparsed.
+app.use("/api/stripe/webhook", stripeWebhookBodyParser);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
