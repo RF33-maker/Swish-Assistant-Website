@@ -5,12 +5,13 @@ import { getLeagueSides } from "./teamSides";
 import { teamClubKey } from "@shared/teamIdentity";
 import { bestPlayerName, playerNameKey } from "@shared/playerNameKey";
 import { seasonLabel, seasonStart } from "@shared/season";
-import { BOX_SCORE_COLUMNS, buildScoutRoster, type BoxScoreRow, type Headshot, type ScoutRoster } from "@shared/scoutRoster";
+import { parseWindow, windowGames, windowLabel } from "@shared/coachNotes";
+import { applyWindow, BOX_SCORE_COLUMNS, buildScoutRoster, type BoxScoreRow, type Headshot, type ScoutRoster } from "@shared/scoutRoster";
 
 /**
  * The scouting report's roster table and league-percentile profiles.
  *
- * GET /api/scout-agent/roster?leagueId=&opponent=&forTeam=
+ * GET /api/scout-agent/roster?leagueId=&opponent=&forTeam=&window=season|last5|last3
  *
  * Built from public box-score rows (player_stats), so it needs no login and
  * shows nothing the league pages don't already. The numbers come from
@@ -28,7 +29,7 @@ const PAGE = 1000;
 const CACHE_MS = 5 * 60 * 1000;
 
 type Comp = { league_id: string; name: string | null; is_public: boolean | null; parent_league_id: string | null };
-type SeasonRows = { at: number; since: string; rows: BoxScoreRow[]; names: Map<string, string> };
+type SeasonRows = { at: number; since: string; rows: BoxScoreRow[]; names: Map<string, string>; playedAt: Map<string, string> };
 let seasonCache: SeasonRows | null = null;
 let seasonInFlight: Promise<SeasonRows> | null = null;
 
@@ -58,11 +59,13 @@ async function loadSeason(): Promise<SeasonRows> {
     return !!parent?.is_public;
   };
 
-  const schedule = await all<{ league_id: string; game_key: string }>((f, t) =>
-    supabaseAdmin.from("game_schedule").select("league_id, game_key")
+  const schedule = await all<{ league_id: string; game_key: string; matchtime: string | null }>((f, t) =>
+    supabaseAdmin.from("game_schedule").select("league_id, game_key, matchtime")
       .gte("matchtime", since.toISOString()).lte("matchtime", now.toISOString()).order("game_key").range(f, t));
   const gamesByLeague = new Map<string, Set<string>>();
+  const playedAt = new Map<string, string>();
   for (const g of schedule) {
+    if (g.game_key && g.matchtime) playedAt.set(g.game_key, g.matchtime);
     if (!g.league_id || !g.game_key || !inScope(g.league_id)) continue;
     if (!gamesByLeague.has(g.league_id)) gamesByLeague.set(g.league_id, new Set());
     gamesByLeague.get(g.league_id)!.add(g.game_key);
@@ -74,7 +77,7 @@ async function loadSeason(): Promise<SeasonRows> {
       supabaseAdmin.from("player_stats").select(BOX_SCORE_COLUMNS).eq("league_id", leagueId).order("id").range(f, t) as any);
     for (const r of leagueRows) if (r.game_key && games.has(r.game_key)) rows.push(r);
   }
-  return { at: Date.now(), since: since.toISOString(), rows, names: new Map(comps.map((c) => [c.league_id, c.name || ""])) };
+  return { at: Date.now(), since: since.toISOString(), rows, names: new Map(comps.map((c) => [c.league_id, c.name || ""])), playedAt };
 }
 
 async function season(): Promise<SeasonRows> {
@@ -129,6 +132,7 @@ export function registerScoutRosterRoutes(
       const leagueId = String(req.query.leagueId || "");
       const opponent = String(req.query.opponent || "");
       const forTeam = String(req.query.forTeam || "");
+      const window = parseWindow(req.query.window);
       if (!leagueId || !opponent) return res.status(400).json({ error: "leagueId and opponent are required" });
 
       // The competition plus the private feed competitions that display under it.
@@ -152,6 +156,8 @@ export function registerScoutRosterRoutes(
       let rows = seasonData.rows;
       let wholeSeason = rows.some(inLeague);
       if (!wholeSeason) rows = await leagueRowsOnly(ids); // a past season: just its own competition
+      // "Last 5" is each club's newest five games this season, across competitions. A past season has no window.
+      if (wholeSeason) rows = applyWindow(rows, clubOf, (key) => seasonData.playedAt.get(key), windowGames(window));
       const leagueClubs = new Set(rows.filter(inLeague).map(clubOf));
 
       const result = wholeSeason
@@ -188,6 +194,8 @@ export function registerScoutRosterRoutes(
         ...result,
         season: {
           label: seasonLabel(),
+          window: wholeSeason ? window : "season",
+          windowLabel: windowLabel(wholeSeason ? window : "season"),
           since: seasonData.since,
           wholeSeason,
           games: competitions.reduce((n, c) => n + c.games, 0),

@@ -1,7 +1,7 @@
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
 import type {
-  EventRow, LineupStintRow, PlayerStintRow, RosterRow, ScoutingBundle, ShotRow, TeamGameRow,
+  CoachNotes, EventRow, LineupStintRow, PlayerStintRow, RosterRow, ScoutingBundle, ShotRow, TeamGameRow,
 } from "./facts.ts";
 
 /**
@@ -56,6 +56,10 @@ export interface LoadOptions {
   myTeamName?: string | null;
   /** The most games to take. A club's whole season across competitions, up to this many (default 20). */
   maxGames?: number;
+  /** Only the newest N games this season (a "last 5" or "last 3" view); overrides maxGames and minGames. */
+  lastN?: number | null;
+  /** The coach's club, for their private notes on this opponent (full plans only). */
+  forTeamNotes?: string | null;
   /** Pad with older games up to this many when the season has fewer (default 4). */
   minGames?: number;
   /** Ignore games older than this many days (default ~13 months, i.e. last season and this one). */
@@ -89,9 +93,11 @@ function seasonStartMs(now: Date): number {
  * season is still thin, the newest older games pad it up to `min`; the facts
  * already flag those and check the roster still matches.
  */
-export function pickGames<T extends { played_at: string }>(newestFirst: T[], now: Date, max: number, min: number): T[] {
+export function pickGames<T extends { played_at: string }>(newestFirst: T[], now: Date, max: number, min: number, lastN: number | null = null): T[] {
   const start = seasonStartMs(now);
   const thisSeason = newestFirst.filter((g) => new Date(g.played_at).getTime() >= start);
+  // A last-N view is the newest N of this season (only if the club has played none yet, the newest N there are).
+  if (lastN) return (thisSeason.length ? thisSeason : newestFirst).slice(0, lastN);
   return thisSeason.length >= min ? thisSeason.slice(0, max) : newestFirst.slice(0, Math.max(min, thisSeason.length));
 }
 
@@ -137,7 +143,7 @@ async function loadClubGames(o: LoadOptions, teamName: string, targetGender: str
     .filter((r) => new Date(r.played_at).getTime() < cutoff)
     .sort((a, b) => b.played_at.localeCompare(a.played_at))
     .filter((r) => (seen.has(r.game_key) ? false : (seen.add(r.game_key), true)));
-  const games = pickGames(ordered, o.before ?? new Date(), o.maxGames ?? 20, o.minGames ?? 4);
+  const games = pickGames(ordered, o.before ?? new Date(), o.maxGames ?? 20, o.minGames ?? 4, o.lastN ?? null);
 
   const gameKeys = games.map((g) => g.game_key);
   const opponentsInGames: Record<string, TeamGameRow> = {};
@@ -175,6 +181,32 @@ async function loadBaseline(db: SupabaseClient, leagueId: string, oppGames: Team
   return {
     rows: shape([...target, ...more]),
     note: `Early season: ranks compare against this competition plus ${c?.name ?? "the previous competition"} (${target.length + more.length} team-games).`,
+  };
+}
+
+/**
+ * What this coach has told us about the opponent: one team-wide note and any
+ * number of player notes, read from scout_coach_notes. Matched on club identity,
+ * like the reports, because the schedule and the box scores spell clubs differently.
+ */
+export async function loadCoachNotes(o: LoadOptions): Promise<CoachNotes | null> {
+  const forTeam = o.forTeamNotes;
+  if (!forTeam) return null;
+  const core = searchCore(forTeam);
+  if (core.length < 3) return null;
+  const { data, error } = await o.db.from("scout_coach_notes")
+    .select("scope, player_name, kind, note, updated_at, for_team_name, opponent_name")
+    .ilike("for_team_name", `%${core}%`).limit(500);
+  if (error) {
+    console.error("coach notes unavailable:", error.message);
+    return null;
+  }
+  const mine = (data || []).filter((r: any) => o.isSameTeam(r.for_team_name, forTeam) && o.isSameTeam(r.opponent_name, o.opponentName));
+  if (!mine.length) return null;
+  return {
+    general: mine.find((r: any) => r.scope === "team")?.note ?? null,
+    players: mine.filter((r: any) => r.scope === "player" && r.player_name).map((r: any) => ({ name: r.player_name, kind: r.kind ?? "other", note: r.note })),
+    updatedAt: mine.map((r: any) => r.updated_at).sort().pop() ?? null,
   };
 }
 
@@ -226,5 +258,6 @@ export async function loadScoutingBundle(o: LoadOptions): Promise<ScoutingBundle
     leagueRows: leagueRows.rows,
     baselineNote: leagueRows.note,
     myTeam: mine && o.myTeamName ? { name: o.myTeamName, ...mine } : null,
+    coachNotes: await loadCoachNotes(o),
   };
 }

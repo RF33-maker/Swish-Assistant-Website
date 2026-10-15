@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { printScoutPlan } from '@/lib/printScoutPlan';
 import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
+import { windowLabel, type CoachNote, type ScoutWindow } from '@shared/coachNotes';
 
 /**
  * The scouting agent's game plan, shown at the top of the opponent scout report.
@@ -48,6 +49,8 @@ interface Report {
   dataThrough: string | null;
   teaser: Teaser | null;
   plan: GamePlan | null;
+  /** Only the coach's own report carries the fact pack; here, just to see whether notes went into it. */
+  facts?: { coachNotes?: unknown } | null;
   error: string | null;
 }
 interface ApiResponse {
@@ -104,8 +107,15 @@ function CallList({ calls }: { calls: Call[] }) {
 }
 
 export default function AgentGamePlan({
-  leagueId, opponentName, myTeamName, color, roster,
-}: { leagueId: string; opponentName: string; myTeamName: string; color: string; roster?: ScoutRosterResponse | null }) {
+  leagueId, opponentName, myTeamName, color, roster, window: scoutWindow = 'season', notes = null, notesUpdatedAt = null,
+}: {
+  leagueId: string; opponentName: string; myTeamName: string; color: string; roster?: ScoutRosterResponse | null;
+  /** The games the plan is built on: the whole season, or the last 5 or 3. */
+  window?: ScoutWindow;
+  /** The coach's notes on this opponent, for the printed report and the "rebuild to apply" prompt. */
+  notes?: CoachNote[] | null;
+  notesUpdatedAt?: string | null;
+}) {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
@@ -117,6 +127,7 @@ export default function AgentGamePlan({
   const load = useCallback(async () => {
     try {
       const qs = new URLSearchParams({ leagueId, opponent: opponentName, forTeam: myTeamName || '' });
+      if (scoutWindow !== 'season') qs.set('window', scoutWindow);
       const res = await fetch(`/api/scout-agent/report?${qs}`, { headers: await authHeaders() });
       if (!res.ok) throw new Error(`report returned ${res.status}`);
       setData(await res.json());
@@ -125,9 +136,9 @@ export default function AgentGamePlan({
     } finally {
       setLoading(false);
     }
-  }, [leagueId, opponentName, myTeamName]);
+  }, [leagueId, opponentName, myTeamName, scoutWindow]);
 
-  useEffect(() => { setLoading(true); polls.current = 0; load(); }, [load]);
+  useEffect(() => { setLoading(true); setRequesting(false); setRequestError(null); polls.current = 0; load(); }, [load]);
 
   // Poll while a build is running (a build takes a minute or two).
   const building = data?.report?.status === 'building' || data?.preview?.status === 'building' || requesting;
@@ -152,7 +163,7 @@ export default function AgentGamePlan({
       const res = await fetch(`/api/scout-agent/${kind}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-        body: JSON.stringify({ leagueId, opponent: opponentName, forTeam: myTeamName || null, force }),
+        body: JSON.stringify({ leagueId, opponent: opponentName, forTeam: myTeamName || null, force, window: scoutWindow }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok && res.status !== 202) throw new Error(json.error || `build returned ${res.status}`);
@@ -173,6 +184,8 @@ export default function AgentGamePlan({
   const report = full ? data.report : data.preview;
   const plan = report?.plan ?? null;
   const teaser = report?.teaser ?? null;
+  // Notes saved after the plan was built haven't reached it yet.
+  const notesStale = full && !!notesUpdatedAt && !!report?.generatedAt && new Date(notesUpdatedAt).getTime() > new Date(report.generatedAt).getTime();
 
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -182,6 +195,11 @@ export default function AgentGamePlan({
         {plan && (
           <span className="text-[11px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300">
             {plan.confidence} confidence
+          </span>
+        )}
+        {full && scoutWindow !== 'season' && (
+          <span className="text-[11px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: color }}>
+            {windowLabel(scoutWindow)}
           </span>
         )}
       </div>
@@ -205,6 +223,8 @@ export default function AgentGamePlan({
                 brandColor: color,
                 competitionName: roster?.leagueName ?? null,
                 roster: roster ?? null,
+                windowLabel: scoutWindow === 'season' ? null : windowLabel(scoutWindow),
+                coachNotes: notes ?? null,
               });
               if (!ok) setRequestError('Allow pop-ups for this site to download the report.');
             }}
@@ -316,7 +336,14 @@ export default function AgentGamePlan({
         ) : (
           <div className="space-y-2">
             <p className="text-sm text-gray-600 dark:text-neutral-300">
-              {failed ? 'The last build did not finish.' : 'No game plan for this matchup yet.'} Plans for your fixtures are built automatically a few days out; you can also build one now.
+              {failed
+                ? 'The last build did not finish.'
+                : scoutWindow === 'season'
+                  ? 'No game plan for this matchup yet.'
+                  : `No game plan on ${opponentName}'s ${windowLabel(scoutWindow)} yet.`}{' '}
+              {scoutWindow === 'season'
+                ? 'Plans for your fixtures are built automatically a few days out; you can also build one now.'
+                : 'Build one to read their recent form on its own.'}
             </p>
             <button onClick={() => build(failed)} className="text-sm font-semibold text-white px-4 py-2 rounded-md" style={{ backgroundColor: color }}>
               Build game plan
@@ -335,6 +362,15 @@ export default function AgentGamePlan({
     <div className="space-y-4">
       <div className="ch-card p-4 md:p-6">
         {header}
+        {notesStale && !building && (
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2 text-[13px] bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+            <span>You've added notes since this plan was built, so it doesn't reflect them yet.</span>
+            <button onClick={() => build(true)} className="font-semibold underline underline-offset-2">Rebuild with my notes</button>
+          </div>
+        )}
+        {!notesStale && !!report?.facts?.coachNotes && (
+          <p className="mb-3 text-[12.5px] text-gray-500 dark:text-neutral-400">This plan takes your notes into account.</p>
+        )}
         <p className="text-lg md:text-xl font-semibold text-slate-800 dark:text-white">{plan.headline}</p>
         <p className="text-sm text-gray-700 dark:text-neutral-300 mt-2">{plan.summary}</p>
 

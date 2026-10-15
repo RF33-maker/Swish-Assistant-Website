@@ -7,8 +7,13 @@ import { ComparisonBarRow, NarrativeSummary, RankTrack, SectionNarrative } from 
 import { useReportNarrative } from '@/hooks/useReportNarrative';
 import AgentGamePlan from './AgentGamePlan';
 import ScoutRoster from './ScoutRoster';
+import CoachNotesPanel from './CoachNotes';
+import WindowToggle from './WindowToggle';
 import { TeamLogo } from '@/components/TeamLogo';
 import { useScoutRoster } from '@/hooks/useScoutRoster';
+import { useCoachNotes } from '@/hooks/useCoachNotes';
+import { useAuth } from '@/hooks/use-auth';
+import type { ScoutWindow } from '@shared/coachNotes';
 import { num, ordinal, toPlayerLine, type PlayerGameRow, type PlayerLine } from '@/lib/gameReport';
 import type { PlayerSeasonAverage, StandingRow, TeamSeasonAverage } from '@/pages/CoachesHub';
 
@@ -86,7 +91,12 @@ export default function OpponentScoutReport({
   // Branded to the coach's own team, not the opponent -- this is their document.
   const { primaryColor, secondaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: myTeamName, leagueId });
   // The opponent's roster and league-percentile profiles (public box-score data).
-  const { data: rosterData } = useScoutRoster(leagueId, opponentName, myTeamName);
+  // Which of the opponent's games the plan, roster and percentiles are read over.
+  const [scoutWindow, setScoutWindow] = useState<ScoutWindow>('season');
+  const { data: rosterData } = useScoutRoster(leagueId, opponentName, myTeamName, scoutWindow);
+  // The coach's own notes on this opponent: for coach accounts and admins, never other visitors.
+  const { isCoach, isRealAdmin } = useAuth();
+  const notes = useCoachNotes(leagueId, opponentName, myTeamName, isCoach || isRealAdmin);
   const brand = brandLoading || !primaryColor ? brandColor : primaryColor;
 
   // The feed lists some clubs under two names in one competition (sponsor
@@ -331,9 +341,18 @@ export default function OpponentScoutReport({
         </p>
       </div>
 
-      <AgentGamePlan leagueId={leagueId} opponentName={opponentName} myTeamName={myTeamName} color={brand} roster={rosterData ?? null} />
+      <WindowToggle value={scoutWindow} onChange={setScoutWindow} color={brand} games={rosterData?.season.wholeSeason ? rosterData.season.games : null} />
 
-      {rosterData && <ScoutRoster data={rosterData} opponentName={opponentName} color={brand} />}
+      <AgentGamePlan
+        leagueId={leagueId} opponentName={opponentName} myTeamName={myTeamName} color={brand}
+        roster={rosterData ?? null} window={scoutWindow} notes={notes.canEdit ? notes.notes : null} notesUpdatedAt={notes.canEdit ? notes.updatedAt : null}
+      />
+
+      {notes.canEdit && (
+        <CoachNotesPanel api={notes} opponentName={opponentName} players={(rosterData?.roster ?? []).map((r) => r.name)} color={brand} />
+      )}
+
+      {rosterData && <ScoutRoster data={rosterData} opponentName={opponentName} color={brand} notes={notes.canEdit ? notes : null} />}
 
       <NarrativeSummary
         headline={narrative?.headline}

@@ -9,7 +9,7 @@ import { generateGamePlan, type GamePlan, type Tier } from "./agent.ts";
  * scout-agent — builds opponent scouting reports and game plans.
  *
  * Actions (POST JSON, header x-scout-secret required):
- *   { action: "build", leagueId, opponentName, forTeamName?, tier?, gameKey?, matchTime?, requestedBy?, force? }
+ *   { action: "build", leagueId, opponentName, forTeamName?, tier?, window?, gameKey?, matchTime?, requestedBy?, force? }
  *       Queue one report and build it in the background. Returns 202 at once.
  *       tier "full" (default): the paid game plan, written by MODEL_FULL for
  *       the coach's own team (forTeamName). tier "preview": the free look,
@@ -78,9 +78,16 @@ interface BuildRequest {
   matchTime?: string | null;
   requestedBy?: string | null;
   tier?: Tier;
+  /** The games the report reads: the whole season (default), the last 5 or the last 3. */
+  window?: Window;
 }
 
+type Window = "season" | "last5" | "last3";
+const parseWindow = (v: unknown): Window => (v === "last5" || v === "last3" ? v : "season");
+const WINDOW_LABEL: Record<Window, string> = { season: "this season", last5: "last 5 games", last3: "last 3 games" };
+
 async function computeFactsFor(r: BuildRequest) {
+  const window = parseWindow(r.window);
   const bundle = await loadScoutingBundle({
     db,
     isSameTeam,
@@ -88,12 +95,15 @@ async function computeFactsFor(r: BuildRequest) {
     leagueId: r.leagueId,
     myTeamName: r.tier === "preview" ? null : r.forTeamName || null,
     maxGames: 20,
+    lastN: window === "last5" ? 5 : window === "last3" ? 3 : null,
+    // The free look is shared by everyone, so it never carries one coach's notes.
+    forTeamNotes: r.tier === "preview" ? null : r.forTeamName || null,
   });
-  return computeScoutingFacts(bundle, { isSameTeam });
+  return { ...computeScoutingFacts(bundle, { isSameTeam }), window: { key: window, label: WINDOW_LABEL[window] } };
 }
 
 async function build(r: BuildRequest) {
-  const key = { league_id: r.leagueId, opponent_name: r.opponentName, for_team_name: r.forTeamName || "" };
+  const key = { league_id: r.leagueId, opponent_name: r.opponentName, for_team_name: r.forTeamName || "", window: parseWindow(r.window) };
   const tier: Tier = r.tier === "preview" ? "preview" : "full";
   const model = tier === "preview" ? MODEL_PREVIEW : MODEL_FULL;
   const started = Date.now();
@@ -124,7 +134,7 @@ async function build(r: BuildRequest) {
 
 /** Mark a row as building (creating it if needed). Returns false if another build is already in flight. */
 async function claim(r: BuildRequest, force: boolean): Promise<boolean> {
-  const key = { league_id: r.leagueId, opponent_name: r.opponentName, for_team_name: r.forTeamName || "" };
+  const key = { league_id: r.leagueId, opponent_name: r.opponentName, for_team_name: r.forTeamName || "", window: parseWindow(r.window) };
   const { data: existing } = await db.from("scout_agent_reports").select("id, status, updated_at, attempts").match(key).maybeSingle();
   const now = new Date();
   if (existing?.status === "building" && !force) {
@@ -191,10 +201,13 @@ async function sweep(days: number, limit: number, selfUrl: string, scoutSecret: 
   if (!wanted.length) return { fixtures: fixtures?.length ?? 0, coachTeams: coachTeams.length, queued: 0 };
 
   const leagueIds = Array.from(new Set(wanted.map((w) => w.leagueId)));
-  const { data: rows } = await db.from("scout_agent_reports")
-    .select("league_id, opponent_name, for_team_name, status, generated_at, updated_at, attempts")
+  const { data: rows, error: rowsError } = await db.from("scout_agent_reports")
+    .select("league_id, opponent_name, for_team_name, window, status, generated_at, updated_at, attempts")
     .in("league_id", leagueIds);
-  const byKey = new Map((rows || []).map((r: any) => [`${r.league_id}|${r.opponent_name}|${r.for_team_name}`, r]));
+  // If the window column is missing (migration not applied) every plan would look unbuilt and be rebuilt: stop instead.
+  if (rowsError) throw new Error(`sweep: ${rowsError.message}`);
+  // The sweep only keeps the whole-season plan fresh; a coach asks for last 3 / last 5 themselves.
+  const byKey = new Map((rows || []).filter((r: any) => (r.window ?? "season") === "season").map((r: any) => [`${r.league_id}|${r.opponent_name}|${r.for_team_name}`, r]));
 
   const staleBefore = now.getTime() - STALE_HOURS * 3_600_000;
   const needs = wanted.filter((w) => {
@@ -239,6 +252,7 @@ Deno.serve(async (req) => {
       leagueId: body.leagueId, opponentName: body.opponentName, forTeamName: body.forTeamName || null,
       gameKey: body.gameKey || null, matchTime: body.matchTime || null, requestedBy: body.requestedBy || null,
       tier: body.tier === "preview" ? "preview" : "full",
+      window: body.tier === "preview" ? "season" : parseWindow(body.window),
     };
     // A preview describes the opponent only, so every visitor shares one row.
     if (r.tier === "preview") r.forTeamName = null;

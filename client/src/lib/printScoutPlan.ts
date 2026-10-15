@@ -13,6 +13,7 @@
 
 import { describeStanding, ordinalOf, type Aspect, type Headshot, type ScoutRoster } from "../../../shared/scoutRoster";
 import { playerNameKey } from "../../../shared/playerNameKey";
+import { noteKindLabel, type CoachNote } from "../../../shared/coachNotes";
 
 export interface PrintablePlan {
   headline: string;
@@ -53,6 +54,10 @@ export interface PrintableMeta {
   /** Roster table, league-percentile profiles, headshots and club crests; left out when not loaded. */
   roster?: PrintableRoster | null;
   teaser?: PrintableTeaser | null;
+  /** "last 5 games" when the report was read over a window rather than the whole season. */
+  windowLabel?: string | null;
+  /** The coach's own notes on this opponent, printed so the reader sees what the plan was told. */
+  coachNotes?: CoachNote[] | null;
 }
 
 const esc = (value: unknown): string =>
@@ -149,12 +154,16 @@ function seasonNote(r: PrintableRoster): string {
   return `<p class="season"><b>${s.games} game${s.games === 1 ? "" : "s"} this season</b>${s.competitions.length > 1 ? ", counted across every competition" : ""}: ${where}. Player numbers and percentiles use all of them.</p>`;
 }
 
-function profilesSection(r: PrintableRoster): string {
+function noteLine(n: CoachNote | undefined): string {
+  return n ? `<p class="pnote"><b>Your note${n.kind ? ` &middot; ${esc(noteKindLabel(n.kind))}` : ""}</b>${esc(n.note)}</p>` : "";
+}
+
+function profilesSection(r: PrintableRoster, notes: Map<string, CoachNote>): string {
   if (!r.profiles.length) return "";
   const [lo, hi] = r.poolRange;
   const cards = r.profiles
     .map((p) => `<article class="pro"><header>${headshot(p.photo, p.name, p.shirt, "lg")}<div><h3>${esc(p.name)}</h3><p class="line">${p.mpg} min &middot; ${p.pts} pts &middot; ${p.reb} reb &middot; ${p.ast} ast &middot; ${p.gp} games</p></div></header>
-<div class="two"><div><h4>Strengths</h4><ul class="aspects">${p.strengths.map((a) => aspectHtml(a, "up")).join("") || '<li class="none">No league-level strength yet in this sample.</li>'}${p.strengths.length > 0 && p.strengths.length < 3 ? `<li class="none">Only ${p.strengths.length} area${p.strengths.length === 1 ? "" : "s"} above the 60th percentile.</li>` : ""}</ul></div>
+${noteLine(notes.get(playerNameKey(p.name)))}<div class="two"><div><h4>Strengths</h4><ul class="aspects">${p.strengths.map((a) => aspectHtml(a, "up")).join("") || '<li class="none">No league-level strength yet in this sample.</li>'}${p.strengths.length > 0 && p.strengths.length < 3 ? `<li class="none">Only ${p.strengths.length} area${p.strengths.length === 1 ? "" : "s"} above the 60th percentile.</li>` : ""}</ul></div>
 <div><h4>Weaknesses</h4><ul class="aspects">${p.weaknesses.map((a) => aspectHtml(a, "down")).join("") || '<li class="none">No league-level weakness yet in this sample.</li>'}${p.weaknesses.length > 0 && p.weaknesses.length < 3 ? `<li class="none">Only ${p.weaknesses.length} area${p.weaknesses.length === 1 ? "" : "s"} below the 40th percentile.</li>` : ""}</ul></div></div></article>`)
     .join("");
   return `<section><h2><span>Players</span>Strengths and weaknesses</h2>
@@ -181,11 +190,20 @@ export function buildPlanHtml(plan: PrintablePlan, meta: PrintableMeta): string 
     if (k) rosterShirt.set(k, p.shirt);
   }
 
+  const noteByPlayer = new Map<string, CoachNote>();
+  for (const n of meta.coachNotes ?? []) if (n.scope === "player" && n.playerName) noteByPlayer.set(playerNameKey(n.playerName), n);
+  const teamNote = (meta.coachNotes ?? []).find((n) => n.scope === "team");
+  const notesBlock = meta.coachNotes && meta.coachNotes.length
+    ? `<section class="notes"><h2 class="mini">Your notes on ${esc(meta.opponentName)}, which this plan was told</h2>
+${teamNote ? `<p class="nt"><b>Team</b>${esc(teamNote.note)}</p>` : ""}${Array.from(noteByPlayer.values()).map((n) => `<p class="nt"><b>${esc(n.playerName)} &middot; ${esc(noteKindLabel(n.kind))}</b>${esc(n.note)}</p>`).join("")}</section>`
+    : "";
+
   const chips = [
     `<span class="chip solid">Game plan</span>`,
     season?.wholeSeason && season.games
       ? `<span class="chip">${season.games} game${season.games === 1 ? "" : "s"} analysed, ${season.competitions.length > 1 ? `${season.competitions.length} competitions` : esc(season.competitions[0]?.name || "this season")}</span>`
       : meta.gamesAnalysed ? `<span class="chip">${meta.gamesAnalysed} games analysed${meta.dataThrough ? `, through ${esc(day(meta.dataThrough))}` : ""}</span>` : "",
+    meta.windowLabel ? `<span class="chip">Read on the ${esc(meta.windowLabel)}</span>` : "",
     `<span class="chip">Confidence: ${esc(plan.confidence)}</span>`,
     meta.generatedAt ? `<span class="chip">Built ${esc(day(meta.generatedAt))}</span>` : "",
   ].filter(Boolean).join("");
@@ -285,6 +303,10 @@ ${numbers.slice(0, 5).map((k) => {
   .aspect{font-weight:700;font-size:.92rem}.val{color:var(--muted);font-size:.85rem}.gloss{font-size:.74rem;color:var(--muted);margin-top:1px}
   .pbar{display:flex;align-items:center;gap:7px;margin-top:3px}.track{flex:1;height:5px;border-radius:9px;background:#e1e5ec;overflow:hidden}.fill{display:block;height:100%;border-radius:9px}.fill.up{background:var(--good)}.fill.down{background:var(--bad)}.pbar b{font-size:.72rem;white-space:nowrap}
   .tier{font-weight:700}.tier.up{color:var(--good)}.tier.down{color:var(--bad)}
+  .notes{margin:12px 0 0;border:1px solid var(--line);border-left:4px solid var(--brand);border-radius:8px;padding:8px 12px;break-inside:avoid}
+  .notes h2.mini{margin:0 0 5px}
+  .nt{font-size:.88rem;margin-top:3px}.nt b,.pnote b{display:block;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .pnote{background:var(--soft);border-left:3px solid var(--brand);border-radius:0 6px 6px 0;padding:5px 10px;margin:-2px 0 9px;font-size:.86rem}
   .closing{margin-top:20px;padding-top:9px;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem;break-inside:avoid}
   .watch li{padding:5px 0 5px 11px;border-left:3px solid var(--line);margin-bottom:5px;break-inside:avoid}
 </style></head><body>
@@ -293,6 +315,7 @@ ${numbers.slice(0, 5).map((k) => {
 <div class="chips">${chips}</div></div>
 <p class="headline">${esc(plan.headline)}</p><p class="summary">${esc(plan.summary)}</p>
 ${glance}
+${notesBlock}
 <h2><span>01</span>Game plan</h2><ol class="plan">${plan.gamePlan
     .map((g, i) => `<li><div class="n">${i + 1}</div><div><p class="call">${esc(g.call)}</p><p class="why">${esc(g.why)}</p><p class="target"><b>Target</b>${esc(g.target)}</p></div></li>`)
     .join("")}</ol>
@@ -303,7 +326,7 @@ ${glance}
 <h2><span>06</span>Lineups and rotation</h2><div class="panel"><p>${esc(plan.lineupsAndRotation.summary)}</p></div><ul class="watch" style="margin-top:8px">${plan.lineupsAndRotation.watchFor.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>
 <h2><span>07</span>Late game</h2><div class="panel"><p>${esc(plan.lateGame)}</p></div>
 ${meta.roster && meta.roster.roster.length ? rosterSection(meta.roster, meta.opponentName) : ""}
-${meta.roster ? profilesSection(meta.roster) : ""}
+${meta.roster ? profilesSection(meta.roster, noteByPlayer) : ""}
 <p class="closing"><strong>Confidence: ${esc(plan.confidence)}.</strong> ${esc(plan.confidenceReason)}</p>
 </body></html>`;
 }

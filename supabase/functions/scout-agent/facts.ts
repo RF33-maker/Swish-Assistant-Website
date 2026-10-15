@@ -105,6 +105,13 @@ export interface LeagueTeamRow {
   [k: string]: unknown;
 }
 
+/** The coach's own context on the opponent (see scout_coach_notes). */
+export interface CoachNotes {
+  general: string | null;
+  players: Array<{ name: string; kind: string; note: string }>;
+  updatedAt: string | null;
+}
+
 export interface ScoutingBundle {
   opponentName: string;
   targetLeagueId: string;
@@ -124,6 +131,8 @@ export interface ScoutingBundle {
   baselineNote?: string | null;
   /** Optional: the coach's own team, profiled the same way for a matchup read. */
   myTeam?: { name: string; games: TeamGameRow[]; opponentsInGames: Record<string, TeamGameRow> } | null;
+  /** What the coach knows that the numbers can't: taken as true, and said so in the plan. */
+  coachNotes?: CoachNotes | null;
 }
 
 // ---------- Helpers ----------
@@ -858,7 +867,35 @@ export function computeScoutingFacts(input: ScoutingBundle, opts: ComputeOptions
         }
       : null,
   };
-  return facts;
+  return { ...facts, coachNotes: coachNotesBlock(b.coachNotes, playerCards) };
+}
+
+const KIND_MEANING: Record<string, string> = {
+  stronger: "the coach says this player is better than the numbers show",
+  weaker: "the coach says this player is worse than the numbers show",
+  out: "the coach says this player is injured or not playing: plan without them",
+  changed: "the coach says this player has a new role or only just joined: the games so far don't describe them",
+  other: "extra context from the coach",
+};
+
+/** The coach's notes, each tied to the player's numbers when we have them so the plan can weigh one against the other. */
+export function coachNotesBlock(notes: CoachNotes | null | undefined, cards: Array<{ name: string; gp: number; mpg: number | null; onRecentRoster: boolean }>) {
+  if (!notes || (!notes.general && notes.players.length === 0)) return null;
+  const byKey = new Map(cards.map((c) => [nameKey(c.name), c]));
+  return {
+    note: "Written by the coach for their own use. It is first-hand knowledge the data cannot see: treat it as true, let it outweigh a small sample, and say where a call rests on it.",
+    aboutTheOpponent: notes.general,
+    aboutPlayers: notes.players.map((p) => {
+      const card = byKey.get(nameKey(p.name));
+      return {
+        name: card?.name ?? p.name,
+        meaning: KIND_MEANING[p.kind] ?? KIND_MEANING.other,
+        coachNote: p.note,
+        gamesInSample: card?.gp ?? null,
+        onRecentRoster: card ? card.onRecentRoster : false,
+      };
+    }),
+  };
 }
 
 export type ScoutingFacts = ReturnType<typeof computeScoutingFacts>;

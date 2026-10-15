@@ -197,6 +197,33 @@ export interface Aspect {
 }
 
 /** A player's headshot, when one is on their record. */
+/**
+ * Keeps only each club's newest `games` games (a club's "last 5"), counted across
+ * competitions. Applied to every club, so a player's percentile is against other
+ * players' recent form, not their whole season. null keeps everything.
+ */
+export function applyWindow<R extends { game_key?: string | null }>(
+  rows: R[],
+  clubOf: (row: R) => string,
+  playedAt: (gameKey: string) => string | undefined,
+  games: number | null,
+): R[] {
+  if (games == null) return rows;
+  const byClub = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (!r.game_key) continue;
+    const club = clubOf(r);
+    if (!byClub.has(club)) byClub.set(club, new Set());
+    byClub.get(club)!.add(r.game_key);
+  }
+  const keep = new Map<string, Set<string>>();
+  for (const [club, keys] of Array.from(byClub.entries())) {
+    const newest = Array.from(keys).sort((a, b) => (playedAt(b) ?? "").localeCompare(playedAt(a) ?? "") || b.localeCompare(a));
+    keep.set(club, new Set(newest.slice(0, games)));
+  }
+  return rows.filter((r) => !!r.game_key && keep.get(clubOf(r))?.has(r.game_key));
+}
+
 export interface Headshot {
   url: string;
   /** Vertical focus (0 to 100) for cropping a tall photo to the face. */

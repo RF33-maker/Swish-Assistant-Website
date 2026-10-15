@@ -1,4 +1,5 @@
-import { Plus, Minus, Users, Target, CalendarRange } from 'lucide-react';
+import { Plus, Minus, Users, Target, CalendarRange, MessageSquareText } from 'lucide-react';
+import { PlayerNote, type CoachNotesApi } from './CoachNotes';
 import { PlayerHeadshot } from '@/components/PlayerHeadshot';
 import { describeStanding, ordinalOf, type Aspect, type Headshot, type PlayerProfile, type RosterEntry } from '@shared/scoutRoster';
 import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
@@ -83,7 +84,7 @@ function AspectRow({ a, kind }: { a: Aspect; kind: 'up' | 'down' }) {
   );
 }
 
-function ProfileCard({ p, color }: { p: PlayerProfile; color: string }) {
+function ProfileCard({ p, color, notes }: { p: PlayerProfile; color: string; notes?: CoachNotesApi | null }) {
   return (
     <article className="ch-tile p-4 flex flex-col gap-4 min-w-0">
       <header className="flex items-center gap-3">
@@ -117,6 +118,7 @@ function ProfileCard({ p, color }: { p: PlayerProfile; color: string }) {
           </ul>
         </div>
       </div>
+      {notes && <PlayerNote api={notes} playerName={p.name} color={color} />}
     </article>
   );
 }
@@ -136,18 +138,22 @@ function SeasonNote({ season, color }: { season: ScoutRosterResponse['season']; 
     <div className="ch-tile flex items-start gap-2.5 p-3 mb-3 text-[13px] text-[color:var(--ch-text-2)]" style={{ borderLeft: `3px solid ${color}` }}>
       <CalendarRange className="w-4 h-4 mt-0.5 shrink-0" style={{ color }} />
       <p>
-        <strong className="text-slate-900 dark:text-white">{season.games} game{season.games === 1 ? '' : 's'} this season</strong>
+        <strong className="text-slate-900 dark:text-white">{season.window === 'season'
+          ? `${season.games} game${season.games === 1 ? '' : 's'} this season`
+          : season.windowLabel.charAt(0).toUpperCase() + season.windowLabel.slice(1)}</strong>
         {season.competitions.length > 1 ? ', counted across every competition: ' : ' in '}
         {season.competitions.map((c, i) => (
           <span key={c.name}>{i > 0 ? ' · ' : ''}{c.name} {c.games}</span>
         ))}
-        . Player numbers and league percentiles use all of them, so a club with few league games is not judged on one.
+        . {season.window === 'season'
+          ? 'Player numbers and league percentiles use all of them, so a club with few league games is not judged on one.'
+          : `Every club is read on its own ${season.windowLabel}, so the percentiles compare recent form with recent form.`}
       </p>
     </div>
   );
 }
 
-function RosterTable({ roster }: { roster: RosterEntry[] }) {
+function RosterTable({ roster, notes }: { roster: RosterEntry[]; notes?: CoachNotesApi | null }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-[color:var(--ch-border)]">
       <table className="w-full min-w-[640px] text-[13px] tabular-nums">
@@ -174,6 +180,9 @@ function RosterTable({ roster }: { roster: RosterEntry[] }) {
                     )}
                   </span>
                   {r.name}
+                  {notes?.noteFor(r.name) && (
+                    <MessageSquareText className="w-3.5 h-3.5 shrink-0 text-[color:var(--ch-muted)]" aria-label="You have a note on this player" />
+                  )}
                 </span>
               </th>
               <td className="text-right px-3 py-2">{r.gp}</td>
@@ -195,7 +204,7 @@ function RosterTable({ roster }: { roster: RosterEntry[] }) {
   );
 }
 
-export default function ScoutRoster({ data, opponentName, color }: { data: ScoutRosterResponse; opponentName: string; color: string }) {
+export default function ScoutRoster({ data, opponentName, color, notes }: { data: ScoutRosterResponse; opponentName: string; color: string; notes?: CoachNotesApi | null }) {
   if (!data.roster.length) return null;
   const [lo, hi] = data.poolRange;
   return (
@@ -206,10 +215,10 @@ export default function ScoutRoster({ data, opponentName, color }: { data: Scout
           <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{opponentName} roster</h3>
         </div>
         <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">
-          Box-score per-game averages for the {data.season.label} season, most minutes first. Bold names are profiled below.
+          Box-score per-game averages for {data.season.window === 'season' ? `the ${data.season.label} season` : `the ${data.season.windowLabel}`}, most minutes first. Bold names are profiled below.
         </p>
         <SeasonNote season={data.season} color={color} />
-        <RosterTable roster={data.roster} />
+        <RosterTable roster={data.roster} notes={notes} />
       </section>
 
       {data.profiles.length > 0 && (
@@ -219,7 +228,7 @@ export default function ScoutRoster({ data, opponentName, color }: { data: Scout
             <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Player profiles</h3>
           </div>
           <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">
-            Each player with 10+ minutes a game over 2+ games this season, set against all {data.poolSize} such players from the clubs in {data.leagueName || 'this league'}, with their games across competitions counted together.
+            Each player with 10+ minutes a game over 2+ games {data.season.window === 'season' ? 'this season' : `in the ${data.season.windowLabel}`}, set against all {data.poolSize} such players from the clubs in {data.leagueName || 'this league'}, with their games across competitions counted together.
           </p>
 
           <div className="ch-tile p-3.5 md:p-4 mb-4 space-y-3" style={{ borderLeft: `3px solid ${color}` }}>
@@ -236,12 +245,12 @@ export default function ScoutRoster({ data, opponentName, color }: { data: Scout
               ))}
             </ul>
             <p className="text-xs text-[color:var(--ch-muted)]">
-              Counting stats are compared per 40 minutes, so bench players are not marked down for minutes. Early in a season the sample is small, so read these as early signs.
+              Counting stats are compared per 40 minutes, so bench players are not marked down for minutes. Early in a season the sample is small, so read these as early signs.{data.season.window === 'last3' && ' Three games is a small sample, so one hot or cold night can swing a profile.'}
             </p>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 md:gap-4">
-            {data.profiles.map((p) => <ProfileCard key={p.playerId} p={p} color={color} />)}
+            {data.profiles.map((p) => <ProfileCard key={p.playerId} p={p} color={color} notes={notes} />)}
           </div>
         </section>
       )}

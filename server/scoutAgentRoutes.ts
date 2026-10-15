@@ -2,6 +2,8 @@ import type { Express, Request, Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { isSameTeam } from "./teamIdentityService";
 import { getLeagueSides } from "./teamSides";
+import { cleanNote, isNoteKind, parseWindow, type CoachNote, type ScoutWindow } from "@shared/coachNotes";
+import { playerNameKey } from "@shared/playerNameKey";
 
 /**
  * Site-side API for the scouting agent (supabase/functions/scout-agent).
@@ -20,6 +22,11 @@ import { getLeagueSides } from "./teamSides";
  * schedule and the box scores don't always spell a club the same way
  * ("Tees Valley Mohawks Senior Men I" vs "Tees Valley Mohawks"), so lookups
  * match on club identity instead of string equality.
+ *
+ * A report is also keyed by its window (the whole season, the last 5 games or the
+ * last 3), so each view keeps its own plan. A coach's notes on an opponent
+ * (scout_coach_notes) are private to that coach's club and are read by the agent
+ * when it builds their plan.
  */
 
 const FUNCTION_URL = `${process.env.VITE_SUPABASE_URL}/functions/v1/scout-agent`;
@@ -66,17 +73,17 @@ async function agentSecret(): Promise<string | null> {
   return (data as string | null) ?? null;
 }
 
-async function findReport(leagueId: string, opponent: string, forTeam: string) {
+async function findReport(leagueId: string, opponent: string, forTeam: string, window: ScoutWindow = "season") {
   const { data, error } = await supabaseAdmin
     .from("scout_agent_reports")
-    .select("id, league_id, opponent_name, for_team_name, tier, game_key, match_time, status, teaser, plan, facts, model, error, games_analysed, data_through, generated_at, updated_at")
+    .select("id, league_id, opponent_name, for_team_name, tier, window, game_key, match_time, status, teaser, plan, facts, model, error, games_analysed, data_through, generated_at, updated_at")
     .eq("league_id", leagueId)
     .limit(500);
   if (error) throw new Error(error.message);
   const sameOpp = (data || []).filter((r: any) => isSameTeam(r.opponent_name, opponent));
-  const full = sameOpp.filter((r: any) => r.tier !== "preview");
+  const full = sameOpp.filter((r: any) => r.tier !== "preview" && (r.window ?? "season") === window);
   const exact = forTeam ? full.find((r: any) => r.for_team_name && isSameTeam(r.for_team_name, forTeam)) : undefined;
-  const preview = sameOpp.find((r: any) => r.tier === "preview");
+  const preview = sameOpp.find((r: any) => r.tier === "preview" && (r.window ?? "season") === "season");
   return { exact, preview };
 }
 
@@ -95,10 +102,30 @@ async function dispatch(body: Record<string, unknown>) {
   return { ok: true, status: 202, error: null };
 }
 
+const MAX_NOTES = 60;
+
+/** Notes between one coach's club and one opponent, matched on club identity like the reports. */
+async function notesFor(forTeam: string, opponent: string): Promise<any[]> {
+  const core = forTeam.replace(/\s+Senior\s+(Men|Women)\b.*$/i, "").replace(/\s+I$/i, "").replace(/[%_,]/g, "").trim();
+  if (core.length < 3) return [];
+  const { data, error } = await supabaseAdmin
+    .from("scout_coach_notes")
+    .select("id, for_team_name, opponent_name, scope, player_name, player_key, kind, note, updated_at")
+    .ilike("for_team_name", `%${core}%`)
+    .limit(500);
+  if (error) throw new Error(error.message);
+  return (data || []).filter((r: any) => isSameTeam(r.for_team_name, forTeam) && isSameTeam(r.opponent_name, opponent));
+}
+
+function shapeNote(r: any): CoachNote {
+  return { id: r.id, scope: r.scope, playerName: r.player_name ?? null, kind: r.kind ?? null, note: r.note, updatedAt: r.updated_at };
+}
+
 function shape(row: any, full: boolean) {
   if (!row) return null;
   return {
     tier: row.tier ?? "full",
+    window: row.window ?? "season",
     status: row.status,
     opponentName: row.opponent_name,
     forTeamName: row.for_team_name || null,
@@ -121,10 +148,11 @@ export function registerScoutAgentRoutes(app: Express) {
       const leagueId = String(req.query.leagueId || "");
       const opponent = String(req.query.opponent || "");
       const forTeam = String(req.query.forTeam || "");
+      const window = parseWindow(req.query.window);
       if (!leagueId || !opponent) return res.status(400).json({ error: "leagueId and opponent are required" });
 
       const access = await resolveAccess(req, leagueId, forTeam || null);
-      const { exact, preview } = await findReport(leagueId, opponent, forTeam);
+      const { exact, preview } = await findReport(leagueId, opponent, forTeam, window);
       return res.json({
         access: access.full ? "full" : "teaser",
         canBuild: access.full,
@@ -176,13 +204,14 @@ export function registerScoutAgentRoutes(app: Express) {
   app.post("/api/scout-agent/build", async (req: Request, res: Response) => {
     try {
       const { leagueId, opponent, forTeam, gameKey, matchTime, force } = req.body || {};
+      const window = parseWindow(req.body?.window);
       if (!leagueId || !opponent) return res.status(400).json({ error: "leagueId and opponent are required" });
       const access = await resolveAccess(req, leagueId, forTeam || null);
       if (!access.userId) return res.status(401).json({ error: "Sign in to build a scouting report" });
       if (!access.full) return res.status(403).json({ error: "Full scouting reports are part of the coach plan" });
 
       // Don't let repeated clicks burn model calls: a fresh or in-flight report is returned as is.
-      const { exact } = await findReport(leagueId, opponent, forTeam || "");
+      const { exact } = await findReport(leagueId, opponent, forTeam || "", window);
       if (exact && !force) {
         const age = (Date.now() - new Date(exact.updated_at).getTime()) / 60000;
         if (exact.status === "building" && age < 15) return res.status(202).json({ status: "building" });
@@ -192,6 +221,7 @@ export function registerScoutAgentRoutes(app: Express) {
       const sent = await dispatch({
         action: "build",
         tier: "full",
+        window,
         leagueId,
         // Reuse the stored spelling so the agent updates the same row.
         opponentName: exact?.opponent_name ?? opponent,
@@ -206,6 +236,72 @@ export function registerScoutAgentRoutes(app: Express) {
     } catch (err: any) {
       console.error("[scout-agent] build failed:", err?.message);
       return res.status(500).json({ error: "Failed to start scouting report" });
+    }
+  });
+  // ----- a coach's notes on an opponent -----
+
+  // GET /api/scout-agent/notes?leagueId=&opponent=&forTeam=
+  app.get("/api/scout-agent/notes", async (req: Request, res: Response) => {
+    try {
+      const leagueId = String(req.query.leagueId || "");
+      const opponent = String(req.query.opponent || "");
+      const forTeam = String(req.query.forTeam || "");
+      if (!leagueId || !opponent || !forTeam) return res.status(400).json({ error: "leagueId, opponent and forTeam are required" });
+      const access = await resolveAccess(req, leagueId, forTeam);
+      if (!access.full) return res.status(403).json({ error: "Coach notes are part of the coach plan" });
+      const rows = await notesFor(forTeam, opponent);
+      return res.json({ notes: rows.map(shapeNote), canEdit: true });
+    } catch (err: any) {
+      console.error("[scout-agent] notes lookup failed:", err?.message);
+      return res.status(500).json({ error: "Failed to load notes" });
+    }
+  });
+
+  // PUT /api/scout-agent/notes { leagueId, opponent, forTeam, scope, playerName?, kind?, note }
+  // One note per player (or one team-wide note) per opponent; an empty note removes it.
+  app.put("/api/scout-agent/notes", async (req: Request, res: Response) => {
+    try {
+      const { leagueId, opponent, forTeam, scope, playerName, kind } = req.body || {};
+      if (!leagueId || !opponent || !forTeam) return res.status(400).json({ error: "leagueId, opponent and forTeam are required" });
+      if (scope !== "team" && scope !== "player") return res.status(400).json({ error: "scope must be team or player" });
+      const access = await resolveAccess(req, leagueId, forTeam);
+      if (!access.userId) return res.status(401).json({ error: "Sign in to add notes" });
+      if (!access.full) return res.status(403).json({ error: "Coach notes are part of the coach plan" });
+
+      const playerKey = scope === "player" ? playerNameKey(String(playerName || "")) : "";
+      if (scope === "player" && !playerKey) return res.status(400).json({ error: "playerName is required for a player note" });
+      const note = cleanNote(req.body?.note);
+
+      const rows = await notesFor(forTeam, opponent);
+      const existing = rows.find((r: any) => r.scope === scope && r.player_key === playerKey);
+      if (!note) {
+        if (existing) await supabaseAdmin.from("scout_coach_notes").delete().eq("id", existing.id);
+        return res.json({ notes: rows.filter((r: any) => r.id !== existing?.id).map(shapeNote) });
+      }
+      if (!existing && rows.length >= MAX_NOTES) return res.status(400).json({ error: `That is the most notes (${MAX_NOTES}) for one opponent` });
+
+      const values = {
+        note,
+        kind: scope === "player" && isNoteKind(kind) ? kind : null,
+        league_id: leagueId,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = existing
+        ? await supabaseAdmin.from("scout_coach_notes").update(values).eq("id", existing.id)
+        : await supabaseAdmin.from("scout_coach_notes").insert({
+            ...values,
+            for_team_name: forTeam,
+            opponent_name: opponent,
+            scope,
+            player_name: scope === "player" ? String(playerName).slice(0, 120) : null,
+            player_key: playerKey,
+            created_by: access.userId,
+          });
+      if (error) throw new Error(error.message);
+      return res.json({ notes: (await notesFor(forTeam, opponent)).map(shapeNote) });
+    } catch (err: any) {
+      console.error("[scout-agent] note save failed:", err?.message);
+      return res.status(500).json({ error: "Failed to save the note" });
     }
   });
 }
