@@ -12,6 +12,8 @@
  */
 
 export interface BoxScoreRow {
+  league_id?: string | null;
+  game_key?: string | null;
   player_id: string | null;
   full_name: string | null;
   team_name: string | null;
@@ -36,7 +38,7 @@ export interface BoxScoreRow {
 }
 
 export const BOX_SCORE_COLUMNS =
-  "player_id, full_name, team_name, shirtnumber, sminutes, spoints, sreboundstotal, sreboundsoffensive, sassists, sturnovers, ssteals, sblocks, sfoulspersonal, sfreethrowsmade, sfreethrowsattempted, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, stwopointersmade, stwopointersattempted";
+  "league_id, game_key, player_id, full_name, team_name, shirtnumber, sminutes, spoints, sreboundstotal, sreboundsoffensive, sassists, sturnovers, ssteals, sblocks, sfoulspersonal, sfreethrowsmade, sfreethrowsattempted, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, stwopointersmade, stwopointersattempted";
 
 const SUM_KEYS = [
   "spoints", "sreboundstotal", "sreboundsoffensive", "sassists", "sturnovers", "ssteals", "sblocks", "sfoulspersonal",
@@ -49,6 +51,10 @@ export interface PlayerTotals {
   id: string;
   name: string;
   team: string;
+  /** The club this player's rows belong to, as `clubOf` names it (the team name by default). */
+  club: string;
+  /** Every player id (one per competition, say) that went into this person. */
+  playerIds: string[];
   shirt: string | null;
   gp: number;
   min: number;
@@ -67,27 +73,52 @@ export function parseMinutes(value: string | number | null | undefined): number 
   return m + (Number.isFinite(s) ? s / 60 : 0);
 }
 
+export interface AggregateOptions {
+  /**
+   * Which rows are one person. By default a player id. Pass one that merges a
+   * person across competitions (and across the spellings of their name) to
+   * count a whole season's games together.
+   */
+  personKey?: (row: BoxScoreRow) => string;
+  /** The club a row belongs to, for picking out a team and a league's players. Defaults to the team name. */
+  clubOf?: (row: BoxScoreRow) => string;
+  /** Picks the name shown when a person has several spellings. Defaults to the longest. */
+  displayName?: (names: string[]) => string;
+}
+
 /** One entry per player, summed over the games they actually played. */
-export function aggregatePlayers(rows: BoxScoreRow[]): Map<string, PlayerTotals> {
+export function aggregatePlayers(rows: BoxScoreRow[], opts: AggregateOptions = {}): Map<string, PlayerTotals> {
   const out = new Map<string, PlayerTotals>();
+  const names = new Map<string, Set<string>>();
   for (const r of rows) {
     const minutes = parseMinutes(r.sminutes);
     if (minutes <= 0) continue; // did not play
-    const id = r.player_id || `${r.team_name}|${r.full_name}`;
+    const id = (opts.personKey ? opts.personKey(r) : r.player_id) || `${r.team_name}|${r.full_name}`;
     let p = out.get(id);
     if (!p) {
       p = {
-        id, name: r.full_name || "Player", team: r.team_name || "", shirt: r.shirtnumber != null ? String(r.shirtnumber) : null,
+        id, name: r.full_name || "Player", team: r.team_name || "", club: opts.clubOf ? opts.clubOf(r) : r.team_name || "",
+        playerIds: [], shirt: r.shirtnumber != null ? String(r.shirtnumber) : null,
         gp: 0, min: 0, mpg: 0, t: Object.fromEntries(SUM_KEYS.map((k) => [k, 0])) as Record<SumKey, number>,
       };
       out.set(id, p);
+    }
+    if (r.player_id && !p.playerIds.includes(r.player_id)) p.playerIds.push(r.player_id);
+    if (r.full_name) {
+      const set = names.get(id) ?? new Set<string>();
+      set.add(r.full_name);
+      names.set(id, set);
     }
     p.gp += 1;
     p.min += minutes;
     if (!p.shirt && r.shirtnumber != null) p.shirt = String(r.shirtnumber);
     for (const k of SUM_KEYS) p.t[k] += Number(r[k]) || 0;
   }
-  out.forEach((p) => { p.mpg = p.min / p.gp; });
+  out.forEach((p, id) => {
+    p.mpg = p.min / p.gp;
+    const spellings = Array.from(names.get(id) ?? []);
+    if (spellings.length > 1) p.name = opts.displayName ? opts.displayName(spellings) : spellings.sort((a, b) => b.length - a.length)[0];
+  });
   return out;
 }
 
@@ -165,8 +196,18 @@ export interface Aspect {
   tier: Tier;
 }
 
+/** A player's headshot, when one is on their record. */
+export interface Headshot {
+  url: string;
+  /** Vertical focus (0 to 100) for cropping a tall photo to the face. */
+  focusY: number | null;
+}
+
 export interface RosterEntry {
   playerId: string;
+  /** Every player id that went into this person, for looking up a headshot. */
+  playerIds: string[];
+  photo?: Headshot | null;
   name: string;
   shirt: string | null;
   gp: number;
@@ -179,6 +220,8 @@ export interface RosterEntry {
 
 export interface PlayerProfile {
   playerId: string;
+  playerIds: string[];
+  photo?: Headshot | null;
   name: string;
   shirt: string | null;
   gp: number;
@@ -203,9 +246,15 @@ const pctOrNull = (made: number, att: number) => (att > 0 ? r1((made / att) * 10
  * `leagueRows` are every box-score row in the competition; `isTeam` picks the
  * scouted team's rows out of them.
  */
-export function buildScoutRoster(leagueRows: BoxScoreRow[], isTeam: (teamName: string) => boolean): ScoutRoster {
-  const all = aggregatePlayers(leagueRows);
-  const pool = new Map(Array.from(all.entries()).filter(([, p]) => p.mpg >= MIN_MPG && p.gp >= MIN_GAMES));
+export interface BuildOptions extends AggregateOptions {
+  /** Which clubs' players make up the league the percentiles are measured against. Defaults to everyone in the rows. */
+  inPool?: (club: string) => boolean;
+}
+
+export function buildScoutRoster(leagueRows: BoxScoreRow[], isTeam: (club: string) => boolean, opts: BuildOptions = {}): ScoutRoster {
+  const all = aggregatePlayers(leagueRows, opts);
+  const inPool = opts.inPool ?? (() => true);
+  const pool = new Map(Array.from(all.entries()).filter(([, p]) => p.mpg >= MIN_MPG && p.gp >= MIN_GAMES && inPool(p.club)));
 
   const strengths = new Map<string, Aspect[]>();
   const weaknesses = new Map<string, Aspect[]>();
@@ -218,7 +267,7 @@ export function buildScoutRoster(leagueRows: BoxScoreRow[], isTeam: (teamName: s
     largest = Math.max(largest, eligible.length);
     const values = eligible.map(metric.value);
     for (const p of eligible) {
-      if (!isTeam(p.team)) continue;
+      if (!isTeam(p.club)) continue;
       const { percentile, ahead, others } = percentileOf(metric.value(p), values, metric.higherIsBetter);
       const aspect: Aspect = { key: metric.key, label: metric.label, text: metric.text(p), percentile, pool: others + 1, ahead, tier: tierOf(percentile) };
       if (percentile >= STRENGTH_ABOVE) strengths.set(p.id, [...(strengths.get(p.id) || []), aspect]);
@@ -226,9 +275,9 @@ export function buildScoutRoster(leagueRows: BoxScoreRow[], isTeam: (teamName: s
     }
   }
 
-  const team = Array.from(all.values()).filter((p) => isTeam(p.team)).sort((a, b) => b.mpg - a.mpg || a.name.localeCompare(b.name));
+  const team = Array.from(all.values()).filter((p) => isTeam(p.club)).sort((a, b) => b.mpg - a.mpg || a.name.localeCompare(b.name));
   const roster: RosterEntry[] = team.map((p) => ({
-    playerId: p.id, name: p.name, shirt: p.shirt, gp: p.gp, mpg: r1(p.mpg),
+    playerId: p.id, playerIds: p.playerIds, name: p.name, shirt: p.shirt, gp: p.gp, mpg: r1(p.mpg),
     pts: r1(perGame(p, "spoints")), reb: r1(perGame(p, "sreboundstotal")), ast: r1(perGame(p, "sassists")),
     stl: r1(perGame(p, "ssteals")), blk: r1(perGame(p, "sblocks")), tov: r1(perGame(p, "sturnovers")),
     fgPct: pctOrNull(p.t.sfieldgoalsmade, p.t.sfieldgoalsattempted),
@@ -237,7 +286,7 @@ export function buildScoutRoster(leagueRows: BoxScoreRow[], isTeam: (teamName: s
     profiled: pool.has(p.id),
   }));
   const profiles: PlayerProfile[] = team.filter((p) => pool.has(p.id)).map((p) => ({
-    playerId: p.id, name: p.name, shirt: p.shirt, gp: p.gp, mpg: r1(p.mpg),
+    playerId: p.id, playerIds: p.playerIds, name: p.name, shirt: p.shirt, gp: p.gp, mpg: r1(p.mpg),
     pts: r1(perGame(p, "spoints")), reb: r1(perGame(p, "sreboundstotal")), ast: r1(perGame(p, "sassists")),
     strengths: (strengths.get(p.id) || []).sort((a, b) => b.percentile - a.percentile).slice(0, 3),
     weaknesses: (weaknesses.get(p.id) || []).sort((a, b) => a.percentile - b.percentile).slice(0, 3),

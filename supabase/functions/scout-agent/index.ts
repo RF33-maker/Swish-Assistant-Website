@@ -87,7 +87,7 @@ async function computeFactsFor(r: BuildRequest) {
     opponentName: r.opponentName,
     leagueId: r.leagueId,
     myTeamName: r.tier === "preview" ? null : r.forTeamName || null,
-    maxGames: 10,
+    maxGames: 20,
   });
   return computeScoutingFacts(bundle, { isSameTeam });
 }

@@ -49,7 +49,7 @@ const roster = { ...haukar, leagueName: "Icelandic Women's Premier League 2026-2
 
 test("the printable report carries the roster, profiles, percentile bars and crests", () => {
   const html = buildPlanHtml(plan, { opponentName: "Haukar", forTeamName: "Valur", roster });
-  for (const part of ["Haukar roster", "Player profiles", "How to read this", "Strengths", "Weaknesses", "percentile", "Ahead of", "Jadakiss Nashi Guinn", "https://example.com/haukar.jpg", "https://example.com/valur.png", "Valur scouting report"]) {
+  for (const part of ["<span>Roster</span>Haukar", "Strengths and weaknesses", "How to read this", "Strengths", "Weaknesses", "percentile", "Ahead of", "Jadakiss Nashi Guinn", "https://example.com/haukar.jpg", "https://example.com/valur.png", "Valur scouting report"]) {
     assert.ok(html.includes(part), `missing: ${part}`);
   }
   assert.equal((html.match(/class="pro"/g) || []).length, haukar.profiles.length);
@@ -72,5 +72,37 @@ test("only http(s) crest links are used", () => {
 test("without a roster the printout still builds", () => {
   const html = buildPlanHtml(plan, { opponentName: "Haukar", forTeamName: "Valur", roster: null });
   assert.ok(html.includes("Game plan"));
-  assert.ok(!html.includes("Player profiles"));
+  assert.ok(!html.includes("Strengths and weaknesses"));
+});
+
+test("the cover shows both crests and the at-a-glance numbers", () => {
+  const html = buildPlanHtml(plan, {
+    opponentName: "Haukar", forTeamName: "Valur", roster,
+    teaser: { record: "1-2", gamesAnalysed: 3, keyNumbers: [{ key: "pace", value: 71.2, rank: 2, of: 10 }] },
+  });
+  assert.ok(html.includes("Haukar at a glance"));
+  assert.ok(html.includes("1-2") && html.includes("71.2") && html.includes("2nd of 10"));
+  assert.equal((html.match(/class="crest"/g) || []).length, 2);
+});
+
+test("headshots use the face-framed thumbnail with the original as fallback, and unsafe links are dropped", () => {
+  const url = "https://x.supabase.co/storage/v1/object/public/player-photos/abc/cut.png";
+  const first = roster.roster[0];
+  const withPhoto = { ...roster, roster: [{ ...first, photo: { url, focusY: 20 } }, ...roster.roster.slice(1)] };
+  const html = buildPlanHtml(plan, { opponentName: "Haukar", roster: withPhoto });
+  assert.ok(html.includes("abc/cut.thumb.webp"));
+  assert.ok(html.includes(`data-o="${url}"`));
+  const bad = { ...roster, roster: [{ ...first, photo: { url: "javascript:alert(1)", focusY: null } }, ...roster.roster.slice(1)] };
+  assert.ok(!buildPlanHtml(plan, { opponentName: "Haukar", roster: bad }).includes("javascript:alert"));
+});
+
+test("a title with quotes or braces cannot break out of the footer's CSS", () => {
+  const html = buildPlanHtml(plan, { opponentName: 'Evil";}</style><script>x</script>{', forTeamName: null });
+  assert.ok(!html.includes("</style><script>"));
+});
+
+test("the season note names every competition counted", () => {
+  const season = { label: "2026-27", wholeSeason: true, games: 5, competitions: [{ name: "BCB League", games: 1 }, { name: "BCB Trophy", games: 4 }] };
+  const html = buildPlanHtml(plan, { opponentName: "Haukar", roster: { ...roster, season } });
+  assert.ok(html.includes("5 games this season") && html.includes("BCB Trophy 4") && html.includes("5 games analysed"));
 });

@@ -1,5 +1,6 @@
-import { Plus, Minus, Users, Target } from 'lucide-react';
-import { describeStanding, ordinalOf, type Aspect, type PlayerProfile, type RosterEntry } from '@shared/scoutRoster';
+import { Plus, Minus, Users, Target, CalendarRange } from 'lucide-react';
+import { PlayerHeadshot } from '@/components/PlayerHeadshot';
+import { describeStanding, ordinalOf, type Aspect, type Headshot, type PlayerProfile, type RosterEntry } from '@shared/scoutRoster';
 import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
 
 /**
@@ -10,13 +11,46 @@ import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
 
 const dash = (v: number | null) => (v == null ? '–' : String(v));
 
-function Shirt({ n, color }: { n: string | null; color: string }) {
+const initialsOf = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('');
+
+/**
+ * A player's headshot when their record has one (face-framed thumbnail, falling
+ * back to the original), otherwise their shirt number on the team colour.
+ * `size` is the tile in px; the shirt number rides on the corner of a photo.
+ */
+function Avatar({ photo, shirt, name, color, size }: { photo?: Headshot | null; shirt: string | null; name: string; color: string; size: number }) {
+  if (!photo) {
+    return (
+      <span
+        className="shrink-0 rounded-[10px] flex items-center justify-center text-white font-bold ch-display"
+        style={{ backgroundColor: color, width: size, height: size, fontSize: size * 0.45 }}
+        aria-label={`${name}, number ${shirt || 'unknown'}`}
+      >
+        {shirt || initialsOf(name)}
+      </span>
+    );
+  }
   return (
-    <span
-      className="shrink-0 w-10 h-10 rounded-[10px] flex items-center justify-center text-white text-lg font-bold ch-display"
-      style={{ backgroundColor: color }}
-    >
-      {n || '–'}
+    <span className="relative shrink-0" style={{ width: size, height: size }}>
+      <span className="block w-full h-full rounded-[10px] overflow-hidden" style={{ backgroundColor: `color-mix(in srgb, ${color} 18%, var(--ch-surface-2))` }}>
+        <PlayerHeadshot
+          src={photo.url}
+          variant="thumb"
+          alt={name}
+          loading="lazy"
+          className="w-full h-full object-cover"
+          fallbackStyle={{ objectPosition: `50% ${photo.focusY ?? 12}%` }}
+        />
+      </span>
+      {shirt && (
+        <span
+          className="absolute -bottom-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-md text-[10.5px] leading-[18px] text-center font-bold text-white ch-display"
+          style={{ backgroundColor: color, boxShadow: '0 0 0 2px var(--ch-surface)' }}
+        >
+          {shirt}
+        </span>
+      )}
     </span>
   );
 }
@@ -53,7 +87,7 @@ function ProfileCard({ p, color }: { p: PlayerProfile; color: string }) {
   return (
     <article className="ch-tile p-4 flex flex-col gap-4 min-w-0">
       <header className="flex items-center gap-3">
-        <Shirt n={p.shirt} color={color} />
+        <Avatar photo={p.photo} shirt={p.shirt} name={p.name} color={color} size={56} />
         <div className="min-w-0">
           <h4 className="text-[15px] font-semibold tracking-tight text-slate-900 dark:text-white truncate">{p.name}</h4>
           <p className="text-[12.5px] text-[color:var(--ch-text-2)] tabular-nums">
@@ -95,6 +129,24 @@ const SCALE = [
   { range: '0 to 10', label: 'Among the worst', tone: 'var(--ch-loss)' },
 ];
 
+/** Where the club's games came from, so a thin league record is not mistaken for thin data. */
+function SeasonNote({ season, color }: { season: ScoutRosterResponse['season']; color: string }) {
+  if (!season.wholeSeason || season.competitions.length === 0) return null;
+  return (
+    <div className="ch-tile flex items-start gap-2.5 p-3 mb-3 text-[13px] text-[color:var(--ch-text-2)]" style={{ borderLeft: `3px solid ${color}` }}>
+      <CalendarRange className="w-4 h-4 mt-0.5 shrink-0" style={{ color }} />
+      <p>
+        <strong className="text-slate-900 dark:text-white">{season.games} game{season.games === 1 ? '' : 's'} this season</strong>
+        {season.competitions.length > 1 ? ', counted across every competition: ' : ' in '}
+        {season.competitions.map((c, i) => (
+          <span key={c.name}>{i > 0 ? ' · ' : ''}{c.name} {c.games}</span>
+        ))}
+        . Player numbers and league percentiles use all of them, so a club with few league games is not judged on one.
+      </p>
+    </div>
+  );
+}
+
 function RosterTable({ roster }: { roster: RosterEntry[] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-[color:var(--ch-border)]">
@@ -112,7 +164,18 @@ function RosterTable({ roster }: { roster: RosterEntry[] }) {
           {roster.map((r) => (
             <tr key={r.playerId} className={`border-t border-[color:var(--ch-border)] ${r.profiled ? '' : 'text-[color:var(--ch-muted)]'}`}>
               <td className="text-center px-3 py-2 text-[color:var(--ch-muted)]">{r.shirt || ''}</td>
-              <th scope="row" className={`text-left px-3 py-2 whitespace-nowrap ${r.profiled ? 'font-semibold text-slate-900 dark:text-white' : 'font-normal'}`}>{r.name}</th>
+              <th scope="row" className={`text-left px-3 py-1.5 whitespace-nowrap ${r.profiled ? 'font-semibold text-slate-900 dark:text-white' : 'font-normal'}`}>
+                <span className="inline-flex items-center gap-2.5">
+                  <span className="shrink-0 w-7 h-7 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-semibold bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)]">
+                    {r.photo ? (
+                      <PlayerHeadshot src={r.photo.url} variant="thumb" alt="" loading="lazy" className="w-full h-full object-cover" fallbackStyle={{ objectPosition: `50% ${r.photo.focusY ?? 12}%` }} />
+                    ) : (
+                      initialsOf(r.name)
+                    )}
+                  </span>
+                  {r.name}
+                </span>
+              </th>
               <td className="text-right px-3 py-2">{r.gp}</td>
               <td className="text-right px-3 py-2">{r.mpg}</td>
               <td className={`text-right px-3 py-2 ${r.profiled ? 'font-semibold' : ''}`}>{r.pts}</td>
@@ -143,8 +206,9 @@ export default function ScoutRoster({ data, opponentName, color }: { data: Scout
           <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{opponentName} roster</h3>
         </div>
         <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">
-          Box-score per-game averages in {data.leagueName || 'this competition'} so far, most minutes first. Bold names are profiled below.
+          Box-score per-game averages for the {data.season.label} season, most minutes first. Bold names are profiled below.
         </p>
+        <SeasonNote season={data.season} color={color} />
         <RosterTable roster={data.roster} />
       </section>
 
@@ -155,7 +219,7 @@ export default function ScoutRoster({ data, opponentName, color }: { data: Scout
             <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Player profiles</h3>
           </div>
           <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">
-            Each player with 10+ minutes a game over 2+ games, set against all {data.poolSize} such players in the league.
+            Each player with 10+ minutes a game over 2+ games this season, set against all {data.poolSize} such players from the clubs in {data.leagueName || 'this league'}, with their games across competitions counted together.
           </p>
 
           <div className="ch-tile p-3.5 md:p-4 mb-4 space-y-3" style={{ borderLeft: `3px solid ${color}` }}>

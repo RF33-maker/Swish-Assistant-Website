@@ -1,8 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ScoutRoster } from "@shared/scoutRoster";
 
+export interface ScoutSeason {
+  /** "2026/27". */
+  label: string;
+  since: string;
+  /** False when the competition had no games this season (a past one), so only its own games were used. */
+  wholeSeason: boolean;
+  /** The club's games this season, across every competition. */
+  games: number;
+  competitions: Array<{ name: string; games: number }>;
+}
+
 export interface ScoutRosterResponse extends ScoutRoster {
   leagueName: string | null;
+  season: ScoutSeason;
   logos: { opponent: string | null; forTeam: string | null };
 }
 

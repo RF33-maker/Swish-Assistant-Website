@@ -54,7 +54,10 @@ export interface LoadOptions {
   opponentName: string;
   leagueId: string;
   myTeamName?: string | null;
+  /** The most games to take. A club's whole season across competitions, up to this many (default 20). */
   maxGames?: number;
+  /** Pad with older games up to this many when the season has fewer (default 4). */
+  minGames?: number;
   /** Ignore games older than this many days (default ~13 months, i.e. last season and this one). */
   maxAgeDays?: number;
   /** Only games played before this instant — lets a report be rebuilt "as of" a past fixture. */
@@ -72,6 +75,24 @@ async function competitionMeta(db: SupabaseClient, leagueIds: string[]): Promise
   if (!leagueIds.length) return new Map();
   const { data } = await db.from("competitions").select("league_id, name, gender, is_public, parent_league_id").in("league_id", leagueIds);
   return new Map<string, CompMeta>((data || []).map((c: any): [string, CompMeta] => [c.league_id, { name: c.name, gender: c.gender, is_public: c.is_public, parent: c.parent_league_id }]));
+}
+
+/** 1 September of the season `now` is in (same rule as shared/season.ts). */
+function seasonStartMs(now: Date): number {
+  const year = now.getUTCMonth() >= 8 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  return Date.UTC(year, 8, 1);
+}
+
+/**
+ * Every game this season, across all competitions (newest first, capped), so a
+ * club with one league game and four cup games is read on all five. If the
+ * season is still thin, the newest older games pad it up to `min`; the facts
+ * already flag those and check the roster still matches.
+ */
+export function pickGames<T extends { played_at: string }>(newestFirst: T[], now: Date, max: number, min: number): T[] {
+  const start = seasonStartMs(now);
+  const thisSeason = newestFirst.filter((g) => new Date(g.played_at).getTime() >= start);
+  return thisSeason.length >= min ? thisSeason.slice(0, max) : newestFirst.slice(0, Math.max(min, thisSeason.length));
 }
 
 async function loadClubGames(o: LoadOptions, teamName: string, targetGender: string | null): Promise<ClubGames> {
@@ -111,12 +132,12 @@ async function loadClubGames(o: LoadOptions, teamName: string, targetGender: str
   }
   const cutoff = o.before?.getTime() ?? Infinity;
   const seen = new Set<string>();
-  const games: TeamGameRow[] = rows
+  const ordered: TeamGameRow[] = rows
     .map((r) => ({ ...r, played_at: when.get(r.game_key) || r.created_at, competition: meta.get(r.league_id)?.name ?? null }))
     .filter((r) => new Date(r.played_at).getTime() < cutoff)
     .sort((a, b) => b.played_at.localeCompare(a.played_at))
-    .filter((r) => (seen.has(r.game_key) ? false : (seen.add(r.game_key), true)))
-    .slice(0, o.maxGames ?? 10);
+    .filter((r) => (seen.has(r.game_key) ? false : (seen.add(r.game_key), true)));
+  const games = pickGames(ordered, o.before ?? new Date(), o.maxGames ?? 20, o.minGames ?? 4);
 
   const gameKeys = games.map((g) => g.game_key);
   const opponentsInGames: Record<string, TeamGameRow> = {};
