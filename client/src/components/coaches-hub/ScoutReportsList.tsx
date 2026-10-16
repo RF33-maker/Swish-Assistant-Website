@@ -80,6 +80,15 @@ export default function ScoutReportsList({ leagueId, brandColor, onOpen }: Props
     plan: r.plan,
   });
 
+  const download = async (r: ScoutRow) => {
+    const doc = asExportable(r);
+    if (!doc) return;
+    const result = await downloadScout(doc);
+    if (result === 'failed') setNotice('Could not create this PDF. Try again.');
+    else return;
+    setTimeout(() => setNotice(null), 3000);
+  };
+
   const share = async (r: ScoutRow) => {
     const doc = asExportable(r);
     if (!doc) return;
@@ -144,7 +153,7 @@ export default function ScoutReportsList({ leagueId, brandColor, onOpen }: Props
               {ready && (
                 <div className="flex shrink-0 items-center gap-1">
                   <button
-                    onClick={() => { const d = asExportable(r); if (d) downloadScout(d); }}
+                    onClick={() => download(r)}
                     className="ch-btn ch-btn-ghost h-8 w-8 p-0 justify-center"
                     aria-label={`Download ${r.opponentName} scout as PDF`}
                     title="Download PDF"

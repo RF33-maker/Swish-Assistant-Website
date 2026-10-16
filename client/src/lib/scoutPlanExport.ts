@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { saveFile } from "@/lib/saveFile";
 
 /**
  * Turns a scouting-agent game plan into something a coach can hand over:
@@ -120,8 +121,13 @@ export function scoutToPdf(s: ExportableScout): jsPDF {
   return pdf;
 }
 
-export function downloadScout(s: ExportableScout) {
-  scoutToPdf(s).save(scoutFileName(s));
+export async function downloadScout(s: ExportableScout): Promise<"shared" | "downloaded" | "cancelled" | "failed"> {
+  try {
+    return await saveFile(scoutToPdf(s).output("blob"), scoutFileName(s));
+  } catch (err) {
+    console.error("Scout PDF download failed:", err);
+    return "failed";
+  }
 }
 
 /** Share sheet with the PDF where the device can send files, else the text; falls back to the clipboard. */
