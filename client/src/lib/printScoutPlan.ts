@@ -62,6 +62,8 @@ export interface PrintableMeta {
   /** Roster table, league-percentile profiles, headshots and club crests; left out when not loaded. */
   roster?: PrintableRoster | null;
   teaser?: PrintableTeaser | null;
+  /** Club crests as the on-screen report resolves them (team logos table or storage); overrides the roster endpoint's. */
+  crests?: { opponent?: string | null; forTeam?: string | null } | null;
   /** "last 5 games" when the report was read over a window rather than the whole season. */
   windowLabel?: string | null;
   /** The coach's own notes on this opponent, printed so the reader sees what the plan was told. */
@@ -182,8 +184,9 @@ export function buildPlanHtml(plan: PrintablePlan, meta: PrintableMeta): string 
   const origin = safeOrigin(meta.siteOrigin);
   const logo = origin ? `${origin}/icon-512.png` : "";
 
-  const myCrest = safeUrl(meta.roster?.logos.forTeam);
-  const oppCrest = safeUrl(meta.roster?.logos.opponent);
+  // The crests the report shows on screen win; the roster endpoint's own logo links are the fallback.
+  const myCrest = safeUrl(meta.crests?.forTeam) || safeUrl(meta.roster?.logos.forTeam);
+  const oppCrest = safeUrl(meta.crests?.opponent) || safeUrl(meta.roster?.logos.opponent);
   const crest = (url: string, name: string) =>
     url ? `<span class="crest"><img src="${esc(url)}" alt="${esc(name)}"></span>` : `<span class="mono">${esc(initialsOf(name))}</span>`;
   const title = meta.forTeamName ? `${meta.forTeamName} v ${meta.opponentName}` : `Scouting report: ${meta.opponentName}`;

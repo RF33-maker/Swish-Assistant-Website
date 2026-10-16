@@ -9,6 +9,7 @@ import { applyEdits, windowLabel, type CoachNote, type PlanEdits, type ScoutWind
 import { ordinalOf, type RosterEntry } from '@shared/scoutRoster';
 import { playerNameKey } from '@shared/playerNameKey';
 import { Avatar } from './ScoutRoster';
+import { getTeamLogoCached } from '@/utils/teamLogoCache';
 import { Ed, EditProvider, type EditApi } from './EditableText';
 
 /**
@@ -226,6 +227,16 @@ export default function AgentGamePlan({
   const polls = useRef(0);
   // Admin-only while the report is tested: a printable copy to save as a PDF.
   const { isRealAdmin } = useAuth();
+  // The crests the banner shows (the team logos table, then storage), fetched ahead so the PDF button can use them without waiting.
+  const [crests, setCrests] = useState<{ opponent: string | null; forTeam: string | null }>({ opponent: null, forTeam: null });
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      getTeamLogoCached({ leagueId, teamName: opponentName }).catch(() => null),
+      myTeamName ? getTeamLogoCached({ leagueId, teamName: myTeamName }).catch(() => null) : Promise.resolve(null),
+    ]).then(([opponent, forTeam]) => { if (!cancelled) setCrests({ opponent, forTeam }); });
+    return () => { cancelled = true; };
+  }, [leagueId, opponentName, myTeamName]);
 
   const load = useCallback(async () => {
     try {
@@ -356,6 +367,7 @@ export default function AgentGamePlan({
                 secondaryColor,
                 competitionName: roster?.leagueName ?? null,
                 roster: roster ?? null,
+                crests,
                 teaser: report?.teaser ?? null,
                 windowLabel: scoutWindow === 'season' ? null : windowLabel(scoutWindow),
                 coachNotes: notes ?? null,
