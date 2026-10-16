@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRoute } from 'wouter';
 import { createPlaybook, type PlaybookData, type PlaybookHandle } from '@/lib/playbook/engine';
-import { printPlaybook } from '@/lib/printPlaybook';
+import { printPlaybook, type PrintablePlaybookMeta } from '@/lib/printPlaybook';
 import '@/lib/playbook/playbook.css';
 
 /**
@@ -11,10 +11,26 @@ import '@/lib/playbook/playbook.css';
  * link needs no sign-in and never touches /api/playbook; the engine starts
  * view-only, with no edit bar, save or import. The code in the URL is the only
  * gate and the page is marked noindex, so treat the link as unlisted, not secret.
- * To share another playbook, add its JSON next to this one and list it here.
+ * To share another playbook, add its JSON next to this one and list it here,
+ * with the club's name, crest and colours for the PDF (the page has no sign-in,
+ * so nothing is looked up: the crest is the club's teams.logo_url and the colour
+ * the one the hub reads from that crest).
  */
-const SHARED: Record<string, () => Promise<{ default: unknown }>> = {
-  N7bHfZoSy2SF: () => import('@/lib/playbook/shared/stagger-horns.json'),
+type SharedPlaybook = {
+  load: () => Promise<{ default: unknown }>;
+  club: Pick<PrintablePlaybookMeta, 'teamName' | 'season' | 'brandColor' | 'secondaryColor' | 'crestUrl'>;
+};
+const SHARED: Record<string, SharedPlaybook> = {
+  N7bHfZoSy2SF: {
+    load: () => import('@/lib/playbook/shared/stagger-horns.json'),
+    club: {
+      teamName: 'Gloucester City Kings',
+      season: '2026/27',
+      brandColor: '#53d4c0',
+      secondaryColor: null,
+      crestUrl: 'https://omkwqpcgttrgvbhcxgqf.supabase.co/storage/v1/object/public/team-logos/7c9e58f4-1428-4839-a3fe-e37fab773893_Gloucester_City_Kings_Senior_Men.png',
+    },
+  },
 };
 
 type State = { kind: 'loading' } | { kind: 'ready' } | { kind: 'missing' };
@@ -38,13 +54,13 @@ export default function PlaybookSharePage() {
   useEffect(() => {
     let cancelled = false;
     let engine: PlaybookHandle | null = null;
-    const load = Object.prototype.hasOwnProperty.call(SHARED, code) ? SHARED[code] : null;
-    if (!load) {
+    const entry = Object.prototype.hasOwnProperty.call(SHARED, code) ? SHARED[code] : null;
+    if (!entry) {
       setState({ kind: 'missing' });
       return;
     }
     setState({ kind: 'loading' });
-    load().then((mod) => {
+    entry.load().then((mod) => {
       if (cancelled || !host.current) return;
       const data = mod.default as PlaybookData;
       shared.current = data;
@@ -74,7 +90,7 @@ export default function PlaybookSharePage() {
             <button
               type="button"
               className="ch-btn ch-btn-primary h-9 px-4"
-              onClick={() => shared.current && setBlocked(!printPlaybook(shared.current))}
+              onClick={() => shared.current && setBlocked(!printPlaybook(shared.current, SHARED[code]?.club))}
             >
               Download PDF
             </button>

@@ -1597,7 +1597,12 @@ export default function CoachesHub() {
                   {activeTab === 'playbook' && (
                     <div>
                       {tabIntro('01', 'Playbook', isCoach ? 'Your team\u2019s plays, shared with every coach on the team. Draw them, then press Play to watch them run.' : 'Draw plays, then press Play to watch them run.')}
-                      <Playbook teamName={myTeam?.team_name || coachTeamName || null} />
+                      <Playbook
+                        teamName={myTeam?.team_name || coachTeamName || null}
+                        leagueId={selectedLeague.league_id}
+                        brandColor={brandColor}
+                        secondaryColor={isCoach && myTeam && !myTeamBrandLoading && myTeamColors ? myTeamColors.secondary : null}
+                      />
                     </div>
                   )}
                 </>

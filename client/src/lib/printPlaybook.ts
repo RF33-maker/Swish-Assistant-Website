@@ -8,8 +8,9 @@
  * read back), so the PDF matches what coaches see on screen and can't drift from
  * it. Everything the coach typed arrives as the engine's own DOM, escaped; only
  * the title and club name are written into the page here, and those are escaped.
- * Laid out for A4 with the Swish Assistant footer; a play never splits across a
- * page, and every step of a play sits side by side so a whole play reads at a glance.
+ * Laid out for A4 in the club's colours with its crest and the Swish Assistant
+ * footer (see playbookPrintHtml.ts); a play never splits across a page, and
+ * every step of a play sits side by side so a whole play reads at a glance.
  */
 
 import { createPlaybook, type PlaybookData } from "./playbook/engine";
@@ -34,11 +35,32 @@ export function renderPlaybookBody(data: PlaybookData): string {
   }
 }
 
+type SectionLike = { title?: unknown; sub?: unknown; plays?: unknown; tables?: unknown };
+
+/** Each section's title and how many plays and calls it holds, for the contents on page one. */
+export function playbookContents(data: PlaybookData): NonNullable<PrintablePlaybookMeta["contents"]> {
+  return (Array.isArray(data.sections) ? data.sections : []).map((raw) => {
+    const s = (raw ?? {}) as SectionLike;
+    const tables = Array.isArray(s.tables) ? (s.tables as Array<{ rows?: unknown }>) : [];
+    return {
+      title: typeof s.title === "string" ? s.title : "",
+      sub: typeof s.sub === "string" ? s.sub : null,
+      plays: Array.isArray(s.plays) ? s.plays.length : 0,
+      calls: tables.reduce((n, t) => n + (Array.isArray(t?.rows) ? t.rows.length : 0), 0),
+    };
+  });
+}
+
 /** Opens the printable playbook in a new window and starts the print dialog once fonts and pictures are in. Returns false if the browser blocked the window. */
 export function printPlaybook(data: PlaybookData, meta: PrintablePlaybookMeta = {}): boolean {
   const win = window.open("", "_blank");
   if (!win) return false;
-  const html = buildPlaybookHtml(renderPlaybookBody(data), data.title || "Playbook", playbookCss, { ...meta, siteOrigin: meta.siteOrigin ?? window.location.origin });
+  const html = buildPlaybookHtml(renderPlaybookBody(data), data.title || "Playbook", playbookCss, {
+    contents: playbookContents(data),
+    printedAt: new Date().toISOString(),
+    ...meta,
+    siteOrigin: meta.siteOrigin ?? window.location.origin,
+  });
   win.document.open();
   win.document.write(html);
   win.document.close();

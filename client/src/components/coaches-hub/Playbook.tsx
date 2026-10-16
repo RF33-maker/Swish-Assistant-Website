@@ -3,6 +3,7 @@ import { Lock, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { shiftSeason } from '@shared/season';
 import { printPlaybook } from '@/lib/printPlaybook';
+import { getTeamLogoCached } from '@/utils/teamLogoCache';
 import { createPlaybook, pbBlankPlaybook, type PlaybookHandle, type PlaybookSaveError } from '@/lib/playbook/engine';
 import '@/lib/playbook/playbook.css';
 
@@ -37,7 +38,14 @@ type SeasonInfo = { season: string; currentSeason: string; seasons: SeasonRow[];
 
 type LoadState = { kind: 'loading' } | { kind: 'ready' } | { kind: 'signedOut' } | { kind: 'error'; message: string };
 
-export default function Playbook({ teamName }: { teamName?: string | null }) {
+export default function Playbook({ teamName, leagueId = null, brandColor = null, secondaryColor = null }: {
+  teamName?: string | null;
+  /** The competition the hub is showing, to find the club's crest for the PDF. */
+  leagueId?: string | null;
+  /** The club's own colours for the PDF (the hub's accent is adjusted for the screen). */
+  brandColor?: string | null;
+  secondaryColor?: string | null;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const engine = useRef<PlaybookHandle | null>(null);
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
@@ -48,6 +56,16 @@ export default function Playbook({ teamName }: { teamName?: string | null }) {
   const [copyFrom, setCopyFrom] = useState('');
   const [copyState, setCopyState] = useState<{ busy: boolean; error?: string }>({ busy: false });
   const [pdfError, setPdfError] = useState<string | null>(null);
+  // The club's crest as the hub shows it (the team logos table, then storage), fetched ahead so the PDF button can use it without waiting.
+  const [crestUrl, setCrestUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setCrestUrl(null);
+    if (leagueId && teamName) {
+      getTeamLogoCached({ leagueId, teamName }).catch(() => null).then((url) => { if (!cancelled) setCrestUrl(url); });
+    }
+    return () => { cancelled = true; };
+  }, [leagueId, teamName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +138,13 @@ export default function Playbook({ teamName }: { teamName?: string | null }) {
     const state = engine.current?.getState();
     if (!state) return;
     const accent = host.current ? getComputedStyle(host.current).getPropertyValue('--ch-accent').trim() : '';
-    const opened = printPlaybook(state, { teamName, season: info?.season ?? null, brandColor: accent });
+    const opened = printPlaybook(state, {
+      teamName,
+      season: info?.season ?? null,
+      brandColor: brandColor || accent,
+      secondaryColor,
+      crestUrl,
+    });
     setPdfError(opened ? null : 'Your browser blocked the PDF window. Allow pop-ups for this site and try again.');
   }
 
