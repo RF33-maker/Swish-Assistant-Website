@@ -5,6 +5,7 @@ import { config } from "dotenv";
 import { servePublicSeo } from "./publicSeo";
 import { newsArticleBodyParser } from "./newsArticles";
 import { playbookBodyParser } from "./playbookRoutes";
+import { stripeWebhookBodyParser } from "./billing/billingRoutes";
 
 // Load environment variables
 config();
@@ -31,6 +32,8 @@ const app = express();
 // Article saves carry the whole document, which can pass the 100kb default.
 app.use("/api/news-articles", newsArticleBodyParser);
 app.use("/api/playbook", playbookBodyParser);
+// Stripe signs the exact bytes it sends, so the webhook needs the body unparsed.
+app.use("/api/stripe/webhook", stripeWebhookBodyParser);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

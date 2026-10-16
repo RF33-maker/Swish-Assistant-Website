@@ -51,6 +51,9 @@ import PublicProfilePage from "@/pages/public-profile";
 import EditMyProfilePage from "@/pages/edit-my-profile";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
+import CoachAccessPage from "@/pages/coach-access";
+import CoachAccessSuccessPage from "@/pages/coach-access-success";
+import CoachAccessAdminPage from "@/pages/admin/coach-access";
 import PrivacyPolicyPage from "@/pages/privacy";
 import TermsOfServicePage from "@/pages/terms";
 import CookiePolicyPage from "@/pages/cookies";
@@ -105,6 +108,7 @@ function Router() {
       <Route path="/terms" component={TermsOfServicePage} />
       <Route path="/cookies" component={CookiePolicyPage} />
       <Route path="/contact-sales" component={ContactSalesPage} />
+      <Route path="/coach-access" component={CoachAccessPage} />
       <Route path="/game/:gameKey" component={GamePage} />
       <Route path="/scores" component={ScoresPage} />
       <Route path="/widget/:type" component={WidgetPage} />
@@ -122,6 +126,7 @@ function Router() {
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/payment" component={PaymentPage} />
+      <ProtectedRoute path="/coach-access/success" component={CoachAccessSuccessPage} />
       <ProtectedRoute path="/my-profile/edit" component={EditMyProfilePage} />
       <AdminRoute path="/social-tools" component={SocialToolsPage} />
       <AdminRoute path="/api-widgets" component={WidgetBuilder} />
@@ -139,6 +144,7 @@ function Router() {
       <AdminRoute path="/admin/import-players" component={ImportPlayersPage} />
       <AdminRoute path="/admin/unconfirmed-accounts" component={UnconfirmedAccountsPage} />
       <AdminRoute path="/admin/player-claims" component={PlayerClaimsAdminPage} />
+      <AdminRoute path="/admin/coach-access" component={CoachAccessAdminPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />

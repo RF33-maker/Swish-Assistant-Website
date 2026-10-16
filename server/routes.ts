@@ -14,6 +14,7 @@ import { getLeagueSides } from "./teamSides";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerPlaybookRoutes } from "./playbookRoutes";
 import { registerScoutRosterRoutes } from "./scoutRoster";
+import { registerBillingRoutes } from "./billing/billingRoutes";
 import { registerNewsArticleRoutes } from "./newsArticles";
 import { registerWeekendReportRoutes } from "./weekendReports";
 import { registerNblScoreRoutes } from "./nblScores";
@@ -435,6 +436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerScoutAgentRoutes(app);
   registerPlaybookRoutes(app);
   registerScoutRosterRoutes(app, { filterLeagueIdsForPublicScope });
+  registerBillingRoutes(app);
 
   // Test endpoint to verify routes are working
   app.get("/api/test", (req, res) => {

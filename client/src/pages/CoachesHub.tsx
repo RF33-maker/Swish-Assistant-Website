@@ -17,6 +17,7 @@ import TeamDetail from '@/components/coaches-hub/TeamDetail';
 import CoachTeamOverview from '@/components/coaches-hub/CoachTeamOverview';
 import CoachTeamBanner from '@/components/coaches-hub/CoachTeamBanner';
 import AdminTeamPicker, { AdminOpponentPicker } from '@/components/coaches-hub/AdminTeamPicker';
+import ManageBilling from '@/components/coaches-hub/ManageBilling';
 import { findCoachTeam, nextFixtureFor, opponentIn } from '@/lib/coachTeam';
 import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Route, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
@@ -1189,6 +1190,7 @@ export default function CoachesHub() {
             >
               <LayoutGrid className="w-4 h-4" /> <span className="hidden lg:inline">Dashboard</span>
             </Link>
+            <ManageBilling />
             <ThemeToggle />
             <button
               onClick={() => logoutMutation.mutate()}
