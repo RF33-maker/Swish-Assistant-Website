@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRoute } from 'wouter';
 import { createPlaybook, type PlaybookData, type PlaybookHandle } from '@/lib/playbook/engine';
+import { printPlaybook } from '@/lib/printPlaybook';
 import '@/lib/playbook/playbook.css';
 
 /**
@@ -22,6 +23,8 @@ export default function PlaybookSharePage() {
   const [, params] = useRoute('/playbook/share/:code');
   const code = params?.code ?? '';
   const host = useRef<HTMLDivElement>(null);
+  const shared = useRef<PlaybookData | null>(null);
+  const [blocked, setBlocked] = useState(false);
   const [state, setState] = useState<State>({ kind: 'loading' });
 
   useEffect(() => {
@@ -44,6 +47,7 @@ export default function PlaybookSharePage() {
     load().then((mod) => {
       if (cancelled || !host.current) return;
       const data = mod.default as PlaybookData;
+      shared.current = data;
       document.title = `${data.title} | Swish Assistant`;
       engine = createPlaybook(host.current, { initial: data, editable: false, barMode: 'sticky' });
       setState({ kind: 'ready' });
@@ -63,6 +67,18 @@ export default function PlaybookSharePage() {
         {state.kind === 'missing' && (
           <div className="ch-card p-8 text-center">
             <p className="text-sm text-[color:var(--ch-text)]">This playbook link isn't valid. Ask your coach for a fresh one.</p>
+          </div>
+        )}
+        {state.kind === 'ready' && (
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <button
+              type="button"
+              className="ch-btn ch-btn-primary h-9 px-4"
+              onClick={() => shared.current && setBlocked(!printPlaybook(shared.current))}
+            >
+              Download PDF
+            </button>
+            {blocked && <p className="text-[13px] text-[color:var(--ch-loss)]">Your browser blocked the PDF window. Allow pop-ups for this site and try again.</p>}
           </div>
         )}
         <div ref={host} hidden={state.kind !== 'ready'} />
