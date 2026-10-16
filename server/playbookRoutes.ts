@@ -1,6 +1,7 @@
 import express, { type Express, type Request, type Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { teamClubKey } from "./teamIdentityService";
+import { getLeagueSides } from "./teamSides";
 
 /**
  * Coaches Hub playbook API (public.coach_playbooks, RLS on with no policies).
@@ -22,8 +23,11 @@ type Owner = { userId: string; key: string; shared: boolean };
 
 /** `team:club:<club key>` for any of a club's competition entries; the raw id if the team can't be named. */
 async function teamOwnerKey(teamId: string): Promise<string> {
-  const { data } = await supabaseAdmin.from("teams").select("name").eq("team_id", teamId).limit(1).maybeSingle();
-  return data?.name ? `team:club:${teamClubKey(data.name)}` : `team:${teamId}`;
+  const { data } = await supabaseAdmin.from("teams").select("name, league_id").eq("team_id", teamId).limit(1).maybeSingle();
+  if (!data?.name) return `team:${teamId}`;
+  // Read in its own competition: the women's "London Lions" is not the men's club.
+  const sides = await getLeagueSides();
+  return `team:club:${teamClubKey(sides.name(data.name, data.league_id))}`;
 }
 
 async function resolveOwner(req: Request): Promise<Owner | null> {

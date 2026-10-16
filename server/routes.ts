@@ -11,6 +11,7 @@ import type { LineupMetric } from "./lineups";
 import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "./teamIdentityService";
 import { getTeamCompetitions } from "./teamCompetitions";
 import { getLeagueSides } from "./teamSides";
+import { clubLeagueIds, clubSearchCore } from "@shared/clubLeagues";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerPlaybookRoutes } from "./playbookRoutes";
 import { registerScoutRosterRoutes } from "./scoutRoster";
@@ -1461,26 +1462,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (!homeTeam?.name) return res.status(404).json({ error: "Team not found" });
 
-      // A club fields the same named team across several competitions at once
-      // (a league season plus a cup), each with its own teams row and team_id.
-      // Match by name to find them all — the coach's account is provisioned
-      // against only one of them.
-      const { data: siblingTeams, error: siblingError } = await supabaseAdmin
-        .from("teams")
-        .select("league_id")
-        .eq("name", homeTeam.name);
-      // The same name in a women's competition is the other side of the club: a coach for the
-      // women's "London Lions" must not be shown the men's competitions.
-      const sides = await getLeagueSides();
-      const homeSide = sides.name(homeTeam.name, homeTeam.league_id);
+      // A club fields the same team across several competitions at once (a league season plus a
+      // cup), each with its own teams row and team_id, and often spelled differently ("Gloucester
+      // City Kings", "... Senior Men", the odd typo). Match on club identity, not the exact name —
+      // the coach's account is provisioned against only one of them.
+      const core = clubSearchCore(homeTeam.name);
+      const { data: siblingTeams, error: siblingError } = core.length >= 3
+        ? await supabaseAdmin.from("teams").select("name, league_id").ilike("name", `%${core}%`).limit(2000)
+        : { data: [], error: null };
       if (siblingError) {
         console.error("team-competitions: sibling lookup failed:", siblingError.message);
         return res.status(500).json({ error: "Failed to resolve competitions" });
       }
-
-      const leagueIds = Array.from(
-        new Set((siblingTeams || []).map((t: any) => t.league_id).filter(Boolean))
-      ).filter((id) => sides.name(homeTeam.name, id as string) === homeSide) as string[];
+      // The same name in a women's competition is the other side of the club: a coach for the
+      // women's "London Lions" must not be shown the men's competitions.
+      const sides = await getLeagueSides();
+      const leagueIds = clubLeagueIds((siblingTeams || []) as any[], homeTeam.name, homeTeam.league_id, sides);
       const allowedIds = await filterLeagueIdsForPublicScope(leagueIds);
       if (allowedIds.length === 0) {
         return res.json({ teamName: homeTeam.name, homeLeagueId: homeTeam.league_id, competitions: [] });

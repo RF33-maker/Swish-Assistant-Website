@@ -1537,7 +1537,7 @@ export default function CoachesHub() {
                   {activeTab === 'lineups' && (
                     <div>
                       {tabIntro('01', 'Lineups', 'Five-man units by net rating, plus-minus and minutes together.')}
-                      <AdvancedInsights leagueId={selectedLeague.league_id} teamId={isCoach ? coachTeamId ?? undefined : undefined} showHeading={false} />
+                      <AdvancedInsights leagueId={selectedLeague.league_id} teamId={isCoach ? myTeam?.team_id : undefined} showHeading={false} />
                     </div>
                   )}
 

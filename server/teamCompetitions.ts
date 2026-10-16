@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { isSameTeam } from "./teamIdentityService";
 import { getLeagueSides } from "./teamSides";
+import { clubSearchCore } from "@shared/clubLeagues";
 
 // Every competition one club has played in, with its record and game-level
 // team totals in each. Each competition gives the club its own team_id (and
@@ -49,17 +50,6 @@ export type TeamCompetition = {
 const TEAM_STAT_COLUMNS =
   "name, side, league_id, game_key, created_at, tot_spoints, tot_sreboundstotal, tot_sassists, tot_ssteals, tot_sblocks, tot_sthreepointersmade";
 
-// The shared part of every variant of a club's name, used to narrow the
-// ilike search before the exact identity check.
-function searchCore(name: string): string {
-  return name
-    .replace(/\s+Senior\s+(Men|Women)\b.*$/i, "")
-    .replace(/\s+Women$/i, "")
-    .replace(/\s+I$/i, "")
-    .replace(/[%_]/g, "")
-    .trim();
-}
-
 const num = (value: unknown) => Number(value) || 0;
 
 /**
@@ -68,7 +58,7 @@ const num = (value: unknown) => Number(value) || 0;
  * depending on where it came from; without it the name is taken as it stands.
  */
 export async function getTeamCompetitions(teamName: string, competitionSlug?: string | null): Promise<TeamCompetition[]> {
-  const core = searchCore(teamName);
+  const core = clubSearchCore(teamName);
   if (core.length < 3) return [];
 
   const sides = await getLeagueSides();
