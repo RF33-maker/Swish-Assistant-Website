@@ -23,7 +23,7 @@ import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Route, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
-import UnifiedScoutingEditor from '@/components/scout-editor/UnifiedScoutingEditor';
+import ScoutReportsList from '@/components/coaches-hub/ScoutReportsList';
 import { ordinal } from '@/lib/gameReport';
 import MatchReport from '@/components/coaches-hub/MatchReport';
 import OpponentScoutReport from '@/components/coaches-hub/OpponentScoutReport';
@@ -250,7 +250,7 @@ export default function CoachesHub() {
     | { type: 'player'; player: PlayerSeasonAverage }
     | { type: 'team'; team: TeamSeasonAverage }
     | { type: 'matchReport'; gameKey: string }
-    | { type: 'scoutReport'; opponentName: string }
+    | { type: 'scoutReport'; opponentName: string; forTeamName?: string | null }
     | null
   >(null);
 
@@ -1453,11 +1453,12 @@ export default function CoachesHub() {
                   <OpponentScoutReport
                     opponentName={detailView.opponentName}
                     leagueId={selectedLeague.league_id}
-                    myTeamName={myTeam?.team_name || coachTeamName || ''}
+                    myTeamName={detailView.forTeamName || myTeam?.team_name || coachTeamName || ''}
                     standings={standings}
                     teamSeasonAverages={teamSeasonAverages}
                     playerSeasonAverages={playerSeasonAverages}
                     brandColor={readableBrand}
+                    backLabel={activeTab === 'scouting' ? 'Back to scouting reports' : undefined}
                     onBack={() => setDetailView(null)}
                   />
                 ) : detailView.type === 'player' ? (
@@ -1573,22 +1574,12 @@ export default function CoachesHub() {
                     <div className="ch-card overflow-hidden">
                       <div className="flex flex-col md:flex-row md:items-center justify-between px-5 py-4 md:px-6 border-b border-[color:var(--ch-border)] gap-2 md:gap-0">
                         <SectionKicker n="01" label="Scouting reports" color={readableBrand} className="" />
-                        <span className="text-[11px] font-medium text-[color:var(--ch-muted)] ch-tile px-2 py-1 rounded-md self-start md:self-auto">Mobile-optimized A4 editor</span>
                       </div>
 
-                      <UnifiedScoutingEditor
-                        leagueContext={{
-                          leagueId: selectedLeague.league_id,
-                          leagueName: selectedLeague.name,
-                        }}
-                        onChatInsert={(content: string) => {
-                          setChatbotResponse(content);
-                        }}
-                        reportData={reportData}
-                        onReportDataChange={setReportData}
-                        selectedTemplateId={selectedTemplateId}
-                        onTemplateChange={setSelectedTemplateId}
-                        parseError={parseError}
+                      <ScoutReportsList
+                        leagueId={selectedLeague.league_id}
+                        brandColor={readableBrand}
+                        onOpen={(opponentName, forTeamName) => setDetailView({ type: 'scoutReport', opponentName, forTeamName })}
                       />
                     </div>
                   )}
@@ -1617,9 +1608,7 @@ export default function CoachesHub() {
         <>
           <button
             onClick={() => setIsAssistantOpen(true)}
-            className={`fixed right-4 md:right-6 z-40 flex items-center gap-2 h-12 pl-3.5 pr-4 md:pr-5 rounded-full bg-[color:var(--ch-text)] text-[color:var(--ch-surface)] shadow-[0_12px_32px_-8px_rgba(0,0,0,0.45)] ring-1 ring-white/10 hover:scale-[1.03] active:scale-[0.99] transition-transform ${
-              activeTab === 'scouting' && !detailView ? 'bottom-24 md:bottom-6' : 'bottom-5 md:bottom-6'
-            }`}
+            className="fixed right-4 md:right-6 bottom-5 md:bottom-6 z-40 flex items-center gap-2 h-12 pl-3.5 pr-4 md:pr-5 rounded-full bg-[color:var(--ch-text)] text-[color:var(--ch-surface)] shadow-[0_12px_32px_-8px_rgba(0,0,0,0.45)] ring-1 ring-white/10 hover:scale-[1.03] active:scale-[0.99] transition-transform"
             aria-label="Open League Assistant"
           >
             <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: readableBrand }}>

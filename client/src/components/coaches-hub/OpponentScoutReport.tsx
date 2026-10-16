@@ -27,6 +27,7 @@ interface Props {
   playerSeasonAverages: PlayerSeasonAverage[];
   brandColor: string;
   onBack: () => void;
+  backLabel?: string;
 }
 
 const OPP_COLOR = '#94a3b8';
@@ -104,7 +105,7 @@ function rankOf(
 }
 
 export default function OpponentScoutReport({
-  opponentName, leagueId, myTeamName, standings, teamSeasonAverages, playerSeasonAverages, brandColor, onBack,
+  opponentName, leagueId, myTeamName, standings, teamSeasonAverages, playerSeasonAverages, brandColor, onBack, backLabel = 'Back to overview',
 }: Props) {
   const [recent, setRecent] = useState<RecentGame[]>([]);
   const [shots, setShots] = useState<ShotData[]>([]);
@@ -342,7 +343,7 @@ export default function OpponentScoutReport({
   return (
     <div className="sr-brand space-y-4 md:space-y-6" style={brandStyle}>
       <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
-        <ArrowLeft className="w-4 h-4" /> Back to overview
+        <ArrowLeft className="w-4 h-4" /> {backLabel}
       </button>
 
       {/* Solid colours rather than gradients: useTeamBranding resolves some
