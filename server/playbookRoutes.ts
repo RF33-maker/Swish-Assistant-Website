@@ -1,11 +1,14 @@
 import express, { type Express, type Request, type Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
+import { teamClubKey } from "./teamIdentityService";
 
 /**
  * Coaches Hub playbook API (public.coach_playbooks, RLS on with no policies).
  *
  * A coach account's playbook belongs to their club, so all of that team's
- * coaches share one set of plays. Anyone else who is signed in (admins, league
+ * coaches share one set of plays. A club has a separate team_id in every
+ * competition, so the playbook is keyed on club identity (the same grouping the
+ * hub's competition switcher uses), not on whichever team_id the account holds. Anyone else who is signed in (admins, league
  * owners) keeps a personal playbook. Saves carry the `updatedAt` they were
  * built on, so one coach can't silently overwrite a teammate's newer save.
  */
@@ -17,6 +20,12 @@ const MAX_BYTES = 1_500_000;
 
 type Owner = { userId: string; key: string; shared: boolean };
 
+/** `team:club:<club key>` for any of a club's competition entries; the raw id if the team can't be named. */
+async function teamOwnerKey(teamId: string): Promise<string> {
+  const { data } = await supabaseAdmin.from("teams").select("name").eq("team_id", teamId).limit(1).maybeSingle();
+  return data?.name ? `team:club:${teamClubKey(data.name)}` : `team:${teamId}`;
+}
+
 async function resolveOwner(req: Request): Promise<Owner | null> {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return null;
@@ -24,7 +33,7 @@ async function resolveOwner(req: Request): Promise<Owner | null> {
   if (error || !data.user) return null;
   const user = data.user;
   const teamId = user.app_metadata?.role === "coach" ? user.app_metadata?.team_id : null;
-  if (teamId) return { userId: user.id, key: `team:${teamId}`, shared: true };
+  if (teamId) return { userId: user.id, key: await teamOwnerKey(teamId), shared: true };
   return { userId: user.id, key: `user:${user.id}`, shared: false };
 }
 

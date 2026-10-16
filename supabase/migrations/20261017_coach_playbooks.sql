@@ -2,7 +2,7 @@
 -- Playbook tab (client/src/components/coaches-hub/Playbook.tsx).
 --
 -- One playbook per owner. A coach account's playbook belongs to their club
--- (owner_key 'team:<team_id>'), so every coach on that team sees and edits the
+-- (owner_key 'team:club:<club key>', one per club, not per competition), so every coach on that team sees and edits the
 -- same plays. Any other signed-in account (admins, league owners) gets a
 -- personal playbook ('user:<auth uid>').
 --
