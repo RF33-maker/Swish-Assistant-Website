@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Search, Eye, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
+import { buildLeagueSides } from '@shared/leagueSides';
+import { clubDisplayName, teamClubKey } from '@shared/teamIdentity';
+import { seasonLabel } from '@shared/season';
 
 /**
  * Admin-only: open the Coaches Hub as any team's coach, to try the coach
@@ -12,7 +15,7 @@ import { useAuth } from '@/hooks/use-auth';
  * anyone else, and the control isn't rendered for non-admins at all.
  */
 
-interface Match {
+interface Entry {
   team_id: string;
   name: string;
   league_id: string;
@@ -21,10 +24,28 @@ interface Match {
   createdAt: string;
 }
 
+/** One club, however many competitions and spellings it has: the search shows one row per club. */
+interface Club {
+  key: string;
+  name: string;
+  /** The entry to open: the club's newest competition, preferring the current season. */
+  open: Entry;
+  current: Entry[];
+  earlier: Entry[];
+}
+
+const norm = (v: string) => v.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/** Season "2026/27" as competitions write it ("2026/27", "2026-27", "2026-2027"), reduced to its start year. */
+function startYear(season: string | null): number | null {
+  const m = /(\d{4})/.exec(season || '');
+  return m ? Number(m[1]) : null;
+}
+
 export default function AdminTeamPicker({ teamName, leagueName }: { teamName?: string | null; leagueName?: string | null }) {
   const { isRealAdmin, viewingAsTeamId } = useAuth();
   const [query, setQuery] = useState('');
-  const [matches, setMatches] = useState<Match[]>([]);
+  const [matches, setMatches] = useState<Club[]>([]);
   const [searching, setSearching] = useState(false);
   // Open by default: it is the way into the coach view, so it should not need finding.
   const [open, setOpen] = useState(true);
@@ -40,21 +61,39 @@ export default function AdminTeamPicker({ teamName, leagueName }: { teamName?: s
         .from('teams')
         .select('team_id, name, league_id')
         .ilike('name', `%${q.replace(/[%_,]/g, '')}%`)
-        .limit(40);
+        .limit(200);
       const ids = Array.from(new Set((teams || []).map((t: any) => t.league_id).filter(Boolean)));
       const { data: comps } = ids.length
-        ? await supabase.from('competitions').select('league_id, name, season, is_public, created_at').in('league_id', ids)
+        ? await supabase.from('competitions').select('league_id, name, season, is_public, created_at, gender, parent_league_id').in('league_id', ids)
         : { data: [] as any[] };
       if (run !== latest.current) return;
       const byId = new Map((comps || []).map((c: any) => [c.league_id, c]));
+      const sides = buildLeagueSides((comps || []) as any[]);
+      const thisSeason = startYear(seasonLabel());
+
+      const clubs = new Map<string, Club>();
+      (teams || [])
+        .map((t: any) => ({ t, c: byId.get(t.league_id) as any }))
+        .filter(({ c }) => c && c.is_public)
+        .map(({ t, c }): Entry => ({ team_id: t.team_id, name: t.name, league_id: t.league_id, competition: c.name, season: c.season ?? null, createdAt: String(c.created_at || '') }))
+        // Newest first, so a club's first entry is its latest competition.
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .forEach((e) => {
+          // A women's side is its own club, and "Senior Men I" / the odd typo is the same club as the plain name.
+          const key = teamClubKey(sides.name(e.name, e.league_id));
+          const club = clubs.get(key) ?? { key, name: clubDisplayName(e.name), open: e, current: [], earlier: [] };
+          (startYear(e.season) === thisSeason ? club.current : club.earlier).push(e);
+          clubs.set(key, club);
+        });
+
+      const nq = norm(q);
+      const rank = (c: Club) => (norm(c.name).startsWith(nq) ? 0 : 1);
       setMatches(
-        (teams || [])
-          .map((t: any) => ({ t, c: byId.get(t.league_id) as any }))
-          .filter(({ c }) => c && c.is_public)
-          .map(({ t, c }) => ({ team_id: t.team_id, name: t.name, league_id: t.league_id, competition: c.name, season: c.season ?? null, createdAt: String(c.created_at || '') }))
-          // A club's newest competition first, so the current season is the top result.
-          .sort((a, b) => a.name.localeCompare(b.name) || b.createdAt.localeCompare(a.createdAt))
-          .slice(0, 12),
+        Array.from(clubs.values())
+          // Prefer the current season's entry when opening the club.
+          .map((c) => ({ ...c, open: c.current[0] ?? c.earlier[0] }))
+          .sort((a, b) => rank(a) - rank(b) || Number(!!b.current.length) - Number(!!a.current.length) || a.name.localeCompare(b.name))
+          .slice(0, 8),
       );
       setSearching(false);
     }, 250);
@@ -109,15 +148,28 @@ export default function AdminTeamPicker({ teamName, leagueName }: { teamName?: s
           </div>
           {query.trim().length >= 2 && (
             <ul className="divide-y divide-[color:var(--ch-border)] rounded-lg border border-[color:var(--ch-border)] overflow-hidden">
-              {matches.map((m) => (
-                <li key={m.team_id}>
+              {matches.map((club) => (
+                <li key={club.key}>
                   <button
                     type="button"
-                    onClick={() => view(m.team_id)}
-                    className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-black/5 dark:hover:bg-white/5"
+                    onClick={() => view(club.open.team_id)}
+                    className="w-full flex items-start justify-between gap-3 px-3 py-2.5 text-left hover:bg-black/5 dark:hover:bg-white/5"
                   >
-                    <span className="font-medium text-slate-900 dark:text-white truncate">{m.name}</span>
-                    <span className="text-xs text-gray-500 dark:text-neutral-400 truncate">{m.competition}{m.season ? ` · ${m.season}` : ''}</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-slate-900 dark:text-white truncate">{club.name}</span>
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {club.current.map((e) => (
+                          <span key={e.league_id} className="text-[11px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">{e.competition}</span>
+                        ))}
+                        {club.current.length === 0 && (
+                          <span className="text-[11px] text-gray-500 dark:text-neutral-400">Not in a {seasonLabel()} competition yet</span>
+                        )}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs text-gray-500 dark:text-neutral-400 text-right">
+                      {club.current.length > 0 ? seasonLabel() : club.open.season ?? ''}
+                      {club.earlier.length > 0 && <span className="block">{club.earlier.length} earlier {club.earlier.length === 1 ? 'competition' : 'competitions'}</span>}
+                    </span>
                   </button>
                 </li>
               ))}

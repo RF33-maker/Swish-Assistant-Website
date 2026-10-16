@@ -9,7 +9,7 @@ import { generateGamePlan, type GamePlan, type Tier } from "./agent.ts";
  * scout-agent — builds opponent scouting reports and game plans.
  *
  * Actions (POST JSON, header x-scout-secret required):
- *   { action: "build", leagueId, opponentName, forTeamName?, tier?, window?, gameKey?, matchTime?, requestedBy?, force? }
+ *   { action: "build", leagueId, opponentName, forTeamName?, tier?, window?, season?, excludeLeagueIds?, scopeKey?, gameKey?, matchTime?, requestedBy?, force? }
  *       Queue one report and build it in the background. Returns 202 at once.
  *       tier "full" (default): the paid game plan, written by MODEL_FULL for
  *       the coach's own team (forTeamName). tier "preview": the free look,
@@ -80,11 +80,25 @@ interface BuildRequest {
   tier?: Tier;
   /** The games the report reads: the whole season (default), the last 5 or the last 3. */
   window?: Window;
+  /** Which season and which competitions count. The site works out scopeKey ('' = this season, every competition). */
+  season?: string | null;
+  excludeLeagueIds?: string[];
+  scopeKey?: string;
 }
 
 type Window = "season" | "last5" | "last3";
 const parseWindow = (v: unknown): Window => (v === "last5" || v === "last3" ? v : "season");
 const WINDOW_LABEL: Record<Window, string> = { season: "this season", last5: "last 5 games", last3: "last 3 games" };
+
+/** What the coach's scope means in words, for the model and the report: "2025/26 season, without the BCB Trophy". */
+async function scopeLabel(r: BuildRequest, windowLabel: string): Promise<string> {
+  const season = r.season ? `${r.season} season` : null;
+  const base = season && windowLabel === "this season" ? season : season ? `${windowLabel} of the ${season}` : windowLabel;
+  if (!r.excludeLeagueIds?.length) return base;
+  const { data } = await db.from("competitions").select("name").in("league_id", r.excludeLeagueIds);
+  const names = (data || []).map((c: any) => c.name).filter(Boolean);
+  return `${base}, leaving out ${names.length ? names.join(", ") : `${r.excludeLeagueIds.length} competition(s)`}`;
+}
 
 async function computeFactsFor(r: BuildRequest) {
   const window = parseWindow(r.window);
@@ -98,12 +112,18 @@ async function computeFactsFor(r: BuildRequest) {
     lastN: window === "last5" ? 5 : window === "last3" ? 3 : null,
     // The free look is shared by everyone, so it never carries one coach's notes.
     forTeamNotes: r.tier === "preview" ? null : r.forTeamName || null,
+    season: r.season ?? null,
+    excludeLeagueIds: r.excludeLeagueIds ?? [],
   });
-  return { ...computeScoutingFacts(bundle, { isSameTeam }), window: { key: window, label: WINDOW_LABEL[window] } };
+  return { ...computeScoutingFacts(bundle, { isSameTeam }), window: { key: window, label: await scopeLabel(r, WINDOW_LABEL[window]) } };
+}
+
+function keyOf(r: BuildRequest) {
+  return { league_id: r.leagueId, opponent_name: r.opponentName, for_team_name: r.forTeamName || "", window: parseWindow(r.window), scope_key: r.scopeKey || "" };
 }
 
 async function build(r: BuildRequest) {
-  const key = { league_id: r.leagueId, opponent_name: r.opponentName, for_team_name: r.forTeamName || "", window: parseWindow(r.window) };
+  const key = keyOf(r);
   const tier: Tier = r.tier === "preview" ? "preview" : "full";
   const model = tier === "preview" ? MODEL_PREVIEW : MODEL_FULL;
   const started = Date.now();
@@ -134,7 +154,7 @@ async function build(r: BuildRequest) {
 
 /** Mark a row as building (creating it if needed). Returns false if another build is already in flight. */
 async function claim(r: BuildRequest, force: boolean): Promise<boolean> {
-  const key = { league_id: r.leagueId, opponent_name: r.opponentName, for_team_name: r.forTeamName || "", window: parseWindow(r.window) };
+  const key = keyOf(r);
   const { data: existing } = await db.from("scout_agent_reports").select("id, status, updated_at, attempts").match(key).maybeSingle();
   const now = new Date();
   if (existing?.status === "building" && !force) {
@@ -148,6 +168,7 @@ async function claim(r: BuildRequest, force: boolean): Promise<boolean> {
     match_time: r.matchTime ?? null,
     requested_by: r.requestedBy ?? null,
     tier: r.tier === "preview" ? "preview" : "full",
+    scope: r.scopeKey ? { season: r.season ?? null, exclude: r.excludeLeagueIds ?? [] } : null,
     attempts: (existing?.attempts ?? 0) + 1,
     updated_at: now.toISOString(),
   };
@@ -202,12 +223,12 @@ async function sweep(days: number, limit: number, selfUrl: string, scoutSecret: 
 
   const leagueIds = Array.from(new Set(wanted.map((w) => w.leagueId)));
   const { data: rows, error: rowsError } = await db.from("scout_agent_reports")
-    .select("league_id, opponent_name, for_team_name, window, status, generated_at, updated_at, attempts")
+    .select("league_id, opponent_name, for_team_name, window, scope_key, status, generated_at, updated_at, attempts")
     .in("league_id", leagueIds);
   // If the window column is missing (migration not applied) every plan would look unbuilt and be rebuilt: stop instead.
   if (rowsError) throw new Error(`sweep: ${rowsError.message}`);
   // The sweep only keeps the whole-season plan fresh; a coach asks for last 3 / last 5 themselves.
-  const byKey = new Map((rows || []).filter((r: any) => (r.window ?? "season") === "season").map((r: any) => [`${r.league_id}|${r.opponent_name}|${r.for_team_name}`, r]));
+  const byKey = new Map((rows || []).filter((r: any) => (r.window ?? "season") === "season" && !r.scope_key).map((r: any) => [`${r.league_id}|${r.opponent_name}|${r.for_team_name}`, r]));
 
   const staleBefore = now.getTime() - STALE_HOURS * 3_600_000;
   const needs = wanted.filter((w) => {
@@ -253,6 +274,12 @@ Deno.serve(async (req) => {
       gameKey: body.gameKey || null, matchTime: body.matchTime || null, requestedBy: body.requestedBy || null,
       tier: body.tier === "preview" ? "preview" : "full",
       window: body.tier === "preview" ? "season" : parseWindow(body.window),
+      // The free look is shared, so it is always the default scope.
+      ...(body.tier === "preview" ? {} : {
+        season: typeof body.season === "string" && /^\d{4}\/\d{2}$/.test(body.season) ? body.season : null,
+        excludeLeagueIds: Array.isArray(body.excludeLeagueIds) ? body.excludeLeagueIds.map(String).slice(0, 20) : [],
+        scopeKey: typeof body.scopeKey === "string" ? body.scopeKey.slice(0, 1000) : "",
+      }),
     };
     // A preview describes the opponent only, so every visitor shares one row.
     if (r.tier === "preview") r.forTeamName = null;

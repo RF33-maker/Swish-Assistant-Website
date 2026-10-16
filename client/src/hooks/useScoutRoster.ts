@@ -26,13 +26,14 @@ export interface ScoutRosterResponse extends ScoutRoster {
  * The opponent's roster and league-percentile profiles for the scouting report
  * (see server/scoutRoster.ts). Public box-score data, cached for a few minutes.
  */
-export function useScoutRoster(leagueId: string, opponentName: string, forTeamName?: string | null, window: ScoutWindow = "season") {
+export function useScoutRoster(leagueId: string, opponentName: string, forTeamName?: string | null, window: ScoutWindow = "season", exclude: string[] = []) {
   return useQuery<ScoutRosterResponse | null>({
-    queryKey: ["scout-roster", leagueId, opponentName, forTeamName || "", window],
+    queryKey: ["scout-roster", leagueId, opponentName, forTeamName || "", window, exclude.join(",")],
     queryFn: async () => {
       const qs = new URLSearchParams({ leagueId, opponent: opponentName });
       if (forTeamName) qs.set("forTeam", forTeamName);
       if (window !== "season") qs.set("window", window);
+      if (exclude.length) qs.set("exclude", exclude.join(","));
       const res = await fetch(`/api/scout-agent/roster?${qs}`);
       if (!res.ok) return null;
       return res.json();

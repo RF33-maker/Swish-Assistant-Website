@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { printScoutPlan } from '@/lib/printScoutPlan';
 import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
+import { DEFAULT_SCOPE, scopeKey, type ScoutScope } from '@shared/scoutScope';
 import { applyEdits, windowLabel, type CoachNote, type PlanEdits, type ScoutWindow } from '@shared/coachNotes';
 import { ordinalOf, type RosterEntry } from '@shared/scoutRoster';
 import { playerNameKey } from '@shared/playerNameKey';
@@ -209,13 +210,15 @@ function PlanCall({ n, call, color, path }: { n: number; call: Call & { target?:
 }
 
 export default function AgentGamePlan({
-  leagueId, opponentName, myTeamName, color, secondaryColor = null, roster, window: scoutWindow = 'season', notes = null, notesUpdatedAt = null,
+  leagueId, opponentName, myTeamName, color, secondaryColor = null, roster, window: scoutWindow = 'season', scope = DEFAULT_SCOPE, notes = null, notesUpdatedAt = null,
 }: {
   leagueId: string; opponentName: string; myTeamName: string; color: string; roster?: ScoutRosterResponse | null;
   /** The club's second colour, for the printed report. */
   secondaryColor?: string | null;
   /** The games the plan is built on: the whole season, or the last 5 or 3. */
   window?: ScoutWindow;
+  /** The season and competitions the plan counts (default: this season, every competition). */
+  scope?: ScoutScope;
   /** The coach's notes on this opponent, for the printed report and the "rebuild to apply" prompt. */
   notes?: CoachNote[] | null;
   notesUpdatedAt?: string | null;
@@ -225,6 +228,7 @@ export default function AgentGamePlan({
   const [requesting, setRequesting] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
   const polls = useRef(0);
+  const scopeId = scopeKey(scope);
   // Admin-only while the report is tested: a printable copy to save as a PDF.
   const { isRealAdmin } = useAuth();
   // The crests the banner shows (the team logos table, then storage), fetched ahead so the PDF button can use them without waiting.
@@ -242,6 +246,8 @@ export default function AgentGamePlan({
     try {
       const qs = new URLSearchParams({ leagueId, opponent: opponentName, forTeam: myTeamName || '' });
       if (scoutWindow !== 'season') qs.set('window', scoutWindow);
+      if (scope.season) qs.set('season', scope.season);
+      if (scope.exclude.length) qs.set('exclude', scope.exclude.join(','));
       const res = await fetch(`/api/scout-agent/report?${qs}`, { headers: await authHeaders() });
       if (!res.ok) throw new Error(`report returned ${res.status}`);
       setData(await res.json());
@@ -250,7 +256,7 @@ export default function AgentGamePlan({
     } finally {
       setLoading(false);
     }
-  }, [leagueId, opponentName, myTeamName, scoutWindow]);
+  }, [leagueId, opponentName, myTeamName, scoutWindow, scopeId]);
 
   useEffect(() => { setLoading(true); setRequesting(false); setRequestError(null); polls.current = 0; load(); }, [load]);
 
@@ -277,7 +283,7 @@ export default function AgentGamePlan({
       const res = await fetch(`/api/scout-agent/${kind}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-        body: JSON.stringify({ leagueId, opponent: opponentName, forTeam: myTeamName || null, force, window: scoutWindow }),
+        body: JSON.stringify({ leagueId, opponent: opponentName, forTeam: myTeamName || null, force, window: scoutWindow, season: scope.season, exclude: scope.exclude }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok && res.status !== 202) throw new Error(json.error || `build returned ${res.status}`);
@@ -294,7 +300,7 @@ export default function AgentGamePlan({
     const res = await fetch('/api/scout-agent/edits', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-      body: JSON.stringify({ leagueId, opponent: opponentName, forTeam: myTeamName || null, window: scoutWindow, fields: { [path]: text } }),
+      body: JSON.stringify({ leagueId, opponent: opponentName, forTeam: myTeamName || null, window: scoutWindow, season: scope.season, exclude: scope.exclude, fields: { [path]: text } }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json.error || `save returned ${res.status}`);

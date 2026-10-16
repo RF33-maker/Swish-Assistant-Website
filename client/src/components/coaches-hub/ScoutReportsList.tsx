@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, ClipboardList, Download, RefreshCw, Share2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { parseScope, type ScoutScope } from '@shared/scoutScope';
+import { windowLabel, parseWindow, type ScoutWindow } from '@shared/coachNotes';
 import { downloadScout, shareScout, type ExportablePlan } from '@/lib/scoutPlanExport';
 
 /**
@@ -13,6 +15,9 @@ import { downloadScout, shareScout, type ExportablePlan } from '@/lib/scoutPlanE
 interface ScoutRow {
   id: string | null;
   tier: 'full' | 'preview';
+  window: ScoutWindow;
+  /** The choice of season and competitions, when it is not the default. */
+  scope: { season?: string | null; exclude?: string[] } | null;
   status: 'ready' | 'building';
   opponentName: string;
   forTeamName: string | null;
@@ -25,7 +30,7 @@ interface ScoutRow {
 interface Props {
   leagueId: string;
   brandColor: string;
-  onOpen: (opponentName: string, forTeamName: string | null) => void;
+  onOpen: (opponentName: string, forTeamName: string | null, view: { window: ScoutWindow; scope: ScoutScope }) => void;
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -116,9 +121,9 @@ export default function ScoutReportsList({ leagueId, brandColor, onOpen }: Props
           const ready = r.status === 'ready' && !!r.plan;
           const day = formatDay(r.matchTime) || formatDay(r.generatedAt);
           return (
-            <li key={r.id ?? `${r.opponentName}-${r.forTeamName}`} className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-3">
+            <li key={r.id ?? `${r.opponentName}-${r.forTeamName}-${r.window}`} className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-3">
               <button
-                onClick={() => ready && onOpen(r.opponentName, r.tier === 'full' ? r.forTeamName : null)}
+                onClick={() => ready && onOpen(r.opponentName, r.tier === 'full' ? r.forTeamName : null, { window: parseWindow(r.window), scope: parseScope(r.scope) })}
                 disabled={!ready}
                 className="flex-1 min-w-0 flex items-center gap-3 text-left rounded-md px-2 py-1 hover:bg-[color:var(--ch-hover,rgba(0,0,0,0.04))] disabled:cursor-default disabled:hover:bg-transparent"
               >
@@ -133,6 +138,13 @@ export default function ScoutReportsList({ leagueId, brandColor, onOpen }: Props
                     <span className="text-[10.5px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300">
                       {r.tier === 'full' ? 'Game plan' : 'Free look'}
                     </span>
+                    {r.tier === 'full' && [
+                      r.window !== 'season' ? windowLabel(parseWindow(r.window)) : null,
+                      r.scope?.season || null,
+                      r.scope?.exclude?.length ? `${r.scope.exclude.length} left out` : null,
+                    ].filter(Boolean).map((chip) => (
+                      <span key={chip} className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300">{chip}</span>
+                    ))}
                   </span>
                   <span className="block text-[12.5px] text-[color:var(--ch-text-2)] truncate">
                     {ready ? (r.plan?.headline || 'Scouting report') : 'Building. This takes a minute or two.'}

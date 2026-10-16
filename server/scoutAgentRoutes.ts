@@ -4,6 +4,9 @@ import { isSameTeam } from "./teamIdentityService";
 import { getLeagueSides } from "./teamSides";
 import { cleanEdit, cleanNote, isEditablePath, isNoteKind, parseWindow, type CoachNote, type PlanEdits, type ScoutWindow } from "@shared/coachNotes";
 import { playerNameKey } from "@shared/playerNameKey";
+import { parseScope, scopeKey, seasonOfDate, type ScoutScope } from "@shared/scoutScope";
+import { seasonLabel } from "@shared/season";
+import { getTeamCompetitions } from "./teamCompetitions";
 
 /**
  * Site-side API for the scouting agent (supabase/functions/scout-agent).
@@ -24,7 +27,8 @@ import { playerNameKey } from "@shared/playerNameKey";
  * match on club identity instead of string equality.
  *
  * A report is also keyed by its window (the whole season, the last 5 games or the
- * last 3), so each view keeps its own plan. A coach's notes on an opponent
+ * last 3) and its scope (which season, which competitions count), so each view keeps
+ * its own plan. A coach's notes on an opponent
  * (scout_coach_notes) are private to that coach's club and are read by the agent
  * when it builds their plan.
  */
@@ -73,15 +77,20 @@ async function agentSecret(): Promise<string | null> {
   return (data as string | null) ?? null;
 }
 
-async function findReport(leagueId: string, opponent: string, forTeam: string, window: ScoutWindow = "season") {
+/** The scope a request asks for: `season` and a comma list (query) or array (body) of league ids to leave out. */
+function scopeFrom(src: any): ScoutScope {
+  return parseScope({ season: src?.season, exclude: src?.exclude });
+}
+
+async function findReport(leagueId: string, opponent: string, forTeam: string, window: ScoutWindow = "season", scope: string = "") {
   const { data, error } = await supabaseAdmin
     .from("scout_agent_reports")
-    .select("id, league_id, opponent_name, for_team_name, tier, window, edits, game_key, match_time, status, teaser, plan, facts, model, error, games_analysed, data_through, generated_at, updated_at")
+    .select("id, league_id, opponent_name, for_team_name, tier, window, scope_key, scope, edits, game_key, match_time, status, teaser, plan, facts, model, error, games_analysed, data_through, generated_at, updated_at")
     .eq("league_id", leagueId)
     .limit(500);
   if (error) throw new Error(error.message);
   const sameOpp = (data || []).filter((r: any) => isSameTeam(r.opponent_name, opponent));
-  const full = sameOpp.filter((r: any) => r.tier !== "preview" && (r.window ?? "season") === window);
+  const full = sameOpp.filter((r: any) => r.tier !== "preview" && (r.window ?? "season") === window && (r.scope_key ?? "") === scope);
   const exact = forTeam ? full.find((r: any) => r.for_team_name && isSameTeam(r.for_team_name, forTeam)) : undefined;
   const preview = sameOpp.find((r: any) => r.tier === "preview" && (r.window ?? "season") === "season");
   return { exact, preview };
@@ -135,6 +144,7 @@ function shape(row: any, full: boolean) {
     id: row.id ?? null,
     tier: row.tier ?? "full",
     window: row.window ?? "season",
+    scope: row.scope ?? null,
     status: row.status,
     opponentName: row.opponent_name,
     forTeamName: row.for_team_name || null,
@@ -166,7 +176,7 @@ export function registerScoutAgentRoutes(app: Express) {
 
       const { data, error } = await supabaseAdmin
         .from("scout_agent_reports")
-        .select("id, opponent_name, for_team_name, tier, game_key, match_time, status, teaser, plan, games_analysed, data_through, generated_at, updated_at, requested_by")
+        .select("id, opponent_name, for_team_name, tier, window, scope, game_key, match_time, status, teaser, plan, games_analysed, data_through, generated_at, updated_at, requested_by")
         .eq("league_id", leagueId)
         .in("status", ["ready", "building"])
         .order("updated_at", { ascending: false })
@@ -193,6 +203,44 @@ export function registerScoutAgentRoutes(app: Express) {
     }
   });
 
+  // GET /api/scout-agent/scope?leagueId=&opponent=
+  // The seasons the opponent has played in, and the competitions (with game counts) in each, so a
+  // coach can pick a season and untick the ones they don't want counted. Seasons are cut by game
+  // date (1 September), the same rule the agent uses, not by whatever the competition calls itself.
+  app.get("/api/scout-agent/scope", async (req: Request, res: Response) => {
+    try {
+      const leagueId = String(req.query.leagueId || "");
+      const opponent = String(req.query.opponent || "");
+      if (!leagueId || !opponent) return res.status(400).json({ error: "leagueId and opponent are required" });
+      const access = await resolveAccess(req, leagueId);
+      if (!access.userId) return res.status(401).json({ error: "Sign in to choose what a scout counts" });
+
+      const { data: comp } = await supabaseAdmin.from("competitions").select("slug").eq("league_id", leagueId).maybeSingle();
+      const competitions = await getTeamCompetitions(opponent, comp?.slug ?? null);
+
+      const bySeason = new Map<string, Map<string, { leagueId: string; name: string; games: number }>>();
+      for (const c of competitions) {
+        for (const g of c.games) {
+          if (!g.date) continue;
+          const season = seasonOfDate(g.date);
+          const comps = bySeason.get(season) ?? new Map();
+          const row = comps.get(c.league_id) ?? { leagueId: c.league_id, name: c.name, games: 0 };
+          row.games += 1;
+          comps.set(c.league_id, row);
+          bySeason.set(season, comps);
+        }
+      }
+      const seasons = Array.from(bySeason.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .slice(0, 4)
+        .map(([season, comps]) => ({ season, competitions: Array.from(comps.values()).sort((a, b) => b.games - a.games) }));
+      return res.json({ current: seasonLabel(), seasons });
+    } catch (err: any) {
+      console.error("[scout-agent] scope lookup failed:", err?.message);
+      return res.status(500).json({ error: "Failed to load competitions" });
+    }
+  });
+
   // GET /api/scout-agent/report?leagueId=&opponent=&forTeam=
   app.get("/api/scout-agent/report", async (req: Request, res: Response) => {
     try {
@@ -200,10 +248,11 @@ export function registerScoutAgentRoutes(app: Express) {
       const opponent = String(req.query.opponent || "");
       const forTeam = String(req.query.forTeam || "");
       const window = parseWindow(req.query.window);
+      const scope = scopeFrom(req.query);
       if (!leagueId || !opponent) return res.status(400).json({ error: "leagueId and opponent are required" });
 
       const access = await resolveAccess(req, leagueId, forTeam || null);
-      const { exact, preview } = await findReport(leagueId, opponent, forTeam, window);
+      const { exact, preview } = await findReport(leagueId, opponent, forTeam, window, scopeKey(scope));
       return res.json({
         access: access.full ? "full" : "teaser",
         canBuild: access.full,
@@ -256,13 +305,14 @@ export function registerScoutAgentRoutes(app: Express) {
     try {
       const { leagueId, opponent, forTeam, gameKey, matchTime, force } = req.body || {};
       const window = parseWindow(req.body?.window);
+      const scope = scopeFrom(req.body);
       if (!leagueId || !opponent) return res.status(400).json({ error: "leagueId and opponent are required" });
       const access = await resolveAccess(req, leagueId, forTeam || null);
       if (!access.userId) return res.status(401).json({ error: "Sign in to build a scouting report" });
       if (!access.full) return res.status(403).json({ error: "Full scouting reports are part of the coach plan" });
 
       // Don't let repeated clicks burn model calls: a fresh or in-flight report is returned as is.
-      const { exact } = await findReport(leagueId, opponent, forTeam || "", window);
+      const { exact } = await findReport(leagueId, opponent, forTeam || "", window, scopeKey(scope));
       if (exact && !force) {
         const age = (Date.now() - new Date(exact.updated_at).getTime()) / 60000;
         if (exact.status === "building" && age < 15) return res.status(202).json({ status: "building" });
@@ -273,6 +323,9 @@ export function registerScoutAgentRoutes(app: Express) {
         action: "build",
         tier: "full",
         window,
+        season: scope.season,
+        excludeLeagueIds: scope.exclude,
+        scopeKey: scopeKey(scope),
         leagueId,
         // Reuse the stored spelling so the agent updates the same row.
         opponentName: exact?.opponent_name ?? opponent,
@@ -365,12 +418,13 @@ export function registerScoutAgentRoutes(app: Express) {
     try {
       const { leagueId, opponent, forTeam, fields } = req.body || {};
       const window = parseWindow(req.body?.window);
+      const scope = scopeFrom(req.body);
       if (!leagueId || !opponent || !forTeam || !fields || typeof fields !== "object") return res.status(400).json({ error: "leagueId, opponent, forTeam and fields are required" });
       const access = await resolveAccess(req, leagueId, forTeam);
       if (!access.userId) return res.status(401).json({ error: "Sign in to edit the report" });
       if (!access.full) return res.status(403).json({ error: "Editing is part of the coach plan" });
 
-      const { exact } = await findReport(leagueId, opponent, forTeam, window);
+      const { exact } = await findReport(leagueId, opponent, forTeam, window, scopeKey(scope));
       if (!exact || exact.status !== "ready" || !exact.generated_at) return res.status(409).json({ error: "There is no finished plan to edit yet" });
 
       const keep: Record<string, string> = currentEdits(exact)?.fields ?? {};
