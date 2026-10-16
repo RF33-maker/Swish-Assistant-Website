@@ -1,7 +1,6 @@
 import express, { type Express, type Request, type Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
-import { teamClubKey } from "./teamIdentityService";
-import { getLeagueSides } from "./teamSides";
+import { resolveClub } from "./clubs";
 
 /**
  * Coaches Hub playbook API (public.coach_playbooks, RLS on with no policies).
@@ -21,24 +20,13 @@ const MAX_BYTES = 1_500_000;
 
 type Owner = { userId: string; key: string; shared: boolean };
 
-/** `team:club:<club key>` for any of a club's competition entries; the raw id if the team can't be named. */
-async function teamOwnerKey(teamId: string): Promise<string> {
-  const { data } = await supabaseAdmin.from("teams").select("name, league_id").eq("team_id", teamId).limit(1).maybeSingle();
-  if (!data?.name) return `team:${teamId}`;
-  // Read in its own competition: the women's "London Lions" is not the men's club.
-  const sides = await getLeagueSides();
-  return `team:club:${teamClubKey(sides.name(data.name, data.league_id))}`;
-}
-
 async function resolveOwner(req: Request): Promise<Owner | null> {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) return null;
-  const { data, error } = await supabaseAdmin.auth.getUser(header.slice(7));
-  if (error || !data.user) return null;
-  const user = data.user;
-  const teamId = user.app_metadata?.role === "coach" ? user.app_metadata?.team_id : null;
-  if (teamId) return { userId: user.id, key: await teamOwnerKey(teamId), shared: true };
-  return { userId: user.id, key: `user:${user.id}`, shared: false };
+  const ctx = await resolveClub(req);
+  if (!ctx) return null;
+  // A coach's playbook belongs to their club; the raw id only when the team can't be named.
+  if (ctx.clubKey) return { userId: ctx.userId, key: `team:club:${ctx.clubKey}`, shared: true };
+  if (ctx.access === "legacy" && ctx.teamId) return { userId: ctx.userId, key: `team:${ctx.teamId}`, shared: true };
+  return { userId: ctx.userId, key: `user:${ctx.userId}`, shared: false };
 }
 
 /** The shape the Playbook tab writes: a title and a list of sections. */
