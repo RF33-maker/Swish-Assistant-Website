@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Lock, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { shiftSeason } from '@shared/season';
 import { createPlaybook, pbBlankPlaybook, type PlaybookHandle, type PlaybookSaveError } from '@/lib/playbook/engine';
 import '@/lib/playbook/playbook.css';
 
@@ -9,7 +10,9 @@ import '@/lib/playbook/playbook.css';
  * run. The drawing, editing and animation live in a framework-free engine
  * (lib/playbook/engine.js, shared with the standalone playbook page); this
  * component loads the playbook from /api/playbook, mounts the engine, and saves
- * back. A coach's playbook is shared by every coach on their team.
+ * back. A coach's playbook is shared by every coach on their team, and there is
+ * one per season: the picker switches between them, and a season with nothing
+ * saved can start from a copy of an earlier one.
  */
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -28,6 +31,9 @@ function downloadFile(filename: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+type SeasonRow = { season: string; title: string; updatedAt: string };
+type SeasonInfo = { season: string; currentSeason: string; seasons: SeasonRow[]; saved: boolean };
+
 type LoadState = { kind: 'loading' } | { kind: 'ready' } | { kind: 'signedOut' } | { kind: 'error'; message: string };
 
 export default function Playbook({ teamName }: { teamName?: string | null }) {
@@ -35,6 +41,11 @@ export default function Playbook({ teamName }: { teamName?: string | null }) {
   const engine = useRef<PlaybookHandle | null>(null);
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  // The season to open; null lets the server pick the current one.
+  const [wanted, setWanted] = useState<string | null>(null);
+  const [info, setInfo] = useState<SeasonInfo | null>(null);
+  const [copyFrom, setCopyFrom] = useState('');
+  const [copyState, setCopyState] = useState<{ busy: boolean; error?: string }>({ busy: false });
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +54,7 @@ export default function Playbook({ teamName }: { teamName?: string | null }) {
       try {
         const headers = await authHeaders();
         if (!headers.Authorization) return setLoad({ kind: 'signedOut' });
-        const res = await fetch('/api/playbook', { headers });
+        const res = await fetch(`/api/playbook${wanted ? `?season=${encodeURIComponent(wanted)}` : ''}`, { headers });
         if (res.status === 401) return setLoad({ kind: 'signedOut' });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json.error || `The playbook didn't load (${res.status}).`);
@@ -51,23 +62,34 @@ export default function Playbook({ teamName }: { teamName?: string | null }) {
 
         // The version this copy was built on; the server refuses a save over a newer one.
         let base: string | null = json.updatedAt ?? null;
+        const season: string = json.season;
+        setInfo({ season, currentSeason: json.currentSeason, seasons: json.seasons ?? [], saved: !!json.playbook });
+        setCopyFrom((json.seasons ?? []).find((r: SeasonRow) => r.season !== season)?.season ?? '');
+        setCopyState({ busy: false });
         engine.current = createPlaybook(host.current, {
           initial: json.playbook ?? pbBlankPlaybook(teamName ? `${teamName} Playbook` : 'Team Playbook'),
           barMode: 'sticky',
-          draftKey: `swish-playbook:${json.ownerKey}`,
+          draftKey: `swish-playbook:${json.ownerKey}:${season}`,
           idleStatus: json.shared ? "Shared with your team's coaches. Tap Edit to change a play." : 'Tap Edit to change a play.',
           download: downloadFile,
           save: async (data) => {
             const r = await fetch('/api/playbook', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-              body: JSON.stringify({ data, baseUpdatedAt: base }),
+              body: JSON.stringify({ data, baseUpdatedAt: base, season }),
             });
             const j = await r.json().catch(() => ({}));
             if (r.status === 409) throw { code: 'conflict', message: j.error } satisfies PlaybookSaveError;
             if (r.status === 401 || r.status === 403) throw { code: 'readonly', message: j.error || 'Sign in again to save.' } satisfies PlaybookSaveError;
             if (!r.ok) throw { message: j.error || "Couldn't save. Check your connection and tap Save again." } satisfies PlaybookSaveError;
             base = j.updatedAt;
+            setInfo((prev) => prev && prev.season === season ? {
+              ...prev,
+              saved: true,
+              seasons: prev.seasons.some((r) => r.season === season)
+                ? prev.seasons.map((r) => r.season === season ? { ...r, title: data.title, updatedAt: j.updatedAt } : r)
+                : [{ season, title: data.title, updatedAt: j.updatedAt }, ...prev.seasons],
+            } : prev);
           },
         });
         setLoad({ kind: 'ready' });
@@ -80,7 +102,7 @@ export default function Playbook({ teamName }: { teamName?: string | null }) {
       engine.current?.destroy();
       engine.current = null;
     };
-  }, [teamName, attempt]);
+  }, [teamName, attempt, wanted]);
 
   // Leaving the page with unsaved plays: let the browser ask first.
   useEffect(() => {
@@ -90,6 +112,39 @@ export default function Playbook({ teamName }: { teamName?: string | null }) {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, []);
+
+  function switchSeason(next: string) {
+    if (!info || next === info.season) return;
+    if (engine.current?.isDirty() && !window.confirm('You have unsaved changes in this playbook. Switch season and lose them?')) return;
+    setWanted(next);
+  }
+
+  // Start this season from an earlier one: copy its plays across and reopen.
+  async function copySeason() {
+    if (!info || !copyFrom) return;
+    setCopyState({ busy: true });
+    try {
+      const headers = await authHeaders();
+      const src = await fetch(`/api/playbook?season=${encodeURIComponent(copyFrom)}`, { headers });
+      const srcJson = await src.json().catch(() => ({}));
+      if (!src.ok || !srcJson.playbook) throw new Error(srcJson.error || `Couldn't read the ${copyFrom} playbook.`);
+      const put = await fetch('/api/playbook', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ data: srcJson.playbook, baseUpdatedAt: null, season: info.season }),
+      });
+      const putJson = await put.json().catch(() => ({}));
+      if (!put.ok) throw new Error(putJson.error || "Couldn't copy the plays across. Try again.");
+      setAttempt((n) => n + 1);
+    } catch (err) {
+      setCopyState({ busy: false, error: err instanceof Error ? err.message : "Couldn't copy the plays across." });
+    }
+  }
+
+  const seasonOptions = info
+    ? Array.from(new Set([...info.seasons.map((r) => r.season), info.currentSeason, shiftSeason(info.currentSeason, 1)])).sort().reverse()
+    : [];
+  const earlier = info ? info.seasons.filter((r) => r.season !== info.season) : [];
 
   return (
     <div className="pb-host">
@@ -107,6 +162,35 @@ export default function Playbook({ teamName }: { teamName?: string | null }) {
           <AlertTriangle className="w-5 h-5 mx-auto mb-3 text-[color:var(--ch-loss)]" />
           <p className="text-sm text-[color:var(--ch-text)] mb-4">{load.message}</p>
           <button type="button" className="ch-btn ch-btn-primary h-9 px-4" onClick={() => setAttempt((n) => n + 1)}>Try again</button>
+        </div>
+      )}
+      {load.kind === 'ready' && info && (
+        <div className="ch-card p-3 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <label htmlFor="pb-season" className="ch-eyebrow">Season</label>
+          <select
+            id="pb-season"
+            className="ch-input h-9 px-3 text-[13px]"
+            value={info.season}
+            onChange={(e) => switchSeason(e.target.value)}
+          >
+            {seasonOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}{s === info.currentSeason ? ' (current)' : ''}{info.seasons.some((r) => r.season === s) ? '' : ' · not started'}
+              </option>
+            ))}
+          </select>
+          {!info.saved && earlier.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-[13px] text-[color:var(--ch-text-2)]">
+              <span>Nothing saved for {info.season} yet.</span>
+              <select className="ch-input h-9 px-3 text-[13px]" value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)} aria-label="Season to copy from">
+                {earlier.map((r) => <option key={r.season} value={r.season}>{r.season}</option>)}
+              </select>
+              <button type="button" className="ch-btn ch-btn-primary h-9 px-4" disabled={copyState.busy || !copyFrom} onClick={copySeason}>
+                {copyState.busy ? 'Copying…' : 'Copy these plays'}
+              </button>
+            </div>
+          )}
+          {copyState.error && <p className="w-full text-[13px] text-[color:var(--ch-loss)]">{copyState.error}</p>}
         </div>
       )}
       <div ref={host} hidden={load.kind !== 'ready'} />

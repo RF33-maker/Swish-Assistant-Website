@@ -22,3 +22,18 @@ export function seasonLabel(now: Date = new Date()): string {
   const y = seasonStart(now).getUTCFullYear();
   return `${y}/${String((y + 1) % 100).padStart(2, "0")}`;
 }
+
+/** Seasons are labelled like "2026/27"; the second half is the next year's last two digits. */
+export function isSeasonLabel(value: unknown, now: Date = new Date()): value is string {
+  if (typeof value !== "string") return false;
+  const m = /^(\d{4})\/(\d{2})$/.exec(value);
+  if (!m) return false;
+  const y = Number(m[1]);
+  return Number(m[2]) === (y + 1) % 100 && y >= 2020 && y <= seasonStart(now).getUTCFullYear() + 2;
+}
+
+/** The label `by` seasons after (or before, if negative) `label`. */
+export function shiftSeason(label: string, by: number): string {
+  const y = Number(label.slice(0, 4)) + by;
+  return `${y}/${String((y + 1) % 100).padStart(2, "0")}`;
+}
