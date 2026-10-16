@@ -9,11 +9,14 @@ import AgentGamePlan from './AgentGamePlan';
 import ScoutRoster from './ScoutRoster';
 import CoachNotesPanel from './CoachNotes';
 import WindowToggle from './WindowToggle';
+import ScopePicker from './ScopePicker';
 import { TeamLogo } from '@/components/TeamLogo';
 import { useScoutRoster } from '@/hooks/useScoutRoster';
+import { useScoutScope } from '@/hooks/useScoutScope';
 import { useCoachNotes } from '@/hooks/useCoachNotes';
 import { useAuth } from '@/hooks/use-auth';
 import type { ScoutWindow } from '@shared/coachNotes';
+import { DEFAULT_SCOPE, type ScoutScope } from '@shared/scoutScope';
 import { brandVars } from '@/lib/brandColor';
 import { num, ordinal, toPlayerLine, type PlayerGameRow, type PlayerLine } from '@/lib/gameReport';
 import type { PlayerSeasonAverage, StandingRow, TeamSeasonAverage } from '@/pages/CoachesHub';
@@ -28,6 +31,9 @@ interface Props {
   brandColor: string;
   onBack: () => void;
   backLabel?: string;
+  /** Open on a particular view, for a scout picked from the list. */
+  initialWindow?: ScoutWindow;
+  initialScope?: ScoutScope;
 }
 
 const OPP_COLOR = '#94a3b8';
@@ -105,7 +111,7 @@ function rankOf(
 }
 
 export default function OpponentScoutReport({
-  opponentName, leagueId, myTeamName, standings, teamSeasonAverages, playerSeasonAverages, brandColor, onBack, backLabel = 'Back to overview',
+  opponentName, leagueId, myTeamName, standings, teamSeasonAverages, playerSeasonAverages, brandColor, onBack, backLabel = 'Back to overview', initialWindow = 'season', initialScope = DEFAULT_SCOPE,
 }: Props) {
   const [recent, setRecent] = useState<RecentGame[]>([]);
   const [shots, setShots] = useState<ShotData[]>([]);
@@ -117,10 +123,15 @@ export default function OpponentScoutReport({
   const { colors, primaryColor, secondaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: myTeamName, leagueId });
   // The opponent's roster and league-percentile profiles (public box-score data).
   // Which of the opponent's games the plan, roster and percentiles are read over.
-  const [scoutWindow, setScoutWindow] = useState<ScoutWindow>('season');
-  const { data: rosterData } = useScoutRoster(leagueId, opponentName, myTeamName, scoutWindow);
-  // The coach's own notes on this opponent: for coach accounts and admins, never other visitors.
+  const [scoutWindow, setScoutWindow] = useState<ScoutWindow>(initialWindow);
+  // Which season and competitions count; coaches and admins can change it.
+  const [scope, setScope] = useState<ScoutScope>(initialScope);
   const { isCoach, isRealAdmin } = useAuth();
+  const scopeOptions = useScoutScope(leagueId, opponentName, isCoach || isRealAdmin).data ?? null;
+  // The roster and percentiles are read from the season in progress, so a past season has none to show.
+  const pastSeason = !!scope.season;
+  const { data: rosterData } = useScoutRoster(leagueId, opponentName, myTeamName, scoutWindow, scope.exclude);
+  // The coach's own notes on this opponent: for coach accounts and admins, never other visitors.
   const notes = useCoachNotes(leagueId, opponentName, myTeamName, isCoach || isRealAdmin);
   const brand = brandLoading || !primaryColor ? brandColor : primaryColor;
   // The hook falls back to a stock blue when a club has no colours of its own, so only a loaded second colour counts.
@@ -386,16 +397,20 @@ export default function OpponentScoutReport({
 
       <WindowToggle value={scoutWindow} onChange={setScoutWindow} color={brand} games={rosterData?.season.wholeSeason ? rosterData.season.games : null} />
 
+      {scopeOptions && (isCoach || isRealAdmin) && <ScopePicker options={scopeOptions} value={scope} onChange={setScope} color={brand} />}
+
       <AgentGamePlan
         leagueId={leagueId} opponentName={opponentName} myTeamName={myTeamName} color={brand} secondaryColor={secondBrand}
-        roster={rosterData ?? null} window={scoutWindow} notes={notes.canEdit ? notes.notes : null} notesUpdatedAt={notes.canEdit ? notes.updatedAt : null}
+        roster={pastSeason ? null : rosterData ?? null} window={scoutWindow} scope={scope} notes={notes.canEdit ? notes.notes : null} notesUpdatedAt={notes.canEdit ? notes.updatedAt : null}
       />
 
       {notes.canEdit && (
         <CoachNotesPanel api={notes} opponentName={opponentName} players={(rosterData?.roster ?? []).map((r) => r.name)} color={brand} />
       )}
 
-      {rosterData && <ScoutRoster data={rosterData} opponentName={opponentName} color={brand} notes={notes.canEdit ? notes : null} />}
+      {pastSeason && <p className="text-[13px] text-[color:var(--ch-muted)]">The roster and player percentiles describe the season in progress, so they are not shown for a {scope.season} scout.</p>}
+
+      {rosterData && !pastSeason && <ScoutRoster data={rosterData} opponentName={opponentName} color={brand} notes={notes.canEdit ? notes : null} />}
 
       <NarrativeSummary
         headline={narrative?.headline}

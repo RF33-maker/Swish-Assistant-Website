@@ -66,6 +66,12 @@ export interface LoadOptions {
   maxAgeDays?: number;
   /** Only games played before this instant — lets a report be rebuilt "as of" a past fixture. */
   before?: Date;
+  /**
+   * A coach's choice of games for the opponent: a past season ("2025/26"; null is the season in
+   * progress), and competitions to leave out. The coach's own team is read as usual.
+   */
+  season?: string | null;
+  excludeLeagueIds?: string[];
 }
 
 interface ClubGames {
@@ -101,7 +107,13 @@ export function pickGames<T extends { played_at: string }>(newestFirst: T[], now
   return thisSeason.length >= min ? thisSeason.slice(0, max) : newestFirst.slice(0, Math.max(min, thisSeason.length));
 }
 
-async function loadClubGames(o: LoadOptions, teamName: string, targetGender: string | null): Promise<ClubGames> {
+/** 1 September to 1 September of a season label like "2025/26". */
+function seasonRangeMs(label: string): { start: number; end: number } {
+  const y = Number(label.slice(0, 4));
+  return { start: Date.UTC(y, 8, 1), end: Date.UTC(y + 1, 8, 1) };
+}
+
+async function loadClubGames(o: LoadOptions, teamName: string, targetGender: string | null, scoped = false): Promise<ClubGames> {
   const { db, isSameTeam } = o;
   const core = searchCore(teamName);
   if (core.length < 3) return { games: [], opponentsInGames: {} };
@@ -117,7 +129,11 @@ async function loadClubGames(o: LoadOptions, teamName: string, targetGender: str
   const teamIds = club.map((t: any) => t.team_id);
   if (!teamIds.length) return { games: [], opponentsInGames: {} };
 
-  const since = new Date((o.before?.getTime() ?? Date.now()) - (o.maxAgeDays ?? 400) * 86_400_000).toISOString();
+  const pastSeason = scoped && o.season ? seasonRangeMs(o.season) : null;
+  const excluded = new Set(scoped ? o.excludeLeagueIds ?? [] : []);
+  const defaultSince = (o.before?.getTime() ?? Date.now()) - (o.maxAgeDays ?? 400) * 86_400_000;
+  // Ingestion time trails the real game date, so look a little before a past season starts.
+  const since = new Date(pastSeason ? pastSeason.start - 30 * 86_400_000 : defaultSince).toISOString();
   const rows = await fetchAll<any>((from, to) =>
     db.from("team_stats").select(TEAM_COLUMNS).in("team_id", teamIds).not("game_key", "is", null).gte("created_at", since)
       // Only published data, plus the competition being scouted (its owner may be the one asking).
@@ -141,9 +157,13 @@ async function loadClubGames(o: LoadOptions, teamName: string, targetGender: str
   const ordered: TeamGameRow[] = rows
     .map((r) => ({ ...r, played_at: when.get(r.game_key) || r.created_at, competition: meta.get(r.league_id)?.name ?? null }))
     .filter((r) => new Date(r.played_at).getTime() < cutoff)
+    .filter((r) => !excluded.has(r.league_id))
     .sort((a, b) => b.played_at.localeCompare(a.played_at))
     .filter((r) => (seen.has(r.game_key) ? false : (seen.add(r.game_key), true)));
-  const games = pickGames(ordered, o.before ?? new Date(), o.maxGames ?? 20, o.minGames ?? 4, o.lastN ?? null);
+  // A past season is exactly that season's games, never padded with older ones.
+  const games = pastSeason
+    ? ordered.filter((g) => { const t = new Date(g.played_at).getTime(); return t >= pastSeason.start && t < pastSeason.end; }).slice(0, o.lastN ?? o.maxGames ?? 20)
+    : pickGames(ordered, o.before ?? new Date(), o.maxGames ?? 20, o.minGames ?? 4, o.lastN ?? null);
 
   const gameKeys = games.map((g) => g.game_key);
   const opponentsInGames: Record<string, TeamGameRow> = {};
@@ -217,7 +237,7 @@ export async function loadScoutingBundle(o: LoadOptions): Promise<ScoutingBundle
   const targetGender = targetMeta?.gender ?? null;
 
   const [opp, mine] = await Promise.all([
-    loadClubGames(o, o.opponentName, targetGender),
+    loadClubGames(o, o.opponentName, targetGender, true),
     o.myTeamName ? loadClubGames(o, o.myTeamName, targetGender) : Promise.resolve(null),
   ]);
 

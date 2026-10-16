@@ -23,6 +23,8 @@ import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Route, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
+import { DEFAULT_SCOPE, scopeKey, type ScoutScope } from '@shared/scoutScope';
+import type { ScoutWindow } from '@shared/coachNotes';
 import ScoutReportsList from '@/components/coaches-hub/ScoutReportsList';
 import { ordinal } from '@/lib/gameReport';
 import MatchReport from '@/components/coaches-hub/MatchReport';
@@ -250,7 +252,7 @@ export default function CoachesHub() {
     | { type: 'player'; player: PlayerSeasonAverage }
     | { type: 'team'; team: TeamSeasonAverage }
     | { type: 'matchReport'; gameKey: string }
-    | { type: 'scoutReport'; opponentName: string; forTeamName?: string | null }
+    | { type: 'scoutReport'; opponentName: string; forTeamName?: string | null; window?: ScoutWindow; scope?: ScoutScope }
     | null
   >(null);
 
@@ -1458,6 +1460,9 @@ export default function CoachesHub() {
                     teamSeasonAverages={teamSeasonAverages}
                     playerSeasonAverages={playerSeasonAverages}
                     brandColor={readableBrand}
+                    initialWindow={detailView.window}
+                    initialScope={detailView.scope}
+                    key={`${detailView.opponentName}|${detailView.window ?? ''}|${scopeKey(detailView.scope ?? DEFAULT_SCOPE)}`}
                     backLabel={activeTab === 'scouting' ? 'Back to scouting reports' : undefined}
                     onBack={() => setDetailView(null)}
                   />
@@ -1579,7 +1584,7 @@ export default function CoachesHub() {
                       <ScoutReportsList
                         leagueId={selectedLeague.league_id}
                         brandColor={readableBrand}
-                        onOpen={(opponentName, forTeamName) => setDetailView({ type: 'scoutReport', opponentName, forTeamName })}
+                        onOpen={(opponentName, forTeamName, view) => setDetailView({ type: 'scoutReport', opponentName, forTeamName, ...view })}
                       />
                     </div>
                   )}

@@ -6,12 +6,13 @@ import { teamClubKey } from "@shared/teamIdentity";
 import { bestPlayerName, playerNameKey } from "@shared/playerNameKey";
 import { seasonLabel, seasonStart } from "@shared/season";
 import { parseWindow, windowGames, windowLabel } from "@shared/coachNotes";
+import { parseScope } from "@shared/scoutScope";
 import { applyWindow, BOX_SCORE_COLUMNS, buildScoutRoster, type BoxScoreRow, type Headshot, type ScoutRoster } from "@shared/scoutRoster";
 
 /**
  * The scouting report's roster table and league-percentile profiles.
  *
- * GET /api/scout-agent/roster?leagueId=&opponent=&forTeam=&window=season|last5|last3
+ * GET /api/scout-agent/roster?leagueId=&opponent=&forTeam=&window=season|last5|last3&exclude=<league ids>
  *
  * Built from public box-score rows (player_stats), so it needs no login and
  * shows nothing the league pages don't already. The numbers come from
@@ -133,6 +134,9 @@ export function registerScoutRosterRoutes(
       const opponent = String(req.query.opponent || "");
       const forTeam = String(req.query.forTeam || "");
       const window = parseWindow(req.query.window);
+      // Competitions the coach has left out of this scout. Only the opponent's games in them are dropped;
+      // the percentile pool is every other club's games, as before. (Past seasons are not served here.)
+      const excluded = new Set(parseScope({ exclude: req.query.exclude }).exclude);
       if (!leagueId || !opponent) return res.status(400).json({ error: "leagueId and opponent are required" });
 
       // The competition plus the private feed competitions that display under it.
@@ -153,7 +157,7 @@ export function registerScoutRosterRoutes(
       const oppClub = teamClubKey(sides.name(opponent, leagueId));
       const inLeague = (r: BoxScoreRow) => !!r.league_id && ids.includes(r.league_id);
 
-      let rows = seasonData.rows;
+      let rows = excluded.size ? seasonData.rows.filter((r) => !(r.league_id && excluded.has(r.league_id) && clubOf(r) === oppClub)) : seasonData.rows;
       let wholeSeason = rows.some(inLeague);
       if (!wholeSeason) rows = await leagueRowsOnly(ids); // a past season: just its own competition
       // "Last 5" is each club's newest five games this season, across competitions. A past season has no window.
