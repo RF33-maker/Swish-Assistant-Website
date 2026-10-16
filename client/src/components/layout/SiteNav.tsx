@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { Link, useLocation } from "wouter"
-import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2, BadgeCheck, UserCheck, Landmark } from "lucide-react"
+import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2, BadgeCheck, UserCheck, Landmark, CreditCard } from "lucide-react"
 import { SheetClose } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import StatsThreadLogo from "@/assets/statsthread-logo.svg"
@@ -152,6 +152,10 @@ export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet
               </span>
             )}
           </>, "player-claims")}
+          {isAdmin && internalLink("/admin/coach-access", location.startsWith("/admin/coach-access"), <>
+            <CreditCard className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Coach Access
+          </>, "coach-access")}
         </>
       ) : (
         <>

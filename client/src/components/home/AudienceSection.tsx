@@ -171,7 +171,7 @@ export default function AudienceSection() {
               <Link href="/contact-sales?topic=player-page" className="ch-btn ch-btn-primary h-10 px-4">
                 Request your page <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/contact-sales?topic=coach" className="ch-btn ch-btn-ghost h-10 px-4">
+              <Link href="/coach-access" className="ch-btn ch-btn-ghost h-10 px-4">
                 Coaches: get team access
               </Link>
             </div>

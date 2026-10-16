@@ -402,7 +402,7 @@ export default function AgentGamePlan({
         <p className="text-sm font-medium text-slate-800 dark:text-white">
           The full game plan (defensive and offensive keys, players to stop, lineup triggers and late-game calls, written for your team) is part of the coach plan.
         </p>
-        <Link href="/contact-sales" className="text-sm font-semibold px-4 py-2 rounded-md" style={fill(color)}>
+        <Link href="/coach-access" className="text-sm font-semibold px-4 py-2 rounded-md" style={fill(color)}>
           Unlock full scouting reports
         </Link>
       </div>
