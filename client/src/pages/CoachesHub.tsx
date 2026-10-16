@@ -20,7 +20,7 @@ import AdminTeamPicker, { AdminOpponentPicker } from '@/components/coaches-hub/A
 import ManageBilling from '@/components/coaches-hub/ManageBilling';
 import { findCoachTeam, nextFixtureFor, opponentIn } from '@/lib/coachTeam';
 import LeagueChatbot from '@/components/LeagueChatbot';
-import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
+import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Route, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
 import UnifiedScoutingEditor from '@/components/scout-editor/UnifiedScoutingEditor';
@@ -28,6 +28,7 @@ import { ordinal } from '@/lib/gameReport';
 import MatchReport from '@/components/coaches-hub/MatchReport';
 import OpponentScoutReport from '@/components/coaches-hub/OpponentScoutReport';
 import FormComparison from '@/components/coaches-hub/FormComparison';
+import Playbook from '@/components/coaches-hub/Playbook';
 import { safelyParseReport } from "@/utils/parseReport";
 import { ScoutingReport } from "@/types/reportSchema";
 import {
@@ -110,7 +111,7 @@ export interface MyTeamGame {
   matchTime: string | null;
 }
 
-type HubTab = 'overview' | 'compare' | 'rankings' | 'lineups' | 'trends' | 'scouting';
+type HubTab = 'overview' | 'compare' | 'rankings' | 'lineups' | 'trends' | 'scouting' | 'playbook';
 
 interface TopLeagueShortcut {
   // Display label/logo prefer the parent league brand (shorter, more
@@ -729,6 +730,7 @@ export default function CoachesHub() {
     {
       group: 'Build', tabs: [
         { id: 'scouting', label: 'Scouting Reports', icon: ClipboardList },
+        { id: 'playbook', label: 'Playbook', icon: Route },
       ]
     },
   ];
@@ -1588,6 +1590,14 @@ export default function CoachesHub() {
                         onTemplateChange={setSelectedTemplateId}
                         parseError={parseError}
                       />
+                    </div>
+                  )}
+
+                  {/* Playbook: draw, step through and animate the team's plays */}
+                  {activeTab === 'playbook' && (
+                    <div>
+                      {tabIntro('01', 'Playbook', isCoach ? 'Your team\u2019s plays, shared with every coach on the team. Draw them, then press Play to watch them run.' : 'Draw plays, then press Play to watch them run.')}
+                      <Playbook teamName={myTeam?.team_name || coachTeamName || null} />
                     </div>
                   )}
                 </>

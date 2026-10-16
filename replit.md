@@ -25,6 +25,7 @@ The application features a React frontend and integrates with external backend s
     -   **Content Management**: Administrative interfaces for league owners to upload banners and manage team logos.
     -   **Search & Filtering**: Comprehensive search for players and leagues with filtering capabilities.
     -   **Coaching Tools**: Coaches Hub with an integrated League Assistant (chatbot) and document editing for scouting reports.
+    -   **Playbook**: Coaches Hub "Playbook" tab (`client/src/components/coaches-hub/Playbook.tsx`) for drawing plays step by step on a half court and animating them. The drawing engine is framework-free (`client/src/lib/playbook/engine.js`, typed by `engine.d.ts`) and themes itself from the hub's `--ch-*` tokens. Saved through `/api/playbook` (`server/playbookRoutes.ts`) into `coach_playbooks` (migration `20261017_coach_playbooks.sql`); a coach account's playbook is shared by its whole team, other accounts get a personal one, and saves are refused over a teammate's newer version.
 -   **Feature Specifications**:
     -   **League Management**: Centralized route (`/league-admin/:slug`) for owners to manage assets and integrations.
     -   **Team Pages**: Dedicated pages for league teams (`/league/:slug/teams`) and individual team profiles (`/team/:teamName`).

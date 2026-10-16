@@ -1,0 +1,141 @@
+/* Swish Assistant Playbook
+   Every colour reads the Coaches Hub tokens (--ch-*) when the tool sits inside
+   the hub, so it follows the hub's light/dark mode and team accent. Outside
+   the hub the fallbacks are the Swish Assistant brand values. */
+.pb {
+  --pb-bg: var(--ch-bg, #f5f6f8);
+  --pb-surface: var(--ch-surface, #ffffff);
+  --pb-surface-2: var(--ch-surface-2, #f8f9fb);
+  --pb-surface-3: var(--ch-surface-3, #f1f3f6);
+  --pb-line: var(--ch-border, rgba(15, 23, 42, 0.08));
+  --pb-line-strong: var(--ch-border-strong, rgba(15, 23, 42, 0.14));
+  --pb-ink: var(--ch-text, #0b1220);
+  --pb-ink-2: var(--ch-text-2, #475467);
+  --pb-muted: var(--ch-muted, #8a94a6);
+  --pb-accent: var(--ch-accent, #f97316);
+  --pb-on-accent: #ffffff;
+  --pb-accent-soft: color-mix(in srgb, var(--pb-accent) 12%, transparent);
+  --pb-ball: #f97316;
+  --pb-ball-soft: color-mix(in srgb, #f97316 24%, var(--pb-surface));
+  --pb-court: var(--pb-surface-2);
+  --pb-courtline: color-mix(in srgb, var(--pb-ink) 24%, transparent);
+  --pb-warn: color-mix(in srgb, #f59e0b 62%, var(--pb-ink));
+  --pb-warn-bg: color-mix(in srgb, #f59e0b 16%, transparent);
+  --pb-danger: var(--ch-loss, #e11d48);
+  --pb-radius: var(--ch-radius, 14px);
+  --pb-display: 'Barlow Condensed', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --pb-body: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--pb-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--pb-ink);
+  letter-spacing: -0.006em;
+}
+.pb *, .pb *::before, .pb *::after { box-sizing: border-box; }
+.pb svg.pb-defs { position: absolute; width: 0; height: 0; }
+
+.pb-wrap { display: flex; flex-direction: column; gap: 32px; min-width: 0; }
+
+/* Header */
+.pb-head h1 { font-family: var(--pb-display); font-weight: 700; font-size: clamp(32px, 6vw, 48px); line-height: 1; letter-spacing: 0.005em; text-transform: uppercase; margin: 0; text-wrap: balance; }
+.pb-head p { margin: 8px 0 0; color: var(--pb-ink-2); max-width: 62ch; }
+.pb-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.pb-nav button { font: 700 14px var(--pb-display); text-transform: uppercase; letter-spacing: 0.06em; color: var(--pb-ink); border: 1px solid var(--pb-line-strong); padding: 4px 12px; border-radius: 999px; background: var(--pb-surface); cursor: pointer; }
+.pb-nav button:hover { border-color: var(--pb-accent); color: var(--pb-accent); }
+
+/* Sections */
+.pb-sec { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 140px; }
+.pb-sec h2 { font-family: var(--pb-display); font-weight: 700; text-transform: uppercase; font-size: 28px; letter-spacing: 0.02em; margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding-bottom: 6px; border-bottom: 2px solid var(--pb-accent); }
+.pb-sec h2 small { font-family: var(--pb-body); font-weight: 500; text-transform: none; font-size: 14px; color: var(--pb-ink-2); letter-spacing: 0; }
+.pb-sec h2 .pb-mini { margin-left: auto; align-self: center; }
+
+.pb-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--pb-ink-2); align-items: center; }
+.pb-legend span { display: flex; align-items: center; gap: 6px; }
+
+/* Play cards */
+.pb-play { background: var(--pb-surface); border: 1px solid var(--pb-line); border-radius: var(--pb-radius); box-shadow: var(--ch-shadow, 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05)); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pb-play-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.pb-play h3 { font-family: var(--pb-display); font-weight: 700; text-transform: uppercase; font-size: 24px; letter-spacing: 0.03em; margin: 0; }
+.pb-tag { font-size: 11px; font-weight: 700; color: var(--pb-accent); text-transform: uppercase; letter-spacing: 0.1em; }
+.pb-sub { color: var(--pb-ink-2); font-size: 14px; margin: 0; }
+.pb-check { font-size: 11.5px; font-weight: 600; color: var(--pb-warn); background: var(--pb-warn-bg); padding: 2px 8px; border-radius: 999px; }
+.pb-frames { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.pb figure { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pb-court { position: relative; }
+.pb-court svg { width: 100%; height: auto; display: block; border: 1px solid var(--pb-line-strong); border-radius: 10px; background: var(--pb-court); }
+.pb figcaption { font-size: 13px; color: var(--pb-ink-2); display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.pb figcaption b { font-weight: 700; color: var(--pb-ink); font-variant-numeric: tabular-nums; }
+.pb figcaption > span { flex: 1; min-width: 0; }
+.pb-reads { list-style: decimal; margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.pb-note { font-size: 13px; color: var(--pb-ink-2); border-left: 2px solid var(--pb-line-strong); padding-left: 10px; margin: 0; }
+
+/* Tables */
+.pb-tbl { overflow-x: auto; background: var(--pb-surface); border: 1px solid var(--pb-line); border-radius: var(--pb-radius); }
+.pb-tbl table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.pb-tbl th, .pb-tbl td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--pb-line); vertical-align: top; }
+.pb-tbl tr:last-child td { border-bottom: 0; }
+.pb-tbl th { font: 700 13px var(--pb-display); text-transform: uppercase; letter-spacing: 0.08em; color: var(--pb-ink-2); }
+.pb-tbl td.pb-call { font: 700 19px var(--pb-display); text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+.pb-sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; border: 1px solid var(--pb-line-strong); }
+.pb-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.pb-empty-row { color: var(--pb-muted); font-size: 14px; }
+
+/* Buttons */
+.pb button { font-family: var(--pb-body); }
+.pb button:focus-visible { outline: 2px solid var(--pb-accent); outline-offset: 2px; }
+.pb-mini, .pb-tools button { font: 600 12px var(--pb-body); border: 1px solid var(--pb-line-strong); background: var(--pb-surface); color: var(--pb-ink); border-radius: 999px; padding: 5px 11px; cursor: pointer; min-height: 30px; }
+.pb-mini:hover, .pb-tools button:hover { border-color: var(--pb-accent); }
+.pb-mini:disabled { opacity: 0.5; cursor: default; }
+.pb-mini.is-danger { color: var(--pb-danger); }
+.pb-mini.is-armed { background: var(--pb-danger); border-color: var(--pb-danger); color: #fff; }
+.pb-mini.is-primary { background: var(--pb-accent); border-color: var(--pb-accent); color: var(--pb-on-accent); }
+.pb-tools button[aria-pressed="true"] { background: var(--pb-ink); border-color: var(--pb-ink); color: var(--pb-surface); }
+.pb-play-btn { background: var(--pb-ball); border-color: var(--pb-ball); color: #fff; font-size: 13px; padding: 6px 14px; }
+.pb-play-btn:hover { filter: brightness(1.05); border-color: var(--pb-ball); }
+.pb-row { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Animation viewer */
+.pb-anim { max-width: 440px; display: flex; flex-direction: column; gap: 6px; }
+.pb-anim .pb-court svg { border-color: var(--pb-ball); }
+.pb-anim-cap { margin: 0; font-size: 14px; min-height: 2.6em; }
+
+/* Edit mode */
+.pb-edit-only { display: none !important; }
+.pb.is-editing .pb-edit-only { display: revert !important; }
+.pb-tools { display: none; flex-wrap: wrap; gap: 4px; }
+.pb.is-editing .pb-tools { display: flex; }
+.pb.is-editing [contenteditable] { outline: 1px dashed color-mix(in srgb, var(--pb-accent) 70%, transparent); outline-offset: 2px; border-radius: 3px; min-width: 1ch; display: inline-block; }
+.pb.is-editing [contenteditable]:focus { outline: 2px solid var(--pb-accent); background: var(--pb-accent-soft); }
+.pb.is-editing [contenteditable]:empty::before { content: attr(data-ph); color: var(--pb-muted); }
+.pb.is-editing .pb-court svg { touch-action: none; border-color: var(--pb-accent); }
+.pb-hint { font-size: 13px; color: var(--pb-ink-2); background: var(--pb-accent-soft); border-radius: 10px; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.pb-banner { background: var(--pb-warn-bg); color: var(--pb-ink); border-radius: 10px; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px; }
+
+/* Copy steps */
+.pb-copy { border: 1px dashed var(--pb-accent); background: var(--pb-accent-soft); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.pb-copy .pb-tools { display: flex; }
+.pb-copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
+.pb-copy select { font: 500 14px var(--pb-body); color: var(--pb-ink); background: var(--pb-surface); border: 1px solid var(--pb-line-strong); border-radius: 8px; padding: 6px 8px; max-width: 100%; min-width: 0; flex: 1; }
+.pb-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.pb-steps button { border: 2px solid var(--pb-line-strong); background: var(--pb-surface); color: var(--pb-ink-2); border-radius: 8px; padding: 4px; display: flex; flex-direction: column; gap: 3px; font: 600 12px var(--pb-body); cursor: pointer; opacity: 0.55; }
+.pb-steps button[aria-pressed="true"] { border-color: var(--pb-accent); color: var(--pb-ink); opacity: 1; }
+.pb-steps svg { width: 100%; height: auto; display: block; background: var(--pb-court); border-radius: 4px; }
+
+/* Edit / save bar */
+.pb-bar { z-index: 30; background: var(--pb-ink); color: var(--pb-surface); }
+.pb-bar-in { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pb-status { flex: 1; min-width: 120px; font-size: 13px; opacity: 0.85; }
+.pb-bar button { font: 600 14px var(--pb-body); border-radius: 999px; padding: 7px 16px; cursor: pointer; border: 1px solid currentColor; background: transparent; color: inherit; min-height: 36px; }
+.pb-bar button.is-primary { background: var(--pb-ball); border-color: var(--pb-ball); color: #fff; }
+.pb-bar button:disabled { opacity: 0.4; cursor: default; }
+.pb-bar.is-fixed { position: fixed; left: 0; right: 0; bottom: 0; padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.pb-bar.is-fixed .pb-bar-in { max-width: 880px; margin: 0 auto; }
+.pb-bar.is-sticky { position: sticky; top: var(--pb-sticky-top, 0px); border-radius: 999px; padding: 6px 6px 6px 16px; margin-bottom: 20px; box-shadow: var(--ch-shadow-lg, 0 12px 32px -12px rgba(16, 24, 40, 0.3)); }
+
+@media (prefers-reduced-motion: reduce) { .pb * { transition: none !important; } }
+
+/* Inside the Coaches Hub: the edit bar sticks just under the hub's own
+   header and section tabs, which are themselves sticky. */
+.pb-host .pb { --pb-sticky-top: 112px; }
+@media (min-width: 768px) { .pb-host .pb { --pb-sticky-top: 128px; } }
+.pb-host .pb-sec { scroll-margin-top: 190px; }
