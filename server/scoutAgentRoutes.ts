@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { isSameTeam } from "./teamIdentityService";
-import { getLeagueSides } from "./teamSides";
+import { isInClub, resolveClub } from "./clubs";
 import { cleanEdit, cleanNote, isEditablePath, isNoteKind, parseWindow, type CoachNote, type PlanEdits, type ScoutWindow } from "@shared/coachNotes";
 import { playerNameKey } from "@shared/playerNameKey";
 
@@ -42,26 +42,18 @@ type Access = { userId: string | null; full: boolean };
  * club's game plans.
  */
 async function resolveAccess(req: Request, leagueId: string, forTeam: string | null = null): Promise<Access> {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) return { userId: null, full: false };
-  const { data, error } = await supabaseAdmin.auth.getUser(header.slice(7));
-  if (error || !data.user) return { userId: null, full: false };
-  const user = data.user;
-  const role = user.app_metadata?.role;
-  if (role === "admin") return { userId: user.id, full: true };
-  if (role === "coach") {
-    const teamId = user.app_metadata?.team_id;
-    if (!teamId || !forTeam) return { userId: user.id, full: false };
-    const { data: team } = await supabaseAdmin.from("teams").select("name, league_id").eq("team_id", teamId).maybeSingle();
+  const ctx = await resolveClub(req);
+  if (!ctx) return { userId: null, full: false };
+  if (ctx.role === "admin") return { userId: ctx.userId, full: true };
+  if (ctx.role === "coach") {
     // The coach's club and the plan's club can be in different competitions, so each name is
     // read in its own: a women's "London Lions" plan is not the men's coach's.
-    const sides = await getLeagueSides();
-    return { userId: user.id, full: !!team?.name && isSameTeam(sides.name(team.name, team.league_id), sides.name(forTeam, leagueId)) };
+    return { userId: ctx.userId, full: !!forTeam && (await isInClub(ctx, forTeam, leagueId)) };
   }
   const { data: comp } = await supabaseAdmin
     .from("competitions").select("user_id, created_by").eq("league_id", leagueId).maybeSingle();
-  const owner = !!comp && (comp.user_id === user.id || comp.created_by === user.id);
-  return { userId: user.id, full: owner };
+  const owner = !!comp && (comp.user_id === ctx.userId || comp.created_by === ctx.userId);
+  return { userId: ctx.userId, full: owner };
 }
 
 async function agentSecret(): Promise<string | null> {
