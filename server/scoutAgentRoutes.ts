@@ -94,6 +94,7 @@ async function dispatch(body: Record<string, unknown>) {
 function shape(row: any, full: boolean) {
   if (!row) return null;
   return {
+    id: row.id ?? null,
     tier: row.tier ?? "full",
     status: row.status,
     opponentName: row.opponent_name,
@@ -111,6 +112,46 @@ function shape(row: any, full: boolean) {
 }
 
 export function registerScoutAgentRoutes(app: Express) {
+  // GET /api/scout-agent/list?leagueId=
+  // Every scout the caller can open in this competition: full game plans for
+  // the teams they have access to, and the free looks they asked for. Plans
+  // are included so the list can download and share without a second call.
+  app.get("/api/scout-agent/list", async (req: Request, res: Response) => {
+    try {
+      const leagueId = String(req.query.leagueId || "");
+      if (!leagueId) return res.status(400).json({ error: "leagueId is required" });
+      const base = await resolveAccess(req, leagueId);
+      if (!base.userId) return res.status(401).json({ error: "Sign in to see your scouting reports" });
+
+      const { data, error } = await supabaseAdmin
+        .from("scout_agent_reports")
+        .select("id, opponent_name, for_team_name, tier, game_key, match_time, status, teaser, plan, games_analysed, data_through, generated_at, updated_at, requested_by")
+        .eq("league_id", leagueId)
+        .in("status", ["ready", "building"])
+        .order("updated_at", { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+
+      const fullByTeam = new Map<string, boolean>();
+      const reports = [];
+      for (const row of data || []) {
+        let allowed: boolean;
+        if (row.tier === "preview") {
+          allowed = row.requested_by === base.userId;
+        } else {
+          const key = row.for_team_name || "";
+          if (!fullByTeam.has(key)) fullByTeam.set(key, (await resolveAccess(req, leagueId, key || null)).full);
+          allowed = fullByTeam.get(key)!;
+        }
+        if (allowed) reports.push(shape(row, true));
+      }
+      return res.json({ reports });
+    } catch (err: any) {
+      console.error("[scout-agent] list failed:", err?.message);
+      return res.status(500).json({ error: "Failed to load scouting reports" });
+    }
+  });
+
   // GET /api/scout-agent/report?leagueId=&opponent=&forTeam=
   app.get("/api/scout-agent/report", async (req: Request, res: Response) => {
     try {
