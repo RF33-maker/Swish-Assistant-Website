@@ -1,5 +1,6 @@
 import express, { type Express, type Request, type Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
+import { isSeasonLabel, seasonLabel } from "@shared/season";
 import { teamClubKey } from "./teamIdentityService";
 
 /**
@@ -43,30 +44,39 @@ function isPlaybook(data: unknown): data is { title?: unknown; sections: unknown
 }
 
 export function registerPlaybookRoutes(app: Express) {
-  // GET /api/playbook -> { playbook, updatedAt, ownerKey, shared }
+  // GET /api/playbook?season=2026/27 -> { playbook, updatedAt, ownerKey, shared, season, currentSeason, seasons }
+  // `seasons` lists every season this owner has saved a playbook for, newest first.
   app.get("/api/playbook", async (req: Request, res: Response) => {
     try {
       const owner = await resolveOwner(req);
       if (!owner) return res.status(401).json({ error: "Sign in to open your playbook" });
-      const { data, error } = await supabaseAdmin
-        .from("coach_playbooks")
-        .select("data, updated_at")
-        .eq("owner_key", owner.key)
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      return res.json({ playbook: data?.data ?? null, updatedAt: data?.updated_at ?? null, ownerKey: owner.key, shared: owner.shared });
+      const currentSeason = seasonLabel();
+      const asked = req.query.season;
+      if (asked !== undefined && !isSeasonLabel(asked)) return res.status(400).json({ error: "That isn't a season" });
+      const season = (asked as string | undefined) ?? currentSeason;
+
+      const [row, list] = await Promise.all([
+        supabaseAdmin.from("coach_playbooks").select("data, updated_at").eq("owner_key", owner.key).eq("season", season).maybeSingle(),
+        supabaseAdmin.from("coach_playbooks").select("season, title, updated_at").eq("owner_key", owner.key).order("season", { ascending: false }),
+      ]);
+      if (row.error) throw new Error(row.error.message);
+      if (list.error) throw new Error(list.error.message);
+      const seasons = (list.data ?? []).map((r) => ({ season: r.season, title: r.title, updatedAt: r.updated_at }));
+      return res.json({ playbook: row.data?.data ?? null, updatedAt: row.data?.updated_at ?? null, ownerKey: owner.key, shared: owner.shared, season, currentSeason, seasons });
     } catch (err: any) {
       console.error("[playbook] load failed:", err?.message);
       return res.status(500).json({ error: "Failed to load the playbook" });
     }
   });
 
-  // PUT /api/playbook { data, baseUpdatedAt } -> { updatedAt }
+  // PUT /api/playbook { data, baseUpdatedAt, season } -> { updatedAt }
   app.put("/api/playbook", async (req: Request, res: Response) => {
     try {
       const owner = await resolveOwner(req);
       if (!owner) return res.status(401).json({ error: "Sign in again to save your playbook" });
-      const { data, baseUpdatedAt } = req.body || {};
+      const { data, baseUpdatedAt, season: askedSeason } = req.body || {};
+      if (askedSeason !== undefined && !isSeasonLabel(askedSeason)) return res.status(400).json({ error: "That isn't a season" });
+      const season: string = askedSeason ?? seasonLabel();
       if (!isPlaybook(data)) return res.status(400).json({ error: "That isn't a playbook" });
       if (JSON.stringify(data).length > MAX_BYTES) return res.status(413).json({ error: "This playbook is too large to save. Remove some plays and try again." });
 
@@ -74,6 +84,7 @@ export function registerPlaybookRoutes(app: Express) {
         .from("coach_playbooks")
         .select("id, updated_at")
         .eq("owner_key", owner.key)
+        .eq("season", season)
         .maybeSingle();
       if (readErr) throw new Error(readErr.message);
 
@@ -86,7 +97,7 @@ export function registerPlaybookRoutes(app: Express) {
       const title = typeof data.title === "string" && data.title.trim() ? data.title.trim().slice(0, 120) : "Team Playbook";
       const { error } = existing
         ? await supabaseAdmin.from("coach_playbooks").update({ data, title, updated_by: owner.userId, updated_at: now }).eq("id", existing.id)
-        : await supabaseAdmin.from("coach_playbooks").insert({ owner_key: owner.key, data, title, updated_by: owner.userId, updated_at: now });
+        : await supabaseAdmin.from("coach_playbooks").insert({ owner_key: owner.key, season, data, title, updated_by: owner.userId, updated_at: now });
       if (error) throw new Error(error.message);
       return res.json({ updatedAt: now });
     } catch (err: any) {
