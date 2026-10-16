@@ -36,6 +36,7 @@ import WidgetPage from "@/pages/widgets/WidgetPage";
 import EmbedGuide from "@/pages/embed-guide";
 import GamePage from "@/pages/GamePage";
 import ScoresPage from "@/pages/ScoresPage";
+import PlaybookSharePage from "@/pages/PlaybookSharePage";
 import { AuthProvider } from "./hooks/use-auth";
 import { AdminRoute, ProtectedRoute, TeamRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
@@ -72,6 +73,8 @@ function Router() {
       {/* Public */}
       <Route path="/" component={LandingPage} />
       <Route path="/auth" component={AuthPage} />
+      {/* Unlisted, read-only team playbook (no sign-in, no API) */}
+      <Route path="/playbook/share/:code" component={PlaybookSharePage} />
       {/* /league/:slug  = league brand page (series hub) */}
       <Route path="/league/:slug" component={CompetitionPage} />
       {/* /competition/:slug = individual season/tournament page */}
