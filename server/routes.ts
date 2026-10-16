@@ -12,6 +12,7 @@ import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "
 import { getTeamCompetitions } from "./teamCompetitions";
 import { getLeagueSides } from "./teamSides";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
+import { registerPlaybookRoutes } from "./playbookRoutes";
 import { registerScoutRosterRoutes } from "./scoutRoster";
 import { registerNewsArticleRoutes } from "./newsArticles";
 import { registerWeekendReportRoutes } from "./weekendReports";
@@ -432,6 +433,7 @@ async function fetchLatestPodcast(): Promise<PodcastResponse> {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   registerScoutAgentRoutes(app);
+  registerPlaybookRoutes(app);
   registerScoutRosterRoutes(app, { filterLeagueIdsForPublicScope });
 
   // Test endpoint to verify routes are working

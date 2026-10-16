@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { config } from "dotenv";
 import { servePublicSeo } from "./publicSeo";
 import { newsArticleBodyParser } from "./newsArticles";
+import { playbookBodyParser } from "./playbookRoutes";
 
 // Load environment variables
 config();
@@ -29,6 +30,7 @@ if (!process.env.SESSION_SECRET) {
 const app = express();
 // Article saves carry the whole document, which can pass the 100kb default.
 app.use("/api/news-articles", newsArticleBodyParser);
+app.use("/api/playbook", playbookBodyParser);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
