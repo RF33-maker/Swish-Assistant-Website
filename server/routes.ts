@@ -1111,7 +1111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("league_id, competition_id, name, slug, season, gender, division")
+        .select("league_id, competition_id, parent_league_id, age_group, stop, is_public, name, slug, season, gender, division")
         .eq("competition_id", leagueId)
         .order("season", { ascending: false });
 

@@ -21,6 +21,10 @@ interface SeasonCompetition {
   banner_url: string | null;
   logo_url: string | null;
   gender: string | null;
+  league_id?: string;
+  parent_league_id?: string | null;
+  age_group?: string | null;
+  stop?: number | null;
 }
 
 const GENDER_ORDER = ["Men's", "Men", "Male", "Women's", "Women", "Female"];
@@ -38,6 +42,9 @@ function getSeasonLabel(competition: SeasonCompetition): string {
 }
 
 function getCompetitionLabel(competition: SeasonCompetition): string {
+  // A plain ordinal season ("Season 2", REBA SL) says nothing about the stage,
+  // unlike BCB's "Season 2025/26", so the competition keeps its own name.
+  if (/^season\s+\d{1,2}$/i.test((competition.season || "").trim())) return competition.name;
   const identity = `${competition.season || ""} ${competition.name}`.toLowerCase();
   if (identity.includes("trophy")) return "Trophy";
   if (identity.includes("regular") || identity.includes("season")) return "Regular Season";
@@ -90,12 +97,19 @@ export default function CompetitionPage() {
       // Fetch all competitions belonging to this league brand
       const { data: competitionsData } = await supabase
         .from("competitions")
-        .select("name, slug, season, banner_url, logo_url, gender")
+        .select("league_id, parent_league_id, age_group, stop, name, slug, season, banner_url, logo_url, gender")
         .eq("competition_id", leagueData.id)
         .eq("is_public", true)
         .order("season", { ascending: false });
 
-      const seasonList = (competitionsData as SeasonCompetition[] | null) || [];
+      // Age-group / stop competitions (REBA SL) are reached through their season
+      // parent, so only the parent is a choice here. Trophy-style children
+      // (no age group or stop) stay listed.
+      const allCompetitions = (competitionsData as SeasonCompetition[] | null) || [];
+      const listedIds = new Set(allCompetitions.map((c) => c.league_id));
+      const seasonList = allCompetitions.filter(
+        (c) => !(c.parent_league_id && listedIds.has(c.parent_league_id) && (c.age_group || c.stop != null)),
+      );
       setSeasons(seasonList);
 
       // Gender-based brands (e.g. Super League Basketball, NBL Division One)
