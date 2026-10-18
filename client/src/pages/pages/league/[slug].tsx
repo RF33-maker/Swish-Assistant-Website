@@ -19,11 +19,12 @@ import GameDetailModal from "@/components/GameDetailModal";
 
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
+import { CupBracket, useCupBracketRows } from "@/components/league/CupBracket";
 import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
 import { InstagramFeedSection } from "@/components/InstagramFeedSection";
-import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram, ListOrdered, BarChart3, Shield, CalendarDays, Crown, ArrowLeftRight, LayoutDashboard } from "lucide-react";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram, ListOrdered, BarChart3, Shield, CalendarDays, Crown, ArrowLeftRight, LayoutDashboard, GitBranch } from "lucide-react";
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -586,6 +587,10 @@ export default function LeaguePage() {
     const [location, navigate] = useLocation();
     // Site search now lives in the shared SiteHeader.
     const [league, setLeague] = useState(null);
+    // A knockout cup has a saved bracket; every other competition gets an empty list and no Bracket tab.
+    const { data: cupBracketRows = [] } = useCupBracketRows((league as any)?.league_id);
+    // A knockout cup is decided by the bracket, not a table, so it has no standings anywhere.
+    const hasBracket = cupBracketRows.length > 0;
     const [topScorer, setTopScorer] = useState<PlayerStat | null>(null);
     const [topRebounder, setTopRebounder] = useState<PlayerStat | null>(null);
     const [topAssists, setTopAssists] = useState<PlayerStat | null>(null);
@@ -616,10 +621,14 @@ export default function LeaguePage() {
     if (urlPlayerSlug) return 'player';
     if (urlGameKey) return 'game';
     const section = new URLSearchParams(window.location.search).get('section');
-    return section && ['teams', 'standings', 'stats', 'teamstats', 'schedule', 'leaders', 'comparison', 'overview'].includes(section)
+    return section && ['bracket', 'teams', 'standings', 'stats', 'teamstats', 'schedule', 'leaders', 'comparison', 'overview'].includes(section)
       ? section
       : 'overview';
   });
+  // An old ?section=standings link to a cup lands on its bracket instead.
+  useEffect(() => {
+    if (hasBracket && activeSection === 'standings') setActiveSection('bracket');
+  }, [hasBracket, activeSection]);
   const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');
@@ -4248,6 +4257,10 @@ export default function LeaguePage() {
             <nav className="flex items-stretch gap-1 overflow-x-auto scrollbar-hide -mx-1" aria-label="League sections">
               {([
                   {
+                    key: 'bracket', label: 'Bracket', icon: GitBranch, show: cupBracketRows.length > 0,
+                    onClick: () => { setSelectedPlayerSlug(null); setSelectedTeamName(null); setActiveSection('bracket'); },
+                  },
+                  {
                     key: 'teams', label: 'Teams', icon: Users, show: true,
                     onClick: () => {
                     setSelectedPlayerSlug(null);
@@ -4259,7 +4272,7 @@ export default function LeaguePage() {
                   },
                   },
                   {
-                    key: 'standings', label: 'Standings', icon: ListOrdered, show: !isRebaSeasonParent,
+                    key: 'standings', label: 'Standings', icon: ListOrdered, show: !isRebaSeasonParent && !hasBracket,
                     onClick: () => {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
@@ -4403,7 +4416,7 @@ export default function LeaguePage() {
           <section className={`${activeSection === 'overview' ? 'md:col-span-2' : 'md:col-span-3'} space-y-6`}>
             
             {/* Standings Section */}
-            {activeSection === 'standings' && !isRebaSeasonParent && (
+            {activeSection === 'standings' && !isRebaSeasonParent && !hasBracket && (
               <div className="ch-card p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
                   <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">League Standings</h2>
@@ -5400,6 +5413,10 @@ export default function LeaguePage() {
             )}
 
             {/* Schedule Section */}
+            {activeSection === 'bracket' && league?.league_id && cupBracketRows.length > 0 && (
+              <CupBracket leagueId={league.league_id} rows={cupBracketRows} onOpenGame={(gameKey) => handleSelectGame(gameKey, 'bracket')} />
+            )}
+
             {activeSection === 'schedule' && (
               <div className="ch-card p-4 md:p-6">
                 <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-3 md:mb-4">Game Schedule</h2>
@@ -6708,6 +6725,7 @@ export default function LeaguePage() {
             )}
 
             {/* League Standings */}
+            {!hasBracket && (
             <div className="ch-card p-4 md:p-6">
               <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-4">League Standings</h2>
               {isLoadingStandings ? (
@@ -6803,6 +6821,7 @@ export default function LeaguePage() {
               )
               })()}
             </div>
+            )}
               </>
             )}
           </section>
