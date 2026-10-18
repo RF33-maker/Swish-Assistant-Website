@@ -21,6 +21,7 @@ import { registerWeekendReportRoutes } from "./weekendReports";
 import { registerNblScoreRoutes } from "./nblScores";
 import { registerPreferredNameRoutes } from "./preferredNames";
 import { registerClaimEmailRoutes } from "./claimEmail";
+import { registerGameTimeReviewRoutes } from "./gameTimeReview";
 import { registerContactRequestRoutes } from "./contactRequests";
 import { registerSeoRoutes } from "./seoIndex";
 import { SITE_BASE } from "@shared/seo";
@@ -2685,6 +2686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerWeekendReportRoutes(app, { requireAdmin, formatName: formatCanonicalPlayerName });
   registerNblScoreRoutes(app, { requireAdmin });
   registerClaimEmailRoutes(app, { requireAdmin });
+  registerGameTimeReviewRoutes(app, { requireAdmin });
   registerContactRequestRoutes(app, { requireAdmin });
   registerPreferredNameRoutes(app, { requireAdmin, authenticate: authenticateSupabaseUser, withAliases, formatName: formatCanonicalPlayerName });
 

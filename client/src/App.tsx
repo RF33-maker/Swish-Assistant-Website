@@ -54,6 +54,7 @@ import ContactSalesPage from "@/pages/contact-sales";
 import CoachAccessPage from "@/pages/coach-access";
 import CoachAccessSuccessPage from "@/pages/coach-access-success";
 import CoachAccessAdminPage from "@/pages/admin/coach-access";
+import GameTimesAdminPage from "@/pages/admin/game-times";
 import PrivacyPolicyPage from "@/pages/privacy";
 import TermsOfServicePage from "@/pages/terms";
 import CookiePolicyPage from "@/pages/cookies";
@@ -145,6 +146,7 @@ function Router() {
       <AdminRoute path="/admin/unconfirmed-accounts" component={UnconfirmedAccountsPage} />
       <AdminRoute path="/admin/player-claims" component={PlayerClaimsAdminPage} />
       <AdminRoute path="/admin/coach-access" component={CoachAccessAdminPage} />
+      <AdminRoute path="/admin/game-times" component={GameTimesAdminPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />
