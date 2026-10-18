@@ -19,6 +19,7 @@ import { registerBillingRoutes } from "./billing/billingRoutes";
 import { registerNewsArticleRoutes } from "./newsArticles";
 import { registerWeekendReportRoutes } from "./weekendReports";
 import { registerNblScoreRoutes } from "./nblScores";
+import { registerNationalCupRoutes } from "./nationalCup";
 import { registerPreferredNameRoutes } from "./preferredNames";
 import { registerClaimEmailRoutes } from "./claimEmail";
 import { registerContactRequestRoutes } from "./contactRequests";
@@ -2684,6 +2685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerNewsArticleRoutes(app, requireAdmin);
   registerWeekendReportRoutes(app, { requireAdmin, formatName: formatCanonicalPlayerName });
   registerNblScoreRoutes(app, { requireAdmin });
+  registerNationalCupRoutes(app, { requireAdmin });
   registerClaimEmailRoutes(app, { requireAdmin });
   registerContactRequestRoutes(app, { requireAdmin });
   registerPreferredNameRoutes(app, { requireAdmin, authenticate: authenticateSupabaseUser, withAliases, formatName: formatCanonicalPlayerName });
