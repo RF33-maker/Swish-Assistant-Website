@@ -22,6 +22,7 @@ import { registerNblScoreRoutes } from "./nblScores";
 import { registerNationalCupRoutes } from "./nationalCup";
 import { registerPreferredNameRoutes } from "./preferredNames";
 import { registerClaimEmailRoutes } from "./claimEmail";
+import { registerGameTimeReviewRoutes } from "./gameTimeReview";
 import { registerContactRequestRoutes } from "./contactRequests";
 import { registerSeoRoutes } from "./seoIndex";
 import { SITE_BASE } from "@shared/seo";
@@ -1111,7 +1112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("league_id, competition_id, name, slug, season, gender, division")
+        .select("league_id, competition_id, parent_league_id, age_group, stop, is_public, name, slug, season, gender, division")
         .eq("competition_id", leagueId)
         .order("season", { ascending: false });
 
@@ -2687,6 +2688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerNblScoreRoutes(app, { requireAdmin });
   registerNationalCupRoutes(app, { requireAdmin });
   registerClaimEmailRoutes(app, { requireAdmin });
+  registerGameTimeReviewRoutes(app, { requireAdmin });
   registerContactRequestRoutes(app, { requireAdmin });
   registerPreferredNameRoutes(app, { requireAdmin, authenticate: authenticateSupabaseUser, withAliases, formatName: formatCanonicalPlayerName });
 

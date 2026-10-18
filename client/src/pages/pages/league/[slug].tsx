@@ -736,6 +736,11 @@ export default function LeaguePage() {
     season: string | null;
     gender?: string | null;
     division?: string | null;
+    league_id?: string;
+    parent_league_id?: string | null;
+    age_group?: string | null;
+    stop?: number | null;
+    is_public?: boolean | null;
   };
   const [siblingSeasons, setSiblingSeasons] = useState<SeasonCompetitionOption[]>([]);
 
@@ -787,6 +792,8 @@ export default function LeaguePage() {
     : 'rgba(100, 100, 100, 0.05)';
 
   const isParentLeague = childCompetitions.length > 0;
+  // REBA SL runs as stops, so its season parents have no league table of their own.
+  const isRebaSeasonParent = ['REBA-SL', 'REBA-SL-SEASON-2'].includes(slug?.toUpperCase() ?? '');
   const isBritishChampionship = useMemo(() => {
     const identity = `${league?.name || ''} ${slug}`.toLowerCase();
     return identity.includes('british championship');
@@ -1919,7 +1926,15 @@ export default function LeaguePage() {
             try {
               const res = await fetch(`/api/league/${(data as any).competition_id}/competitions`);
               if (res.ok) {
-                const allSeasons: SeasonCompetitionOption[] = await res.json();
+                const everyCompetition: SeasonCompetitionOption[] = await res.json();
+                // Age-group / stop children (REBA SL) hang off a season parent and
+                // are reached from its page, and a draft season stays out of the
+                // list until it is public. Trophy-style children stay listed.
+                const listedIds = new Set(everyCompetition.map(s => s.league_id));
+                const allSeasons = everyCompetition.filter(s =>
+                  s.is_public !== false
+                    && !(s.parent_league_id && listedIds.has(s.parent_league_id) && (s.age_group || s.stop != null)),
+                );
                 const currentGender = (data as any).gender ?? null;
                 const filtered = currentGender
                   ? allSeasons.filter(s => (s.gender ?? null) === currentGender)
@@ -4082,7 +4097,7 @@ export default function LeaguePage() {
                       </option>
                     ))}
                   </select>
-                ) : (league as any)?.competition_id && siblingSeasons.length > 1 ? (
+                ) : (league as any)?.competition_id && siblingSeasons.length > 1 && siblingSeasons.some((s) => s.slug === slug) ? (
                   <select
                     value={slug}
                     onChange={(e) => navigate(`/competition/${e.target.value}`)}
@@ -4257,7 +4272,7 @@ export default function LeaguePage() {
                   },
                   },
                   {
-                    key: 'standings', label: 'Standings', icon: ListOrdered, show: slug?.toUpperCase() !== 'REBA-SL' && !hasBracket,
+                    key: 'standings', label: 'Standings', icon: ListOrdered, show: !isRebaSeasonParent && !hasBracket,
                     onClick: () => {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
@@ -4401,7 +4416,7 @@ export default function LeaguePage() {
           <section className={`${activeSection === 'overview' ? 'md:col-span-2' : 'md:col-span-3'} space-y-6`}>
             
             {/* Standings Section */}
-            {activeSection === 'standings' && slug?.toUpperCase() !== 'REBA-SL' && !hasBracket && (
+            {activeSection === 'standings' && !isRebaSeasonParent && !hasBracket && (
               <div className="ch-card p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
                   <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">League Standings</h2>
