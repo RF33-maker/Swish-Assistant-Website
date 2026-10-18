@@ -12,7 +12,7 @@ import type { PlayerSeasonAverage } from "@/lib/playerRankings";
  */
 
 export type StorylineSide = "home" | "away" | "both";
-export type StorylineKind = "player" | "team" | "matchup" | "standings" | "form" | "h2h";
+export type StorylineKind = "player" | "team" | "matchup" | "standings" | "form" | "h2h" | "recent" | "cup";
 
 export interface Storyline {
   id: string;
@@ -23,6 +23,10 @@ export interface Storyline {
   eyebrow: string;
   headline: string;
   detail: string;
+  /** Where the numbers come from, e.g. "NBL Division One 2026-27 · 4 games". */
+  scope?: string;
+  /** Why the numbers are thin, e.g. "Only 2 games played". Shown as a flag on the card. */
+  limited?: string;
   /** The player to link to, for player storylines. */
   player?: { name: string; playerIds: string[] };
   priority: number;
@@ -47,14 +51,35 @@ interface Input {
   /** League-wide player season averages (merged). */
   players: PlayerSeasonAverage[];
   /** "this season" / "last season" — the data the ranks come from. */
-  seasonLabel: string;
+  seasonLabel?: string;
+  /** The competition the ranks come from, e.g. "NBL Division One 2026-27". */
+  competitionName?: string | null;
+  /** How many of the competition's teams have recorded stats. Low coverage is flagged. */
+  coverage?: { withStats: number; total: number } | null;
   max?: number;
+}
+
+/** Fewer games than this and a ranking is flagged as thin. */
+export const LIMITED_GAMES = 4;
+/** A player needs this many games before a ranking is worth a storyline: one game is a night, not a rank. */
+export const MIN_STORY_GAMES = 2;
+/** Below this share of teams recording stats, rankings are flagged as incomplete. */
+export const LOW_COVERAGE = 0.75;
+
+/** "NBL Division One 2026-27" -> "NBL Division One": the competition as a headline names it. */
+export function shortCompetition(name?: string | null): string {
+  const base = (name || "").replace(/\s+(?:19|20)?\d{2}\s*[-/–]\s*(?:19|20)?\d{2}\s*$/, "").replace(/\s+(?:19|20)\d{2}\s*$/, "").trim();
+  return base;
+}
+
+/** Whether a competition is a knockout cup, where most clubs don't record stats. */
+export function isCupCompetition(name?: string | null): boolean {
+  return /\b(cup|trophy)\b/i.test(name || "");
 }
 
 const ORDINAL = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"];
 const ordinal = (n: number) => ORDINAL[n] ?? `${n}th`;
 const fmt = (v: number, d = 1) => v.toFixed(d);
-const gamesNote = (n: number) => ` · ${n} game${n === 1 ? "" : "s"}`;
 
 const PLAYER_CATEGORIES = [
   { key: "avg_pts", stat: "Points", unit: "PPG", verb: "scoring" },
@@ -146,11 +171,19 @@ function streakOf(form: boolean[]): { won: boolean; count: number } | null {
 }
 
 export function buildGameStorylines({
-  homeTeam, awayTeam, homeId, awayId, teamRows, players, seasonLabel, max = 6,
+  homeTeam, awayTeam, homeId, awayId, teamRows, players, competitionName, coverage, max = 6,
 }: Input): Storyline[] {
   const stories: Storyline[] = [];
   const nameOf = { home: homeTeam, away: awayTeam } as const;
-  const inSeason = seasonLabel === "this season" ? "" : ` (${seasonLabel})`;
+  const comp = shortCompetition(competitionName) || "the league";
+  const lowCoverage = !!coverage && coverage.total > 0 && coverage.withStats / coverage.total < LOW_COVERAGE;
+  // Where a number comes from, and whether to flag it: few games, or few teams recording stats.
+  const scopeFor = (games: number): Pick<Storyline, "scope" | "limited"> => ({
+    scope: `${competitionName || "League"} · ${games} game${games === 1 ? "" : "s"}`,
+    limited: lowCoverage
+      ? `Stats recorded for ${coverage!.withStats} of ${coverage!.total} teams`
+      : games < LIMITED_GAMES ? `Only ${games} game${games === 1 ? "" : "s"} played` : undefined,
+  });
 
   // ── Players ────────────────────────────────────────────────────────────
   const homeNorm = normalizeTeamName(homeTeam);
@@ -175,6 +208,7 @@ export function buildGameStorylines({
       const rank = sorted.findIndex((q) => (q[cat.key] || 0) === value) + 1;
       const side = sideOfPlayer(p);
       if (!side) return;
+      if (p.games_played < MIN_STORY_GAMES) return;
       if (cat.key === "avg_pts" && !topScorerBySide[side]) topScorerBySide[side] = { p, rank };
       if (rank > 3) return;
       const avg = `${fmt(value)} ${cat.unit}`;
@@ -183,11 +217,12 @@ export function buildGameStorylines({
         kind: "player",
         side,
         rank,
-        eyebrow: rank === 1 ? `League leader · ${cat.stat}` : cat.stat,
+        eyebrow: rank === 1 ? `Leader · ${cat.stat}` : cat.stat,
         headline: rank === 1
-          ? `${p.player_name} leads the league in ${cat.verb}`
-          : `${p.player_name} ranks ${ordinal(rank)} in the league in ${cat.verb}`,
-        detail: `${avg} for ${nameOf[side]}${gamesNote(p.games_played)}${inSeason}`,
+          ? `${p.player_name} leads ${comp} in ${cat.verb}`
+          : `${p.player_name} ranks ${ordinal(rank)} in ${comp} in ${cat.verb}`,
+        detail: `${avg} for ${nameOf[side]}`,
+        ...scopeFor(p.games_played),
         player: { name: p.player_name, playerIds: p.player_ids },
         priority: (rank === 1 ? 100 : rank === 2 ? 70 : 60) + (cat.key === "avg_pts" ? 5 : 0) - i * 0.01,
       });
@@ -204,7 +239,8 @@ export function buildGameStorylines({
       side: "both",
       eyebrow: "Scoring duel",
       headline: `${hs.p.player_name} vs ${as.p.player_name}`,
-      detail: `${ordinal(hs.rank)} and ${ordinal(as.rank)} in the league in scoring: ${fmt(hs.p.avg_pts)} vs ${fmt(as.p.avg_pts)} PPG${inSeason}`,
+      detail: `${ordinal(hs.rank)} and ${ordinal(as.rank)} in ${comp} scoring: ${fmt(hs.p.avg_pts)} vs ${fmt(as.p.avg_pts)} PPG`,
+      ...scopeFor(Math.min(hs.p.games_played, as.p.games_played)),
       priority: 88,
     });
   }
@@ -232,17 +268,17 @@ export function buildGameStorylines({
       lower?: boolean; maxRank: number; headline: (team: string, rank: number) => string; base: number;
     }[] = [
       { key: "off", label: "Offence", ...offence, maxRank: 3, base: 80,
-        headline: (team, r) => r === 1 ? `${team} have the league's best offence` : `${team} have the league's ${ordinal(r)}-best offence` },
+        headline: (team, r) => r === 1 ? `${team} have the best offence in ${comp}` : `${team} have the ${ordinal(r)}-best offence in ${comp}` },
       { key: "def", label: "Defence", ...defence, lower: true, maxRank: 3, base: 80,
-        headline: (team, r) => r === 1 ? `${team} have the league's best defence` : `${team} have the league's ${ordinal(r)}-best defence` },
+        headline: (team, r) => r === 1 ? `${team} have the best defence in ${comp}` : `${team} have the ${ordinal(r)}-best defence in ${comp}` },
       ...(hasRatings ? [{ key: "net", label: "Net rating", value: (t: TeamSeason) => t.netRating, show: (t: TeamSeason) => `${t.netRating > 0 ? "+" : ""}${fmt(t.netRating)} net rating`, maxRank: 1, base: 76,
-        headline: (team: string) => `${team} own the league's best net rating` }] : []),
+        headline: (team: string) => `${team} own the best net rating in ${comp}` }] : []),
       ...(teams.every((t) => t.pace > 0) ? [{ key: "pace", label: "Pace", value: (t: TeamSeason) => t.pace, show: (t: TeamSeason) => `${fmt(t.pace)} possessions per game`, maxRank: 1, base: 62,
-        headline: (team: string) => `${team} play at the league's fastest pace` }] : []),
+        headline: (team: string) => `${team} play at the fastest pace in ${comp}` }] : []),
       { key: "3p", label: "Three-point shooting", value: (t) => t.threePct, show: (t) => `${fmt(t.threePct)}% from three`, maxRank: 1, base: 64,
-        headline: (team) => `${team} are the league's best three-point shooting team` },
+        headline: (team) => `${team} are the best three-point shooting team in ${comp}` },
       { key: "reb", label: "Rebounding", value: (t) => t.rpg, show: (t) => `${fmt(t.rpg)} rebounds per game`, maxRank: 1, base: 60,
-        headline: (team) => `${team} rule the glass` },
+        headline: (team) => `${team} rule the glass in ${comp}` },
     ];
 
     const ranks: Record<string, Partial<Record<"home" | "away", number>>> = {};
@@ -265,7 +301,8 @@ export function buildGameStorylines({
           rank,
           eyebrow: cat.label,
           headline: cat.headline(nameOf[side], rank),
-          detail: `${cat.show(t)}${gamesNote(t.games)}${inSeason}`,
+          detail: cat.show(t),
+          ...scopeFor(t.games),
           priority: cat.base - (rank - 1) * 12,
         });
       });
@@ -284,7 +321,8 @@ export function buildGameStorylines({
           side: "both",
           eyebrow: both1 ? "Unstoppable force vs immovable object" : "Strength on strength",
           headline: `${both1 ? "No.1" : ordinal(off)} offence meets ${both1 ? "No.1" : ordinal(def)} defence`,
-          detail: `${nameOf[side]}'s attack against ${nameOf[other]}'s defence${inSeason}`,
+          detail: `${nameOf[side]}'s attack against ${nameOf[other]}'s defence in ${comp}`,
+          ...scopeFor(Math.min(seasons.get(ids[side]!)!.games, seasons.get(ids[other]!)!.games)),
           priority: both1 ? 96 : 84 - (off + def),
         });
       }
@@ -306,8 +344,9 @@ export function buildGameStorylines({
         kind: "standings",
         side: "both",
         eyebrow: Math.max(hp, ap) <= 2 ? "Top-of-the-table clash" : "Top-four clash",
-        headline: `${ordinal(Math.min(hp, ap))} vs ${ordinal(Math.max(hp, ap))}`,
-        detail: `${nameOf[first]} (${seasons.get(ids[first]!)!.wins}-${seasons.get(ids[first]!)!.losses}) take on ${nameOf[second]} (${seasons.get(ids[second]!)!.wins}-${seasons.get(ids[second]!)!.losses})${inSeason}`,
+        headline: `${ordinal(Math.min(hp, ap))} vs ${ordinal(Math.max(hp, ap))} in ${comp}`,
+        detail: `${nameOf[first]} (${seasons.get(ids[first]!)!.wins}-${seasons.get(ids[first]!)!.losses}) take on ${nameOf[second]} (${seasons.get(ids[second]!)!.wins}-${seasons.get(ids[second]!)!.losses})`,
+        ...scopeFor(Math.min(seasons.get(ids[first]!)!.games, seasons.get(ids[second]!)!.games)),
         priority: Math.max(hp, ap) <= 2 ? 92 : 78,
       });
     }
@@ -324,7 +363,8 @@ export function buildGameStorylines({
         id: `form-unbeaten-${side}`, kind: "form", side,
         eyebrow: "Unbeaten",
         headline: `${nameOf[side]} are still perfect`,
-        detail: `${t.wins}-0${inSeason}. Can anyone stop them?`,
+        detail: `${t.wins}-0 in ${comp}. Can anyone stop them?`,
+        ...scopeFor(t.games),
         priority: 82,
       });
     } else if (streak && streak.won && streak.count >= 3) {
@@ -332,7 +372,8 @@ export function buildGameStorylines({
         id: `form-streak-${side}`, kind: "form", side,
         eyebrow: `W${streak.count}`,
         headline: `${nameOf[side]} have won ${streak.count} straight`,
-        detail: `Riding a ${streak.count}-game winning streak${inSeason}`,
+        detail: `Riding a ${streak.count}-game winning streak in ${comp}`,
+        ...scopeFor(t.games),
         priority: 58 + streak.count * 3,
       });
     } else if (streak && !streak.won && streak.count >= 3) {
@@ -340,7 +381,8 @@ export function buildGameStorylines({
         id: `form-skid-${side}`, kind: "form", side,
         eyebrow: `L${streak.count}`,
         headline: `${nameOf[side]} look to snap a ${streak.count}-game skid`,
-        detail: `Without a win in their last ${streak.count}${inSeason}`,
+        detail: `Without a win in their last ${streak.count} in ${comp}`,
+        ...scopeFor(t.games),
         priority: 42 + streak.count,
       });
     }
@@ -370,7 +412,8 @@ export function buildGameStorylines({
         side: winner,
         eyebrow: "Last meeting",
         headline: margin <= 5 ? `Last time it went down to the wire` : `${nameOf[winner]} won the last meeting`,
-        detail: `${homeTeam} ${last.home} – ${last.away} ${awayTeam}${inSeason}`,
+        detail: `${homeTeam} ${last.home} – ${last.away} ${awayTeam}`,
+        scope: competitionName || undefined,
         priority: margin <= 5 ? 66 : 48,
       });
     }
@@ -386,9 +429,13 @@ export function buildGameStorylines({
     }
   });
 
-  // One storyline per player at most (their best), strongest first.
+  return finalizeStorylines(stories, max);
+}
+
+/** One storyline per player at most (their best), strongest first, trimmed to `max`. */
+export function finalizeStorylines(stories: Storyline[], max = 6): Storyline[] {
   const seenPlayer = new Set<string>();
-  return stories
+  return [...stories]
     .sort((a, b) => b.priority - a.priority)
     .filter((s) => {
       if (!s.player) return true;

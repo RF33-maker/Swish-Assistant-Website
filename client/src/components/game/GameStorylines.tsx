@@ -1,15 +1,18 @@
 import type { ReactNode } from "react";
 import EntityLink from "@/components/EntityLink";
 import {
-  Crown, Medal, Swords, Shield, Target, Flame, TrendingDown, Trophy, History, Zap, Crosshair, Layers, Activity,
+  Crown, Medal, Swords, Shield, Target, Flame, TrendingDown, Trophy, History, Zap, Crosshair, Layers, Activity, Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import type { Storyline } from "@/lib/gameStorylines";
 import type { MatchupColors } from "./GameScoreHero";
 
 /**
- * The upcoming game's storylines: league accolades in play, as cards. The
- * strongest leads, larger and washed in that team's colour.
+ * The upcoming game's storylines, as cards: accolades in play, and who is in form.
+ * The strongest leads, larger and washed in that team's colour.
+ *
+ * Every card says where its numbers come from (the competition, how many games, or the
+ * date of a player's last game), and flags a thin sample as "Limited data".
  */
 
 const MEDAL: Record<number, { bg: string; fg: string }> = {
@@ -19,6 +22,7 @@ const MEDAL: Record<number, { bg: string; fg: string }> = {
 };
 
 function iconFor(s: Storyline): LucideIcon {
+  if (s.kind === "recent") return Sparkles;
   if (s.kind === "player") return s.rank === 1 ? Crown : Medal;
   if (s.kind === "matchup") return Swords;
   if (s.kind === "standings") return Trophy;
@@ -53,7 +57,7 @@ export default function GameStorylines({
   colors: MatchupColors;
   /** Wraps a player's name in a link to their profile, when one is known. */
   playerLink?: (s: Storyline, children: ReactNode) => ReactNode;
-  /** e.g. "Ranks from last season" when the current one hasn't started. */
+  /** e.g. "Ranks from last season" when the current one hasn't started, or why rankings are absent in a cup. */
   seasonNote?: string | null;
 }) {
   if (loading) {
@@ -135,6 +139,16 @@ export default function GameStorylines({
                 {headlineWithLink(s)}
               </h3>
               <p className={`mt-1.5 text-[color:var(--ch-text-2)] ${lead ? "text-sm" : "text-[13px]"}`}>{s.detail}</p>
+              {(s.scope || s.limited) && (
+                <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] leading-snug text-[color:var(--ch-muted)]">
+                  {s.scope && <span>{s.scope}</span>}
+                  {s.limited && (
+                    <span className="inline-flex items-center rounded-full bg-[color:var(--ch-surface-3)] px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[color:var(--ch-text-2)]" title={s.limited}>
+                      Limited data · {s.limited}
+                    </span>
+                  )}
+                </p>
+              )}
             </article>
           );
         })}

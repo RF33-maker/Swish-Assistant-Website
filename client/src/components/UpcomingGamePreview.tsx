@@ -5,7 +5,9 @@ import { CalendarDays, Clock3, MapPin, RefreshCw } from "lucide-react";
 import GameScoreHero, { StatCompareRow, useMatchupColors } from "@/components/game/GameScoreHero";
 import GameStorylines, { StorylinePlayerLink } from "@/components/game/GameStorylines";
 import TicketsCard from "@/components/game/TicketsCard";
-import { buildGameStorylines } from "@/lib/gameStorylines";
+import { buildGameStorylines, finalizeStorylines, isCupCompetition, LOW_COVERAGE } from "@/lib/gameStorylines";
+import { recentStandouts } from "@/lib/recentStandouts";
+import { fetchRecentGames, fetchStatsCoverage } from "@/lib/recentGames";
 import { fetchAndMergePlayerRankings } from "@/lib/playerRankings";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -274,18 +276,63 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
     staleTime: 5 * 60_000,
   });
 
+  // A knockout cup is where most clubs don't record stats, so a ranking there would be unfair:
+  // cup previews skip rankings and lead with what players did in their last game instead.
+  const isCup = isCupCompetition(game.competitionname);
+  const gameTime = useMemo(() => parseScheduleTime(game.matchtime), [game.matchtime]);
+
+  // The competition the ranks come from (it can be last season's, when this one hasn't started).
+  const { data: rankingCompetition } = useQuery({
+    queryKey: ["storyline-competition", context?.leagueId],
+    queryFn: async () => {
+      const { data } = await supabase.from("competitions").select("name").eq("league_id", context!.leagueId).maybeSingle();
+      return (data?.name as string | undefined) ?? null;
+    },
+    enabled: !isCup && !!context?.leagueId,
+    staleTime: 10 * 60_000,
+  });
+
+  const teamsWithStats = useMemo(() => new Set((context?.rows ?? []).map((r) => r.team_id)).size, [context?.rows]);
+  const { data: coverage } = useQuery({
+    queryKey: ["storyline-coverage", context?.leagueId, teamsWithStats],
+    queryFn: () => fetchStatsCoverage(context!.leagueId, teamsWithStats),
+    enabled: !isCup && !!context?.leagueId && teamsWithStats > 0,
+    staleTime: 10 * 60_000,
+  });
+
+  const { data: recentGames, isLoading: recentLoading } = useQuery({
+    queryKey: ["storyline-recent-games", game.hometeam, game.awayteam, game.league_id, game.matchtime],
+    queryFn: () => fetchRecentGames({ homeTeam: game.hometeam, awayTeam: game.awayteam, gameLeagueId: game.league_id, gameTime }),
+    staleTime: 5 * 60_000,
+  });
+
   const storylines = useMemo(() => {
     if (!context) return [];
-    return buildGameStorylines({
-      homeTeam: game.hometeam,
-      awayTeam: game.awayteam,
-      homeId: context.homeId,
-      awayId: context.awayId,
-      teamRows: context.rows,
-      players: rankings || [],
-      seasonLabel: context.previous ? "last season" : "this season",
-    });
-  }, [context, rankings, game.hometeam, game.awayteam]);
+    const ranked = isCup
+      ? []
+      : buildGameStorylines({
+          homeTeam: game.hometeam,
+          awayTeam: game.awayteam,
+          homeId: context.homeId,
+          awayId: context.awayId,
+          teamRows: context.rows,
+          players: rankings || [],
+          seasonLabel: context.previous ? "last season" : "this season",
+          competitionName: rankingCompetition,
+          coverage,
+          max: 12,
+        });
+    const recent = recentStandouts(recentGames ?? [], { gameTime, currentLeagueId: game.league_id });
+    return finalizeStorylines([...ranked, ...recent], 6);
+  }, [context, rankings, rankingCompetition, coverage, recentGames, isCup, gameTime, game.hometeam, game.awayteam, game.league_id]);
+
+  const storylineNote = isCup
+    ? "Cup previews skip rankings: most clubs don't record cup stats"
+    : context?.previous
+      ? `Ranks from the previous season${context.season ? ` (${context.season})` : ""}`
+      : coverage && coverage.total > 0 && coverage.withStats / coverage.total < LOW_COVERAGE
+        ? `Rankings use ${coverage.withStats} of ${coverage.total} teams with stats`
+        : null;
 
   const storyPlayerIds = useMemo(
     () => storylines.flatMap((s) => s.player?.playerIds ?? []),
@@ -445,9 +492,9 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
 
         <GameStorylines
           storylines={storylines}
-          loading={contextLoading || (!!context?.leagueId && rankingsLoading)}
+          loading={contextLoading || recentLoading || (!isCup && !!context?.leagueId && rankingsLoading)}
           colors={colors}
-          seasonNote={context?.previous ? `Ranks from ${contextLabel.toLowerCase()}` : null}
+          seasonNote={storylineNote}
           playerLink={(story, children) => {
             const ids = story.player?.playerIds ?? [];
             // The profile resolves a raw player id when there's no slug yet.
