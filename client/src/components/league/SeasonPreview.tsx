@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarDays, GraduationCap, Instagram, Sparkles } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
@@ -31,6 +32,18 @@ interface RecapAgeGroup {
   points: RecapPlayer[];
   rebounds: RecapPlayer[];
   assists: RecapPlayer[];
+}
+
+interface Signing {
+  id: string;
+  player_name: string;
+  player_slug: string | null;
+  destination: string;
+  destination_type: string | null;
+  destination_location: string | null;
+  destination_logo_url: string | null;
+  photo_url: string | null;
+  note: string | null;
 }
 
 interface SeasonRecap {
@@ -96,7 +109,53 @@ function PlayerRow({ player, rank, stat, unit }: { player: RecapPlayer; rank: nu
   );
 }
 
-export default function SeasonPreview({ previousSlug, seasonLabel }: { previousSlug: string; seasonLabel: string }) {
+function SigningCard({ signing }: { signing: Signing }) {
+  const initials = signing.player_name.split(" ").map((p) => p[0]).slice(0, 2).join("");
+  const meta = [signing.destination_type, signing.destination_location].filter(Boolean).join(" · ");
+  const body = (
+    <>
+      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-[color:var(--ch-surface-2,rgba(120,120,120,0.12))] flex items-center justify-center">
+        {signing.photo_url ? (
+          <img src={signing.photo_url} alt="" className="h-full w-full object-cover object-top" />
+        ) : (
+          <span className="text-sm font-semibold text-[color:var(--ch-muted)]">{initials}</span>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[15px] font-semibold leading-snug text-[color:var(--ch-text)] group-hover:underline underline-offset-2">{signing.player_name}</div>
+        <div className="mt-0.5 text-sm leading-snug text-[color:var(--ch-text-2)]">
+          Signed with <span className="font-semibold text-[color:var(--ch-text)]">{signing.destination}</span>
+        </div>
+        {meta && <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--ch-muted)]">{meta}</div>}
+        {signing.note && <p className="mt-1.5 text-xs leading-relaxed text-[color:var(--ch-text-2)]">{signing.note}</p>}
+      </div>
+      {signing.destination_logo_url && (
+        <img src={signing.destination_logo_url} alt="" className="h-10 w-10 shrink-0 object-contain" />
+      )}
+    </>
+  );
+  const className = "group flex items-start gap-3 rounded-xl border border-[color:var(--ch-border)] p-3.5";
+  return signing.player_slug ? (
+    <Link href={`/player/${signing.player_slug}`} className={`${className} ch-hover`}>{body}</Link>
+  ) : (
+    <div className={className}>{body}</div>
+  );
+}
+
+export default function SeasonPreview({ previousSlug, seasonLabel, instagramUrl }: { previousSlug: string; seasonLabel: string; instagramUrl?: string | null }) {
+  const { data: signings = [] } = useQuery<Signing[]>({
+    queryKey: ["player-signings", previousSlug],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("player_signings")
+        .select("id, player_name, player_slug, destination, destination_type, destination_location, destination_logo_url, photo_url, note")
+        .eq("competition_slug", previousSlug)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      return error ? [] : ((data || []) as Signing[]);
+    },
+    staleTime: 10 * 60 * 1000,
+  });
   const { data: recap, isLoading } = useQuery<SeasonRecap | null>({
     queryKey: ["api", "season-recap", previousSlug],
     queryFn: async () => {
@@ -123,7 +182,9 @@ export default function SeasonPreview({ previousSlug, seasonLabel }: { previousS
   const span = monthRange(totals.first_game, totals.last_game);
   const numbers = [
     { label: "Games", value: totals.games },
-    { label: "Players", value: totals.players },
+    // Player names are typed per stop, so spelling variants inflate the
+    // distinct count; a safe floor reads better than a precise wrong number.
+    { label: "Players", value: totals.players, display: totals.players >= 500 ? "500+" : `${Math.floor(totals.players / 50) * 50}+` },
     { label: "Teams", value: totals.teams },
     { label: "Points scored", value: totals.points },
   ];
@@ -147,7 +208,7 @@ export default function SeasonPreview({ previousSlug, seasonLabel }: { previousS
           {numbers.map((n) => (
             <div key={n.label} className="rounded-xl border border-[color:var(--ch-border)] px-4 py-3">
               <div className="ch-display text-[1.7rem] md:text-[2rem] font-bold leading-none tabular-nums text-[color:var(--ch-text)]">
-                {n.value.toLocaleString("en-GB")}
+                {"display" in n && n.display ? n.display : n.value.toLocaleString("en-GB")}
               </div>
               <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">{n.label}</div>
             </div>
@@ -162,6 +223,41 @@ export default function SeasonPreview({ previousSlug, seasonLabel }: { previousS
           Explore {previousLabel}: every game, stop and stat
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
+      </section>
+
+      {signings.length > 0 && (
+        <section className="ch-card p-4 md:p-6" aria-labelledby="season-preview-signings" data-testid="season-signings">
+          <h2 id="season-preview-signings" className="flex items-center gap-2 text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">
+            <GraduationCap className="h-4 w-4 text-[color:var(--ch-accent)]" aria-hidden="true" />
+            Where they signed
+          </h2>
+          <p className="mt-0.5 text-xs text-[color:var(--ch-muted)]">{previousLabel} players who earned their next move.</p>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {signings.map((s) => <SigningCard key={s.id} signing={s} />)}
+          </div>
+        </section>
+      )}
+
+      <section className="ch-card p-5 md:p-6 border-[color:var(--ch-accent)]" data-testid="season-cta">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">{seasonLabel}</div>
+        <h2 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[1.6rem] md:text-[2rem] text-[color:var(--ch-text)]">
+          Could you be next?
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[color:var(--ch-text-2)]">
+          Every game at a REBA SL stop is tracked here, so your stats, box scores and profile follow you all season.
+          {signings.length > 0 ? " Put your game in front of the people who make the next move happen." : ""}
+        </p>
+        {instagramUrl && (
+          <a
+            href={instagramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ch-btn ch-btn-primary mt-4 inline-flex h-10 items-center gap-2 px-4 text-sm font-semibold"
+          >
+            <Instagram className="h-4 w-4" aria-hidden="true" />
+            Follow REBA for stop dates and sign-ups
+          </a>
+        )}
       </section>
 
       {group && (

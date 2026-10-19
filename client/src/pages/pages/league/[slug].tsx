@@ -6450,7 +6450,7 @@ export default function LeaguePage() {
                 stats cards below would all be empty. */}
             {activeSection === 'overview' && inSeasonPreview && previousSeasonSlug && (
               <>
-                <SeasonPreview previousSlug={previousSeasonSlug} seasonLabel={(league as any)?.season || (league as any)?.name || 'This season'} />
+                <SeasonPreview previousSlug={previousSeasonSlug} seasonLabel={(league as any)?.season || (league as any)?.name || 'This season'} instagramUrl={(league as any)?.instagram_embed_url} />
                 {slug && <LeagueNews competitionSlug={slug} />}
               </>
             )}
