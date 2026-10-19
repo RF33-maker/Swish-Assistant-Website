@@ -3632,6 +3632,180 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const playerLeadersCache = new Map<string, { data: any; at: number }>();
   const PLAYER_LEADERS_TTL = 5 * 60 * 1000;
 
+  // ── Season recap ──────────────────────────────────────────────────────────
+  // A finished season in numbers plus its leaders per age group, for the next
+  // season's preview (REBA SL Season 2 shows Season 1). Built for parents whose
+  // stats live on stop / age-group children: one player is merged by name
+  // within an age group, so a player who played several stops counts once.
+  const seasonRecapCache = new Map<string, { at: number; data: any }>();
+  const SEASON_RECAP_TTL = 60 * 60 * 1000;
+  // Age groups with fewer games than this (one-off 13U / 16+ events) are
+  // counted in the totals but get no leaderboard of their own.
+  const RECAP_MIN_GROUP_GAMES = 20;
+  // Leaders must have played 30% of the busiest player's games (never fewer
+  // than 3), so one hot stop doesn't top a season-long list.
+  const recapMinGames = (maxGames: number) => Math.max(3, Math.ceil(maxGames * 0.3));
+
+  app.get("/api/competition/:slug/season-recap", async (req: Request, res: Response) => {
+    const { slug } = req.params;
+    const cached = seasonRecapCache.get(slug);
+    if (cached && Date.now() - cached.at < SEASON_RECAP_TTL) return res.json(cached.data);
+
+    try {
+      const { data: parent } = await supabaseAdmin
+        .from("competitions")
+        .select("league_id, name, slug, season")
+        .eq("slug", slug)
+        .maybeSingle();
+      if (!parent) return res.status(404).json({ error: "Not found" });
+      const allowed = await filterLeagueIdsForPublicScope([parent.league_id]);
+      if (!allowed.includes(parent.league_id)) return res.status(403).json({ error: "Forbidden" });
+
+      const { data: children } = await supabaseAdmin
+        .from("competitions")
+        .select("league_id, age_group, stop")
+        .eq("parent_league_id", parent.league_id);
+      const childRows = (children || []) as Array<{ league_id: string; age_group: string | null; stop: number | null }>;
+      const ageByLeague = new Map(childRows.map((c) => [c.league_id, c.age_group]));
+      const queryIds = childRows.length > 0 ? childRows.map((c) => c.league_id) : [parent.league_id];
+
+      const allStats: any[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        const { data: page, error } = await supabaseAdmin
+          .from("player_stats")
+          .select("league_id, game_key, player_id, full_name, firstname, familyname, team_name, spoints, sreboundstotal, sassists, sminutes")
+          .in("league_id", queryIds)
+          .order("id")
+          .range(offset, offset + 999);
+        if (error) return res.status(500).json({ error: error.message });
+        if (!page || page.length === 0) break;
+        allStats.push(...page);
+        if (page.length < 1000) break;
+      }
+
+      const { data: scheduleDates } = await supabaseAdmin
+        .from("game_schedule")
+        .select("matchtime")
+        .in("league_id", queryIds)
+        .order("matchtime", { ascending: true });
+      const dates = (scheduleDates || []).map((g: any) => g.matchtime).filter(Boolean);
+
+      type Agg = { key: string; name: string; team: string; player_id: string; games: number; pts: number; reb: number; ast: number };
+      const groups = new Map<string, { games: Set<string>; players: Map<string, Agg> }>();
+      const allGames = new Set<string>();
+      const allPlayers = new Set<string>();
+      const allTeams = new Set<string>();
+      let totalPoints = 0;
+
+      for (const s of allStats) {
+        const name = (s.full_name || `${s.firstname || ""} ${s.familyname || ""}`).replace(/\s+/g, " ").trim();
+        if (!name || !s.game_key) continue;
+        const key = normalisePlayerName(name);
+        const age = ageByLeague.get(s.league_id) || "Open";
+        allGames.add(s.game_key);
+        allPlayers.add(key);
+        if (s.team_name) allTeams.add(s.team_name.trim().toLowerCase());
+        totalPoints += s.spoints || 0;
+
+        const played = (s.sminutes && s.sminutes !== "0:00" && s.sminutes !== 0)
+          || (s.spoints || 0) > 0 || (s.sreboundstotal || 0) > 0 || (s.sassists || 0) > 0;
+        if (!groups.has(age)) groups.set(age, { games: new Set(), players: new Map() });
+        const group = groups.get(age)!;
+        group.games.add(s.game_key);
+        if (!played) continue;
+        let agg = group.players.get(key);
+        if (!agg) {
+          agg = { key, name, team: s.team_name || "", player_id: s.player_id, games: 0, pts: 0, reb: 0, ast: 0 };
+          group.players.set(key, agg);
+        }
+        agg.games += 1;
+        agg.pts += s.spoints || 0;
+        agg.reb += s.sreboundstotal || 0;
+        agg.ast += s.sassists || 0;
+        if (name.length > agg.name.length) agg.name = name;
+      }
+
+      const ageOrder = (a: string) => {
+        const m = a.match(/(\d+)/);
+        return (m ? parseInt(m[1], 10) : 99) + (a.includes("+") ? 0.5 : 0);
+      };
+      const leaderGroups = Array.from(groups.entries())
+        .filter(([, g]) => g.games.size >= RECAP_MIN_GROUP_GAMES)
+        .sort(([a], [b]) => ageOrder(a) - ageOrder(b));
+
+      // Slug + cut-out photo for every player who could appear in a top 3.
+      const picked: Agg[] = [];
+      const board = (rows: Agg[], stat: "pts" | "reb" | "ast", minGames: number) =>
+        rows
+          .filter((p) => p.games >= minGames)
+          .sort((a, b) => b[stat] / b.games - a[stat] / a.games)
+          .slice(0, 3);
+      const boards = leaderGroups.map(([age, g]) => {
+        const rows = Array.from(g.players.values());
+        const minGames = recapMinGames(rows.reduce((m, p) => Math.max(m, p.games), 0));
+        const b = {
+          age, games: g.games.size, players: rows.length, minGames,
+          points: board(rows, "pts", minGames), rebounds: board(rows, "reb", minGames), assists: board(rows, "ast", minGames),
+        };
+        picked.push(...b.points, ...b.rebounds, ...b.assists);
+        return b;
+      });
+
+      const ids = Array.from(new Set(picked.map((p) => p.player_id).filter(Boolean)));
+      const meta = new Map<string, { slug: string | null; photo: string | null }>();
+      if (ids.length > 0) {
+        const { data: rows } = await supabaseAdmin
+          .from("players")
+          .select("id, slug, photo_path_bg_removed")
+          .in("id", ids);
+        (rows || []).forEach((p: any) => meta.set(p.id, { slug: p.slug ?? null, photo: p.photo_path_bg_removed ?? null }));
+      }
+      const fallback = await fetchPhotoFallbackMap();
+      const shape = (p: Agg) => {
+        const m = meta.get(p.player_id);
+        const gp = p.games || 1;
+        return {
+          player_id: p.player_id,
+          full_name: formatCanonicalPlayerName(p.name),
+          team: p.team,
+          slug: m?.slug ?? null,
+          photo_path_bg_removed: m?.photo ?? fallback.get(p.key) ?? null,
+          games: p.games,
+          ppg: Math.round((p.pts / gp) * 10) / 10,
+          rpg: Math.round((p.reb / gp) * 10) / 10,
+          apg: Math.round((p.ast / gp) * 10) / 10,
+        };
+      };
+
+      const data = {
+        competition: { name: parent.name, slug: parent.slug, season: parent.season },
+        totals: {
+          games: allGames.size,
+          players: allPlayers.size,
+          teams: allTeams.size,
+          points: totalPoints,
+          stops: new Set(childRows.map((c) => c.stop).filter((s) => s != null)).size,
+          first_game: dates[0] ?? null,
+          last_game: dates[dates.length - 1] ?? null,
+        },
+        age_groups: boards.map((b) => ({
+          age_group: b.age,
+          games: b.games,
+          players: b.players,
+          min_games: b.minGames,
+          points: b.points.map(shape),
+          rebounds: b.rebounds.map(shape),
+          assists: b.assists.map(shape),
+        })),
+      };
+      seasonRecapCache.set(slug, { at: Date.now(), data });
+      res.json(data);
+    } catch (err: any) {
+      console.error("[SeasonRecap]", err?.message || err);
+      res.status(500).json({ error: "Failed to build season recap" });
+    }
+  });
+
   app.get("/api/home/player-leaders/:leagueId", async (req: Request, res: Response) => {
     const { leagueId } = req.params;
     const now = Date.now();

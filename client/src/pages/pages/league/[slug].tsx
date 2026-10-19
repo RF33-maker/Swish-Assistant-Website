@@ -58,6 +58,7 @@ import {
 } from "@/lib/advancedStats";
 import LeagueTrendingPerformances from "@/components/league/LeagueTrendingPerformances";
 import LeagueNews from "@/components/league/LeagueNews";
+import SeasonPreview from "@/components/league/SeasonPreview";
 import { getImportedPlayerName, resolvePlayerDisplayName } from "@/lib/playerName";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
@@ -794,6 +795,12 @@ export default function LeaguePage() {
   const isParentLeague = childCompetitions.length > 0;
   // REBA SL runs as stops, so its season parents have no league table of their own.
   const isRebaSeasonParent = ['REBA-SL', 'REBA-SL-SEASON-2'].includes(slug?.toUpperCase() ?? '');
+  // A new season with no games yet previews the one before it; that earlier
+  // season points forward to it once the new one is public.
+  const SEASON_SUCCESSORS: Record<string, string> = { 'REBA-SL': 'REBA-SL-SEASON-2' };
+  const previousSeasonSlug = Object.keys(SEASON_SUCCESSORS).find(k => SEASON_SUCCESSORS[k] === slug?.toUpperCase()) ?? null;
+  const inSeasonPreview = !!previousSeasonSlug && schedule.length === 0;
+  const nextSeason = siblingSeasons.find(s => s.slug.toUpperCase() === SEASON_SUCCESSORS[slug?.toUpperCase() ?? '']) ?? null;
   const isBritishChampionship = useMemo(() => {
     const identity = `${league?.name || ''} ${slug}`.toLowerCase();
     return identity.includes('british championship');
@@ -6439,8 +6446,35 @@ export default function LeaguePage() {
             )}
 
             {/* Overview Section - Default view */}
-            {activeSection === 'overview' && (
+            {/* A season with no games yet shows only its preview and news; the
+                stats cards below would all be empty. */}
+            {activeSection === 'overview' && inSeasonPreview && previousSeasonSlug && (
               <>
+                <SeasonPreview previousSlug={previousSeasonSlug} seasonLabel={(league as any)?.season || (league as any)?.name || 'This season'} instagramUrl={(league as any)?.instagram_embed_url} />
+                {slug && <LeagueNews competitionSlug={slug} />}
+              </>
+            )}
+
+            {activeSection === 'overview' && !inSeasonPreview && (
+              <>
+                {nextSeason && (
+                  <Link
+                    href={`/competition/${nextSeason.slug}`}
+                    className="ch-card ch-hover flex items-center justify-between gap-3 p-4 md:px-6"
+                    data-testid="next-season-banner"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ch-muted)]">
+                        {(league as any)?.season ? `${(league as any).season} · Completed` : 'Completed'}
+                      </div>
+                      <div className="mt-0.5 text-sm md:text-[15px] font-semibold text-[color:var(--ch-text)]">
+                        {nextSeason.season || nextSeason.name} is next. See the preview
+                      </div>
+                    </div>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--ch-accent)]" aria-hidden="true" />
+                  </Link>
+                )}
+
                 {/* Top Performances This Week */}
                 {slug && (
                   <div className="-mx-4 md:-mx-6">
