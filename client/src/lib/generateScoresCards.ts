@@ -6,6 +6,7 @@
  */
 
 import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
+import fkChatLogoSrc from "@/assets/FK Chat Logo.png";
 import {
   SIDE,
   cleanTeamLabel,
@@ -117,8 +118,9 @@ export async function renderScoresCard(opts: ScoresCardOptions): Promise<HTMLCan
   const games = opts.games.slice(0, GAMES_PER_CARD);
   await ensureDisplayFont();
 
-  const [logo, ...clubLogos] = await Promise.all([
+  const [logo, fkChatLogo, ...clubLogos] = await Promise.all([
     fetchImg(swishLogoSrc),
+    fetchImg(fkChatLogoSrc),
     ...games.flatMap((g) => [fetchImg(g.homeLogoUrl), fetchImg(g.awayLogoUrl)]),
   ]);
 
@@ -140,6 +142,6 @@ export async function renderScoresCard(opts: ScoresCardOptions): Promise<HTMLCan
     drawGame(ctx, game, [clubLogos[i * 2] ?? null, clubLogos[i * 2 + 1] ?? null], startY + i * (rowH + GAME_GAP), rowH, theme);
   });
 
-  drawFooter(ctx, [logo, "statsthread"], footnote ?? "");
+  drawFooter(ctx, [logo, "statsthread", fkChatLogo], footnote ?? "");
   return canvas;
 }
