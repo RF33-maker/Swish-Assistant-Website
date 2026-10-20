@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { type WidgetParams, isLightColor, withRetry, retrySupabase, MAX_WIDGET_ROWS } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
+import { EXCLUDE_LIVE_GAMES } from "@/lib/gameResults";
 
 interface StandingRow {
   team: string;
@@ -91,7 +92,8 @@ export default function StandingsWidget({ params }: { params: WidgetParams }) {
         const { data: gameResults, error: statsError } = await retrySupabase(() => db
           .from("v_game_results")
           .select("home_team, away_team, home_score, away_score")
-          .eq("league_id", dataLeagueId));
+          .eq("league_id", dataLeagueId)
+          .or(EXCLUDE_LIVE_GAMES));
 
         if (statsError) {
           setError("We couldn't load standings right now. Please try again later.");

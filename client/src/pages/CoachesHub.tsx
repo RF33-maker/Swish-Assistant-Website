@@ -41,6 +41,7 @@ import {
   type AdvancedAverages,
 } from "@/lib/advancedStats";
 import { fetchAndMergePlayerRankings, type PlayerSeasonAverage } from "@/lib/playerRankings";
+import { EXCLUDE_LIVE_GAMES } from "@/lib/gameResults";
 
 export type { PlayerSeasonAverage };
 
@@ -416,6 +417,7 @@ export default function CoachesHub() {
           .from('v_game_results')
           .select('game_key, home_team, away_team, home_score, away_score, match_time')
           .eq('league_id', leagueId)
+          .or(EXCLUDE_LIVE_GAMES)
           .order('match_time', { ascending: false }),
         // Next scheduled game for a coach's own team — league owners viewing
         // generally don't need this, so it's skipped for them.

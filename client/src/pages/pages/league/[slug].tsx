@@ -61,6 +61,7 @@ import LeagueNews from "@/components/league/LeagueNews";
 import SeasonPreview from "@/components/league/SeasonPreview";
 import { getImportedPlayerName, resolvePlayerDisplayName } from "@/lib/playerName";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
+import { EXCLUDE_LIVE_GAMES } from "@/lib/gameResults";
 
 type CanonicalPlayerName = {
   name: string;
@@ -3328,7 +3329,8 @@ export default function LeaguePage() {
         const { data: gameResults, error: gameResultsError } = await db
           .from("v_game_results")
           .select("home_team, away_team, home_score, away_score, pool")
-          .eq("league_id", leagueId);
+          .eq("league_id", leagueId)
+          .or(EXCLUDE_LIVE_GAMES);
 
         if ((!gameResults || gameResults.length === 0 || gameResultsError) && (!allTeams || allTeams.length === 0)) {
           return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false, groupedStandings: [] };
@@ -3515,7 +3517,8 @@ export default function LeaguePage() {
         const { data: gameResults, error: gameResultsError } = await db
           .from("v_game_results")
           .select("home_team, away_team, home_score, away_score")
-          .eq("league_id", leagueId);
+          .eq("league_id", leagueId)
+          .or(EXCLUDE_LIVE_GAMES);
 
         if (allTeams.length === 0 && (!gameResults || gameResults.length === 0)) {
           setStandings([]);
@@ -3748,7 +3751,8 @@ export default function LeaguePage() {
         const { data: scheduleData, error: scheduleError } = await db
           .from("v_game_results")
           .select("*")
-          .eq("league_id", leagueId);
+          .eq("league_id", leagueId)
+          .or(EXCLUDE_LIVE_GAMES);
 
         if (allTeams.length === 0 && (!scheduleData || scheduleData.length === 0)) {
           setPoolAStandings([]);
