@@ -17,6 +17,7 @@ import TeamComparisonCard from './league-chatbot/TeamComparisonCard';
 import GameLogTable from './league-chatbot/GameLogTable';
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
 import { teamPath } from "@shared/seo";
+import { EXCLUDE_LIVE_GAMES } from "@/lib/gameResults";
 
 /** A team button's permanent team page (the id is the encoded team name). */
 function chatTeamHref(id: string, leagueSlug?: string | null): string {
@@ -72,6 +73,7 @@ async function fetchLeagueSnapshot(leagueId: string): Promise<LeagueSnapshot> {
       .select('game_date:match_time, home_team, away_team, home_score, away_score')
       .eq('league_id', leagueId)
       .eq('game_status', 'Final')
+      .or(EXCLUDE_LIVE_GAMES)
       .order('match_time', { ascending: false })
       .limit(1000),
     supabase
