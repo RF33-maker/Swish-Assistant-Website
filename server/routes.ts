@@ -4652,14 +4652,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lineOf = (r: Record<string, any>) => Object.fromEntries(STAT_KEYS.map((k) => [k, num(r[STATS[k]])])) as Line;
       const add = (into: Line, from: Line) => STAT_KEYS.forEach((k) => (into[k] += from[k]));
       const possessions = (l: Line) => l.fga + 0.44 * l.fta - l.oreb + l.tov;
+      // Game length from the box score's team minutes, e.g. "199:60" (regulation) or
+      // "249:60" (two overtimes): five players' minutes summed, seconds sometimes 60.
+      // Falls back to 40 when the feed leaves it out or it makes no sense.
+      const gameMinutes = (...values: unknown[]) => {
+        for (const v of values) {
+          if (v == null || v === "") continue;
+          const [m, s = "0"] = String(v).split(":");
+          const game = (Number(m) + Number(s) / 60) / 5;
+          if (Number.isFinite(game) && game >= 35 && game <= 80) return game;
+        }
+        return 40;
+      };
 
-      const rows = await fetchAllLeagueRows("team_stats", ["team_id", "name", "league_id", "game_key", ...Object.values(STATS)].join(","), leagueIds);
+      const rows = await fetchAllLeagueRows("team_stats", ["team_id", "name", "league_id", "game_key", "tot_sminutes", ...Object.values(STATS)].join(","), leagueIds);
       const byGame = new Map<string, Record<string, any>[]>();
       for (const r of rows) byGame.set(r.game_key, [...(byGame.get(r.game_key) || []), r]);
 
-      type Agg = { id: string; name: string; team_id: string | null; league_id: string; games: number; poss: number; own: Line; opp: Line };
+      type Agg = { id: string; name: string; team_id: string | null; league_id: string; games: number; poss: number; mins: number; own: Line; opp: Line };
       const aggs = new Map<string, Agg>();
-      const league = { games: 0, poss: 0, own: emptyLine() };
+      const league = { games: 0, poss: 0, mins: 0, own: emptyLine() };
       let gamesCounted = 0;
       for (const pair of Array.from(byGame.values())) {
         // A game only counts once both box scores are in and it has actually been played.
@@ -4667,19 +4679,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lines = [lineOf(pair[0]), lineOf(pair[1])];
         const poss = (possessions(lines[0]) + possessions(lines[1])) / 2;
         if (poss < 20 || lines[0].pts + lines[1].pts <= 0) continue;
+        const mins = gameMinutes(pair[0].tot_sminutes, pair[1].tot_sminutes);
         gamesCounted += 1;
         pair.forEach((r, i) => {
           const id = r.team_id || r.name;
           if (!id) return;
           let a = aggs.get(id);
-          if (!a) aggs.set(id, (a = { id, name: r.name, team_id: r.team_id, league_id: r.league_id, games: 0, poss: 0, own: emptyLine(), opp: emptyLine() }));
+          if (!a) aggs.set(id, (a = { id, name: r.name, team_id: r.team_id, league_id: r.league_id, games: 0, poss: 0, mins: 0, own: emptyLine(), opp: emptyLine() }));
           a.games += 1;
           a.name = r.name ?? a.name;
           a.poss += poss;
+          a.mins += mins;
           add(a.own, lines[i]);
           add(a.opp, lines[1 - i]);
           league.games += 1;
           league.poss += poss;
+          league.mins += mins;
           add(league.own, lines[i]);
         });
       }
@@ -4688,7 +4703,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const recorded = (k: Stat) => league.own[k] > 0;
       const round1 = (v: number | null) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
       const pct = (a: number, b: number) => (b > 0 ? (a / b) * 100 : null);
-      const metricsOf = (own: Line, opp: Line, games: number, poss: number) => {
+      const metricsOf = (own: Line, opp: Line, games: number, poss: number, mins: number) => {
         const perGame = (k: Stat) => (games > 0 && recorded(k) ? own[k] / games : null);
         const ortg = poss > 0 ? (100 * own.pts) / poss : null;
         const drtg = poss > 0 ? (100 * opp.pts) / poss : null;
@@ -4696,7 +4711,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ortg,
           drtg,
           net: ortg != null && drtg != null ? ortg - drtg : null,
-          pace: games > 0 ? poss / games : null,
+          // Per 40 minutes, so overtime games don't make a team look faster than it is.
+          pace: mins > 0 ? (40 * poss) / mins : null,
           margin: games > 0 ? (own.pts - opp.pts) / games : null,
           efg: pct(own.fgm + 0.5 * own.tpm, own.fga),
           oppEfg: pct(opp.fgm + 0.5 * opp.tpm, opp.fga),
@@ -4723,11 +4739,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const teams = all
         .filter((a) => a.games >= minGames && a.poss > 0)
-        .map((a) => ({ id: a.id, name: a.name, team_id: a.team_id, league_id: a.league_id, games: a.games, metrics: metricsOf(a.own, a.opp, a.games, a.poss) }))
+        .map((a) => ({ id: a.id, name: a.name, team_id: a.team_id, league_id: a.league_id, games: a.games, metrics: metricsOf(a.own, a.opp, a.games, a.poss, a.mins) }))
         .sort((x, y) => (y.metrics.net ?? 0) - (x.metrics.net ?? 0) || y.games - x.games);
 
       // The crosshairs: the league as one team playing itself, so every game counts once on each side.
-      const averages = metricsOf(league.own, league.own, league.games, league.poss);
+      const averages = metricsOf(league.own, league.own, league.games, league.poss, league.mins);
 
       // Pools or conferences entered as child competitions, so a card can show one at a time.
       const groups = leagueIds
