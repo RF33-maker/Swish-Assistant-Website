@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowLeft, Calendar, Clock, Trophy, Link as LinkIcon, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { LiveFeedPanel, LiveFeedStrip } from "@/components/game/LiveFeed";
+import OnCourt, { type OnCourtBoxPlayer } from "@/components/game/OnCourt";
 import { useLiveCommentary } from "@/hooks/useLiveCommentary";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import SharedBoxScore from "@/components/BoxScoreTable";
@@ -61,6 +62,7 @@ interface PlayerStat {
   sblocks?: number;
   sturnovers?: number;
   sfoulspersonal?: number;
+  starter?: boolean | null;
 }
 
 interface TeamStatRow {
@@ -115,6 +117,16 @@ function parseMinutes(s: string | null | undefined): string {
 }
 
 const fullName = (p: PlayerStat) => `${p.firstname} ${p.familyname}`.trim();
+
+const toOnCourt = (p: PlayerStat): OnCourtBoxPlayer => ({
+  name: fullName(p),
+  playerId: p.playerId ?? null,
+  shirt: p.jersey_number,
+  starter: p.starter,
+  points: p.spoints,
+  fouls: p.sfoulspersonal,
+  href: playerPath({ slug: p.slug, full_name: fullName(p), id: p.playerId }),
+});
 
 const toLeader = (p: PlayerStat): GameLeaderPlayer => ({
   name: fullName(p),
@@ -366,6 +378,7 @@ export function InlineGameDetail({
             sturnovers: r.turnovers ?? r.sturnovers,
             // v_box_score names this column `fouls`; the player_stats fallback keeps `sfoulspersonal`.
             sfoulspersonal: r.fouls ?? r.sfoulspersonal ?? 0,
+            starter: r.starter ?? null,
           });
 
           const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
@@ -736,6 +749,18 @@ export function InlineGameDetail({
                 leagueId={leagueId}
               />
             </div>
+          )}
+          {isLive && (
+            <OnCourt
+              homeTeam={hometeam}
+              awayTeam={awayteam}
+              homeColor={colors.homeFill}
+              awayColor={colors.awayFill}
+              homePlayers={homePlayerStats.map(toOnCourt)}
+              awayPlayers={awayPlayerStats.map(toOnCourt)}
+              events={liveEvents}
+              players={feedPlayers}
+            />
           )}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             {/* Scrolls on a phone, where five labels don't fit; a fixed grid from md up. */}

@@ -17,6 +17,7 @@ import TeamSplitShotChart from "@/components/TeamSplitShotChart";
 import PlayByPlay from "@/components/PlayByPlay";
 import UpcomingGamePreview from "@/components/UpcomingGamePreview";
 import { LiveFeedPanel, LiveFeedStrip } from "@/components/game/LiveFeed";
+import OnCourt, { type OnCourtBoxPlayer } from "@/components/game/OnCourt";
 import { useLiveCommentary } from "@/hooks/useLiveCommentary";
 import GameScoreHero, { useMatchupColors, type GameHeroState } from "@/components/game/GameScoreHero";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "@/components/game/GameOverview";
@@ -52,6 +53,7 @@ interface PlayerStat {
   sblocks: number;
   sturnovers: number;
   sfoulspersonal?: number;
+  starter?: boolean | null;
   sfieldgoalsmade: number;
   sfieldgoalsattempted: number;
   sthreepointersmade: number;
@@ -217,6 +219,16 @@ function parseMinutes(minutesStr: string | null | undefined): string {
 const leaderName = (p: PlayerStat) => p.full_name || p.player_name || `${p.firstname || ''} ${p.familyname || ''}`.trim();
 // The player's page, so box-score and leader names are real links.
 const playerHref = (p: PlayerStat) => playerPath({ slug: p.players?.slug, full_name: leaderName(p), id: p.player_id });
+
+const toOnCourt = (p: PlayerStat): OnCourtBoxPlayer => ({
+  name: leaderName(p),
+  playerId: p.player_id ?? null,
+  shirt: p.shirtnumber,
+  starter: p.starter,
+  points: p.spoints,
+  fouls: p.sfoulspersonal,
+  href: playerHref(p),
+});
 
 const toLeader = (p: PlayerStat): GameLeaderPlayer => ({
   href: playerHref(p),
@@ -1261,6 +1273,18 @@ export default function GamePage() {
                     leagueId={gameData.league_id}
                   />
                 </div>
+              )}
+              {isLive && (
+                <OnCourt
+                  homeTeam={gameData.hometeam}
+                  awayTeam={gameData.awayteam}
+                  homeColor={colors.homeFill}
+                  awayColor={colors.awayFill}
+                  homePlayers={homePlayerStats.map(toOnCourt)}
+                  awayPlayers={awayPlayerStats.map(toOnCourt)}
+                  events={liveEvents}
+                  players={feedPlayers}
+                />
               )}
               <Tabs defaultValue={initialTab} className="w-full">
                 <TabsList className={GAME_TAB_LIST_CLASS}>
