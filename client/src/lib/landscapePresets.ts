@@ -71,7 +71,7 @@ export const LANDSCAPE_PRESETS: LandscapePreset[] = [
     y: { metric: "threeRate", label: "Shots from three", short: "3PA RATE", title: "SHARE OF SHOTS FROM THREE", ends: ["FEWER THREES", "MORE THREES"], neutral: true, unit: "%" },
     quadrants: { topLeft: "PATIENT SHOOTERS", topRight: "RUN & GUN", bottomLeft: "GRIND IT OUT", bottomRight: "ATTACK THE RIM" },
     bestTopRight: false,
-    footnote: "Pace against three-point attempt rate",
+    footnote: "Pace (possessions per 40 minutes, so overtime doesn't count extra) against three-point attempt rate",
   },
   {
     id: "shooting",
