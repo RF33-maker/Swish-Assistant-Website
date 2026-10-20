@@ -66,6 +66,15 @@ const BOARDS: Array<{ key: "points" | "rebounds" | "assists"; title: string; sta
   { key: "assists", title: "Assists", stat: "apg", unit: "APG" },
 ];
 
+// Season 1 reach and outcomes as REBA reported them (Instagram, 8 Oct 2026),
+// covering 31 March to 31 August 2026. Not derived from Swish data.
+const REACH = [
+  { value: "15.6M", label: "Views" },
+  { value: "20+", label: "Scholarships" },
+  { value: "10+", label: "Pro deals" },
+  { value: "Multiple", label: "National team call-ups" },
+];
+
 // Stop teams named only by number ("14U Team 1") say nothing about the player.
 const GENERIC_TEAM = /\bteam\s*\d+$/i;
 
@@ -203,6 +212,7 @@ export default function SeasonPreview({ previousSlug, seasonLabel, instagramUrl 
           Fixtures, results and stats will appear here from the first stop. Until then, here is how {previousLabel} went
           {totals.stops > 0 ? ` across ${totals.stops} stops` : ""}{span ? `, ${span}` : ""}.
         </p>
+        <p className="mt-2 text-sm font-semibold text-[color:var(--ch-text)]">Season 2 starts October 26 to 29.</p>
 
         <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
           {numbers.map((n) => (
@@ -213,6 +223,21 @@ export default function SeasonPreview({ previousSlug, seasonLabel, instagramUrl 
               <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">{n.label}</div>
             </div>
           ))}
+        </div>
+
+        <div className="mt-5" data-testid="season-reach">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ch-muted)]">
+            {previousLabel} exposure and outcomes
+          </div>
+          <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {REACH.map((r) => (
+              <div key={r.label} className="rounded-xl border border-[color:var(--ch-accent)] px-4 py-3">
+                <div className="ch-display text-[1.7rem] md:text-[2rem] font-bold leading-none tabular-nums text-[color:var(--ch-text)]">{r.value}</div>
+                <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">{r.label}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-[color:var(--ch-muted)]">Figures reported by REBA, 31 March to 31 August 2026.</p>
         </div>
 
         <Link
