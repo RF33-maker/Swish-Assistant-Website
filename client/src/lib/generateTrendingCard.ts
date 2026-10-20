@@ -257,7 +257,7 @@ export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promi
 
   // Row 1: primary stats
   const row1 = [
-    { label: "GmSc", value: String(gmSc ?? 0) },
+    { label: "Swish", value: String(gmSc ?? 0) },
     { label: "PTS",  value: String(pts ?? 0) },
     { label: "REB",  value: String(reb ?? 0) },
     { label: "AST",  value: String(ast ?? 0) },

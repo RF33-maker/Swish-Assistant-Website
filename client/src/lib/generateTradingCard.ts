@@ -536,7 +536,7 @@ export async function generateTradingCardBlob(o: TradingCardOptions): Promise<Bl
     ctx.fillText(o.gameResult, x + padX, baselineIn(ctx, y + padY, lh));
   }
 
-  // Game Score, bottom right.
+  // Swish Score, bottom right.
   {
     const right = CW - cq(5);
     const valueSize = mx(18, 9.5);
@@ -553,7 +553,7 @@ export async function generateTradingCardBlob(o: TradingCardOptions): Promise<Bl
     ctx.font = font(600, labelSize, BODY);
     ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
     const lSpacing = labelSize * 0.14;
-    drawSpaced(ctx, "GMSC", right - spacedWidth(ctx, "GMSC", lSpacing), baselineIn(ctx, labelTop, labelLH), lSpacing);
+    drawSpaced(ctx, "SWISH SCORE", right - spacedWidth(ctx, "SWISH SCORE", lSpacing), baselineIn(ctx, labelTop, labelLH), lSpacing);
   }
   ctx.restore(); // panel clip
 

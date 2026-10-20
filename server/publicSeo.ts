@@ -9,6 +9,7 @@ import { gameRecap, playerBio, teamSeasonSummary } from "@shared/recaps";
 import { clubSlug, teamClubKey } from "@shared/teamIdentity";
 import { articleDocToHtml, articleTagHref, type ArticleDoc, type ArticleTag } from "@shared/newsArticle";
 import { isUnder18, isYouthCompetition } from "@shared/youth";
+import { SWISH_SCORE_FT_SHARE, SWISH_SCORE_SHOOTING_WEIGHT, SWISH_SCORE_WEIGHTS, SWISH_SCORE_WIN_BONUS } from "@shared/swishScore";
 import {
   SITE_BASE,
   SITE_NAME,
@@ -639,6 +640,24 @@ const LEGAL_PAGES: Record<string, { title: string; summary: string }> = {
   },
 };
 
+// Same title and description as the React page (SwishScorePage.tsx).
+function renderSwishScore(): SeoPage {
+  const w = SWISH_SCORE_WEIGHTS;
+  const title = "Swish Score";
+  const description = "How Swish Score works: the formula behind Player of the Week, Team of the Week and top performances on Swish Assistant.";
+  const crumbs = [{ name: SITE_NAME, path: "/" }, { name: title, path: "/swish-score" }];
+  return {
+    title: `${title} | ${SITE_NAME}`,
+    description,
+    canonicalPath: "/swish-score",
+    breadcrumbs: crumbs,
+    body: `${breadcrumbNav(crumbs)}<article><h1>${title}</h1><p>${escapeHtml(description)}</p>
+      <p>Swish Score = PTS + ${w.reb} REB + ${w.ast} AST + ${w.stl} STL + ${w.blk} BLK − ${Math.abs(w.tov)} TOV + ${SWISH_SCORE_SHOOTING_WEIGHT} × (PTS − FGA − ${SWISH_SCORE_FT_SHARE} FTA) + ${SWISH_SCORE_WIN_BONUS} for a win.</p>
+      <p>Player of the Week is the best single-game Swish Score from Monday to Sunday. Team of the Week is the five best, one game per player.</p></article>`,
+    jsonLd: { "@type": "WebPage", name: title, url: canonicalUrl("/swish-score") },
+  };
+}
+
 function renderLegal(path: string): SeoPage | undefined {
   const page = LEGAL_PAGES[path];
   if (!page) return undefined;
@@ -1001,6 +1020,7 @@ export async function servePublicSeo(req: Request, res: Response, next: NextFunc
   const newsIndexMatch = pathname === "/news";
   const scoresMatch = pathname === "/scores";
   const legalMatch = pathname in LEGAL_PAGES;
+  const swishScoreMatch = pathname === "/swish-score";
   const newsArticleMatch = pathname.match(/^\/news\/([^/]+)$/i);
   const playerMatch = pathname.match(/^\/player\/([^/]+)(?:\/games\/page\/(\d+))?$/i);
   const competitionGameMatch = pathname.match(/^\/competition\/([^/]+)\/game\/([^/]+)$/i);
@@ -1011,7 +1031,7 @@ export async function servePublicSeo(req: Request, res: Response, next: NextFunc
   const competitionTeamMatch = pathname.match(/^\/competition\/([^/]+)\/team\/([^/]+)$/i);
   const teamMatch = pathname.match(/^\/team\/([^/]+)$/i);
   const competitionMatch = pathname.match(/^\/competition\/([^/]+)$/i);
-  if (!homeMatch && !teamsHubMatch && !playersHubMatch && !newsIndexMatch && !scoresMatch && !legalMatch && !newsArticleMatch && !playerMatch && !competitionGameMatch && !competitionPlayerMatch && !competitionLeadersMatch && !competitionTeamsMatch && !directGameMatch && !competitionTeamMatch && !teamMatch && !competitionMatch) return next();
+  if (!homeMatch && !teamsHubMatch && !playersHubMatch && !newsIndexMatch && !scoresMatch && !legalMatch && !swishScoreMatch && !newsArticleMatch && !playerMatch && !competitionGameMatch && !competitionPlayerMatch && !competitionLeadersMatch && !competitionTeamsMatch && !directGameMatch && !competitionTeamMatch && !teamMatch && !competitionMatch) return next();
 
   try {
     if (req.path.length > 1 && req.path.endsWith("/")) {
@@ -1040,6 +1060,8 @@ export async function servePublicSeo(req: Request, res: Response, next: NextFunc
       page = await renderScores();
     } else if (legalMatch) {
       page = renderLegal(pathname);
+    } else if (swishScoreMatch) {
+      page = renderSwishScore();
     } else if (newsArticleMatch) {
       const result = await renderNewsArticle(decodeURIComponent(newsArticleMatch[1]));
       if (result.redirect) return res.redirect(301, result.redirect);

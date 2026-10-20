@@ -99,7 +99,7 @@ function initials(name: string) {
 
 /**
  * One performance as a basketball trading card: a team-coloured photo panel
- * (team logo watermark, league badge, result, Game Score) over the player's
+ * (team logo watermark, league badge, result, Swish Score) over the player's
  * name, matchup, the box score and FG/3PT/FT shooting splits. Its download is
  * the same card drawn on a canvas (generateTradingCard).
  *
@@ -360,7 +360,7 @@ export default function TradingCard({
             )}
             <span className="absolute right-[5cqw] bottom-[4cqw] text-right text-white">
               <span className="block ch-display font-bold leading-none text-[max(18px,9.5cqw)] tabular-nums">{perf.gameScore ?? 0}</span>
-              <span className="block mt-[0.8cqw] text-[max(8px,2.7cqw)] font-semibold uppercase tracking-[0.14em] text-white/80">GmSc</span>
+              <span className="block mt-[0.8cqw] text-[max(8px,2.7cqw)] font-semibold uppercase tracking-[0.14em] text-white/80">Swish Score</span>
             </span>
           </div>
 

@@ -210,7 +210,7 @@ function PerfCard({
 
         {/* Stats — full width, evenly spaced */}
         <div className="flex items-center justify-between">
-          <Stat label="GmSc" value={perf.game_score ?? 0} />
+          <Stat label="Swish" value={perf.game_score ?? 0} />
           <Stat label="PTS" value={perf.pts ?? 0} />
           <Stat label="REB" value={perf.reb ?? 0} />
           <Stat label="AST" value={perf.ast ?? 0} />
@@ -300,6 +300,9 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
           className="flex-1 h-px"
           style={{ background: `linear-gradient(to right, ${accentColor}40, transparent)` }}
         />
+        <a href="/swish-score" className="text-[11px] font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:underline">
+          How Swish Score works
+        </a>
       </div>
       <div className="flex flex-col gap-2">
         {perfs.map((perf, index) => (

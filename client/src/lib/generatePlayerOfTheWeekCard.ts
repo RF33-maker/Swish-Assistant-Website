@@ -2,7 +2,7 @@
  * Player of the Week card (1080×1350), drawn on a canvas in the shared Swish Social
  * look (see cardStyle.ts). The player's photo runs the full width of the card and
  * melts into it above and below; their club, the game, their name, stat line and
- * game score sit over its lower half.
+ * Swish Score sit over its lower half.
  */
 
 import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
@@ -149,7 +149,7 @@ export async function renderPlayerOfTheWeek(
     drawRingedCrest(ctx, CARD_W / 2, 470, 178, teamLogo, initialsOf(award.full_name), theme);
   }
   drawVignette(ctx, theme);
-  // The competition's logo, faded into the bottom-right behind the game score.
+  // The competition's logo, faded into the bottom-right behind the Swish Score.
   if (leagueLogo && theme.style === "league") drawContain(ctx, leagueLogo, CARD_W - 430, 905, 520, 520, 0.1);
 
   drawHeader(ctx, "PLAYER OF THE WEEK", weekLabel, brand.leagueName, theme);
@@ -200,7 +200,7 @@ export async function renderPlayerOfTheWeek(
 
   if (showGameScore) {
     const gsX = right - 130;
-    drawSpaced(ctx, "GAME SCORE", gsX, y - 14, 2.5, { size: 22, weight: 500, alpha: 0.82, align: "center" });
+    drawSpaced(ctx, "SWISH SCORE", gsX, y - 14, 2.5, { size: 22, weight: 500, alpha: 0.82, align: "center" });
     drawTextTop(ctx, fmtGameScore(award.game_score), gsX, y + 30, { size: 110, weight: 700, color: theme.rank, align: "center" });
   }
 

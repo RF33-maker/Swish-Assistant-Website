@@ -9,6 +9,7 @@
  */
 
 import type { WeeklyAward } from "@/types/weeklyAwards";
+import { SWISH_SCORE_WEIGHTS } from "@shared/swishScore";
 
 export const CARD_W = 1080;
 export const CARD_H = 1350;
@@ -66,9 +67,9 @@ export function shade(hex: string, amount: number): string {
 type StatKey = "pts" | "reb" | "ast" | "stl" | "blk";
 const STAT_LABEL: Record<StatKey, string> = { pts: "PTS", reb: "REB", ast: "AST", stl: "STL", blk: "BLK" };
 const STAT_ORDER: StatKey[] = ["pts", "reb", "ast", "stl", "blk"];
-const STAT_WEIGHT = { reb: 1.2, ast: 1.3, stl: 1.7, blk: 2.0 } as const;
+const STAT_WEIGHT = SWISH_SCORE_WEIGHTS;
 
-/** PTS plus the two categories that contributed most to the game score, in display order. */
+/** PTS plus the two categories that contributed most to the Swish Score, in display order. */
 export function headlineStats(a: WeeklyAward): { key: StatKey; label: string; value: number }[] {
   const val = (k: StatKey) => Number(a[k] ?? 0);
   const extras = (["reb", "ast", "stl", "blk"] as const)

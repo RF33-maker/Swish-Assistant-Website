@@ -423,8 +423,8 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
         title={title}
         description={
           kind === "team"
-            ? "The five best game scores across a Monday–Sunday week."
-            : "The best game score of the week, as a full-photo card."
+            ? "The five best Swish Scores across a Monday–Sunday week."
+            : "The best Swish Score of the week, as a full-photo card."
         }
         className="order-2 lg:order-1"
         bodyClassName="space-y-4"
@@ -462,13 +462,13 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
         <Toggle
           checked={showGameScore}
           onChange={onShowGameScoreChange}
-          label="Show game score"
-          hint="Players are still picked by game score; this only shows or hides the number on the card."
+          label="Show Swish Score"
+          hint="Players are still picked by Swish Score; this only shows or hides the number on the card."
           testId="toggle-game-score"
         />
 
         {kind === "team" && (
-          <Field label={`Players (${selected.length}/5) — top game scores, untick to swap`}>
+          <Field label={`Players (${selected.length}/5) — top Swish Scores, untick to swap`}>
             <div className="ch-tile max-h-[420px] divide-y divide-[color:var(--ch-border)] overflow-y-auto">
               {(data?.awards || []).map((a) => (
                 <label key={a.player_id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">

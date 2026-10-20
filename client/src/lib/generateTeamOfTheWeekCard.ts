@@ -2,7 +2,7 @@
  * Team of the Week card (1080×1350), drawn on a canvas in the shared Swish Social
  * look (see cardStyle.ts). The five players stand side by side as one band of
  * photos that melt into each other and into the card, rather than five boxed
- * panels; each has their name, headline stats and game score underneath.
+ * panels; each has their name, headline stats and Swish Score underneath.
  */
 
 import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
@@ -161,7 +161,7 @@ export async function renderTeamOfTheWeek(
 
   const count = Math.max(1, awards.length);
   const cw = CARD_W / count;
-  // Without the game score there's room for taller photos.
+  // Without the Swish Score there's room for taller photos.
   const frameBottom = showGameScore ? 886 : 990;
   const frameH = frameBottom - FRAME_TOP;
 
@@ -191,7 +191,7 @@ export async function renderTeamOfTheWeek(
 
   drawHeader(ctx, "TEAM OF THE WEEK", weekLabel, brand.leagueName, theme);
 
-  // ── under each photo: club crest, name, headline stats, game score ──
+  // ── under each photo: club crest, name, headline stats, Swish Score ──
   const maxW = cw - 26;
   const names = awards.map((a) => splitName(a.full_name));
   // One size for every surname (and every given name), so the row reads as a set. A name too long
@@ -253,7 +253,7 @@ export async function renderTeamOfTheWeek(
     });
 
     if (showGameScore) {
-      drawSpaced(ctx, "GAME SCORE", cx, gsLblTop, 2, gsLblOpts);
+      drawSpaced(ctx, "SWISH SCORE", cx, gsLblTop, 2, gsLblOpts);
       drawTextTop(ctx, fmtGameScore(a.game_score), cx, gsTop, gsOpts);
     }
   });

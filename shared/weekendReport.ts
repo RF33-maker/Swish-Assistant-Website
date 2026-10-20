@@ -120,7 +120,7 @@ export interface WeekendReportData {
   to: string;
   lede: string;
   games: ReportGame[];
-  /** Best single-game lines by Game Score, one per player. */
+  /** Best single-game lines by Swish Score, one per player. */
   performances: ReportPerformer[];
   callouts: ReportCallout[];
   generatedAt: string;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import CardFanCarousel from "@/components/ui/card-fan-carousel";
 import SectionHeader from "@/components/home/SectionHeader";
@@ -283,9 +283,13 @@ export default function TrendingPerformanceSection({
           eyebrow="Trending"
           title="Top performances"
           description={
-            selected
-              ? `The standout stat lines from the latest round in ${selected.name}. Tap a card to see the player.`
-              : "The standout stat lines from across our leagues. Tap a card to see the player."
+            <>
+              {selected
+                ? `The standout stat lines from the latest round in ${selected.name}, ranked by `
+                : "The standout stat lines from across our leagues, ranked by "}
+              <Link href="/swish-score" className="font-semibold text-[color:var(--ch-accent)] hover:underline">Swish Score</Link>
+              . Tap a card to see the player.
+            </>
           }
           action={picker}
         />
