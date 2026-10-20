@@ -5,66 +5,38 @@ import ShareableCard from "@/components/ShareableCard";
 import { ChevronDown, ChevronUp, Info } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// View type
+// Data: one row of player_on_off_season (filled by refresh_player_on_off)
 // ---------------------------------------------------------------------------
 
-/**
- * Columns currently returned by player_on_off_impact_profile_v1.
- *
- * Missing from the view (frontend placeholder only — will show "—" until
- * the Supabase view is updated to include them):
- *   on_oreb_pct / off_oreb_pct / diff_oreb_pct
- *   on_dreb_pct / off_dreb_pct / diff_dreb_pct
- *   on_reb_pct  / off_reb_pct  / diff_reb_pct
- *   on_ast_pct  / off_ast_pct  / diff_ast_pct
- *   on_blk_pct  / off_blk_pct  / diff_blk_pct
- *   on_stl_pct  / off_stl_pct  / diff_stl_pct
- *   on_tov_pct  / off_tov_pct  / diff_tov_pct
- */
-interface PlayerOnOffImpactProfileRow {
+/** Counting stats stored for "on" and "off", for the player's team and the opponent. */
+const COUNTS = [
+  "secs", "poss_for", "poss_against", "pts_for", "pts_against",
+  "fg2m", "fg2a", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "ast", "tov", "stl", "blk",
+  "opp_fg2m", "opp_fg2a", "opp_fg3m", "opp_fg3a", "opp_ftm", "opp_fta",
+  "opp_oreb", "opp_dreb", "opp_ast", "opp_tov", "opp_stl", "opp_blk",
+] as const;
+type Count = (typeof COUNTS)[number];
+
+type OnOffRow = {
+  league_id: string;
+  team_id: string;
   player_id: string;
-  league_id?: string | null;
-  team_id?: string | null;
-  adjusted_net_swing: number | null;
-  raw_net_swing: number | null;
-  on_ortg: number | null;
-  off_ortg: number | null;
-  on_drtg: number | null;
-  off_drtg: number | null;
-  on_nrtg: number | null;
-  off_nrtg: number | null;
-  on_possessions_for: number | null;
-  on_minutes: number | null;
-  off_minutes: number | null;
-  official_minutes_total: number | null;
-  accuracy_label: string | null;
-  sample_size_label: string | null;
-  tracking_quality: string | null;
-  confidence_explanation: string | null;
-  profile_safe: boolean | null;
-  // Percentage splits — not yet in the view; will be null until view is updated
-  on_oreb_pct?: number | null;
-  off_oreb_pct?: number | null;
-  diff_oreb_pct?: number | null;
-  on_dreb_pct?: number | null;
-  off_dreb_pct?: number | null;
-  diff_dreb_pct?: number | null;
-  on_reb_pct?: number | null;
-  off_reb_pct?: number | null;
-  diff_reb_pct?: number | null;
-  on_ast_pct?: number | null;
-  off_ast_pct?: number | null;
-  diff_ast_pct?: number | null;
-  on_blk_pct?: number | null;
-  off_blk_pct?: number | null;
-  diff_blk_pct?: number | null;
-  on_stl_pct?: number | null;
-  off_stl_pct?: number | null;
-  diff_stl_pct?: number | null;
-  on_tov_pct?: number | null;
-  off_tov_pct?: number | null;
-  diff_tov_pct?: number | null;
-}
+  games: number;
+  ortg_diff: number | null;
+  drtg_diff: number | null;
+  nrtg_diff: number | null;
+  plus_minus_diff: number | null;
+  qualified: boolean;
+  qualified_count: number | null;
+  ortg_diff_rank: number | null;
+  drtg_diff_rank: number | null;
+  nrtg_diff_rank: number | null;
+  plus_minus_diff_rank: number | null;
+} & Record<`on_${Count}` | `off_${Count}`, number>;
+
+// Possessions a player needs on and off court before he is ranked (matches the SQL).
+const MIN_ON_POSS = 100;
+const MIN_OFF_POSS = 50;
 
 interface PlayerPerformanceSplitsProps {
   playerId: string;
@@ -79,209 +51,231 @@ interface PlayerPerformanceSplitsProps {
 }
 
 // ---------------------------------------------------------------------------
-// Metric row definition
+// Metrics
 // ---------------------------------------------------------------------------
 
-interface MetricRow {
+type Side = "on" | "off";
+type View = "own" | "opp";
+
+interface Metric {
   label: string;
-  abbr: string;
-  on: number | null | undefined;
-  off: number | null | undefined;
-  /** pre-computed diff from the view, or null to compute on-the-fly */
-  diff: number | null | undefined;
-  /** true = lower diff is better (DRTG, TOV%) */
-  invertGood?: boolean;
-  decimals?: number;
-  /** true = show % suffix */
+  /** value for one side of the split, from the chosen team's point of view */
+  value: (row: OnOffRow, side: Side, view: View) => number | null;
+  decimals: number;
   pct?: boolean;
-  /** true = this metric comes from a view column not yet deployed */
-  missing?: boolean;
+  signed?: boolean;
+  /** true when a bigger number is good for the player's team (own view) */
+  higherIsGood?: boolean;
+  /** no diff column (minutes, possessions) */
+  noDiff?: boolean;
+  /** diffs within this band are shown in the muted colour */
+  neutral?: number;
+}
+
+const ratio = (a: number, b: number) => (b > 0 ? a / b : null);
+
+/** The team whose numbers a row shows ("T") and the team it was up against ("O"). */
+function sides(row: OnOffRow, side: Side, view: View) {
+  const get = (k: Count) => Number(row[`${side}_${k}`] ?? 0);
+  const own = {
+    fg2m: get("fg2m"), fg2a: get("fg2a"), fg3m: get("fg3m"), fg3a: get("fg3a"), ftm: get("ftm"), fta: get("fta"),
+    oreb: get("oreb"), dreb: get("dreb"), ast: get("ast"), tov: get("tov"), stl: get("stl"), blk: get("blk"),
+    pts: get("pts_for"), poss: get("poss_for"),
+  };
+  const opp = {
+    fg2m: get("opp_fg2m"), fg2a: get("opp_fg2a"), fg3m: get("opp_fg3m"), fg3a: get("opp_fg3a"),
+    ftm: get("opp_ftm"), fta: get("opp_fta"), oreb: get("opp_oreb"), dreb: get("opp_dreb"),
+    ast: get("opp_ast"), tov: get("opp_tov"), stl: get("opp_stl"), blk: get("opp_blk"),
+    pts: get("pts_against"), poss: get("poss_against"),
+  };
+  return view === "own" ? { T: own, O: opp, secs: get("secs") } : { T: opp, O: own, secs: get("secs") };
+}
+
+const METRICS: Metric[] = [
+  { label: "MIN", decimals: 0, noDiff: true, value: (r, s, v) => sides(r, s, v).secs / 60 },
+  {
+    label: "POSS", decimals: 0, noDiff: true,
+    value: (r, s, v) => { const { T, O } = sides(r, s, v); return (T.poss + O.poss) / 2; },
+  },
+  {
+    label: "+/-", decimals: 0, signed: true, higherIsGood: true, neutral: 0,
+    value: (r, s, v) => { const { T, O } = sides(r, s, v); return T.pts - O.pts; },
+  },
+  {
+    label: "ORTG", decimals: 1, higherIsGood: true, neutral: 2,
+    value: (r, s, v) => { const { T } = sides(r, s, v); const x = ratio(T.pts, T.poss); return x == null ? null : 100 * x; },
+  },
+  {
+    label: "DRTG", decimals: 1, higherIsGood: false, neutral: 2,
+    value: (r, s, v) => { const { O } = sides(r, s, v); const x = ratio(O.pts, O.poss); return x == null ? null : 100 * x; },
+  },
+  {
+    label: "NRTG", decimals: 1, signed: true, higherIsGood: true, neutral: 2,
+    value: (r, s, v) => {
+      const { T, O } = sides(r, s, v);
+      const off = ratio(T.pts, T.poss), def = ratio(O.pts, O.poss);
+      return off == null || def == null ? null : 100 * (off - def);
+    },
+  },
+  {
+    label: "eFG%", decimals: 1, pct: true, higherIsGood: true, neutral: 1,
+    value: (r, s, v) => {
+      const { T } = sides(r, s, v);
+      const x = ratio(T.fg2m + 1.5 * T.fg3m, T.fg2a + T.fg3a);
+      return x == null ? null : 100 * x;
+    },
+  },
+  {
+    label: "OREB%", decimals: 1, pct: true, higherIsGood: true, neutral: 1,
+    value: (r, s, v) => { const { T, O } = sides(r, s, v); const x = ratio(T.oreb, T.oreb + O.dreb); return x == null ? null : 100 * x; },
+  },
+  {
+    label: "DREB%", decimals: 1, pct: true, higherIsGood: true, neutral: 1,
+    value: (r, s, v) => { const { T, O } = sides(r, s, v); const x = ratio(T.dreb, T.dreb + O.oreb); return x == null ? null : 100 * x; },
+  },
+  {
+    label: "REB%", decimals: 1, pct: true, higherIsGood: true, neutral: 1,
+    value: (r, s, v) => {
+      const { T, O } = sides(r, s, v);
+      const x = ratio(T.oreb + T.dreb, T.oreb + T.dreb + O.oreb + O.dreb);
+      return x == null ? null : 100 * x;
+    },
+  },
+  {
+    label: "AST%", decimals: 1, pct: true, higherIsGood: true, neutral: 1,
+    value: (r, s, v) => { const { T } = sides(r, s, v); const x = ratio(T.ast, T.fg2m + T.fg3m); return x == null ? null : 100 * x; },
+  },
+  {
+    label: "BLK%", decimals: 1, pct: true, higherIsGood: true, neutral: 1,
+    value: (r, s, v) => { const { T, O } = sides(r, s, v); const x = ratio(T.blk, O.fg2a); return x == null ? null : 100 * x; },
+  },
+  {
+    label: "STL%", decimals: 1, pct: true, higherIsGood: true, neutral: 1,
+    value: (r, s, v) => { const { T, O } = sides(r, s, v); const x = ratio(T.stl, O.poss); return x == null ? null : 100 * x; },
+  },
+  {
+    label: "TOV%", decimals: 1, pct: true, higherIsGood: false, neutral: 1,
+    value: (r, s, v) => {
+      const { T } = sides(r, s, v);
+      const x = ratio(T.tov, T.fg2a + T.fg3a + 0.44 * T.fta + T.tov);
+      return x == null ? null : 100 * x;
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Formatting
+// ---------------------------------------------------------------------------
+
+function fmt(v: number | null | undefined, decimals: number, pct = false, signed = false): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const rounded = Number(v.toFixed(decimals));
+  const body = Math.abs(rounded).toFixed(decimals);
+  const sign = rounded < 0 ? "−" : signed && rounded > 0 ? "+" : "";
+  return `${sign}${body}${pct ? "%" : ""}`;
+}
+
+function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+/** Green when the change helps the player's team, red when it hurts, muted when it's within noise. */
+function diffTone(diff: number | null, metric: Metric, view: View): string {
+  if (diff == null || !Number.isFinite(diff) || metric.noDiff) return "text-[color:var(--ch-muted)]";
+  if (Math.abs(diff) <= (metric.neutral ?? 0)) return "text-[color:var(--ch-text-2)]";
+  // In the opposing-team view a bigger number is the opponent doing better.
+  const good = (diff > 0) === Boolean(metric.higherIsGood) !== (view === "opp");
+  return good ? "text-[color:var(--ch-win)]" : "text-[color:var(--ch-loss)]";
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Pieces
 // ---------------------------------------------------------------------------
 
-function fmt(v: number | null | undefined, decimals = 1, pct = false): string {
-  if (v == null) return "—";
-  return `${v.toFixed(decimals)}${pct ? "%" : ""}`;
-}
-
-function fmtSigned(v: number | null | undefined, decimals = 1): string {
-  if (v == null) return "—";
-  const sign = v >= 0 ? "+" : "−";
-  return `${sign}${Math.abs(v).toFixed(decimals)}`;
-}
-
-/**
- * Returns Tailwind text colour classes for a diff value.
- * neutral band: |diff| ≤ 3 → muted
- * invertGood: negative diff is green (DRTG, TOV%)
- */
-function diffColor(
-  diff: number | null | undefined,
-  invertGood = false
-): string {
-  if (diff == null) return "text-slate-400 dark:text-slate-500";
-  const abs = Math.abs(diff);
-  if (abs <= 3) return "text-slate-500 dark:text-slate-400";
-  const positive = diff > 0;
-  const isGood = invertGood ? !positive : positive;
-  return isGood
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-500 dark:text-red-400";
-}
-
-// ---------------------------------------------------------------------------
-// Badge sub-components
-// ---------------------------------------------------------------------------
-
-function SwingBadge({ swing }: { swing: number }) {
-  if (swing > 3)
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-        Positive
-      </span>
-    );
-  if (swing < -3)
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800">
-        Negative
-      </span>
-    );
+function Headshot({ url, name, off }: { url?: string | null; name: string; off?: boolean }) {
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-neutral-800 dark:text-slate-400 border border-slate-200 dark:border-neutral-700">
-      Neutral
-    </span>
+    <div className="flex flex-col items-center gap-1">
+      <div
+        className={`relative h-12 w-12 overflow-hidden rounded-full border border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface-3)] ${off ? "opacity-45 grayscale" : ""}`}
+      >
+        {url ? (
+          <img src={url} alt={`${name} ${off ? "off" : "on"} court`} className="h-full w-full object-cover object-top" />
+        ) : (
+          <span className="ch-display flex h-full w-full items-center justify-center text-base font-bold text-[color:var(--ch-text-2)]">
+            {initials}
+          </span>
+        )}
+      </div>
+      <span
+        className="rounded px-1.5 text-[10px] font-bold uppercase tracking-[0.08em]"
+        style={
+          off
+            ? { background: "var(--ch-surface-3)", color: "var(--ch-muted)" }
+            : { background: "var(--ch-accent)", color: "#fff" }
+        }
+      >
+        {off ? "Off" : "On"}
+      </span>
+    </div>
   );
 }
 
-function AccuracyBadge({ label }: { label: string }) {
-  const lower = label.toLowerCase();
-  if (lower.includes("high"))
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-        {label}
-      </span>
-    );
-  if (lower.includes("medium"))
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-        {label}
-      </span>
-    );
-  if (lower.includes("low") || lower.includes("directional"))
-    return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border border-orange-200 dark:border-orange-800">
-        {label}
-      </span>
-    );
+function ImpactTile({
+  label, value, decimals, rank, of, tone,
+}: { label: string; value: number | null; decimals: number; rank: number | null; of: number | null; tone: string }) {
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-neutral-800 dark:text-slate-400 border border-slate-200 dark:border-neutral-700">
-      {label}
-    </span>
+    <div className="ch-tile px-3 py-2.5">
+      <div className={`ch-display ch-num text-[1.75rem] font-bold leading-none ${tone}`}>{fmt(value, decimals, false, true)}</div>
+      <div className="mt-1.5 flex items-baseline gap-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">{label}</span>
+        {rank != null && (
+          <span className="text-[10px] font-semibold text-[color:var(--ch-text-2)]">
+            {ordinal(rank)}
+            {of ? <span className="text-[color:var(--ch-muted)]"> of {of}</span> : null}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
-function SampleBadge({ label }: { label: string }) {
+function SplitTable({
+  row, view, name, photoUrl, compact = false,
+}: { row: OnOffRow; view: View; name: string; photoUrl?: string | null; compact?: boolean }) {
+  const cell = compact ? "px-2.5 py-1.5" : "px-3 py-2";
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-neutral-800 dark:text-slate-400 border border-slate-200 dark:border-neutral-700">
-      {label}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Metric table (shared between card and share snapshot)
-// ---------------------------------------------------------------------------
-
-function MetricTable({
-  metrics,
-  compact = false,
-}: {
-  metrics: MetricRow[];
-  compact?: boolean;
-}) {
-  const cellPx = compact ? "6px 12px" : "8px 14px";
-  const labelSize = compact ? 10 : 11;
-  const valSize = compact ? 13 : 15;
-
-  return (
-    <div
-      className="rounded-xl border border-slate-200 dark:border-neutral-700 overflow-hidden"
-      style={{ fontSize: 14 }}
-    >
-      <table className="w-full">
-        <thead className="bg-slate-50 dark:bg-neutral-800">
-          <tr>
-            <th
-              className="text-left font-bold text-slate-500 uppercase"
-              style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.12em" }}
-            />
-            <th
-              className="text-right font-bold text-slate-500 uppercase"
-              style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.12em" }}
-            >
-              On
-            </th>
-            <th
-              className="text-right font-bold text-slate-500 uppercase"
-              style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.12em" }}
-            >
-              Off
-            </th>
-            <th
-              className="text-right font-bold text-slate-500 uppercase"
-              style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.12em" }}
-            >
-              Diff
-            </th>
+    <div className="overflow-hidden rounded-xl border border-[color:var(--ch-border)]">
+      <table className="ch-table w-full">
+        <thead>
+          <tr className="border-b border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]">
+            <th className={`${cell} text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]`}>Stat</th>
+            <th className={`${cell} text-center`}><div className="flex justify-center"><Headshot url={photoUrl} name={name} /></div></th>
+            <th className={`${cell} text-center`}><div className="flex justify-center"><Headshot url={photoUrl} name={name} off /></div></th>
+            <th className={`${cell} text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]`}>Diff</th>
           </tr>
         </thead>
         <tbody>
-          {metrics.map((m, idx) => {
-            const computedDiff =
-              m.diff != null
-                ? m.diff
-                : m.on != null && m.off != null
-                ? m.on - m.off
-                : null;
-            const color = m.missing
-              ? "text-slate-400 dark:text-slate-500"
-              : diffColor(computedDiff, m.invertGood);
-            const dec = m.decimals ?? 1;
+          {METRICS.map((m, i) => {
+            const on = m.value(row, "on", view);
+            const off = m.value(row, "off", view);
+            const diff = m.noDiff || on == null || off == null ? null : on - off;
             return (
               <tr
-                key={m.abbr}
-                className={`border-t border-slate-100 dark:border-neutral-700 ${
-                  idx % 2 === 1 ? "bg-slate-50/60 dark:bg-neutral-800/30" : ""
-                }`}
+                key={m.label}
+                className={`border-t border-[color:var(--ch-border)] ${i % 2 ? "bg-[color:var(--ch-surface-2)]/60" : ""}`}
               >
-                <td
-                  className="font-semibold uppercase text-slate-600 dark:text-slate-400"
-                  style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.1em" }}
-                >
-                  {m.label}
+                <td className={`${cell} text-[11px] font-semibold tracking-[0.08em] text-[color:var(--ch-text-2)]`}>{m.label}</td>
+                <td className={`${cell} ch-num text-center ${compact ? "text-[13px]" : "text-[15px]"} font-semibold text-[color:var(--ch-text)]`}>
+                  {fmt(on, m.decimals, m.pct, m.signed)}
                 </td>
-                <td
-                  className="text-right tabular-nums text-slate-700 dark:text-slate-200"
-                  style={{ padding: cellPx, fontSize: valSize, fontWeight: 600 }}
-                >
-                  {fmt(m.on, dec, m.pct)}
+                <td className={`${cell} ch-num text-center ${compact ? "text-[13px]" : "text-[15px]"} font-semibold text-[color:var(--ch-text)]`}>
+                  {fmt(off, m.decimals, m.pct, m.signed)}
                 </td>
-                <td
-                  className="text-right tabular-nums text-slate-700 dark:text-slate-200"
-                  style={{ padding: cellPx, fontSize: valSize, fontWeight: 600 }}
-                >
-                  {fmt(m.off, dec, m.pct)}
-                </td>
-                <td
-                  className={`text-right tabular-nums font-bold ${color}`}
-                  style={{ padding: cellPx, fontSize: valSize }}
-                >
-                  {m.missing
-                    ? "—"
-                    : fmtSigned(computedDiff, dec)}
+                <td className={`${cell} ch-num text-right ${compact ? "text-[13px]" : "text-[15px]"} font-bold ${diffTone(diff, m, view)}`}>
+                  {m.noDiff ? "—" : fmt(diff, m.decimals, m.pct, true)}
                 </td>
               </tr>
             );
@@ -307,393 +301,156 @@ export function PlayerPerformanceSplits({
   primaryColor,
   teamLogoUrl,
 }: PlayerPerformanceSplitsProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [view, setView] = useState<View>("own");
+  const [explain, setExplain] = useState(false);
 
-  // Resolve the effective league filter: leagueIds (multi) takes precedence
-  // over the legacy leagueId (single). An empty array means no filter.
+  // leagueIds (multi) takes precedence over the legacy leagueId. Empty means no filter.
   const effectiveLeagueIds: string[] = leagueIds ?? (leagueId ? [leagueId] : []);
 
-  const { data: row, isLoading, isError } = useQuery<PlayerOnOffImpactProfileRow | null>({
-    queryKey: ["player-on-off-impact-profile", playerId, effectiveLeagueIds.join(','), teamId],
+  const { data: row, isLoading, isError } = useQuery<OnOffRow | null>({
+    queryKey: ["player-on-off-season", playerId, effectiveLeagueIds.join(","), teamId],
     queryFn: async () => {
       let query = supabase
-        .from("player_on_off_impact_profile_v1")
+        .from("player_on_off_season")
         .select("*")
         .eq("player_id", playerId)
-        .order("on_possessions_for", { ascending: false })
+        .order("on_poss_for", { ascending: false })
         .limit(1);
-
-      if (effectiveLeagueIds.length === 1) {
-        query = query.eq("league_id", effectiveLeagueIds[0]);
-      } else if (effectiveLeagueIds.length > 1) {
-        query = query.in("league_id", effectiveLeagueIds);
-      }
+      if (effectiveLeagueIds.length === 1) query = query.eq("league_id", effectiveLeagueIds[0]);
+      else if (effectiveLeagueIds.length > 1) query = query.in("league_id", effectiveLeagueIds);
       if (teamId) query = query.eq("team_id", teamId);
-
       const { data, error } = await query;
-
-      if (error) {
-        console.error("PlayerPerformanceSplits: Supabase error", error);
-        throw error;
-      }
-
-      if (data && data.length > 0) {
-        const r = data[0] as PlayerOnOffImpactProfileRow;
-        // Detect which percentage columns are missing from the view
-        const missingCols: string[] = [];
-        const pctFields = [
-          "on_oreb_pct","off_oreb_pct","diff_oreb_pct",
-          "on_dreb_pct","off_dreb_pct","diff_dreb_pct",
-          "on_reb_pct","off_reb_pct","diff_reb_pct",
-          "on_ast_pct","off_ast_pct","diff_ast_pct",
-          "on_blk_pct","off_blk_pct","diff_blk_pct",
-          "on_stl_pct","off_stl_pct","diff_stl_pct",
-          "on_tov_pct","off_tov_pct","diff_tov_pct",
-        ] as const;
-        for (const col of pctFields) {
-          if (!(col in r)) missingCols.push(col);
-        }
-        if (missingCols.length > 0) {
-          console.info(
-            `[PlayerPerformanceSplits] The following columns are not yet present in ` +
-            `player_on_off_impact_profile_v1 — rows will show "—" until the view is updated:\n  ${missingCols.join(", ")}`
-          );
-        }
-        return r;
-      }
-
-      return null;
+      if (error) throw error;
+      return (data?.[0] as OnOffRow | undefined) ?? null;
     },
     enabled: !!playerId,
     staleTime: 5 * 60 * 1000,
   });
 
-  // ── Loading ──────────────────────────────────────────────────────────────
-  if (isLoading) {
-    return (
-      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4 animate-pulse">
-        <div className="h-5 w-48 bg-slate-200 dark:bg-neutral-700 rounded mb-1" />
-        <div className="h-3 w-64 bg-slate-100 dark:bg-neutral-800 rounded mb-4" />
-        <div className="h-10 w-32 bg-slate-100 dark:bg-neutral-800 rounded mb-4" />
-        <div className="space-y-2">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-8 bg-slate-100 dark:bg-neutral-800 rounded" />
-          ))}
-        </div>
+  const shell = (body: JSX.Element) => (
+    <div className="ch-card p-4 md:p-5" data-testid="player-performance-splits-card">
+      <div className="mb-3">
+        <h3 className="ch-display text-xl font-bold uppercase tracking-[0.02em] text-[color:var(--ch-text)]">On/Off Impact</h3>
+        <p className="text-xs text-[color:var(--ch-muted)]">How his team performs with him on the court and off it</p>
       </div>
-    );
-  }
-
-  // ── Error ────────────────────────────────────────────────────────────────
-  if (isError) {
-    return (
-      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-        <span className="text-base font-bold text-slate-800 dark:text-white mb-1 block">
-          Team Performance Splits
-        </span>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-          Per 100 possessions · garbage-time filtered
-        </p>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Performance split data is temporarily unavailable.
-        </p>
-      </div>
-    );
-  }
-
-  // ── No data ───────────────────────────────────────────────────────────────
-  if (!row) {
-    return (
-      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-        <span className="text-base font-bold text-slate-800 dark:text-white mb-1 block">
-          Team Performance Splits
-        </span>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-          Per 100 possessions · garbage-time filtered
-        </p>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          On/off data not available yet.
-        </p>
-      </div>
-    );
-  }
-
-  // ── Derived state ─────────────────────────────────────────────────────────
-  const accuracyLabel = row.accuracy_label || "";
-  const isNeedsReview = accuracyLabel.toLowerCase().includes("needs review");
-  const isInsufficient = accuracyLabel.toLowerCase().includes("insufficient");
-  const isLowAccuracy = accuracyLabel.toLowerCase().includes("low");
-  const hasHeadline = row.adjusted_net_swing != null && !isNeedsReview;
-
-  const swingColor = !hasHeadline
-    ? "text-slate-400 dark:text-slate-500"
-    : row.adjusted_net_swing! > 3
-    ? "text-emerald-600 dark:text-emerald-400"
-    : row.adjusted_net_swing! < -3
-    ? "text-red-600 dark:text-red-400"
-    : "text-slate-700 dark:text-slate-300";
-
-  // Detect if pct columns are missing (from view)
-  const pctMissing = !("on_oreb_pct" in row);
-
-  // ── Metric rows ───────────────────────────────────────────────────────────
-  const metrics: MetricRow[] = [
-    {
-      label: "ORTG",     abbr: "ortg",
-      on: row.on_ortg,   off: row.off_ortg,
-      diff: row.on_ortg != null && row.off_ortg != null ? row.on_ortg - row.off_ortg : null,
-    },
-    {
-      label: "DRTG",     abbr: "drtg",
-      on: row.on_drtg,   off: row.off_drtg,
-      diff: row.on_drtg != null && row.off_drtg != null ? row.on_drtg - row.off_drtg : null,
-      invertGood: true,
-    },
-    {
-      label: "NRTG",     abbr: "nrtg",
-      on: row.on_nrtg,   off: row.off_nrtg,
-      diff: row.on_nrtg != null && row.off_nrtg != null ? row.on_nrtg - row.off_nrtg : null,
-    },
-    {
-      label: "OREB%",    abbr: "oreb_pct",
-      on: row.on_oreb_pct,  off: row.off_oreb_pct,
-      diff: row.diff_oreb_pct ?? null,
-      pct: true, missing: pctMissing,
-    },
-    {
-      label: "DREB%",    abbr: "dreb_pct",
-      on: row.on_dreb_pct,  off: row.off_dreb_pct,
-      diff: row.diff_dreb_pct ?? null,
-      pct: true, missing: pctMissing,
-    },
-    {
-      label: "REB%",     abbr: "reb_pct",
-      on: row.on_reb_pct,   off: row.off_reb_pct,
-      diff: row.diff_reb_pct ?? null,
-      pct: true, missing: pctMissing,
-    },
-    {
-      label: "AST%",     abbr: "ast_pct",
-      on: row.on_ast_pct,   off: row.off_ast_pct,
-      diff: row.diff_ast_pct ?? null,
-      pct: true, missing: pctMissing,
-    },
-    {
-      label: "TOV%",     abbr: "tov_pct",
-      on: row.on_tov_pct,   off: row.off_tov_pct,
-      diff: row.diff_tov_pct ?? null,
-      pct: true, invertGood: true, missing: pctMissing,
-    },
-    {
-      label: "STL%",     abbr: "stl_pct",
-      on: row.on_stl_pct,   off: row.off_stl_pct,
-      diff: row.diff_stl_pct ?? null,
-      pct: true, missing: pctMissing,
-    },
-    {
-      label: "BLK%",     abbr: "blk_pct",
-      on: row.on_blk_pct,   off: row.off_blk_pct,
-      diff: row.diff_blk_pct ?? null,
-      pct: true, missing: pctMissing,
-    },
-  ];
-
-  // ── Share card snapshot ───────────────────────────────────────────────────
-  const shareContent = (
-    <div className="flex flex-col" style={{ gap: 16 }}>
-      <div>
-        <span
-          className="font-bold uppercase text-slate-500 block"
-          style={{ fontSize: 17, letterSpacing: "0.18em" }}
-        >
-          Team Performance Splits
-        </span>
-        <span style={{ fontSize: 12 }} className="text-slate-400">
-          Adjusted per 100 possessions, excluding garbage-time and short-clock stints.
-        </span>
-      </div>
-
-      <div className="flex items-end gap-3 flex-wrap">
-        <span
-          className={`font-extrabold tabular-nums ${swingColor}`}
-          style={{ fontSize: 36, lineHeight: 1 }}
-        >
-          {hasHeadline ? fmtSigned(row.adjusted_net_swing) : "—"}
-        </span>
-        <div className="flex flex-col gap-1 pb-1">
-          <span style={{ fontSize: 13 }} className="text-slate-500 dark:text-slate-400">
-            Adjusted On/Off Swing
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {hasHeadline && row.adjusted_net_swing != null && (
-              <SwingBadge swing={row.adjusted_net_swing} />
-            )}
-            {accuracyLabel && <AccuracyBadge label={accuracyLabel} />}
-            {row.sample_size_label && <SampleBadge label={row.sample_size_label} />}
-          </div>
-        </div>
-      </div>
-
-      {isNeedsReview && (
-        <p style={{ fontSize: 13 }} className="text-slate-500">
-          {row.confidence_explanation || "On/off tracking needs review."}
-        </p>
-      )}
-
-      <MetricTable metrics={metrics} compact />
-
-      <div className="flex items-center justify-between" style={{ fontSize: 12 }}>
-        <span className="text-slate-400">
-          Raw Swing: {fmtSigned(row.raw_net_swing)}
-        </span>
-        <span className="text-slate-400">
-          Clean Possessions: {fmt(row.on_possessions_for, 0)}
-          {row.tracking_quality ? ` · ${row.tracking_quality}` : ""}
-        </span>
-      </div>
-
-      {row.confidence_explanation && !isNeedsReview && (
-        <p style={{ fontSize: 12 }} className="text-slate-500">
-          {row.confidence_explanation}
-        </p>
-      )}
+      {body}
     </div>
   );
 
-  // ── Main render ───────────────────────────────────────────────────────────
+  if (isLoading) {
+    return shell(
+      <div className="animate-pulse space-y-2">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="ch-tile h-16" />)}
+        </div>
+        {[...Array(6)].map((_, i) => <div key={i} className="h-8 rounded bg-[color:var(--ch-surface-3)]" />)}
+      </div>,
+    );
+  }
+  if (isError) return shell(<p className="text-sm text-[color:var(--ch-text-2)]">On/off data is unavailable right now.</p>);
+  if (!row) return shell(<p className="text-sm text-[color:var(--ch-text-2)]">No on/off data for this competition yet.</p>);
+
+  const onPoss = (Number(row.on_poss_for) + Number(row.on_poss_against)) / 2;
+  const offPoss = (Number(row.off_poss_for) + Number(row.off_poss_against)) / 2;
+  const of = row.qualified_count;
+  // Unranked samples are too small to colour as good or bad.
+  const toneFor = (v: number | null, higherIsGood: boolean, band: number) =>
+    !row.qualified
+      ? "text-[color:var(--ch-text-2)]"
+      : v == null || Math.abs(v) <= band
+      ? "text-[color:var(--ch-text)]"
+      : (v > 0) === higherIsGood
+      ? "text-[color:var(--ch-win)]"
+      : "text-[color:var(--ch-loss)]";
+
+  const tiles = (
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <ImpactTile label="Raw +/-" value={row.plus_minus_diff} decimals={0} rank={row.plus_minus_diff_rank} of={of}
+        tone={toneFor(row.plus_minus_diff, true, 0)} />
+      <ImpactTile label="ORTG +/-" value={row.ortg_diff} decimals={1} rank={row.ortg_diff_rank} of={of}
+        tone={toneFor(row.ortg_diff, true, 2)} />
+      <ImpactTile label="DRTG +/-" value={row.drtg_diff} decimals={1} rank={row.drtg_diff_rank} of={of}
+        tone={toneFor(row.drtg_diff, false, 2)} />
+      <ImpactTile label="Net +/-" value={row.nrtg_diff} decimals={1} rank={row.nrtg_diff_rank} of={of}
+        tone={toneFor(row.nrtg_diff, true, 2)} />
+    </div>
+  );
+
+  // The smaller of the two samples decides how much weight the swing can bear.
+  const sampleNote = !row.qualified
+    ? onPoss < MIN_ON_POSS
+      ? `Not ranked yet: ${Math.round(onPoss)} possessions on court so far (needs ${MIN_ON_POSS}).`
+      : `Not ranked: only ${Math.round(offPoss)} possessions with him off the court (needs ${MIN_OFF_POSS}), so the off numbers are very noisy.`
+    : offPoss < 120
+    ? `Small off-court sample (${Math.round(offPoss)} possessions): treat the swing as a rough guide.`
+    : null;
+
+  const viewToggle = (
+    <div className="ch-seg" role="tablist" aria-label="On/off view">
+      {(["own", "opp"] as View[]).map((v) => (
+        <button
+          key={v}
+          type="button"
+          role="tab"
+          data-active={view === v}
+          aria-selected={view === v}
+          onClick={() => setView(v)}
+          className="px-3 py-1 text-xs"
+        >
+          {v === "own" ? "Own team" : "Opposing team"}
+        </button>
+      ))}
+    </div>
+  );
+
+  const footnote = (
+    <p className="text-[11px] leading-relaxed text-[color:var(--ch-muted)]">
+      Per 100 possessions, competitive minutes only (garbage time and end-of-quarter heaves left out). Off is the rest of his
+      team's minutes in the {row.games} game{row.games === 1 ? "" : "s"} he played. Ranked among players with {MIN_ON_POSS}+
+      possessions on and {MIN_OFF_POSS}+ off.
+    </p>
+  );
+
+  const shareContent = (
+    <div className="flex flex-col" style={{ gap: 14 }}>
+      <span className="ch-display text-2xl font-bold uppercase">On/Off Impact</span>
+      {tiles}
+      <SplitTable row={row} view="own" name={playerName} photoUrl={playerPhotoUrl} compact />
+      {footnote}
+    </div>
+  );
+
   return (
     <ShareableCard
-      title="Team Performance Splits"
-      fileSlug="performance-splits"
-      player={{
-        name: playerName,
-        team: playerTeam,
-        photoUrl: playerPhotoUrl,
-        primaryColor,
-        teamLogoUrl,
-      }}
+      title="On/Off Impact"
+      fileSlug="on-off-impact"
+      player={{ name: playerName, team: playerTeam, photoUrl: playerPhotoUrl, primaryColor, teamLogoUrl }}
       shareContent={shareContent}
       wide
     >
-      <div
-        className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4"
-        data-testid="player-performance-splits-card"
-      >
-        {/* Header */}
-        <div className="mb-3">
-          <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white block">
-            Team Performance Splits
-          </span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">
-            Per 100 possessions · garbage-time filtered
-          </span>
-        </div>
-
-        {isNeedsReview ? (
-          <div className="flex items-start gap-2 rounded-lg bg-slate-50 dark:bg-neutral-800 p-3">
-            <Info className="h-4 w-4 text-slate-400 dark:text-slate-500 mt-0.5 shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
-                On/off tracking needs review
-              </p>
-              {row.confidence_explanation && (
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {row.confidence_explanation}
-                </p>
-              )}
+      {shell(
+        <div className="space-y-3">
+          {tiles}
+          {sampleNote && (
+            <div className="flex items-start gap-2 rounded-lg bg-[color:var(--ch-surface-2)] px-3 py-2 text-xs text-[color:var(--ch-text-2)]">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{sampleNote}</span>
             </div>
-          </div>
-        ) : (
-          <>
-            {/* Headline swing */}
-            <div className="flex flex-wrap items-end gap-3 mb-4">
-              <span
-                className={`text-4xl font-extrabold tabular-nums leading-none ${swingColor} ${
-                  isInsufficient ? "opacity-50" : ""
-                }`}
-              >
-                {hasHeadline ? fmtSigned(row.adjusted_net_swing) : "—"}
-              </span>
-              <div className="flex flex-col gap-1 pb-0.5">
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  Adjusted On/Off Swing
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {hasHeadline && row.adjusted_net_swing != null && (
-                    <SwingBadge swing={row.adjusted_net_swing} />
-                  )}
-                  {accuracyLabel && <AccuracyBadge label={accuracyLabel} />}
-                  {row.sample_size_label && (
-                    <SampleBadge label={row.sample_size_label} />
-                  )}
-                </div>
-                {isInsufficient && (
-                  <span className="text-xs text-slate-400 dark:text-slate-500 italic mt-0.5">
-                    Insufficient clean sample
-                  </span>
-                )}
-                {isLowAccuracy && !isInsufficient && (
-                  <span className="text-xs text-slate-400 dark:text-slate-500 italic mt-0.5">
-                    Treat as directional
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Main metric table */}
-            <div className="mb-3">
-              <MetricTable metrics={metrics} />
-            </div>
-
-            {/* Footer — raw swing + possessions + tracking */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-slate-400 dark:text-slate-500">
-              <span>
-                Raw Swing:{" "}
-                <span className="font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
-                  {fmtSigned(row.raw_net_swing)}
-                </span>
-              </span>
-              <span>
-                Clean Possessions:{" "}
-                <span className="font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
-                  {fmt(row.on_possessions_for, 0)}
-                </span>
-              </span>
-              {row.tracking_quality && (
-                <span>
-                  Tracking:{" "}
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">
-                    {row.tracking_quality}
-                  </span>
-                </span>
-              )}
-            </div>
-
-            {/* "How is this calculated?" collapsible */}
-            {row.confidence_explanation && (
-              <div>
-                <button
-                  onClick={() => setExpanded((v) => !v)}
-                  className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                >
-                  <Info className="h-3.5 w-3.5" />
-                  <span>How is this calculated?</span>
-                  {expanded ? (
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  )}
-                </button>
-                {expanded && (
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-neutral-800 rounded-lg p-3">
-                    {row.confidence_explanation}
-                  </p>
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+          )}
+          <div className="flex justify-center">{viewToggle}</div>
+          <SplitTable row={row} view={view} name={playerName} photoUrl={playerPhotoUrl} />
+          <button
+            type="button"
+            onClick={() => setExplain((v) => !v)}
+            className="flex items-center gap-1 text-xs text-[color:var(--ch-muted)] hover:text-[color:var(--ch-text-2)]"
+          >
+            <Info className="h-3.5 w-3.5" />
+            How is this calculated?
+            {explain ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+          {explain && footnote}
+        </div>,
+      )}
     </ShareableCard>
   );
 }
