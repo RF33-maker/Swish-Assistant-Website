@@ -62,6 +62,7 @@ interface PlayerStat {
   sblocks?: number;
   sturnovers?: number;
   sfoulspersonal?: number;
+  splusminuspoints?: number | null;
   starter?: boolean | null;
 }
 
@@ -378,6 +379,7 @@ export function InlineGameDetail({
             sturnovers: r.turnovers ?? r.sturnovers,
             // v_box_score names this column `fouls`; the player_stats fallback keeps `sfoulspersonal`.
             sfoulspersonal: r.fouls ?? r.sfoulspersonal ?? 0,
+            splusminuspoints: r.plus_minus ?? r.splusminuspoints ?? null,
             starter: r.starter ?? null,
           });
 
