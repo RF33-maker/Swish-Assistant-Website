@@ -52,6 +52,8 @@ export interface BoxScorePlayer {
   sthreepointersattempted?: number | null;
   sfreethrowsmade?: number | null;
   sfreethrowsattempted?: number | null;
+  /** Team points scored minus conceded while the player was on court, from the official feed. */
+  splusminuspoints?: number | null;
   /** The player's page; their name becomes a real link (search engines follow these). */
   href?: string | null;
   /** In-page handler for a plain click (e.g. the league page opening the player inline). */
@@ -105,6 +107,17 @@ function squadNumber(player: BoxScorePlayer): string {
   if (raw == null) return '';
   const text = String(raw).trim();
   return text;
+}
+
+/** "+7", "-3", "0"; the sign is what makes the column readable at a glance. */
+function signed(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function plusMinusTone(value: number): string {
+  if (value > 0) return 'text-emerald-600 dark:text-emerald-400';
+  if (value < 0) return 'text-red-600 dark:text-red-400';
+  return 'text-slate-500 dark:text-slate-400';
 }
 
 function efficiency(p: BoxScorePlayer): number {
@@ -166,6 +179,9 @@ export default function BoxScoreTable({
   // permanently blank column — which costs real width on a phone — drop it.
   const anyNumbers = players.some((p) => squadNumber(p) !== '');
   const nameLeft = anyNumbers ? NAME_LEFT : 'left-0';
+  // Only shown where the feed supplied it, so a competition without it does
+  // not get a column of blanks.
+  const anyPlusMinus = players.some((p) => p.splusminuspoints != null);
 
   const sumOf = (pick: (p: BoxScorePlayer) => number | null | undefined) =>
     players.reduce((total, p) => total + (pick(p) || 0), 0);
@@ -240,6 +256,7 @@ export default function BoxScoreTable({
                 <th className={STAT_HEAD}>3PT</th>
                 <th className={STAT_HEAD}>FT</th>
                 <th className={STAT_HEAD}>EFF</th>
+                {anyPlusMinus && <th className={STAT_HEAD}>+/-</th>}
               </tr>
             </thead>
             <tbody className="text-slate-800 dark:text-slate-200">
@@ -247,6 +264,8 @@ export default function BoxScoreTable({
                 const name = resolveName(player);
                 const number = squadNumber(player);
                 const rowBg = stripeBg(idx);
+                const played = clockToSeconds(formatMinutes(player.sminutes == null ? null : String(player.sminutes))) > 0;
+                const plusMinus = player.splusminuspoints;
 
                 return (
                   <tr
@@ -298,6 +317,11 @@ export default function BoxScoreTable({
                     <td className="text-center py-2 px-2 font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
                       {efficiency(player)}
                     </td>
+                    {anyPlusMinus && (
+                      <td className={`text-center py-2 px-2 font-medium tabular-nums ${plusMinus != null && played ? plusMinusTone(plusMinus) : STAT_CELL}`}>
+                        {plusMinus != null && played ? signed(plusMinus) : ''}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -315,7 +339,7 @@ export default function BoxScoreTable({
                   <td className={TOTAL_CELL}>{teamRebounds || ''}</td>
                   <td colSpan={3} />
                   <td className={TOTAL_CELL}>{teamTurnovers || ''}</td>
-                  <td colSpan={5} />
+                  <td colSpan={anyPlusMinus ? 6 : 5} />
                 </tr>
               )}
               <tr className={`border-t-2 border-orange-200 dark:border-neutral-600 ${TOTAL_BG} font-semibold`}>
@@ -337,6 +361,7 @@ export default function BoxScoreTable({
                 <td className={`${TOTAL_CELL} whitespace-nowrap`}>{totals.sthreepointersmade}/{totals.sthreepointersattempted}</td>
                 <td className={`${TOTAL_CELL} whitespace-nowrap`}>{totals.sfreethrowsmade}/{totals.sfreethrowsattempted}</td>
                 <td className={TOTAL_CELL}>{efficiency(totals)}</td>
+                {anyPlusMinus && <td className={TOTAL_CELL} />}
               </tr>
             </tfoot>
           </table>
