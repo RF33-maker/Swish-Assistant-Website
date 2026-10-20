@@ -78,6 +78,7 @@ export default function HomeFooter() {
           <div className="md:col-span-2">
             <FooterColumn title="Company">
               <li><Link href="/coaches-hub" className={linkClass}>Coaches Hub</Link></li>
+              <li><Link href="/swish-score" className={linkClass}>How Swish Score works</Link></li>
               <li><Link href="/contact-sales" className={linkClass}>Contact us</Link></li>
               <li><a href="#subscribe" className={linkClass}>Subscribe</a></li>
               <li><a href="#support" className={linkClass}>Support</a></li>

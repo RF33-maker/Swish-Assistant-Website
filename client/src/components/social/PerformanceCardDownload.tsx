@@ -16,7 +16,7 @@ import { generateTrendingCardBlob } from "@/lib/generateTrendingCard";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { supabase } from "@/lib/supabase";
 import type { GameStatForCard } from "@/lib/performanceCardUtils";
-import { computeGmSc } from "@/lib/performanceCardUtils";
+import { computeSwishScoreFor } from "@/lib/performanceCardUtils";
 
 interface PerformanceCardDownloadProps {
   stat: GameStatForCard;
@@ -73,7 +73,7 @@ export function PerformanceCardDownload({
   const fga = stat.sfieldgoalsattempted ?? 0;
   const ftm = stat.sfreethrowsmade ?? 0;
   const fta = stat.sfreethrowsattempted ?? 0;
-  const gmSc = parseFloat(computeGmSc(stat).toFixed(1));
+  const gmSc = parseFloat(computeSwishScoreFor(stat).toFixed(1));
   const tsPct = computeTsPct(stat);
 
   useEffect(() => {
@@ -135,7 +135,7 @@ export function PerformanceCardDownload({
   };
 
   const statCells = [
-    { label: "GmSc", value: gmSc },
+    { label: "Swish", value: gmSc },
     { label: "PTS",  value: pts },
     { label: "REB",  value: reb },
     { label: "AST",  value: ast },

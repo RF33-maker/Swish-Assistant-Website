@@ -35,7 +35,7 @@ import { selectProfileMatches } from "@/lib/profileMatches";
 import PreferredNameControl from "@/components/PreferredNameControl";
 import TradingCard, { type TradingCardPerformance } from "@/components/cards/TradingCard";
 import { requestTiltPermission } from "@/components/cards/TiltCard";
-import { computeGmSc } from "@/lib/performanceCardUtils";
+import { computeSwishScoreFor } from "@/lib/performanceCardUtils";
 import { computePastSeasonAccolades, computePlayerAccolades } from "@/lib/accolades";
 import { AccoladeChips, AccoladeCollection } from "@/components/cards/AccoladeCollection";
 import type { AccoladeCardPlayer } from "@/components/cards/AccoladeCard";
@@ -1693,7 +1693,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       return db - da;
     });
     const mostRecent = sorted[0];
-    const bestGame = [...filteredStats].sort((a, b) => computeGmSc(b) - computeGmSc(a))[0];
+    // Results aren't loaded yet here, so the win bonus is left out of the pick.
+    const bestGame = [...filteredStats].sort((a, b) => computeSwishScoreFor(b) - computeSwishScoreFor(a))[0];
     if (mostRecent.id === bestGame.id) return [{ stat: mostRecent, label: 'Latest · Best' }];
     return [
       { stat: mostRecent, label: 'Latest' },
@@ -2237,6 +2238,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     const fta = stat.sfreethrowsattempted ?? stat.free_throws_attempted ?? 0;
     const shots = fga + 0.44 * fta;
     const parentId = leagueId ? competitionParentMap.get(leagueId) : undefined;
+    const gameResult = gameResultFor(stat);
     return {
       playerId: playerInfo?.playerId || stat.player_id,
       playerName: playerInfo?.name || stat.full_name || "",
@@ -2247,8 +2249,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       leagueLogo: leagueId ? cardLeagues?.[leagueId]?.logo ?? null : null,
       gameDate: stat.game_date || stat.created_at || null,
       opponentName: stat.opponent?.trim() || null,
-      gameResult: gameResultFor(stat),
-      gameScore: Math.round(computeGmSc(stat) * 10) / 10,
+      gameResult,
+      gameScore: Math.round(computeSwishScoreFor(stat, gameResult ? gameResult.startsWith("W") : null) * 10) / 10,
       pts,
       reb: stat.sreboundstotal ?? stat.rebounds_total ?? 0,
       ast: stat.sassists ?? stat.assists ?? 0,

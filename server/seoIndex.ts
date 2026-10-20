@@ -486,7 +486,7 @@ export function sitemapEntries(index: SeoIndex): Array<{ path: string; lastmod: 
   for (const p of index.players) if (!p.youth) add(`/player/${encodeURIComponent(p.segment)}`, p.lastmod);
   for (const g of index.games) if (!g.youth) add(`/competition/${encodeURIComponent(g.competitionSlug)}/game/${encodeURIComponent(g.gameKey)}`, g.date ? g.date.split("T")[0] : null);
   // Legal pages: indexable, but no meaningful last-modified date to give.
-  for (const p of ["/privacy", "/terms", "/cookies"]) add(p, null);
+  for (const p of ["/privacy", "/terms", "/cookies", "/swish-score"]) add(p, null);
   return entries;
 }
 

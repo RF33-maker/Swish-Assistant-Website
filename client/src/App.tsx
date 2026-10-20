@@ -32,6 +32,7 @@ import NewsPreviewPage from "@/pages/NewsPreviewPage";
 import NewsArticlePage from "@/pages/NewsArticlePage";
 import NewsIndexPage from "@/pages/NewsIndexPage";
 import BritishBasketballHistoryPage from "@/pages/BritishBasketballHistoryPage";
+import SwishScorePage from "@/pages/SwishScorePage";
 import WidgetPage from "@/pages/widgets/WidgetPage";
 import EmbedGuide from "@/pages/embed-guide";
 import GamePage from "@/pages/GamePage";
@@ -116,6 +117,7 @@ function Router() {
       <Route path="/embed" component={EmbedGuide} />
       <Route path="/news" component={NewsIndexPage} />
       <Route path="/british-basketball-history" component={BritishBasketballHistoryPage} />
+      <Route path="/swish-score" component={SwishScorePage} />
       <Route path="/news/:slug" component={NewsArticlePage} />
       <Route path="/p/:slug" component={PublicProfilePage} />
       {/* Handles signed-out and unconfirmed visitors itself, so it can send them back here after sign-in. */}

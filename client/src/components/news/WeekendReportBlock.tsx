@@ -401,7 +401,7 @@ export default function WeekendReportBlock({ data }: { data: WeekendReportData }
       {data.performances.length > 0 && (
         <section aria-labelledby="wr-top">
           <h2 id="wr-top">Top performances</h2>
-          <p className="mt-2 text-[14px] text-[color:var(--ch-text-2)]">The best single-game lines of the weekend by Game Score. Tap a card for the player.</p>
+          <p className="mt-2 text-[14px] text-[color:var(--ch-text-2)]">The best single-game lines of the weekend by <Link href="/swish-score" className="font-semibold text-[color:var(--ch-accent)] hover:underline">Swish Score</Link>. Tap a card for the player.</p>
           <div
             className="tc-sizes -mx-4 mt-2 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-4 px-4 pb-8 pt-3 scrollbar-hide sm:mx-0 sm:scroll-px-0 sm:px-0 md:gap-5"
             role="list"

@@ -1,3 +1,5 @@
+import { computeSwishScore } from "@shared/swishScore";
+
 export interface GameStatForCard {
   id: string;
   player_id?: string;
@@ -28,16 +30,17 @@ export interface GameStatForCard {
   league_id?: string;
 }
 
-export function computeGmSc(stat: GameStatForCard): number {
-  const pts = stat.spoints ?? stat.points ?? 0;
-  const fgm = stat.sfieldgoalsmade ?? 0;
-  const fga = stat.sfieldgoalsattempted ?? 0;
-  const ftm = stat.sfreethrowsmade ?? 0;
-  const fta = stat.sfreethrowsattempted ?? 0;
-  const reb = stat.sreboundstotal ?? stat.rebounds_total ?? 0;
-  const ast = stat.sassists ?? stat.assists ?? 0;
-  const stl = stat.ssteals ?? 0;
-  const blk = stat.sblocks ?? 0;
-  const to  = stat.sturnovers ?? stat.turnovers ?? 0;
-  return pts + 0.4 * fgm - 0.7 * fga - 0.4 * (fta - ftm) + 0.7 * reb + stl + 0.7 * ast + 0.7 * blk - to;
+/** Swish Score for one game (see shared/swishScore.ts). `won` adds the win bonus when known. */
+export function computeSwishScoreFor(stat: GameStatForCard, won?: boolean | null): number {
+  return computeSwishScore({
+    pts: stat.spoints ?? stat.points,
+    reb: stat.sreboundstotal ?? stat.rebounds_total,
+    ast: stat.sassists ?? stat.assists,
+    stl: stat.ssteals,
+    blk: stat.sblocks,
+    tov: stat.sturnovers ?? stat.turnovers,
+    fga: stat.sfieldgoalsattempted,
+    fta: stat.sfreethrowsattempted,
+    won,
+  });
 }
