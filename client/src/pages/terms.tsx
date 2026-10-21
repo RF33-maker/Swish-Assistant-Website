@@ -10,7 +10,7 @@ export default function TermsOfServicePage() {
       draftNote={"These terms are a working draft. Final wording requires review and approval by a qualified legal adviser before public launch."}
     >
       <p className="text-[color:var(--ch-text-2)] leading-relaxed mb-6">
-        Welcome to Swish Assistant, a service operated by {COMPANY.legalName}, a company registered in {COMPANY.registeredIn} (company number {COMPANY.number}) with its registered office at {COMPANY.address} ("we", "our", "us").
+        Welcome to Swish Assistant, a service operated by {COMPANY.legalName}, a company registered in {COMPANY.registeredIn} ("we", "our", "us").
         By creating an account or using our website or service, you agree to these Terms of Service.
         If you do not agree, you must not use our service.
       </p>

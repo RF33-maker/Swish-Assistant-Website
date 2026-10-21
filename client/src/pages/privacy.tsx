@@ -10,8 +10,7 @@ export default function PrivacyPolicyPage() {
       draftNote={"This policy is a working draft. Final wording, lawful bases, and retention periods require review and approval by a qualified legal/privacy adviser before public launch."}
     >
       <p className="text-[color:var(--ch-text-2)] leading-relaxed mb-6">
-        Swish Assistant ("we", "our", "us") is operated by {COMPANY.legalName}, a company registered in {COMPANY.registeredIn} (company
-        number {COMPANY.number}). We are
+        Swish Assistant ("we", "our", "us") is operated by {COMPANY.legalName}, a company registered in {COMPANY.registeredIn}. We are
         committed to protecting your personal data in line with the UK General Data Protection Regulation
         (UK GDPR), the Data Protection Act 2018, and the Privacy and Electronic Communications
         Regulations (PECR). This policy explains what data we collect, why, how long we keep it, and
@@ -21,7 +20,7 @@ export default function PrivacyPolicyPage() {
       <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.4rem] md:text-[1.55rem] text-[color:var(--ch-text)] mt-10 mb-3">1. Who We Are</h2>
       <p className="text-[color:var(--ch-text-2)] leading-relaxed mb-6">
         {COMPANY.legalName} is the data controller for personal data collected through Swish Assistant.
-        Our registered office is {COMPANY.address}. Contact us at{" "}
+        Contact us at{" "}
         <a href={`mailto:${COMPANY.email}`} className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
           {COMPANY.email}
         </a>{" "}

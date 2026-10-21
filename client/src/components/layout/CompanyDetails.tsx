@@ -4,8 +4,8 @@ import { COMPANY } from "@/lib/company";
 export default function CompanyDetails({ className = "" }: { className?: string }) {
   return (
     <p className={className}>
-      {COMPANY.tradingName} is a trading name of {COMPANY.legalName}, registered in {COMPANY.registeredIn},
-      company number {COMPANY.number}. Registered office: {COMPANY.address}. Contact:{" "}
+      {COMPANY.tradingName} is a trading name of {COMPANY.legalName}, registered in {COMPANY.registeredIn}.
+      Contact:{" "}
       <a href={`mailto:${COMPANY.email}`} className="underline underline-offset-2 hover:opacity-80">
         {COMPANY.email}
       </a>
