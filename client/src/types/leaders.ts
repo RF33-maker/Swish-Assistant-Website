@@ -29,6 +29,8 @@ export type LeadersResponse = {
   category: LeaderCategory;
   categories: LeaderCategory[];
   minGames: number;
+  /** Player percentage categories: the attempts needed to qualify (null otherwise). */
+  minAttempts: number | null;
   maxGames: number;
   gamesCounted: number;
   leaders: Leader[];
