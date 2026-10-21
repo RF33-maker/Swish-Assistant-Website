@@ -36,6 +36,16 @@ function stripSeason(name: string): string {
   return name.replace(/\s*\(?\d{4}\s*[-/–]\s*\d{2,4}\)?\s*$/, "").trim();
 }
 
+const ATTEMPT_LABEL: Record<string, string> = { "FG%": "FGA", "3P%": "3PA", "FT%": "FTA" };
+
+/** Card small print: the qualifying minimums, e.g. "Min. 3 games · Min. 15 3PA". */
+function footnoteFor(data: LeadersResponse): string | undefined {
+  const parts: string[] = [];
+  if (data.minGames > 1) parts.push(`Min. ${data.minGames} games`);
+  if (data.minAttempts && ATTEMPT_LABEL[data.category.short]) parts.push(`Min. ${data.minAttempts} ${ATTEMPT_LABEL[data.category.short]}`);
+  return parts.length ? parts.join("  ·  ") : undefined;
+}
+
 function fmtShift(v: number): string {
   const n = Math.round(v);
   return n > 0 ? `+${n}%` : `${n}%`;
@@ -174,7 +184,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
       brand,
       teamLogoUrls,
       framing: leaderFraming,
-      footnote: data.minGames > 1 ? `Min. ${data.minGames} games` : undefined,
+      footnote: footnoteFor(data),
     })
       .then((canvas) => {
         if (token !== renderToken.current) return;
@@ -255,7 +265,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
 
         <Field
           label={`Minimum games${data ? ` (auto: ${data.minGames})` : ""}`}
-          hint="Leave empty for half of the most games anyone has played. Percentage categories also need a few attempts."
+          hint="Leave empty for half of the most games anyone has played. Percentage categories also need enough attempts that a few makes can't lead."
         >
           <input
             type="number"

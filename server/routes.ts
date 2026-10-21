@@ -4425,6 +4425,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     made?: string; // percentage categories: made / attempted
     att?: string;
     minAtt?: number;
+    /** Percentage categories: attempts required per game of the league's longest-playing player, so a few makes can't top the list. */
+    minAttPerGame?: number;
     signed?: boolean;
   };
   const PLAYER_LEADER_CATEGORIES: LeaderCategory[] = [
@@ -4434,9 +4436,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     { key: "stl", title: "Steals Per Game", label: "Steals", short: "SPG", col: "ssteals" },
     { key: "blk", title: "Blocks Per Game", label: "Blocks", short: "BPG", col: "sblocks" },
     { key: "tpm", title: "3-Pointers Made Per Game", label: "3-Pointers Made", short: "3PM", col: "sthreepointersmade" },
-    { key: "fg_pct", title: "Field Goal Percentage", label: "Field Goal %", short: "FG%", made: "sfieldgoalsmade", att: "sfieldgoalsattempted", minAtt: 5 },
-    { key: "tp_pct", title: "3-Point Percentage", label: "3-Point %", short: "3P%", made: "sthreepointersmade", att: "sthreepointersattempted", minAtt: 5 },
-    { key: "ft_pct", title: "Free Throw Percentage", label: "Free Throw %", short: "FT%", made: "sfreethrowsmade", att: "sfreethrowsattempted", minAtt: 5 },
+    { key: "fg_pct", title: "Field Goal Percentage", label: "Field Goal %", short: "FG%", made: "sfieldgoalsmade", att: "sfieldgoalsattempted", minAtt: 5, minAttPerGame: 4 },
+    { key: "tp_pct", title: "3-Point Percentage", label: "3-Point %", short: "3P%", made: "sthreepointersmade", att: "sthreepointersattempted", minAtt: 5, minAttPerGame: 3 },
+    { key: "ft_pct", title: "Free Throw Percentage", label: "Free Throw %", short: "FT%", made: "sfreethrowsmade", att: "sfreethrowsattempted", minAtt: 5, minAttPerGame: 2 },
   ];
   const TEAM_LEADER_CATEGORIES: LeaderCategory[] = [
     { key: "pts", title: "Points Scored Per Game", label: "Points Scored", short: "PPG", col: "tot_spoints" },
@@ -4503,8 +4505,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const cols = ["player_id", "full_name", "team_id", "team_name", "league_id", "game_key", "sminutes", "spoints", "sreboundstotal", "sassists", "ssteals", "sblocks", "sthreepointersmade", "sthreepointersattempted", "sfieldgoalsmade", "sfieldgoalsattempted", "sfreethrowsmade", "sfreethrowsattempted"];
         const rows = await fetchAllLeagueRows("player_stats", cols.join(","), leagueIds);
         gamesCounted = new Set(rows.map((r) => r.game_key)).size;
+        // A box score can carry the same player twice; count each player once per game.
+        const seenPlayerGames = new Set<string>();
         for (const r of rows) {
           if (!r.player_id) continue;
+          const playerGame = `${r.player_id}|${r.game_key}`;
+          if (seenPlayerGames.has(playerGame)) continue;
+          seenPlayerGames.add(playerGame);
           const played = minutesPlayed(r.sminutes) > 0 || cols.slice(7).some((c) => num(r[c]) > 0);
           if (!played) continue;
           const values: Record<string, number> = {};
@@ -4535,13 +4542,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const requestedMin = Number(req.query.minGames);
       const minGames = Number.isFinite(requestedMin) && requestedMin >= 1 ? Math.floor(requestedMin) : Math.max(1, Math.ceil(maxGames * 0.5));
 
+      // Players' percentage categories also need enough attempts that a handful of makes can't lead the league.
+      const minAttempts =
+        kind === "player" && category.made ? Math.max(category.minAtt ?? 1, Math.ceil(maxGames * (category.minAttPerGame ?? 0))) : null;
+
       const scored: { agg: Agg; value: number; display: string }[] = [];
       for (const a of Array.from(aggs.values())) {
         if (a.games < minGames) continue;
         let value: number | null = null;
         if (category.made && category.att) {
           const att = a.sums[category.att] || 0;
-          if (att >= Math.max(category.minAtt ?? 1, minGames * (kind === "player" ? 1 : 0))) value = ((a.sums[category.made] || 0) / att) * 100;
+          if (att >= (minAttempts ?? category.minAtt ?? 1)) value = ((a.sums[category.made] || 0) / att) * 100;
         } else if (category.key === "opp") {
           const g = a.sums.oppGames || 0;
           if (g > 0) value = (a.sums.opp || 0) / g;
@@ -4608,6 +4619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         category: { key: category.key, label: category.label, title: category.title, short: category.short, lowerIsBetter: !!category.lowerIsBetter },
         categories: categoryList,
         minGames,
+        minAttempts,
         maxGames,
         gamesCounted,
         leaders,
