@@ -1,4 +1,5 @@
 import LegalPageShell from "@/components/layout/LegalPageShell";
+import { COMPANY } from "@/lib/company";
 
 export default function TermsOfServicePage() {
   return (
@@ -9,7 +10,7 @@ export default function TermsOfServicePage() {
       draftNote={"These terms are a working draft. Final wording requires review and approval by a qualified legal adviser before public launch."}
     >
       <p className="text-[color:var(--ch-text-2)] leading-relaxed mb-6">
-        Welcome to Swish Assistant, a service operated by Automated Athlete ("we", "our", "us").
+        Welcome to Swish Assistant, a service operated by {COMPANY.legalName}, a company registered in {COMPANY.registeredIn} ("we", "our", "us").
         By creating an account or using our website or service, you agree to these Terms of Service.
         If you do not agree, you must not use our service.
       </p>
@@ -34,8 +35,8 @@ export default function TermsOfServicePage() {
       <ul className="list-disc pl-6 space-y-2 text-[color:var(--ch-text-2)] mb-6 marker:text-[color:var(--ch-muted)]">
         <li>You must verify your email address before accessing member-only features.</li>
         <li>You are responsible for keeping your credentials confidential. Notify us immediately at{" "}
-          <a href="mailto:automatedathleteswa@gmail.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
-            automatedathleteswa@gmail.com
+          <a href="mailto:admin@swishassistant.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
+            admin@swishassistant.com
           </a>{" "}
           if you suspect unauthorised access.
         </li>
@@ -115,11 +116,11 @@ export default function TermsOfServicePage() {
       <p className="text-[color:var(--ch-text-2)] leading-relaxed">
         📧{" "}
         <a
-          href="mailto:automatedathleteswa@gmail.com"
+          href="mailto:admin@swishassistant.com"
           className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80"
           data-testid="link-contact-email"
         >
-          automatedathleteswa@gmail.com
+          admin@swishassistant.com
         </a>
       </p>
     </LegalPageShell>

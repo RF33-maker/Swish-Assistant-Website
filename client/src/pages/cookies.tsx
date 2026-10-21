@@ -105,11 +105,11 @@ export default function CookiePolicyPage() {
       <p className="text-[color:var(--ch-text-2)] leading-relaxed">
         📧{" "}
         <a
-          href="mailto:automatedathleteswa@gmail.com"
+          href="mailto:admin@swishassistant.com"
           className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80"
           data-testid="link-contact-email"
         >
-          automatedathleteswa@gmail.com
+          admin@swishassistant.com
         </a>
       </p>
     </LegalPageShell>
