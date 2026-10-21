@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Helmet } from "react-helmet-async";
 import { AlertTriangle } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
+import CompanyDetails from "@/components/layout/CompanyDetails";
 
 const LEGAL_PAGES = [
   { href: "/privacy", label: "Privacy" },
@@ -67,6 +68,8 @@ export default function LegalPageShell({
         <article className="ch-card ch-rise p-6 md:p-10 text-[15px] [&_strong]:font-semibold [&_strong]:text-[color:var(--ch-text)] [&>h2:first-child]:mt-0 [&>p:first-child]:mt-0">
           {children}
         </article>
+
+        <CompanyDetails className="mt-6 text-xs leading-relaxed text-[color:var(--ch-muted)]" />
       </main>
     </div>
   );

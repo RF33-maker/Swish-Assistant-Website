@@ -630,10 +630,10 @@ export default function AccountCentre() {
                     . Scheduled for {formatDate(existingDeletion.scheduled_for)}.
                     To cancel, contact{" "}
                     <a
-                      href="mailto:automatedathleteswa@gmail.com"
+                      href="mailto:admin@swishassistant.com"
                       className="underline"
                     >
-                      automatedathleteswa@gmail.com
+                      admin@swishassistant.com
                     </a>
                     .
                   </AlertDescription>

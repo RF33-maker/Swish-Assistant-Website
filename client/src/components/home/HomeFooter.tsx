@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Instagram } from "lucide-react";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { useNavLeagues } from "@/lib/navLeagues";
+import CompanyDetails from "@/components/layout/CompanyDetails";
 
 const PLATFORM_INSTAGRAM_HANDLE = "swishassistant";
 
@@ -98,6 +99,7 @@ export default function HomeFooter() {
           <p>&copy; {new Date().getFullYear()} Swish Assistant. All rights reserved.</p>
           <p>Made for British basketball.</p>
         </div>
+        <CompanyDetails className="mt-3 text-center sm:text-left text-xs leading-relaxed text-white/45" />
       </div>
     </footer>
   );

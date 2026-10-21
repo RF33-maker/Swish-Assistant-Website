@@ -1,4 +1,5 @@
 import LegalPageShell from "@/components/layout/LegalPageShell";
+import { COMPANY } from "@/lib/company";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -9,7 +10,8 @@ export default function PrivacyPolicyPage() {
       draftNote={"This policy is a working draft. Final wording, lawful bases, and retention periods require review and approval by a qualified legal/privacy adviser before public launch."}
     >
       <p className="text-[color:var(--ch-text-2)] leading-relaxed mb-6">
-        Swish Assistant ("we", "our", "us") is operated by Automated Athlete, a UK-based company. We are
+        Swish Assistant ("we", "our", "us") is operated by {COMPANY.legalName}, a company registered in {COMPANY.registeredIn} (company
+        number {COMPANY.number}). We are
         committed to protecting your personal data in line with the UK General Data Protection Regulation
         (UK GDPR), the Data Protection Act 2018, and the Privacy and Electronic Communications
         Regulations (PECR). This policy explains what data we collect, why, how long we keep it, and
@@ -18,10 +20,10 @@ export default function PrivacyPolicyPage() {
 
       <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.4rem] md:text-[1.55rem] text-[color:var(--ch-text)] mt-10 mb-3">1. Who We Are</h2>
       <p className="text-[color:var(--ch-text-2)] leading-relaxed mb-6">
-        Automated Athlete is the data controller for personal data collected through Swish Assistant.
-        Contact us at{" "}
-        <a href="mailto:automatedathleteswa@gmail.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
-          automatedathleteswa@gmail.com
+        {COMPANY.legalName} is the data controller for personal data collected through Swish Assistant.
+        Our registered office is {COMPANY.address}. Contact us at{" "}
+        <a href={`mailto:${COMPANY.email}`} className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
+          {COMPANY.email}
         </a>{" "}
         for any privacy-related enquiry.
       </p>
@@ -139,8 +141,8 @@ export default function PrivacyPolicyPage() {
         Requests are reviewed and fulfilled manually by our team. We aim to compile and deliver your data
         by email within 72 hours of receiving the request. If you do not hear from us within 72 hours,
         please contact us at{" "}
-        <a href="mailto:automatedathleteswa@gmail.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
-          automatedathleteswa@gmail.com
+        <a href="mailto:admin@swishassistant.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
+          admin@swishassistant.com
         </a>.
       </p>
 
@@ -174,8 +176,8 @@ export default function PrivacyPolicyPage() {
       </ul>
       <p className="text-[color:var(--ch-text-2)] leading-relaxed mb-6">
         To exercise any right, contact:{" "}
-        <a href="mailto:automatedathleteswa@gmail.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
-          automatedathleteswa@gmail.com
+        <a href="mailto:admin@swishassistant.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
+          admin@swishassistant.com
         </a>. We will respond within one calendar month.
       </p>
 
@@ -195,8 +197,8 @@ export default function PrivacyPolicyPage() {
       <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.4rem] md:text-[1.55rem] text-[color:var(--ch-text)] mt-10 mb-3">13. Contact</h2>
       <p className="text-[color:var(--ch-text-2)] leading-relaxed">
         📧{" "}
-        <a href="mailto:automatedathleteswa@gmail.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
-          automatedathleteswa@gmail.com
+        <a href="mailto:admin@swishassistant.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
+          admin@swishassistant.com
         </a>
       </p>
     </LegalPageShell>

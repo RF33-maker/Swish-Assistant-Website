@@ -4,7 +4,7 @@ import { Helmet } from "react-helmet-async";
 import { ArrowRight, BadgeCheck, Building2, CheckCircle2, ClipboardList, Clock, KeyRound, Mail, MessageSquare } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 
-const CONTACT_EMAIL = "automatedathleteswa@gmail.com";
+const CONTACT_EMAIL = "admin@swishassistant.com";
 
 type TopicKey = "general" | "player-page" | "coach" | "league";
 
