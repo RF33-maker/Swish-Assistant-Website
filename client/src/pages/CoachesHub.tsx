@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useLocation } from 'wouter';
+import { readHubUrl, buildHubSearch, type HubUrlState, type HubUrlView } from '@/lib/hubUrl';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import { useGlobalSearch, type SearchSuggestion } from '@/hooks/useGlobalSearch';
@@ -233,6 +234,15 @@ async function fetchTeamAdvancedAverages(leagueId: string): Promise<Map<string, 
 export default function CoachesHub() {
   const { user, isCoach, isRealAdmin, teamId: coachTeamId, logoutMutation } = useAuth();
   const [, navigate] = useLocation();
+  // What the link we were opened with asked for (league, tab, open report).
+  // Applied once as the league and its stats load, then dropped.
+  const pendingUrl = useRef<HubUrlState | null>(typeof window === 'undefined' ? null : readHubUrl(window.location.search));
+  // False until that link has been applied (or turned out to match nothing), so
+  // the address bar isn't rewritten to the default view before then.
+  const [urlReady, setUrlReady] = useState(() => pendingUrl.current === null);
+  // The league whose stats have finished loading, so a linked player or team
+  // is only looked up once there is something to find.
+  const [statsReadyFor, setStatsReadyFor] = useState<string | null>(null);
   const { query: search, setQuery: setSearch, suggestions, handleSelect: handleSelectSearch, handleSubmit: handleSubmitSearch } = useGlobalSearch();
   const [leagues, setLeagues] = useState<any[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<any>(null);
@@ -304,7 +314,27 @@ export default function CoachesHub() {
     setDetailView(null);
     if (selectedLeague) {
       fetchLeagueStats();
-      setActiveTab('overview');
+      // A link may name the tab and a report to open. It only applies to the
+      // league it was made for; any other league switch starts from overview.
+      const linked = pendingUrl.current;
+      const forThisLeague = linked && (!linked.league || linked.league === selectedLeague.league_id);
+      setActiveTab(forThisLeague && linked.tab ? linked.tab : 'overview');
+      if (forThisLeague && linked.view) {
+        const view = linked.view;
+        if (view.type === 'matchReport') {
+          setDetailView({ type: 'matchReport', gameKey: view.gameKey });
+        } else if (view.type === 'scoutReport') {
+          setDetailView({ type: 'scoutReport', opponentName: view.opponentName, forTeamName: view.forTeamName });
+        }
+        // Players and teams need the league's stats first; see the effect below.
+        if (view.type === 'matchReport' || view.type === 'scoutReport') {
+          pendingUrl.current = null;
+          setUrlReady(true);
+        }
+      } else {
+        pendingUrl.current = null;
+        setUrlReady(true);
+      }
     } else {
       setPlayerSeasonAverages([]);
       setTeamSeasonAverages([]);
@@ -373,7 +403,12 @@ export default function CoachesHub() {
       }
 
       setLeagues(combined);
-      if (coachCompetition) {
+      const linkedLeague = pendingUrl.current?.league
+        ? combined.find((c: any) => c.league_id === pendingUrl.current?.league)
+        : null;
+      if (linkedLeague) {
+        setSelectedLeague(linkedLeague);
+      } else if (coachCompetition) {
         setSelectedLeague(coachCompetition);
       } else if (combined.length === 1) {
         setSelectedLeague(combined[0]);
@@ -462,8 +497,41 @@ export default function CoachesHub() {
       setNextGame(null);
     } finally {
       setStatsLoading(false);
+      setStatsReadyFor(selectedLeague.league_id);
     }
   };
+
+  // Open the player or team a link named, now that the league's stats are in.
+  // If it can't be found (renamed, or a different season) the hub just stays
+  // on the tab the link asked for.
+  useEffect(() => {
+    const view = pendingUrl.current?.view;
+    if (!view || !selectedLeague || statsReadyFor !== selectedLeague.league_id) return;
+    if (view.type === 'player') {
+      const player = playerSeasonAverages.find((p) => p.team_id === view.teamId && p.player_name === view.name);
+      if (player) setDetailView({ type: 'player', player });
+    } else if (view.type === 'team') {
+      const team = teamSeasonAverages.find((t) => t.team_id === view.teamId);
+      if (team) setDetailView({ type: 'team', team });
+    }
+    pendingUrl.current = null;
+    setUrlReady(true);
+  }, [statsReadyFor, selectedLeague, playerSeasonAverages, teamSeasonAverages]);
+
+  // Keep the address bar in step with what's on screen, so copying the URL (or
+  // opening it from a message) lands on the same league, tab and report.
+  useEffect(() => {
+    if (!urlReady || !selectedLeague) return;
+    let view: HubUrlView | undefined;
+    if (detailView?.type === 'player') view = { type: 'player', teamId: detailView.player.team_id, name: detailView.player.player_name };
+    else if (detailView?.type === 'team') view = { type: 'team', teamId: detailView.team.team_id };
+    else if (detailView?.type === 'matchReport') view = { type: 'matchReport', gameKey: detailView.gameKey };
+    else if (detailView?.type === 'scoutReport') view = { type: 'scoutReport', opponentName: detailView.opponentName, forTeamName: detailView.forTeamName || undefined };
+    const search = buildHubSearch({ league: selectedLeague.league_id, tab: activeTab, view }, window.location.search);
+    if (search !== window.location.search) {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`);
+    }
+  }, [urlReady, selectedLeague, activeTab, detailView]);
 
   const hasStats = playerSeasonAverages.length > 0 || teamSeasonAverages.length > 0;
   // v_team_game_log has one row per team per game, so total games = rows / 2 (two teams per game).
