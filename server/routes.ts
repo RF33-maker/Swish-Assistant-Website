@@ -16,6 +16,7 @@ import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerPlaybookRoutes } from "./playbookRoutes";
 import { registerScoutRosterRoutes } from "./scoutRoster";
 import { registerBillingRoutes } from "./billing/billingRoutes";
+import { registerMemberAccountRoutes } from "./memberAccounts";
 import { registerNewsArticleRoutes } from "./newsArticles";
 import { registerWeekendReportRoutes } from "./weekendReports";
 import { registerNblScoreRoutes } from "./nblScores";
@@ -440,6 +441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerPlaybookRoutes(app);
   registerScoutRosterRoutes(app, { filterLeagueIdsForPublicScope });
   registerBillingRoutes(app);
+  registerMemberAccountRoutes(app);
 
   // Test endpoint to verify routes are working
   app.get("/api/test", (req, res) => {
@@ -5804,81 +5806,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/account/update-profile
-  // Authenticated endpoint to update the member's display name only.
-  // Marketing consent is handled by /api/account/update-marketing-consent.
-  // No direct client UPDATE path exists on member_profiles (RLS has no UPDATE
-  // policy), so server endpoints are the only write path.
-  app.post("/api/account/update-profile", async (req: Request, res: Response) => {
-    const userId = await authenticateSupabaseUser(req);
-    if (!userId) return res.status(401).json({ error: "Authentication required" });
-
-    const { displayName } = req.body ?? {};
-    if (typeof displayName !== "string" && displayName !== null && displayName !== undefined) {
-      return res.status(400).json({ error: "displayName must be a string or null" });
-    }
-
-    const { error } = await supabaseAdmin
-      .from("member_profiles")
-      .update({
-        display_name: displayName?.trim() || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", userId);
-
-    if (error) {
-      console.error("[update-profile] error:", error.message);
-      return res.status(500).json({ error: error.message });
-    }
-
-    return res.json({ success: true });
-  });
-
-  // POST /api/account/update-marketing-consent
-  // Authenticated endpoint for members to update their marketing preference.
-  // Updates member_profiles and appends a consent audit row — the only two
-  // places marketing_consent is intentionally written.
-  app.post("/api/account/update-marketing-consent", async (req: Request, res: Response) => {
-    const userId = await authenticateSupabaseUser(req);
-    if (!userId) return res.status(401).json({ error: "Authentication required" });
-
-    const { accepted } = req.body ?? {};
-    if (typeof accepted !== "boolean") {
-      return res.status(400).json({ error: "accepted (boolean) is required" });
-    }
-
-    const now = new Date().toISOString();
-
-    const { error: profileErr } = await supabaseAdmin
-      .from("member_profiles")
-      .update({
-        marketing_consent: accepted,
-        marketing_consent_at: accepted ? now : null,
-        updated_at: now,
-      })
-      .eq("id", userId);
-
-    if (profileErr) {
-      console.error("[update-marketing-consent] profile error:", profileErr.message);
-      return res.status(500).json({ error: "Failed to update preference" });
-    }
-
-    const { error: consentErr } = await supabaseAdmin.from("member_consents").insert({
-      user_id: userId,
-      consent_type: "marketing",
-      accepted,
-      accepted_at: now,
-    });
-
-    if (consentErr) {
-      console.error("[update-marketing-consent] consent audit error:", consentErr.message);
-      // Still return success — the preference is saved; log the audit failure.
-    }
-
-    console.log(`[update-marketing-consent] User ${userId} set marketing=${accepted}`);
-    return res.json({ success: true });
-  });
-
   // POST /api/account/export-request
   // Creates a data_export_requests row for the authenticated user.
   // The actual data assembly is performed by the admin fulfilment endpoint below.
@@ -5989,11 +5916,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const userId = exportReq.user_id;
 
     // Gather account data using service-role key.
+    // maybeSingle: an account made on Scorers Table has no profile row until it
+    // first saves one here, and that is a null profile, not a failed export.
     const [profileRes, consentsRes, exportsRes] = await Promise.all([
-      supabaseAdmin.from("member_profiles").select("*").eq("id", userId).single(),
+      supabaseAdmin.from("member_profiles").select("*").eq("id", userId).maybeSingle(),
       supabaseAdmin.from("member_consents").select("*").eq("user_id", userId),
       supabaseAdmin.from("data_export_requests").select("id, status, requested_at").eq("user_id", userId),
     ]);
+
+    // A real lookup failure must not hand the member an export with the profile silently missing.
+    if (profileRes.error) {
+      console.error(`[fulfil-export] profile lookup failed for ${userId}:`, profileRes.error.message);
+      return res.status(500).json({ error: "Failed to compile the profile for this export" });
+    }
 
     const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
 
