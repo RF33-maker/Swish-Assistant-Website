@@ -9,6 +9,16 @@ import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 
 /**
+ * Where signed-out visitors are sent. The page they asked for rides along as
+ * ?next= (the sign-in page already honours it), so a link to a report still
+ * lands on that report after they sign in.
+ */
+function signInPath(): string {
+  const here = window.location.pathname + window.location.search;
+  return `/auth?next=${encodeURIComponent(here)}`;
+}
+
+/**
  * ProtectedRoute – requires an authenticated user with a confirmed email.
  *
  * Access flow:
@@ -40,7 +50,7 @@ export function ProtectedRoute({
   if (!user) {
     return (
       <Route path={path}>
-        <Redirect to="/auth" />
+        <Redirect to={signInPath()} />
       </Route>
     );
   }
@@ -81,7 +91,7 @@ export function AdminRoute({
   if (!user) {
     return (
       <Route path={path}>
-        <Redirect to="/auth" />
+        <Redirect to={signInPath()} />
       </Route>
     );
   }
@@ -127,7 +137,7 @@ export function TeamRoute({
   if (!user) {
     return (
       <Route path={path}>
-        <Redirect to="/auth" />
+        <Redirect to={signInPath()} />
       </Route>
     );
   }
