@@ -17,6 +17,15 @@ Terms/privacy consent rows are only written by the server (POST /api/account/reg
 validating termsAccepted === true in the request body.  The server rejects any request without
 this flag before any DB write occurs.
 
+One more source exists: Scorers Table (scorerstable.app) shares these accounts and signs up straight
+against Supabase, recording `terms_accepted_at` / `terms_version` in the auth user's `user_metadata`
+instead. server/memberAccounts.ts creates the missing `member_profiles` row on the member's first
+update-profile / update-marketing-consent call and copies that acceptance into ONE `member_consents`
+row, typed `terms_<terms_version>` (e.g. `terms_2026-10-draft-1`, never the site's `terms_v1`), at the
+metadata timestamp, once. Nothing is written if the timestamp or version is missing/unusable. The
+metadata is client-supplied (a member can edit their own user_metadata), so it is the same trust level
+as `termsAccepted: true` posted to /register, not stronger.
+
 member_consents has SELECT-only RLS for clients — no INSERT/UPDATE policy.
 member_profiles has SELECT-only RLS for clients — no UPDATE policy.
 All writes to these tables go through service-role server endpoints.
