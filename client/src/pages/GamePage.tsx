@@ -39,6 +39,8 @@ interface GameSchedule {
 }
 
 interface PlayerStat {
+  /** 'swish_stats' when the game was scored in Scorers Table. */
+  source_type?: string | null;
   firstname?: string;
   familyname?: string;
   full_name?: string;
@@ -66,6 +68,7 @@ interface PlayerStat {
 }
 
 interface TeamStat {
+  source_type?: string | null;
   name: string;
   side: string;
   score: number;
@@ -997,6 +1000,10 @@ export default function GamePage() {
   const homeScore = homeTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[0] : null);
   const awayScore = awayTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[1] : null);
 
+  // Scored in Scorers Table rather than taken from a LiveStats feed.
+  const capturedWithScorersTable =
+    !!playerStats?.some(p => p.source_type === 'swish_stats') || !!teamStats?.some(t => t.source_type === 'swish_stats');
+
   const heroState: GameHeroState = isLive
     ? 'live'
     : isFinal || hasStatsData
@@ -1034,8 +1041,23 @@ export default function GamePage() {
             homeHref={teamPath(gameData.hometeam, leagueSlug) || undefined}
             awayHref={teamPath(gameData.awayteam, leagueSlug) || undefined}
             colors={colors}
-            badges={isTestMode ? (
-              <span className="rounded-full bg-purple-600 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-white">Test mode</span>
+            badges={isTestMode || capturedWithScorersTable ? (
+              <>
+                {isTestMode && (
+                  <span className="rounded-full bg-purple-600 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-white">Test mode</span>
+                )}
+                {capturedWithScorersTable && (
+                  <a
+                    href="https://scorerstable.app"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="captured-with-scorers-table"
+                    className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/80 hover:text-white"
+                  >
+                    Stats captured with Scorers Table by Swish Assistant
+                  </a>
+                )}
+              </>
             ) : null}
             meta={[
               { icon: <Calendar />, label: formatDate(gameData.matchtime) },
