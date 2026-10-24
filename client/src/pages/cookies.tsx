@@ -39,7 +39,7 @@ export default function CookiePolicyPage() {
                 The site cannot function without these.
               </td>
               <td className="p-3 border border-[color:var(--ch-border)] text-emerald-600 dark:text-emerald-400 font-medium">No</td>
-              <td className="p-3 border border-[color:var(--ch-border)]">Supabase, our server</td>
+              <td className="p-3 border border-[color:var(--ch-border)]">Our sign-in provider, our server</td>
             </tr>
             <tr className="bg-[color:var(--ch-surface-2)]">
               <td className="p-3 border border-[color:var(--ch-border)] font-medium text-[color:var(--ch-text)]">Functional</td>
@@ -54,10 +54,10 @@ export default function CookiePolicyPage() {
               <td className="p-3 border border-[color:var(--ch-border)] font-medium text-[color:var(--ch-text)]">Analytics</td>
               <td className="p-3 border border-[color:var(--ch-border)]">
                 Aggregated page-view data to understand which features are used.
-                We use Vercel Analytics (privacy-friendly, IP-anonymised).
+                We use a privacy-friendly analytics service (IP-anonymised).
               </td>
               <td className="p-3 border border-[color:var(--ch-border)] text-amber-600 dark:text-amber-400 font-medium">Yes</td>
-              <td className="p-3 border border-[color:var(--ch-border)]">Vercel Analytics</td>
+              <td className="p-3 border border-[color:var(--ch-border)]">Our analytics provider</td>
             </tr>
           </tbody>
         </table>
