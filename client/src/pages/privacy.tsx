@@ -49,7 +49,7 @@ export default function PrivacyPolicyPage() {
       <h3 className="text-base font-semibold text-[color:var(--ch-text)] mt-6 mb-2">2c. Uploaded content</h3>
       <p className="text-[color:var(--ch-text-2)] leading-relaxed mb-6">
         If you upload game-data files or PDFs, those files and any extracted data are processed to
-        provide the service. Files are stored in Supabase-managed object storage.
+        provide the service. Files are stored in our provider's managed object storage.
       </p>
 
       <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.4rem] md:text-[1.55rem] text-[color:var(--ch-text)] mt-10 mb-3">3. Lawful Basis for Processing</h2>
@@ -150,11 +150,17 @@ export default function PrivacyPolicyPage() {
         We do not sell your data. We share data only with:
       </p>
       <ul className="list-disc pl-6 space-y-2 text-[color:var(--ch-text-2)] mb-6 marker:text-[color:var(--ch-muted)]">
-        <li><strong>Supabase</strong> — authentication and database hosting (data stored in EU region).</li>
-        <li><strong>OpenAI</strong> — AI-generated summaries (data processed per OpenAI's API data policy).</li>
-        <li><strong>Vercel Analytics</strong> — aggregated page-view analytics (if you accepted analytics cookies).</li>
+        <li><strong>Our database and sign-in provider</strong> — authentication and database hosting (data stored in EU region).</li>
+        <li><strong>Our AI provider</strong> — AI-generated summaries (data processed under that provider's API data policy).</li>
+        <li><strong>Our analytics provider</strong> — aggregated page-view analytics (if you accepted analytics cookies).</li>
         <li>Regulatory authorities, if required by law.</li>
       </ul>
+      <p className="text-[color:var(--ch-text-2)] leading-relaxed mb-4">
+        The names of these providers, and where your data is held, are available on request at{" "}
+        <a href="mailto:admin@swishassistant.com" className="font-medium text-[color:var(--ch-accent)] underline underline-offset-2 hover:opacity-80">
+          admin@swishassistant.com
+        </a>.
+      </p>
       <p className="text-[color:var(--ch-text-2)] text-sm mb-6">
         <em>International transfer safeguards (UK adequacy decisions, SCCs) to be confirmed by legal review.</em>
       </p>
