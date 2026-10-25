@@ -114,6 +114,39 @@ function levenshtein(a: string, b: string, maxDist: number): number {
 }
 
 /**
+ * Lowercased words of a team name after normalizeTeamName, so "Senior Men" and
+ * a trailing "I" don't count as words.
+ */
+function teamNameWords(name: string): string[] {
+  return normalizeTeamName(name).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+const ROMAN_NUMERAL = /^(i|ii|iii|iv|v|vi|vii|viii|ix|x)$/;
+
+/**
+ * True when two similar-looking names have words that mark them as different
+ * teams, so the fuzzy scores alone must not merge them:
+ *   - a number or Roman numeral on only one side or different on each side
+ *     ("15U Team 1" / "15U Team 2", "Bristol Flyers" / "Bristol Flyers II")
+ *   - a different word on each side that isn't a typo of the other
+ *     ("Sheffield Arrows" / "Sheffield Sharks", "Bristol Storm" / "Bristol Comets")
+ * Extra words on one side only are allowed ("Phoenix NextGen" / "Phoenix NextGen Stars").
+ */
+function namesConflict(a: string, b: string): boolean {
+  const aWords = teamNameWords(a);
+  const bWords = teamNameWords(b);
+  const onlyA = aWords.filter(w => !bWords.includes(w));
+  const onlyB = bWords.filter(w => !aWords.includes(w));
+  const isIdentifier = (w: string) => /\d/.test(w) || ROMAN_NUMERAL.test(w);
+  if (onlyA.some(isIdentifier) || onlyB.some(isIdentifier)) return true;
+  if (onlyA.length === 0 || onlyB.length === 0) return false;
+  const restA = onlyA.join('');
+  const restB = onlyB.join('');
+  const allowed = Math.max(restA.length, restB.length) >= 8 ? 2 : 1;
+  return levenshtein(restA, restB, allowed) > allowed;
+}
+
+/**
  * Given a list of raw team names, returns a Map<variant, canonical> where names
  * that differ only by minor spelling, spacing, or punctuation are clustered together.
  *
@@ -121,6 +154,7 @@ function levenshtein(a: string, b: string, maxDist: number): number {
  *   - Exact match after stripping punctuation/spaces
  *   - Jaro-Winkler similarity ≥ 0.90
  *   - Levenshtein distance ≤ 2 (for names whose stripped key is ≤ 20 chars)
+ * The last two are skipped when namesConflict finds words that tell the teams apart.
  *
  * The canonical for each cluster is the most-frequent name; ties broken alphabetically.
  *
@@ -153,6 +187,7 @@ export function buildFuzzyTeamAliasMap(
       const ak = fuzzyKey(a);
       const bk = fuzzyKey(b);
       if (ak === bk) { union(a, b); continue; }
+      if (namesConflict(a, b)) continue;
       if (jaroWinkler(ak, bk) >= 0.90) { union(a, b); continue; }
       if (Math.max(ak.length, bk.length) <= 20 && levenshtein(ak, bk, 2) <= 2) {
         union(a, b);
