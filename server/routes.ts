@@ -4632,6 +4632,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Single-game records: the biggest one-game totals in a public competition (and its child
+  // competitions), one box-score column at a time, for the Swish Social records cards.
+  const RECORD_CATEGORIES: { key: string; label: string; title: string; short: string; col: string }[] = [
+    { key: "pts", label: "Points", title: "Most Points in a Game", short: "PTS", col: "spoints" },
+    { key: "reb", label: "Rebounds", title: "Most Rebounds in a Game", short: "REB", col: "sreboundstotal" },
+    { key: "oreb", label: "Offensive Rebounds", title: "Most Offensive Rebounds in a Game", short: "OREB", col: "sreboundsoffensive" },
+    { key: "dreb", label: "Defensive Rebounds", title: "Most Defensive Rebounds in a Game", short: "DREB", col: "sreboundsdefensive" },
+    { key: "ast", label: "Assists", title: "Most Assists in a Game", short: "AST", col: "sassists" },
+    { key: "stl", label: "Steals", title: "Most Steals in a Game", short: "STL", col: "ssteals" },
+    { key: "blk", label: "Blocks", title: "Most Blocks in a Game", short: "BLK", col: "sblocks" },
+    { key: "tpm", label: "3-Pointers Made", title: "Most 3-Pointers in a Game", short: "3PM", col: "sthreepointersmade" },
+    { key: "fgm", label: "Field Goals Made", title: "Most Field Goals in a Game", short: "FGM", col: "sfieldgoalsmade" },
+    { key: "ftm", label: "Free Throws Made", title: "Most Free Throws in a Game", short: "FTM", col: "sfreethrowsmade" },
+  ];
+
+  app.get("/api/league/:slug/records", async (req: Request, res: Response) => {
+    try {
+      const { slug } = req.params;
+      const family = await resolvePublicLeagueFamily(slug, "LeagueRecords");
+      if (!family) return res.status(404).json({ error: "League not found or not public" });
+      const { leagueIds, name } = family;
+
+      const category = RECORD_CATEGORIES.find((c) => c.key === req.query.category) ?? RECORD_CATEGORIES[0];
+      const limit = Math.max(1, Math.min(10, Number(req.query.limit) || 5));
+      const categoryList = RECORD_CATEGORIES.map(({ key, label, title, short }) => ({ key, label, title, short }));
+
+      const rows = await fetchAllLeagueRows(
+        "player_stats",
+        ["player_id", "full_name", "team_id", "team_name", "league_id", "game_key", category.col].join(","),
+        leagueIds,
+      );
+      const gamesCounted = new Set(rows.map((r) => r.game_key)).size;
+
+      // A box score can carry the same player twice; count each player once per game.
+      const best = new Map<string, Record<string, any>>();
+      for (const r of rows) {
+        const value = Number(r[category.col]) || 0;
+        if (!r.player_id || !r.game_key || value <= 0) continue;
+        const playerGame = `${r.player_id}|${r.game_key}`;
+        const seen = best.get(playerGame);
+        if (!seen || value > (Number(seen[category.col]) || 0)) best.set(playerGame, r);
+      }
+      const sorted = Array.from(best.values()).sort((a, b) => (Number(b[category.col]) || 0) - (Number(a[category.col]) || 0));
+      const recordValue = sorted.length ? Number(sorted[0][category.col]) || 0 : 0;
+      const tiedForRecord = sorted.filter((r) => (Number(r[category.col]) || 0) === recordValue).length;
+      // Everyone who shares the record, plus the next best up to the limit.
+      const top = sorted.slice(0, Math.max(limit, tiedForRecord));
+
+      const playerIds = Array.from(new Set(top.map((r) => r.player_id)));
+      const gameKeys = Array.from(new Set(top.map((r) => r.game_key)));
+      const [playersResp, gamesResp] = await Promise.all([
+        playerIds.length
+          ? supabaseAdmin.from("players").select("id, full_name, photo_path, photo_focus_y").in("id", playerIds)
+          : Promise.resolve({ data: [] as any[] }),
+        gameKeys.length
+          ? supabaseAdmin.from("v_game_results").select("game_key,match_time,home_team,away_team,home_score,away_score").in("game_key", gameKeys)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const playerById = new Map<string, any>((playersResp.data || []).map((p: any) => [p.id, p]));
+      const gameByKey = new Map<string, any>((gamesResp.data || []).map((g: any) => [g.game_key, g]));
+
+      // Players without their own photo borrow one from another record with the same name.
+      const borrowed = new Map<string, { photo_path: string; photo_focus_y: number | null }>();
+      const needPhoto = Array.from(playerById.values()).filter((p) => !p.photo_path).map((p) => p.full_name);
+      if (needPhoto.length > 0) {
+        const { data: sameName } = await supabaseAdmin
+          .from("players")
+          .select("full_name, photo_path, photo_focus_y")
+          .in("full_name", needPhoto)
+          .not("photo_path", "is", null);
+        for (const p of (sameName || []) as any[]) {
+          const key = String(p.full_name).toLowerCase();
+          if (p.photo_path && !borrowed.has(key)) borrowed.set(key, p);
+        }
+      }
+      const photoUrl = (path: string | null | undefined) =>
+        path ? supabaseAdmin.storage.from("player-photos").getPublicUrl(path).data.publicUrl : null;
+
+      const records = top.map((r) => {
+        const info = playerById.get(r.player_id);
+        const borrow = info && !info.photo_path ? borrowed.get(String(info.full_name).toLowerCase()) : undefined;
+        const value = Number(r[category.col]) || 0;
+        const g = gameByKey.get(r.game_key);
+        const isHome = !!(g?.home_team && r.team_name && g.home_team.toLowerCase() === String(r.team_name).toLowerCase());
+        const myScore = g ? (isHome ? g.home_score : g.away_score) : null;
+        const oppScore = g ? (isHome ? g.away_score : g.home_score) : null;
+        return {
+          rank: sorted.findIndex((s) => (Number(s[category.col]) || 0) === value) + 1,
+          id: r.player_id,
+          name: formatCanonicalPlayerName(info?.full_name || r.full_name),
+          team_name: r.team_name,
+          team_id: r.team_id,
+          league_id: r.league_id,
+          game_key: r.game_key,
+          game_date: g?.match_time ?? null,
+          opponent_name: g ? (isHome ? g.away_team : g.home_team) : null,
+          game_result:
+            myScore != null && oppScore != null
+              ? `${myScore > oppScore ? "W" : myScore < oppScore ? "L" : "T"} ${myScore}-${oppScore}`
+              : null,
+          value,
+          photoUrl: photoUrl(info?.photo_path || borrow?.photo_path),
+          photoFocusY: info?.photo_path ? info?.photo_focus_y ?? 50 : borrow?.photo_focus_y ?? 50,
+        };
+      });
+
+      return res.json({
+        league: { name: name || slug },
+        category: categoryList.find((c) => c.key === category.key),
+        categories: categoryList,
+        gamesCounted,
+        tiedForRecord,
+        records,
+      });
+    } catch (err: any) {
+      console.error("[LeagueRecords] error", err?.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Team landscape: every team's season numbers for the Swish Social scatter cards, which plot
   // one against another (offence against defence, pace against three-point rate, and so on).
   // Possessions are estimated from the box score and shared between the two teams in a game,
