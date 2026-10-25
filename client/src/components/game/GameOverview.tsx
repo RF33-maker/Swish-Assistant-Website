@@ -249,9 +249,24 @@ function LeadersCard({ homeTeam, awayTeam, homePlayers, awayPlayers, leagueId, c
   );
 }
 
+/** A forfeit has a final score but no box score, so it gets a note instead of stat panels. */
+function ForfeitCard({ homeTeam, awayTeam, home, away }: {
+  homeTeam: string; awayTeam: string; home: GameTeamTotals | null; away: GameTeamTotals | null;
+}) {
+  const homePts = home?.tot_spoints ?? 0;
+  const awayPts = away?.tot_spoints ?? 0;
+  const winner = homePts === awayPts ? null : homePts > awayPts ? homeTeam : awayTeam;
+  return (
+    <GameEmptyCard>
+      Forfeit. {winner ? `${winner} were awarded the game ${Math.max(homePts, awayPts)}-${Math.min(homePts, awayPts)}. ` : ""}
+      No game was played, so there are no stats.
+    </GameEmptyCard>
+  );
+}
+
 /** Everything on the Game tab once a game has stats. */
 export function GameOverviewSections({
-  homeTeam, awayTeam, leagueId, home, away, homePlayers, awayPlayers, events, colors, recap,
+  homeTeam, awayTeam, leagueId, home, away, homePlayers, awayPlayers, events, colors, recap, forfeit = false,
 }: {
   homeTeam: string;
   awayTeam: string;
@@ -264,7 +279,10 @@ export function GameOverviewSections({
   colors: Colors;
   /** A written recap of the result (shared/recaps.ts gameRecap). */
   recap?: string[];
+  /** team_stats rows tagged source_type 'forfeit': a walkover with no box score. */
+  forfeit?: boolean;
 }) {
+  if (forfeit) return <ForfeitCard homeTeam={homeTeam} awayTeam={awayTeam} home={home} away={away} />;
   const hasTeamStats = !!home && !!away;
   const hasPlayers = homePlayers.length > 0 || awayPlayers.length > 0;
 
@@ -310,9 +328,10 @@ export function GameOverviewSections({
 }
 
 /** The Team Stats tab: every team total side by side. */
-export function TeamStatsComparison({ homeTeam, awayTeam, home, away, colors }: {
-  homeTeam: string; awayTeam: string; home: GameTeamTotals | null; away: GameTeamTotals | null; colors: Colors;
+export function TeamStatsComparison({ homeTeam, awayTeam, home, away, colors, forfeit = false }: {
+  homeTeam: string; awayTeam: string; home: GameTeamTotals | null; away: GameTeamTotals | null; colors: Colors; forfeit?: boolean;
 }) {
+  if (forfeit) return <ForfeitCard homeTeam={homeTeam} awayTeam={awayTeam} home={home} away={away} />;
   if (!home || !away) return <GameEmptyCard>Team stats will appear when available.</GameEmptyCard>;
   return (
     <section className="ch-card p-4 md:p-5">

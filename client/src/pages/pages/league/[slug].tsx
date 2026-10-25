@@ -1604,6 +1604,8 @@ export default function LeaguePage() {
 
         rawTeamStats.forEach(stat => {
           if (!stat.name) return;
+          // Forfeits carry a final score for standings but no box score
+          if (stat.source_type === 'forfeit') return;
 
           const normalizedName = normalizeTeamStatName(stat.name);
           const ageGroup = isParentTeamStatsFetch ? (parentChildNameMapForTeamStats.get(stat.league_id) || '') : '';
