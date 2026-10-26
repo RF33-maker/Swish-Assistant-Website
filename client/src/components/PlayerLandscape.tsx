@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ChevronRight, Loader2, Lock } from "lucide-react";
+import { ChevronRight, Loader2, Lock, Maximize2, Minimize2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { extractTeamColors } from "@/lib/colorExtractor";
 import { cleanTeamLabel } from "@/lib/cardStyle";
@@ -12,8 +12,8 @@ import type { PlayerLandscapeMetricKey, PlayerLandscapePlayer, PlayerLandscapeRe
 
 /** The chart anyone can see; the rest come with a free account. */
 const FREE_PRESET = PLAYER_LANDSCAPE_PRESETS[0];
-/** Players named on the chart when no team is picked out: the ones furthest from the middle. */
-const NAMED_OUTLIERS = 12;
+/** Chart area (px²) per name shown when no team is picked out, so a bigger chart names more players. */
+const AREA_PER_NAME = 9000;
 
 type Axis = LandscapeAxis<PlayerLandscapeMetricKey>;
 
@@ -57,6 +57,19 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // The team whose players are named and the rest faded.
   const [teamFocus, setTeamFocus] = useState<string | null>(null);
+  // Full screen: a bigger chart with room for more names.
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const close = (e: KeyboardEvent) => e.key === "Escape" && setExpanded(false);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", close);
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener("keydown", close);
+    };
+  }, [expanded]);
 
   const canOpen = (id: string) => isMember || id === FREE_PRESET.id;
   const preset = PLAYER_LANDSCAPE_PRESETS.find((p) => p.id === presetId && canOpen(p.id)) ?? FREE_PRESET;
@@ -127,7 +140,7 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [loading, error]);
+  }, [loading, error, expanded]);
 
   const layout = useMemo(() => {
     const { w, h } = size;
@@ -171,7 +184,7 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
       .map((p, i) => ({ p, i }))
       .filter(({ p }) => (teamFocus ? teamKey(p) === teamFocus : true))
       .sort((a, b) => distance(b.p) - distance(a.p))
-      .slice(0, teamFocus ? undefined : NAMED_OUTLIERS);
+      .slice(0, teamFocus ? undefined : Math.max(8, Math.round((w * h) / AREA_PER_NAME)));
     type Box = { left: number; top: number; right: number; bottom: number };
     // The two average tags stay readable.
     const placed: Box[] = [
@@ -226,7 +239,13 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
   const lockedCount = PLAYER_LANDSCAPE_PRESETS.length - 1;
 
   return (
-    <div className="ch-card space-y-4 p-3 md:p-5" data-testid="player-landscape">
+    <div
+      className={expanded ? "fixed inset-0 z-[70] space-y-3 overflow-y-auto bg-[color:var(--ch-surface)] p-3 md:p-5" : "ch-card space-y-4 p-3 md:p-5"}
+      data-testid="player-landscape"
+      role={expanded ? "dialog" : undefined}
+      aria-modal={expanded || undefined}
+      aria-label={expanded ? "Player landscape, full screen" : undefined}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-bold text-[color:var(--ch-text)] md:text-lg">League landscape</h3>
@@ -234,7 +253,20 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
             {preset.hint} Each dot is a player in their team's colour; the lines mark the average.
           </p>
         </div>
-        {switcher}
+        <div className="flex flex-none items-center gap-2">
+          {switcher}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-pressed={expanded}
+            title={expanded ? "Exit full screen (Esc)" : "Full screen, with more names"}
+            data-testid="player-landscape-expand"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[color:var(--ch-border)] text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
+          >
+            {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            <span className="sr-only">{expanded ? "Exit full screen" : "Full screen"}</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Chart">
@@ -270,7 +302,9 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
             <AxisCaption axis={preset.y} colour={accent} upright />
             <div
               ref={plotRef}
-              className="relative aspect-square overflow-hidden rounded-xl border border-[color:var(--ch-border)] bg-slate-50 dark:bg-white/[0.03] md:aspect-[16/10]"
+              className={`relative overflow-hidden rounded-xl border border-[color:var(--ch-border)] bg-slate-50 dark:bg-white/[0.03] ${
+                expanded ? "h-[calc(100dvh-16rem)] min-h-[420px] md:h-[calc(100dvh-13rem)]" : "aspect-[4/5] sm:aspect-[4/3]"
+              }`}
             >
               {players.length === 0 ? (
                 <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-[color:var(--ch-text-2)]">
