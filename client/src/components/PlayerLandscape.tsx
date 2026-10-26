@@ -1,6 +1,6 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ChevronRight, Loader2, Lock, Maximize2, Minimize2 } from "lucide-react";
+import { ChevronRight, Loader2, Lock, Maximize2, Minimize2, ZoomIn, ZoomOut } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { extractTeamColors } from "@/lib/colorExtractor";
 import { cleanTeamLabel } from "@/lib/cardStyle";
@@ -8,12 +8,19 @@ import { spreadPoints, tickValues } from "@/lib/landscapeLayout";
 import { formatMetric, type LandscapeAxis } from "@/lib/landscapePresets";
 import { PLAYER_LANDSCAPE_PRESETS } from "@/lib/playerLandscapePresets";
 import { AxisCaption, LandscapeGate } from "@/components/LandscapeParts";
+import { LABEL_HEIGHT, placeLabels } from "@/lib/playerLandscapeLabels";
 import type { PlayerLandscapeMetricKey, PlayerLandscapePlayer, PlayerLandscapeResponse } from "@/types/landscape";
 
 /** The chart anyone can see; the rest come with a free account. */
 const FREE_PRESET = PLAYER_LANDSCAPE_PRESETS[0];
-/** Chart area (px²) per name shown when no team is picked out, so a bigger chart names more players. */
-const AREA_PER_NAME = 9000;
+/** Every player is named, so the canvas starts with this much room (px²) per player and grows if names still collide. */
+const AREA_PER_PLAYER = 2500;
+/** Dot radius on the canvas. */
+const DOT_R = 3.5;
+/** Below this the names are too small to read, so a small screen starts zoomed in and scrolls. */
+const MIN_READABLE_ZOOM = 0.8;
+const MAX_ZOOM = 2;
+const ZOOM_STEP = 1.25;
 
 type Axis = LandscapeAxis<PlayerLandscapeMetricKey>;
 
@@ -129,7 +136,7 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
     [pool, preset],
   );
 
-  // ── the chart's size on screen ──
+  // ── the chart's box on screen, and the canvas inside it that every name fits on ──
   const plotRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
@@ -146,11 +153,9 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
     const { w, h } = size;
     if (!w || !h || players.length === 0) return null;
     const valueOf = (p: PlayerLandscapePlayer, axis: Axis) => p.metrics[axis.metric] ?? 0;
-    // The middle of each axis is the average of the players on the chart.
-    const centre = (axis: Axis) => players.reduce((sum, p) => sum + valueOf(p, axis), 0) / players.length;
-    const reachOf = (axis: Axis, mid: number) => Math.max(0.5, ...players.map((p) => Math.abs(valueOf(p, axis) - mid)));
-    const avgX = centre(preset.x);
-    const avgY = centre(preset.y);
+    // The average lines: the average of the players on the chart.
+    const avgX = players.reduce((sum, p) => sum + valueOf(p, preset.x), 0) / players.length;
+    const avgY = players.reduce((sum, p) => sum + valueOf(p, preset.y), 0) / players.length;
     // Per-game numbers bunch up near zero with a few stars far out, so each axis spans the players
     // themselves rather than sitting the average in the middle; the average lines fall where they fall.
     const rangeOf = (axis: Axis) => {
@@ -162,64 +167,95 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
     };
     const rx = rangeOf(preset.x);
     const ry = rangeOf(preset.y);
+    const texts = players.map((p) => shortName(p.name));
 
-    // Small enough on a phone that a couple of hundred players don't pile into one blob.
-    const r = Math.max(3.5, Math.min(8, w / 110));
-    const pad = r + 10;
-    const dirX = preset.x.lowerIsBetter ? -1 : 1;
-    const dirY = preset.y.lowerIsBetter ? -1 : 1;
-    const fracX = (v: number) => (dirX > 0 ? (v - rx.lo) / (rx.hi - rx.lo) : (rx.hi - v) / (rx.hi - rx.lo));
-    const fracY = (v: number) => (dirY > 0 ? (v - ry.lo) / (ry.hi - ry.lo) : (ry.hi - v) / (ry.hi - ry.lo));
-    const toX = (v: number) => pad + fracX(v) * (w - 2 * pad);
-    const toY = (v: number) => h - pad - fracY(v) * (h - 2 * pad);
-    const halfX = (rx.hi - rx.lo) / 2;
-    const halfY = (ry.hi - ry.lo) / 2;
+    // Start from enough room for every name, then grow the canvas until (almost) none is left sitting on another.
+    const aspect = w / h;
+    let area = Math.max(w * h, players.length * AREA_PER_PLAYER);
+    for (let attempt = 0; ; attempt += 1) {
+      const cw = Math.max(w, Math.sqrt(area * aspect));
+      const ch = Math.max(h, cw / aspect);
+      const pad = DOT_R + 10;
+      const dirX = preset.x.lowerIsBetter ? -1 : 1;
+      const dirY = preset.y.lowerIsBetter ? -1 : 1;
+      const fracX = (v: number) => (dirX > 0 ? (v - rx.lo) / (rx.hi - rx.lo) : (rx.hi - v) / (rx.hi - rx.lo));
+      const fracY = (v: number) => (dirY > 0 ? (v - ry.lo) / (ry.hi - ry.lo) : (ry.hi - v) / (ry.hi - ry.lo));
+      const toX = (v: number) => pad + fracX(v) * (cw - 2 * pad);
+      const toY = (v: number) => ch - pad - fracY(v) * (ch - 2 * pad);
 
-    const truth = players.map((p) => ({ x: toX(valueOf(p, preset.x)), y: toY(valueOf(p, preset.y)) }));
-    const at = spreadPoints(truth, r, { left: 0, top: 0, right: w, bottom: h }, 1);
-
-    // Names: every player of the picked-out team, or else the ones furthest from the middle, skipping any that would overlap.
-    const distance = (p: PlayerLandscapePlayer) => Math.hypot((valueOf(p, preset.x) - avgX) / halfX, (valueOf(p, preset.y) - avgY) / halfY);
-    const order = players
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => (teamFocus ? teamKey(p) === teamFocus : true))
-      .sort((a, b) => distance(b.p) - distance(a.p))
-      .slice(0, teamFocus ? undefined : Math.max(8, Math.round((w * h) / AREA_PER_NAME)));
-    type Box = { left: number; top: number; right: number; bottom: number };
-    // The two average tags stay readable.
-    const placed: Box[] = [
-      { left: toX(avgX) - 45, top: 0, right: toX(avgX) + 45, bottom: 26 },
-      { left: w - 100, top: toY(avgY) - 12, right: w, bottom: toY(avgY) + 12 },
-    ];
-    const overlaps = (b: Box) =>
-      placed.some((o) => b.left < o.right && b.right > o.left && b.top < o.bottom && b.bottom > o.top) ||
-      at.some((q) => q.x + r > b.left && q.x - r < b.right && q.y + r > b.top && q.y - r < b.bottom);
-    const labels: { i: number; text: string; x: number; y: number; side: "right" | "left" }[] = [];
-    for (const { p, i } of order) {
-      const text = shortName(p.name);
-      const width = text.length * 6 + 8;
-      const { x, y } = at[i];
-      const right: Box = { left: x + r + 3, top: y - 8, right: x + r + 3 + width, bottom: y + 8 };
-      const left: Box = { left: x - r - 3 - width, top: y - 8, right: x - r - 3, bottom: y + 8 };
-      const fits = (b: Box) => b.left >= 0 && b.right <= w;
-      const side = fits(right) && !overlaps(right) ? "right" : fits(left) && !overlaps(left) ? "left" : teamFocus ? (fits(right) ? "right" : "left") : null;
-      if (!side) continue;
-      placed.push(side === "right" ? right : left);
-      labels.push({ i, text, x, y, side });
+      const truth = players.map((p) => ({ x: toX(valueOf(p, preset.x)), y: toY(valueOf(p, preset.y)) }));
+      const at = spreadPoints(truth, DOT_R, { left: 0, top: 0, right: cw, bottom: ch }, 1);
+      const avgAtX = toX(avgX);
+      const avgAtY = toY(avgY);
+      const labels = placeLabels(at, DOT_R, texts, { left: 2, top: 2, right: cw - 2, bottom: ch - 2 }, [
+        // The two average tags stay readable.
+        { left: avgAtX - 45, top: 0, right: avgAtX + 45, bottom: 26 },
+        { left: cw - 100, top: avgAtY - 12, right: cw, bottom: avgAtY + 12 },
+      ]);
+      const crowded = labels.filter((l) => l.crowded).length;
+      if (crowded <= players.length * 0.02 || attempt === 6) {
+        const halfX = (rx.hi - rx.lo) / 2;
+        const halfY = (ry.hi - ry.lo) / 2;
+        return {
+          cw,
+          ch,
+          avgX,
+          avgY,
+          avgAtX,
+          avgAtY,
+          at,
+          labels,
+          xTicks: tickValues((rx.lo + rx.hi) / 2, (halfX * cw) / (cw - 2 * pad)).filter((v) => v >= 0).map((v) => ({ v, at: toX(v) })).filter((t) => t.at > 28 && t.at < cw - 28),
+          yTicks: tickValues((ry.lo + ry.hi) / 2, (halfY * ch) / (ch - 2 * pad)).filter((v) => v >= 0).map((v) => ({ v, at: toY(v) })).filter((t) => t.at > 18 && t.at < ch - 18),
+        };
+      }
+      area *= 1.2;
     }
+  }, [size, players, preset]);
 
-    return {
-      r,
-      avgX,
-      avgY,
-      at,
-      labels,
-      avgAtX: toX(avgX),
-      avgAtY: toY(avgY),
-      xTicks: tickValues((rx.lo + rx.hi) / 2, (halfX * w) / (w - 2 * pad)).filter((v) => v >= 0).map((v) => ({ v, at: toX(v) })).filter((t) => t.at > 28 && t.at < w - 28),
-      yTicks: tickValues((ry.lo + ry.hi) / 2, (halfY * h) / (h - 2 * pad)).filter((v) => v >= 0).map((v) => ({ v, at: toY(v) })).filter((t) => t.at > 18 && t.at < h - 18),
-    };
-  }, [size, players, preset, teamFocus]);
+  // ── zoom: "fit" shows the whole canvas in the box; zooming in scrolls it ──
+  const fit = layout ? Math.min(1, size.w / layout.cw, size.h / layout.ch) : 1;
+  // Fit, unless that would shrink the names past reading (a phone): then start at a readable size.
+  const [zoomPick, setZoomPick] = useState<number | null>(null);
+  useEffect(() => setZoomPick(null), [preset.id, expanded]);
+  const zoom = Math.min(MAX_ZOOM, Math.max(fit, zoomPick ?? Math.max(fit, MIN_READABLE_ZOOM)));
+  const zoomTo = (next: number) => {
+    const el = plotRef.current;
+    const target = Math.min(MAX_ZOOM, Math.max(fit, next));
+    if (!el) return setZoomPick(target);
+    // Keep the middle of the view where it is.
+    const cx = (el.scrollLeft + el.clientWidth / 2) / zoom;
+    const cy = (el.scrollTop + el.clientHeight / 2) / zoom;
+    setZoomPick(target);
+    requestAnimationFrame(() => {
+      el.scrollLeft = cx * target - el.clientWidth / 2;
+      el.scrollTop = cy * target - el.clientHeight / 2;
+    });
+  };
+  const scrollable = !!layout && (layout.cw * zoom > size.w + 1 || layout.ch * zoom > size.h + 1);
+
+  // Drag to move around a zoomed-in chart with a mouse (touch scrolls natively).
+  const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!scrollable || e.pointerType !== "mouse" || e.button !== 0) return;
+    const el = e.currentTarget;
+    drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, moved: false };
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    d.moved = true;
+    e.currentTarget.scrollLeft = d.left - dx;
+    e.currentTarget.scrollTop = d.top - dy;
+  };
+  const endDrag = () => {
+    // A drag that moved shouldn't also select the dot it ended on.
+    if (drag.current?.moved) setTimeout(() => (drag.current = null), 0);
+    else drag.current = null;
+  };
 
   const choose = (id: string) => {
     if (!canOpen(id)) {
@@ -237,6 +273,8 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
   const corner = "pointer-events-none absolute max-w-[46%] select-none text-base font-black uppercase leading-none tracking-tight sm:text-2xl md:text-3xl";
   const quiet = "text-slate-900/[0.09] dark:text-white/[0.09]";
   const lockedCount = PLAYER_LANDSCAPE_PRESETS.length - 1;
+  const zoomButton =
+    "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[color:var(--ch-border)] text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)] disabled:opacity-40";
 
   return (
     <div
@@ -259,7 +297,7 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
             type="button"
             onClick={() => setExpanded((v) => !v)}
             aria-pressed={expanded}
-            title={expanded ? "Exit full screen (Esc)" : "Full screen, with more names"}
+            title={expanded ? "Exit full screen (Esc)" : "Full screen"}
             data-testid="player-landscape-expand"
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[color:var(--ch-border)] text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
           >
@@ -298,13 +336,37 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
         <p className="py-10 text-center text-sm text-[color:var(--ch-text-2)]">{error}</p>
       ) : (
         <div className="relative">
+          {layout && (
+            <div className="mb-2 flex items-center justify-end gap-2" role="group" aria-label="Zoom">
+              <span className="mr-auto text-[11px] text-[color:var(--ch-muted)]">
+                {scrollable ? "Drag or scroll to move around. Zoom out to see the whole league." : "Every player is named. Zoom in for a closer look."}
+              </span>
+              <button type="button" onClick={() => zoomTo(zoom / ZOOM_STEP)} disabled={zoom <= fit + 0.001} title="Zoom out" data-testid="player-landscape-zoom-out" className={zoomButton}>
+                <ZoomOut className="h-4 w-4" />
+                <span className="sr-only">Zoom out</span>
+              </button>
+              <button type="button" onClick={() => zoomTo(zoom * ZOOM_STEP)} disabled={zoom >= MAX_ZOOM - 0.001} title="Zoom in" data-testid="player-landscape-zoom-in" className={zoomButton}>
+                <ZoomIn className="h-4 w-4" />
+                <span className="sr-only">Zoom in</span>
+              </button>
+              <button type="button" onClick={() => zoomTo(fit)} disabled={zoom <= fit + 0.001} className={`${zoomButton} w-auto px-2.5 text-xs font-semibold`}>
+                Whole league
+              </button>
+            </div>
+          )}
           <div className={`grid grid-cols-[auto_minmax(0,1fr)] gap-x-1.5 gap-y-1.5 ${wanted ? "pointer-events-none select-none blur-[6px]" : ""}`} aria-hidden={!!wanted}>
             <AxisCaption axis={preset.y} colour={accent} upright />
             <div
               ref={plotRef}
-              className={`relative overflow-hidden rounded-xl border border-[color:var(--ch-border)] bg-slate-50 dark:bg-white/[0.03] ${
-                expanded ? "h-[calc(100dvh-16rem)] min-h-[420px] md:h-[calc(100dvh-13rem)]" : "aspect-[4/5] sm:aspect-[4/3]"
-              }`}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={endDrag}
+              onPointerLeave={endDrag}
+              onClickCapture={(e) => drag.current?.moved && e.stopPropagation()}
+              className={`relative rounded-xl border border-[color:var(--ch-border)] bg-slate-50 dark:bg-white/[0.03] ${
+                scrollable ? "cursor-grab overflow-auto overscroll-contain active:cursor-grabbing" : "overflow-hidden"
+              } ${expanded ? "h-[calc(100dvh-17rem)] min-h-[420px] md:h-[calc(100dvh-14rem)]" : "aspect-[4/5] sm:aspect-[4/3]"}`}
+              data-testid="player-landscape-plot"
             >
               {players.length === 0 ? (
                 <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-[color:var(--ch-text-2)]">
@@ -312,115 +374,155 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
                 </p>
               ) : (
                 layout && (
-                  <>
-                    <span className={`${corner} left-3 top-3 ${quiet}`}>{preset.quadrants.topLeft}</span>
-                    <span
-                      className={`${corner} right-3 top-3 text-right ${preset.bestTopRight ? "opacity-25" : quiet}`}
-                      style={preset.bestTopRight ? { color: accent } : undefined}
-                    >
-                      {preset.quadrants.topRight}
-                    </span>
-                    <span className={`${corner} bottom-5 left-3 ${quiet}`}>{preset.quadrants.bottomLeft}</span>
-                    <span className={`${corner} bottom-5 right-3 text-right ${quiet}`}>{preset.quadrants.bottomRight}</span>
-
-                    {layout.xTicks.map((t) => (
-                      <span key={`x${t.v}`} className="pointer-events-none absolute inset-y-0 w-px bg-slate-900/[0.06] dark:bg-white/[0.06]" style={{ left: t.at }}>
-                        <span className="ch-num absolute bottom-1 left-1 text-[10px] text-[color:var(--ch-muted)]">{t.v}</span>
-                      </span>
-                    ))}
-                    {layout.yTicks.map((t) => (
-                      <span key={`y${t.v}`} className="pointer-events-none absolute inset-x-0 h-px bg-slate-900/[0.06] dark:bg-white/[0.06]" style={{ top: t.at }}>
-                        <span className="ch-num absolute left-1 top-0.5 text-[10px] text-[color:var(--ch-muted)]">{t.v}</span>
-                      </span>
-                    ))}
-                    <span className="pointer-events-none absolute inset-y-0 w-px bg-slate-900/30 dark:bg-white/30" style={{ left: layout.avgAtX }} />
-                    <span className="pointer-events-none absolute inset-x-0 h-px bg-slate-900/30 dark:bg-white/30" style={{ top: layout.avgAtY }} />
-                    <span
-                      className="ch-num pointer-events-none absolute top-1.5 -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-black/70"
-                      style={{ left: layout.avgAtX }}
-                    >
-                      Avg {formatMetric(layout.avgX, preset.x)}
-                    </span>
-                    <span
-                      className="ch-num pointer-events-none absolute right-1.5 -translate-y-1/2 whitespace-nowrap rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-black/70"
-                      style={{ top: layout.avgAtY }}
-                    >
-                      Avg {formatMetric(layout.avgY, preset.y)}
-                    </span>
-
-                    {players.map((p, i) => {
-                      const at = layout.at[i];
-                      if (!at) return null;
-                      const on = p.id === selectedId;
-                      const faded = !!teamFocus && teamKey(p) !== teamFocus;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          aria-label={`${p.name}, ${cleanTeamLabel(p.team_name)}: ${preset.x.label} ${formatMetric(p.metrics[preset.x.metric], preset.x)}, ${preset.y.label} ${formatMetric(p.metrics[preset.y.metric], preset.y)}`}
-                          aria-pressed={on}
-                          onClick={() => setSelectedId(on ? null : p.id)}
-                          onMouseEnter={() => setHoverId(p.id)}
-                          onMouseLeave={() => setHoverId((id) => (id === p.id ? null : id))}
-                          onFocus={() => setHoverId(p.id)}
-                          onBlur={() => setHoverId((id) => (id === p.id ? null : id))}
-                          data-testid={`player-landscape-dot-${p.id}`}
-                          className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full outline-none ring-1 ring-black/25 transition-[left,top,opacity,transform] duration-500 hover:z-20 hover:scale-150 focus-visible:z-20 focus-visible:scale-150 dark:ring-white/40 ${on ? "z-10 scale-150" : ""} ${faded ? "opacity-20" : ""}`}
-                          style={{
-                            left: at.x,
-                            top: at.y,
-                            width: layout.r * 2,
-                            height: layout.r * 2,
-                            backgroundColor: colourOf(p),
-                            boxShadow: on ? `0 0 0 2px var(--ch-surface), 0 0 0 4px ${accent}` : undefined,
-                          }}
-                        />
-                      );
-                    })}
-
-                    {layout.labels.map((l) => (
+                  <div className="relative" style={{ width: layout.cw * zoom, height: layout.ch * zoom }}>
+                    <div className="absolute left-0 top-0 origin-top-left" style={{ width: layout.cw, height: layout.ch, transform: `scale(${zoom})` }}>
+                      <span className={`${corner} left-3 top-3 ${quiet}`}>{preset.quadrants.topLeft}</span>
                       <span
-                        key={players[l.i].id}
-                        className="pointer-events-none absolute -translate-y-1/2 whitespace-nowrap rounded bg-white/80 px-1 text-[10px] font-semibold leading-4 text-slate-900 dark:bg-black/60 dark:text-white"
-                        style={l.side === "right" ? { left: l.x + layout.r + 3, top: l.y } : { right: size.w - (l.x - layout.r - 3), top: l.y }}
+                        className={`${corner} right-3 top-3 text-right ${preset.bestTopRight ? "opacity-25" : quiet}`}
+                        style={preset.bestTopRight ? { color: accent } : undefined}
                       >
-                        {l.text}
+                        {preset.quadrants.topRight}
                       </span>
-                    ))}
+                      <span className={`${corner} bottom-5 left-3 ${quiet}`}>{preset.quadrants.bottomLeft}</span>
+                      <span className={`${corner} bottom-5 right-3 text-right ${quiet}`}>{preset.quadrants.bottomRight}</span>
 
-                    {shown && layout.at[shownIndex] && (
-                      <div
-                        role="status"
-                        className="pointer-events-none absolute z-30 w-52 -translate-x-1/2 rounded-lg border border-white/15 bg-slate-900/95 p-2.5 text-white shadow-xl"
-                        style={{
-                          left: Math.max(108, Math.min(size.w - 108, layout.at[shownIndex].x)),
-                          ...(layout.at[shownIndex].y > size.h / 2
-                            ? { bottom: size.h - layout.at[shownIndex].y + layout.r + 8 }
-                            : { top: layout.at[shownIndex].y + layout.r + 8 }),
-                        }}
+                      {layout.xTicks.map((t) => (
+                        <span key={`x${t.v}`} className="pointer-events-none absolute inset-y-0 w-px bg-slate-900/[0.06] dark:bg-white/[0.06]" style={{ left: t.at }}>
+                          <span className="ch-num absolute bottom-1 left-1 text-[10px] text-[color:var(--ch-muted)]">{t.v}</span>
+                        </span>
+                      ))}
+                      {layout.yTicks.map((t) => (
+                        <span key={`y${t.v}`} className="pointer-events-none absolute inset-x-0 h-px bg-slate-900/[0.06] dark:bg-white/[0.06]" style={{ top: t.at }}>
+                          <span className="ch-num absolute left-1 top-0.5 text-[10px] text-[color:var(--ch-muted)]">{t.v}</span>
+                        </span>
+                      ))}
+                      <span className="pointer-events-none absolute inset-y-0 w-px bg-slate-900/30 dark:bg-white/30" style={{ left: layout.avgAtX }} />
+                      <span className="pointer-events-none absolute inset-x-0 h-px bg-slate-900/30 dark:bg-white/30" style={{ top: layout.avgAtY }} />
+                      <span
+                        className="ch-num pointer-events-none absolute top-1.5 -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-black/70"
+                        style={{ left: layout.avgAtX }}
                       >
-                        <p className="truncate text-xs font-semibold">{shown.name}</p>
-                        <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-white/70">
-                          <span className="h-2 w-2 flex-none rounded-full" style={{ backgroundColor: colourOf(shown) }} />
-                          {cleanTeamLabel(shown.team_name)}
-                        </p>
-                        <dl className="ch-num mt-1.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-[11px]">
-                          <dt className="text-white/60">{preset.x.label}</dt>
-                          <dd className="text-right">{formatMetric(shown.metrics[preset.x.metric], preset.x)}</dd>
-                          <dt className="text-white/60">{preset.y.label}</dt>
-                          <dd className="text-right">{formatMetric(shown.metrics[preset.y.metric], preset.y)}</dd>
-                          {shown.metrics.mpg != null && (
-                            <>
-                              <dt className="text-white/60">Minutes</dt>
-                              <dd className="text-right">{formatMetric(shown.metrics.mpg, {})}</dd>
-                            </>
-                          )}
-                          <dt className="text-white/60">Games</dt>
-                          <dd className="text-right">{shown.games}</dd>
-                        </dl>
-                      </div>
-                    )}
-                  </>
+                        Avg {formatMetric(layout.avgX, preset.x)}
+                      </span>
+                      <span
+                        className="ch-num pointer-events-none absolute right-1.5 -translate-y-1/2 whitespace-nowrap rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-white dark:bg-black/70"
+                        style={{ top: layout.avgAtY }}
+                      >
+                        Avg {formatMetric(layout.avgY, preset.y)}
+                      </span>
+
+                      {/* Leader lines from names that had to move away from their dot */}
+                      <svg className="pointer-events-none absolute inset-0" width={layout.cw} height={layout.ch} aria-hidden="true">
+                        {layout.labels
+                          .filter((l) => l.leader)
+                          .map((l) => {
+                            const dot = layout.at[l.i];
+                            const ex = Math.max(l.box.left, Math.min(l.box.right, dot.x));
+                            const ey = Math.max(l.box.top, Math.min(l.box.bottom, dot.y));
+                            const faded = !!teamFocus && teamKey(players[l.i]) !== teamFocus;
+                            return (
+                              <line
+                                key={players[l.i].id}
+                                x1={dot.x}
+                                y1={dot.y}
+                                x2={ex}
+                                y2={ey}
+                                stroke={colourOf(players[l.i])}
+                                strokeWidth={1}
+                                opacity={faded ? 0.12 : 0.6}
+                              />
+                            );
+                          })}
+                      </svg>
+
+                      {players.map((p, i) => {
+                        const at = layout.at[i];
+                        if (!at) return null;
+                        const on = p.id === selectedId;
+                        const faded = !!teamFocus && teamKey(p) !== teamFocus;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            aria-label={`${p.name}, ${cleanTeamLabel(p.team_name)}: ${preset.x.label} ${formatMetric(p.metrics[preset.x.metric], preset.x)}, ${preset.y.label} ${formatMetric(p.metrics[preset.y.metric], preset.y)}`}
+                            aria-pressed={on}
+                            onClick={() => setSelectedId(on ? null : p.id)}
+                            onMouseEnter={() => setHoverId(p.id)}
+                            onMouseLeave={() => setHoverId((id) => (id === p.id ? null : id))}
+                            onFocus={() => setHoverId(p.id)}
+                            onBlur={() => setHoverId((id) => (id === p.id ? null : id))}
+                            data-testid={`player-landscape-dot-${p.id}`}
+                            className={`absolute z-[1] -translate-x-1/2 -translate-y-1/2 rounded-full outline-none ring-1 ring-black/25 transition-[opacity,transform] hover:z-20 hover:scale-150 focus-visible:z-20 focus-visible:scale-150 dark:ring-white/40 ${on ? "z-10 scale-150" : ""} ${faded ? "opacity-20" : ""}`}
+                            style={{
+                              left: at.x,
+                              top: at.y,
+                              width: DOT_R * 2,
+                              height: DOT_R * 2,
+                              backgroundColor: colourOf(p),
+                              boxShadow: on ? `0 0 0 2px var(--ch-surface), 0 0 0 4px ${accent}` : undefined,
+                            }}
+                          />
+                        );
+                      })}
+
+                      {layout.labels.map((l) => {
+                        const p = players[l.i];
+                        const on = p.id === selectedId || p.id === hoverId;
+                        const faded = !!teamFocus && teamKey(p) !== teamFocus;
+                        return (
+                          <span
+                            key={p.id}
+                            aria-hidden="true"
+                            onClick={() => setSelectedId(p.id === selectedId ? null : p.id)}
+                            onMouseEnter={() => setHoverId(p.id)}
+                            onMouseLeave={() => setHoverId((id) => (id === p.id ? null : id))}
+                            className={`absolute cursor-pointer whitespace-nowrap rounded px-1 text-[10px] font-semibold leading-[14px] transition-opacity ${
+                              on ? "z-20 bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "bg-white/75 text-slate-900 dark:bg-black/55 dark:text-white"
+                            } ${faded ? "opacity-20" : ""}`}
+                            style={{ left: l.box.left, top: l.box.top, height: LABEL_HEIGHT }}
+                          >
+                            {shortName(p.name)}
+                          </span>
+                        );
+                      })}
+
+                      {shown && layout.at[shownIndex] && (
+                        <div
+                          role="status"
+                          className="pointer-events-none absolute z-30 w-52 rounded-lg border border-white/15 bg-slate-900/95 p-2.5 text-white shadow-xl"
+                          style={{
+                            left: Math.max(108 / zoom, Math.min(layout.cw - 108 / zoom, layout.at[shownIndex].x)),
+                            // Stays the same size on screen whatever the zoom.
+                            transformOrigin: layout.at[shownIndex].y > layout.ch / 2 ? "bottom center" : "top center",
+                            transform: `translateX(-50%) scale(${1 / zoom})`,
+                            ...(layout.at[shownIndex].y > layout.ch / 2
+                              ? { bottom: layout.ch - layout.at[shownIndex].y + DOT_R + 8 / zoom }
+                              : { top: layout.at[shownIndex].y + DOT_R + 8 / zoom }),
+                          }}
+                        >
+                          <p className="truncate text-xs font-semibold">{shown.name}</p>
+                          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-white/70">
+                            <span className="h-2 w-2 flex-none rounded-full" style={{ backgroundColor: colourOf(shown) }} />
+                            {cleanTeamLabel(shown.team_name)}
+                          </p>
+                          <dl className="ch-num mt-1.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 text-[11px]">
+                            <dt className="text-white/60">{preset.x.label}</dt>
+                            <dd className="text-right">{formatMetric(shown.metrics[preset.x.metric], preset.x)}</dd>
+                            <dt className="text-white/60">{preset.y.label}</dt>
+                            <dd className="text-right">{formatMetric(shown.metrics[preset.y.metric], preset.y)}</dd>
+                            {shown.metrics.mpg != null && (
+                              <>
+                                <dt className="text-white/60">Minutes</dt>
+                                <dd className="text-right">{formatMetric(shown.metrics.mpg, {})}</dd>
+                              </>
+                            )}
+                            <dt className="text-white/60">Games</dt>
+                            <dd className="text-right">{shown.games}</dd>
+                          </dl>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )
               )}
             </div>
@@ -453,7 +555,7 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
                 onClick={() => setTeamFocus(on ? null : t.key)}
                 aria-pressed={on}
                 data-active={on}
-                title={on ? "Show every team" : `Name ${cleanTeamLabel(t.name)}'s players`}
+                title={on ? "Show every team" : `Pick out ${cleanTeamLabel(t.name)}'s players`}
                 className={`ch-chip inline-flex h-7 items-center gap-1.5 px-2.5 text-[11px] ${teamFocus && !on ? "opacity-50" : ""}`}
               >
                 <span className="h-2.5 w-2.5 flex-none rounded-full ring-1 ring-black/20 dark:ring-white/30" style={{ backgroundColor: colours[t.key] ?? fallbackColour(t.key) }} />
@@ -503,7 +605,7 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
             </>
           )}
           {players.length} players with at least {data.minGames} game{data.minGames === 1 ? "" : "s"}
-          {data.minMinutes ? ` and ${data.minMinutes} minutes a game` : ""}. {preset.footnote}. Tap a team to name its players, or a dot for its numbers.
+          {data.minMinutes ? ` and ${data.minMinutes} minutes a game` : ""}. {preset.footnote}. Tap a team to pick out its players, or a dot or name for the numbers.
         </p>
       )}
     </div>
