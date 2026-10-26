@@ -5757,6 +5757,7 @@ export default function LeaguePage() {
                       setSelectedTeamName(teamName);
                       setActiveSection('team');
                     }}
+                    onPlayerSelect={(playerSlug) => handleSelectPlayer(playerSlug, activeSection)}
                   />
                 ) : comparisonMode === 'player' ? (
                   <PlayerComparison 
