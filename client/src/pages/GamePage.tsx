@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import BoxScoreTable from "@/components/BoxScoreTable";
+import { ScorersTableBadge, ScorersTableNote } from "@/components/game/ScorersTableCredit";
 import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
@@ -1046,17 +1047,7 @@ export default function GamePage() {
                 {isTestMode && (
                   <span className="rounded-full bg-purple-600 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-white">Test mode</span>
                 )}
-                {capturedWithScorersTable && (
-                  <a
-                    href="https://scorerstable.app"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-testid="captured-with-scorers-table"
-                    className="rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/80 hover:text-white"
-                  >
-                    Stats captured with Scorers Table by Swish Assistant
-                  </a>
-                )}
+                {capturedWithScorersTable && <ScorersTableBadge />}
               </>
             ) : null}
             meta={[
@@ -1373,6 +1364,7 @@ export default function GamePage() {
                         headerColor={colors.awayFill}
                         formatMinutes={parseMinutes}
                       />
+                      {capturedWithScorersTable && <ScorersTableNote />}
                     </>
                   )}
                 </TabsContent>

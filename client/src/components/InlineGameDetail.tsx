@@ -12,6 +12,7 @@ import TeamSplitShotChart from "./TeamSplitShotChart";
 import PlayByPlay from "./PlayByPlay";
 import UpcomingGamePreview, { type PreviewGame } from "./UpcomingGamePreview";
 import GameScoreHero, { useMatchupColors } from "./game/GameScoreHero";
+import { ScorersTableBadge, ScorersTableNote, useCapturedWithScorersTable } from "./game/ScorersTableCredit";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "./game/GameOverview";
 import { playerPath, teamPath } from "@shared/seo";
 import { gameRecap } from "@shared/recaps";
@@ -171,6 +172,7 @@ export function InlineGameDetail({
   const [awayTeamStats, setAwayTeamStats] = useState<TeamStatRow | null>(null);
   const [homePlayerStats, setHomePlayerStats] = useState<PlayerStat[]>([]);
   const [awayPlayerStats, setAwayPlayerStats] = useState<PlayerStat[]>([]);
+  const capturedWithScorersTable = useCapturedWithScorersTable(gameKey);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
   const [liveClock, setLiveClock] = useState<LiveClock | null>(null);
   const [eventsLoaded, setEventsLoaded] = useState(false);
@@ -726,6 +728,7 @@ export function InlineGameDetail({
         homeHref={teamHref(hometeam)}
         awayHref={teamHref(awayteam)}
         colors={colors}
+        badges={capturedWithScorersTable ? <ScorersTableBadge /> : null}
         meta={[
           { icon: <Calendar />, label: formatDate(date) },
           { icon: <Clock />, label: formatTime(date) },
@@ -794,6 +797,7 @@ export function InlineGameDetail({
             <TabsContent value="boxscore" className="mt-0 space-y-5">
               <BoxScoreTable players={homePlayerStats} teamName={hometeam} score={homeScore} color={colors.homeFill} totals={homeTeamStats} />
               <BoxScoreTable players={awayPlayerStats} teamName={awayteam} score={awayScore} color={colors.awayFill} totals={awayTeamStats} />
+              {capturedWithScorersTable && <ScorersTableNote />}
             </TabsContent>
 
             {/* TEAM STATS TAB */}
