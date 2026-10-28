@@ -9,6 +9,7 @@ import AdminPageShell, { AdminPageNotice } from "@/components/layout/AdminPageSh
 import { BTN_GHOST, BTN_PRIMARY, FIELD, Panel, TALL } from "@/components/layout/proUi";
 import { CompetitionFieldSelect } from "@/components/CompetitionFieldSelect";
 import { fetchCompetitionFieldOptions, type CompetitionFieldOptions } from "@/lib/competitionFieldOptions";
+import { fetchManagedCompetitions, topManagedCompetitions } from "@/lib/competitionAccess";
 
 const COMBO_INPUT_CLASS = `${FIELD} pr-8`;
 const PILL = "inline-flex h-5 items-center rounded-full px-2 text-[10.5px] font-bold uppercase tracking-[0.06em]";
@@ -85,13 +86,10 @@ export default function LeagueManagement() {
     
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('competitions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
+      let managed;
+      try {
+        managed = await fetchManagedCompetitions();
+      } catch (error) {
         console.error('Error fetching leagues:', error);
         toast({
           title: "Error Loading Leagues",
@@ -101,7 +99,9 @@ export default function LeagueManagement() {
         return;
       }
 
-      setLeagues(data || []);
+      // Seasons you run (shared ones included), plus anything in your own name.
+      const top = new Set(topManagedCompetitions(managed).map((l) => l.league_id));
+      setLeagues(managed.filter((l) => top.has(l.league_id) || l.user_id === user.id) as League[]);
     } catch (error) {
       console.error('Error:', error);
       toast({

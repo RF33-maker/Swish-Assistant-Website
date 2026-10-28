@@ -27,15 +27,26 @@ const UploadSectionLA = ({ leagues }: any) => {
     if (!user?.id) return [];
 
     try {
+      // New children join the parent's season and brand as well as its family,
+      // so a new stop shows up inside that season straight away.
+      const { data: parent } = await supabase
+        .from("competitions")
+        .select("season, competition_id")
+        .eq("league_id", parentLeagueId)
+        .maybeSingle();
+      const link: Record<string, string> = { parent_league_id: parentLeagueId };
+      if (parent?.season) link.season = parent.season;
+      if (parent?.competition_id) link.competition_id = parent.competition_id;
+
       // Preferred path: an explicit list of newly-created child league IDs.
+      // Row-level security limits these updates to competitions this account manages.
       if (explicitChildIds && explicitChildIds.length > 0) {
         const targets = explicitChildIds.filter((id) => id && id !== parentLeagueId);
         if (targets.length === 0) return [];
         const { error } = await supabase
           .from("competitions")
-          .update({ parent_league_id: parentLeagueId })
+          .update(link)
           .in("league_id", targets)
-          .eq("user_id", user.id)
           .is("parent_league_id", null);
         if (error) {
           console.error("❌ parent_league_id backfill (explicit) failed:", error.message);
@@ -56,10 +67,11 @@ const UploadSectionLA = ({ leagues }: any) => {
       }
 
       const preExistingLeagueIds = snapshot.ids;
+      // The parser records the uploader in created_by (user_id stays empty).
       const { data: candidates, error: fetchErr } = await supabase
         .from("competitions")
         .select("league_id")
-        .eq("user_id", user.id)
+        .or(`user_id.eq.${user.id},created_by.eq.${user.id}`)
         .is("parent_league_id", null);
 
       if (fetchErr) {
@@ -75,9 +87,8 @@ const UploadSectionLA = ({ leagues }: any) => {
 
       const { error: updateErr } = await supabase
         .from("competitions")
-        .update({ parent_league_id: parentLeagueId })
+        .update(link)
         .in("league_id", newChildIds)
-        .eq("user_id", user.id)
         .is("parent_league_id", null);
 
       if (updateErr) {
@@ -155,7 +166,7 @@ const UploadSectionLA = ({ leagues }: any) => {
       const { data: existing, error: snapErr } = await supabase
         .from("competitions")
         .select("league_id")
-        .eq("user_id", user.id);
+        .or(`user_id.eq.${user.id},created_by.eq.${user.id}`);
       if (snapErr) {
         console.error("⚠️ Could not snapshot existing leagues:", snapErr.message);
       } else {

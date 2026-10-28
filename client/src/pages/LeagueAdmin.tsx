@@ -11,6 +11,7 @@ import AdminPageShell, { AdminPageNotice } from "@/components/layout/AdminPageSh
 import { BTN_GHOST, BTN_PRIMARY, FIELD, Field, Panel, TALL } from "@/components/layout/proUi";
 import { CompetitionFieldSelect } from "@/components/CompetitionFieldSelect";
 import { fetchCompetitionFieldOptions, type CompetitionFieldOptions } from "@/lib/competitionFieldOptions";
+import { canManageCompetition, fetchManagedCompetitions, topManagedCompetitions } from "@/lib/competitionAccess";
 
 const DETAIL_INPUT_CLASS = `${FIELD} pr-8`;
 const BACK = { href: "/league-management", label: "League management" };
@@ -140,19 +141,9 @@ export default function LeagueAdmin() {
     if (!currentUser) return;
     
     try {
-      const { data, error } = await supabase
-        .from('competitions')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .is('parent_league_id', null)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching user leagues:', error);
-        return;
-      }
-
-      setUserLeagues(data || []);
+      // Every season this account runs, including ones shared with it.
+      const managed = await fetchManagedCompetitions();
+      setUserLeagues(topManagedCompetitions(managed) as League[]);
     } catch (error) {
       console.error('Error fetching user leagues:', error);
     }
@@ -181,9 +172,8 @@ export default function LeagueAdmin() {
       setAgeGroupInput(leagues?.age_group || "");
       setGenderInput(leagues?.gender || "");
 
-      // Check if current user is owner
-      const { data: { user } } = await supabase.auth.getUser();
-      setIsOwner(user?.id === leagues?.created_by || user?.id === leagues?.user_id);
+      // Owners, managers and app admins can run the league.
+      setIsOwner(leagues?.league_id ? await canManageCompetition(leagues.league_id) : false);
 
     } catch (error) {
       console.error("Error fetching league:", error);
