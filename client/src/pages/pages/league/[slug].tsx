@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
-import { fetchLeagueChildren } from "@/lib/leagueChildren";
+import { fetchLeagueChildren, stopLabel } from "@/lib/leagueChildren";
 import { normalizeInstagramHandle } from "@/lib/instagram";
 import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
@@ -722,7 +722,7 @@ export default function LeaguePage() {
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
   const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
   const [teamStatsSortDirection, setTeamStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction for team stats
-  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> & { age_group?: string | null; stop?: number | null; gender?: string | null }[]>([]);
+  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> & { age_group?: string | null; stop?: number | null; stop_name?: string | null; gender?: string | null }[]>([]);
   const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
@@ -980,6 +980,13 @@ export default function LeaguePage() {
     const stops = new Set<number>();
     childCompetitions.forEach(c => { if (c.stop != null) stops.add(c.stop); });
     return Array.from(stops).sort((a, b) => a - b);
+  }, [childCompetitions]);
+
+  // Stops held at a named venue (REBA SL Season 2: "Stop 2 · Bristol").
+  const stopNames = useMemo(() => {
+    const names = new Map<string, string>();
+    childCompetitions.forEach(c => { if (c.stop != null && c.stop_name) names.set(String(c.stop), c.stop_name); });
+    return names;
   }, [childCompetitions]);
 
   const selectedAgeGroupLeagueIds = useMemo(() => {
@@ -4407,7 +4414,7 @@ export default function LeaguePage() {
                       </button>
                     ))}
                   </div>
-                  {availableStopsForAgeGroup.length > 1 && (
+                  {(availableStopsForAgeGroup.length > 1 || stopNames.size > 0) && (
                     <select
                       value={selectedStop}
                       onChange={(e) => setSelectedStop(e.target.value)}
@@ -4416,7 +4423,7 @@ export default function LeaguePage() {
                     >
                       <option value="all">All Stops</option>
                       {availableStopsForAgeGroup.map(stop => (
-                        <option key={stop} value={String(stop)}>Stop {stop}</option>
+                        <option key={stop} value={String(stop)}>{stopLabel(stop, stopNames.get(String(stop)))}</option>
                       ))}
                     </select>
                   )}
@@ -5988,7 +5995,7 @@ export default function LeaguePage() {
                     const contextParts: string[] = [];
                     if (filterAgeGroup !== 'all') contextParts.push(shortenAgeLabel(filterAgeGroup));
                     if (filterRound !== 'all') contextParts.push(`Round ${filterRound}`);
-                    if (isParentLeague && selectedStop !== 'all') contextParts.push(`Stop ${selectedStop}`);
+                    if (isParentLeague && selectedStop !== 'all') contextParts.push(stopLabel(selectedStop, stopNames.get(selectedStop)));
                     const contextLabel = contextParts.join(' · ');
                     const baseContextFallback = leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages';
 
@@ -6523,7 +6530,7 @@ export default function LeaguePage() {
                     const qvContextParts: string[] = [];
                     if (filterAgeGroup !== 'all') qvContextParts.push(shortenAgeLabel(filterAgeGroup));
                     if (filterRound !== 'all') qvContextParts.push(`Round ${filterRound}`);
-                    if (isParentLeague && selectedStop !== 'all') qvContextParts.push(`Stop ${selectedStop}`);
+                    if (isParentLeague && selectedStop !== 'all') qvContextParts.push(stopLabel(selectedStop, stopNames.get(selectedStop)));
                     qvContextParts.push(leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages');
                     const quickContextLabel = qvContextParts.join(' · ');
 

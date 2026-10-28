@@ -1260,7 +1260,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("league_id, name, slug, logo_url, age_group, stop, gender, season")
+        .select("league_id, name, slug, logo_url, age_group, stop, stop_name, gender, season")
         .eq("parent_league_id", parentId);
 
       if (error) {
@@ -1816,13 +1816,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const unique = Array.from(new Set(ids)).slice(0, 100);
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("league_id, name, slug, parent_league_id, age_group, stop")
+        .select("league_id, name, slug, parent_league_id, age_group, stop, stop_name")
         .in("league_id", unique);
       if (error) {
         console.error("Error in /api/public/league-info:", error.message);
         return res.status(500).json({ error: "Internal server error" });
       }
-      const result: Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null }> = {};
+      const result: Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null; stop_name?: string | null }> = {};
       for (const row of data || []) {
         result[row.league_id] = {
           name: row.name,
@@ -1830,6 +1830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           parent_league_id: row.parent_league_id || null,
           age_group: row.age_group || null,
           stop: row.stop ?? null,
+          stop_name: row.stop_name ?? null,
         };
       }
       res.json(result);
