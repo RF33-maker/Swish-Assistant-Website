@@ -34,6 +34,9 @@ type OnOffRow = {
   plus_minus_diff_rank: number | null;
 } & Record<`on_${Count}` | `off_${Count}`, number>;
 
+/** A row with its competition's name and season ("2025/26") for labelling and ordering. */
+type CompetitionRow = OnOffRow & { competition: string; season: string };
+
 // Possessions a player needs on and off court before he is ranked (matches the SQL).
 const MIN_ON_POSS = 100;
 const MIN_OFF_POSS = 50;
@@ -303,35 +306,71 @@ export function PlayerPerformanceSplits({
 }: PlayerPerformanceSplitsProps) {
   const [view, setView] = useState<View>("own");
   const [explain, setExplain] = useState(false);
+  const [pickedLeagueId, setPickedLeagueId] = useState<string | null>(null);
 
   // leagueIds (multi) takes precedence over the legacy leagueId. Empty means no filter.
   const effectiveLeagueIds: string[] = leagueIds ?? (leagueId ? [leagueId] : []);
 
-  const { data: row, isLoading, isError } = useQuery<OnOffRow | null>({
-    queryKey: ["player-on-off-season", playerId, effectiveLeagueIds.join(","), teamId],
+  // Every competition the player has on/off for, newest season first.
+  const { data: rows, isLoading, isError } = useQuery<CompetitionRow[]>({
+    queryKey: ["player-on-off-seasons", playerId, effectiveLeagueIds.join(","), teamId],
     queryFn: async () => {
       let query = supabase
         .from("player_on_off_season")
         .select("*")
         .eq("player_id", playerId)
-        .order("on_poss_for", { ascending: false })
-        .limit(1);
+        .order("on_poss_for", { ascending: false });
       if (effectiveLeagueIds.length === 1) query = query.eq("league_id", effectiveLeagueIds[0]);
       else if (effectiveLeagueIds.length > 1) query = query.in("league_id", effectiveLeagueIds);
       if (teamId) query = query.eq("team_id", teamId);
       const { data, error } = await query;
       if (error) throw error;
-      return (data?.[0] as OnOffRow | undefined) ?? null;
+      const found = (data ?? []) as OnOffRow[];
+      if (!found.length) return [];
+      const { data: comps } = await supabase
+        .from("competitions")
+        .select("league_id, name, season")
+        .in("league_id", Array.from(new Set(found.map((r) => r.league_id))));
+      const byId = new Map((comps ?? []).map((c: any) => [c.league_id as string, c]));
+      return found
+        .map((r) => ({ ...r, competition: byId.get(r.league_id)?.name ?? "", season: byId.get(r.league_id)?.season ?? "" }))
+        .sort((a, b) => b.season.localeCompare(a.season));
     },
     enabled: !!playerId,
     staleTime: 5 * 60 * 1000,
   });
 
+  // Default to the newest season he's ranked in, so an early-season sample
+  // doesn't hide a full one; fall back to the newest season he has at all.
+  const row = rows?.find((r) => r.league_id === pickedLeagueId) ?? rows?.find((r) => r.qualified) ?? rows?.[0] ?? null;
+
   const shell = (body: JSX.Element) => (
     <div className="ch-card p-4 md:p-5" data-testid="player-performance-splits-card">
-      <div className="mb-3">
-        <h3 className="ch-display text-xl font-bold uppercase tracking-[0.02em] text-[color:var(--ch-text)]">On/Off Impact</h3>
-        <p className="text-xs text-[color:var(--ch-muted)]">How his team performs with him on the court and off it</p>
+      {/* pr-8 keeps the competition picker clear of the share button in the corner. */}
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 pr-8">
+        <div>
+          <h3 className="ch-display text-xl font-bold uppercase tracking-[0.02em] text-[color:var(--ch-text)]">On/Off Impact</h3>
+          <p className="text-xs text-[color:var(--ch-muted)]">
+            {row?.competition
+              ? `${row.competition} · ${row.games} game${row.games === 1 ? "" : "s"}`
+              : "How his team performs with him on the court and off it"}
+          </p>
+        </div>
+        {rows && rows.length > 1 && row && (
+          <select
+            value={row.league_id}
+            onChange={(e) => setPickedLeagueId(e.target.value)}
+            aria-label="Competition"
+            className="ch-input h-8 max-w-full cursor-pointer px-3 text-[13px] font-medium"
+          >
+            {rows.map((r) => (
+              <option key={r.league_id} value={r.league_id}>
+                {r.competition || "Unnamed competition"}
+                {r.qualified ? "" : " (not ranked)"}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
       {body}
     </div>
@@ -414,6 +453,7 @@ export function PlayerPerformanceSplits({
   const shareContent = (
     <div className="flex flex-col" style={{ gap: 14 }}>
       <span className="ch-display text-2xl font-bold uppercase">On/Off Impact</span>
+      {row.competition && <span className="text-sm opacity-70">{row.competition}</span>}
       {tiles}
       <SplitTable row={row} view="own" name={playerName} photoUrl={playerPhotoUrl} compact />
       {footnote}
