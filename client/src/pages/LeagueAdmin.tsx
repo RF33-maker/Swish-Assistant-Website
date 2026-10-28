@@ -5,6 +5,7 @@ import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
 import UploadSection from "@/components/LeagueAdmin/upload-section-la";
+import UploadNamesPanel from "@/components/LeagueAdmin/upload-names-panel";
 import DuplicatePlayerManager from "@/components/LeagueAdmin/DuplicatePlayerManager";
 import { Link2, ChevronDown, ExternalLink, Image as ImageIcon, Instagram, Loader2, Upload, Users } from "lucide-react";
 import AdminPageShell, { AdminPageNotice } from "@/components/layout/AdminPageShell";
@@ -779,6 +780,9 @@ export default function LeagueAdmin() {
               : userLeagues
           } />
         </div>
+
+        {/* PDF titles that upload into this competition (or the ones under it) */}
+        <UploadNamesPanel league={league} />
 
         {/* Duplicate Player Management */}
         <DuplicatePlayerManager leagueId={league.league_id} />
