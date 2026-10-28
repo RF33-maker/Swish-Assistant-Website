@@ -62,6 +62,7 @@ import SeasonPreview from "@/components/league/SeasonPreview";
 import { getImportedPlayerName, resolvePlayerDisplayName } from "@/lib/playerName";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 import { EXCLUDE_LIVE_GAMES } from "@/lib/gameResults";
+import { compactLogoUrl } from "@/lib/compactLogo";
 
 type CanonicalPlayerName = {
   name: string;
@@ -4056,7 +4057,7 @@ export default function LeaguePage() {
             <Link href={`/competition/${parentLeague.slug}`} className="inline-flex items-center gap-2 text-[13px] text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)] transition-colors group mb-3" data-testid="link-parent-league">
               {parentLeague.logo_url && (
                 <img
-                  src={parentLeague.logo_url}
+                  src={compactLogoUrl(parentLeague.logo_url)}
                   alt={parentLeague.name}
                   className="w-5 h-5 rounded object-contain bg-white ring-1 ring-black/5"
                 />
@@ -4085,7 +4086,7 @@ export default function LeaguePage() {
             <div className="absolute inset-x-0 bottom-0 p-5 md:p-8 flex items-end gap-4 md:gap-5">
               {displayLogoUrl && (
                 <div className="hidden sm:flex w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-white ring-1 ring-black/5 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.5)] items-center justify-center overflow-hidden shrink-0">
-                  <img src={displayLogoUrl} alt="" className="w-12 h-12 md:w-16 md:h-16 object-contain" />
+                  <img src={compactLogoUrl(displayLogoUrl)} alt="" className="w-12 h-12 md:w-16 md:h-16 object-contain" />
                 </div>
               )}
               <div className="min-w-0 flex-1">
@@ -4233,7 +4234,7 @@ export default function LeaguePage() {
               <div className="flex items-center gap-3 mb-3">
                 {displayLogoUrl && (
                   <img
-                    src={displayLogoUrl}
+                    src={compactLogoUrl(displayLogoUrl)}
                     alt={`${displayLeagueName || league?.name || ''} logo`}
                     className="h-8 w-8 object-contain"
                   />

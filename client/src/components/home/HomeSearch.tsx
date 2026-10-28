@@ -3,6 +3,7 @@ import { Search, Trophy } from "lucide-react";
 import { useGlobalSearch, type SearchSuggestion } from "@/hooks/useGlobalSearch";
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
+import { compactLogoUrl } from "@/lib/compactLogo";
 
 /**
  * The homepage's search-first box (StatMuse-style): one big field that goes
@@ -69,7 +70,7 @@ export default function HomeSearch() {
               {item.type === "league" || item.type === "competition" ? (
                 item.logo_url ? (
                   <span className="h-9 w-9 rounded-lg bg-white ring-1 ring-black/5 flex items-center justify-center overflow-hidden shrink-0">
-                    <img src={item.logo_url} alt="" className="h-7 w-7 object-contain" />
+                    <img src={compactLogoUrl(item.logo_url)} alt="" className="h-7 w-7 object-contain" />
                   </span>
                 ) : (
                   <span className="h-9 w-9 rounded-lg ch-tile flex items-center justify-center shrink-0">

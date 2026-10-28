@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useScores } from "@/lib/scores"
 import { useNavLeagues } from "@/lib/navLeagues"
 import { claimEntry, useMyClaim, usePendingClaimCount } from "@/lib/playerClaims"
+import { compactLogoUrl } from "@/lib/compactLogo"
 
 /**
  * The site's navigation list, rendered in two places from one source:
@@ -97,7 +98,7 @@ export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet
           {leagues.map((l) => internalLink(l.href, location.startsWith(l.href), <>
             <span className="h-5 w-5 shrink-0 rounded bg-white/95 overflow-hidden flex items-center justify-center">
               {l.logoUrl
-                ? <img src={l.logoUrl} alt="" className="h-full w-full object-contain" />
+                ? <img src={compactLogoUrl(l.logoUrl)} alt="" className="h-full w-full object-contain" />
                 : <Trophy className="h-3 w-3 text-orange-500" aria-hidden="true" />}
             </span>
             <span className="truncate">{l.label}</span>

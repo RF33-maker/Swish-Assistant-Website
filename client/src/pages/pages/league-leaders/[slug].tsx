@@ -19,6 +19,7 @@ import {
 } from "@/lib/advancedStats";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
+import { compactLogoUrl } from "@/lib/compactLogo";
 
 interface ChildLeague {
   league_id: string;
@@ -759,7 +760,7 @@ export default function LeagueLeadersPage() {
           <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
             <div className="flex items-center gap-3">
               {displayLogoUrl && (
-                <img src={displayLogoUrl} alt={league?.name || ''} className="h-10 w-10 md:h-14 md:w-14 object-contain rounded-lg bg-white/20 p-1" />
+                <img src={compactLogoUrl(displayLogoUrl)} alt={league?.name || ''} className="h-10 w-10 md:h-14 md:w-14 object-contain rounded-lg bg-white/20 p-1" />
               )}
               <div>
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white drop-shadow-md">

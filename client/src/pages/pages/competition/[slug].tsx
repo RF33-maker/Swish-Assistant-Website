@@ -5,6 +5,7 @@ import { Trophy, ArrowLeft, Users } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import BCBLogo from "@/assets/BCB Logo.jpg";
 import LeagueDefaultImage from "@/assets/league-default.jpg";
+import { compactLogoUrl } from "@/lib/compactLogo";
 
 interface League {
   id: string;
@@ -316,7 +317,7 @@ export default function CompetitionPage() {
                         <span className="mt-1.5 text-xs text-white/65 block truncate">{competition.name}</span>
                       </div>
                       {competition.logo_url && (
-                        <img src={competition.logo_url} alt="" className="h-10 w-10 object-contain shrink-0" />
+                        <img src={compactLogoUrl(competition.logo_url)} alt="" className="h-10 w-10 object-contain shrink-0" />
                       )}
                     </div>
                   </button>
