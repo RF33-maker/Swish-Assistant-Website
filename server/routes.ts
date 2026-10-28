@@ -4899,6 +4899,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Player landscape: every regular's season numbers, for the league page's scatter charts that
+  // plot one per-game figure against another. Players count once they've played enough of the
+  // games and minutes to say something; percentages need enough attempts behind them.
+  app.get("/api/league/:slug/player-landscape", async (req: Request, res: Response) => {
+    try {
+      const { slug } = req.params;
+      const family = await resolvePublicLeagueFamily(slug, "PlayerLandscape");
+      if (!family) return res.status(404).json({ error: "League not found or not public" });
+      const { leagueIds, name } = family;
+
+      const STATS = {
+        pts: "spoints",
+        fga: "sfieldgoalsattempted",
+        fgm: "sfieldgoalsmade",
+        tpa: "sthreepointersattempted",
+        tpm: "sthreepointersmade",
+        fta: "sfreethrowsattempted",
+        oreb: "sreboundsoffensive",
+        dreb: "sreboundsdefensive",
+        ast: "sassists",
+        stl: "ssteals",
+        blk: "sblocks",
+        tov: "sturnovers",
+      } as const;
+      type Stat = keyof typeof STATS;
+      const STAT_KEYS = Object.keys(STATS) as Stat[];
+      const num = (v: unknown) => Number(v) || 0;
+
+      const rows = await fetchAllLeagueRows(
+        "player_stats",
+        ["player_id", "full_name", "team_id", "team_name", "league_id", "game_key", "sminutes", ...Object.values(STATS)].join(","),
+        leagueIds,
+      );
+
+      type Agg = { id: string; name: string; team_id: string | null; team_name: string; league_id: string; games: number; secs: number; sums: Record<Stat, number> };
+      const aggs = new Map<string, Agg>();
+      // A box score can carry the same player twice; count each player once per game.
+      const seen = new Set<string>();
+      for (const r of rows) {
+        if (!r.player_id || seen.has(`${r.player_id}|${r.game_key}`)) continue;
+        seen.add(`${r.player_id}|${r.game_key}`);
+        const secs = minutesPlayed(r.sminutes);
+        if (secs <= 0 && !STAT_KEYS.some((k) => num(r[STATS[k]]) > 0)) continue;
+        let a = aggs.get(r.player_id);
+        if (!a) {
+          a = { id: r.player_id, name: r.full_name, team_id: r.team_id, team_name: r.team_name, league_id: r.league_id, games: 0, secs: 0, sums: Object.fromEntries(STAT_KEYS.map((k) => [k, 0])) as Record<Stat, number> };
+          aggs.set(r.player_id, a);
+        }
+        a.games += 1;
+        a.secs += secs;
+        a.team_name = r.team_name ?? a.team_name;
+        a.team_id = r.team_id ?? a.team_id;
+        a.league_id = r.league_id ?? a.league_id;
+        for (const k of STAT_KEYS) a.sums[k] += num(r[STATS[k]]);
+      }
+
+      // One name per team: box scores from different sources can spell the same team differently.
+      const nameCounts = new Map<string, Map<string, number>>();
+      for (const r of rows) {
+        if (!r.team_id || !r.team_name) continue;
+        const counts = nameCounts.get(r.team_id) ?? new Map<string, number>();
+        counts.set(r.team_name, (counts.get(r.team_name) ?? 0) + 1);
+        nameCounts.set(r.team_id, counts);
+      }
+      const all = Array.from(aggs.values());
+      for (const a of all) {
+        const counts = a.team_id ? nameCounts.get(a.team_id) : undefined;
+        if (counts) a.team_name = Array.from(counts.entries()).sort((x, y) => y[1] - x[1])[0][0];
+      }
+      const maxGames = Math.max(0, ...all.map((a) => a.games));
+      const requestedMin = Number(req.query.minGames);
+      const minGames = Number.isFinite(requestedMin) && requestedMin >= 1 ? Math.floor(requestedMin) : Math.max(1, Math.ceil(maxGames * 0.4));
+      // Feeds without minutes (secs all zero) can't be held to a minutes bar.
+      const hasMinutes = all.some((a) => a.secs > 0);
+      const MIN_MPG = 10;
+
+      const round1 = (v: number | null) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10) / 10);
+      const players = all
+        .filter((a) => a.games >= minGames && (!hasMinutes || a.secs / 60 / a.games >= MIN_MPG))
+        .map((a) => {
+          const s = a.sums;
+          const g = a.games;
+          const shots = s.fga + 0.44 * s.fta;
+          const raw: Record<string, number | null> = {
+            ppg: s.pts / g,
+            rpg: (s.oreb + s.dreb) / g,
+            orebPg: s.oreb / g,
+            drebPg: s.dreb / g,
+            apg: s.ast / g,
+            spg: s.stl / g,
+            bpg: s.blk / g,
+            tovPg: s.tov / g,
+            mpg: hasMinutes ? a.secs / 60 / g : null,
+            // Shooting numbers need at least two shots a game (one three a game for 3P%) to mean anything.
+            tsPct: shots >= 2 * g ? (100 * s.pts) / (2 * shots) : null,
+            efgPct: s.fga >= 2 * g ? (100 * (s.fgm + 0.5 * s.tpm)) / s.fga : null,
+            threePct: s.tpa >= g ? (100 * s.tpm) / s.tpa : null,
+            threeAttPg: s.tpa / g,
+            astTo: s.ast + s.tov > 0 ? s.ast / Math.max(1, s.tov) : null,
+          };
+          return {
+            id: a.id,
+            name: a.name,
+            team_id: a.team_id,
+            team_name: a.team_name,
+            league_id: a.league_id,
+            games: g,
+            metrics: Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, round1(v)])),
+          };
+        });
+
+      // Canonical names and profile slugs, so a dot can open the player's page.
+      const info = new Map<string, { full_name: string | null; slug: string | null }>();
+      const ids = players.map((p) => p.id);
+      for (let i = 0; i < ids.length; i += 300) {
+        const { data } = await supabaseAdmin.from("players").select("id, full_name, slug").in("id", ids.slice(i, i + 300));
+        for (const p of (data || []) as any[]) info.set(p.id, p);
+      }
+
+      return res.json({
+        league: { name: name || slug },
+        minGames,
+        maxGames,
+        minMinutes: hasMinutes ? MIN_MPG : null,
+        gamesCounted: new Set(rows.map((r) => r.game_key)).size,
+        players: players.map((p) => {
+          const fullName = formatCanonicalPlayerName(info.get(p.id)?.full_name || p.name || "Unknown");
+          // Many player rows have no slug; the league page derives one from the name the same way.
+          const slugFromName = fullName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          return { ...p, name: fullName, slug: info.get(p.id)?.slug || slugFromName || null };
+        }),
+      });
+    } catch (err: any) {
+      console.error("[PlayerLandscape] error", err?.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Competitions the signed-in admin/owner can use in Swish Social, including private ones the
   // browser's own query can't see because of row-level security.
   app.get("/api/social/competitions", async (req: Request, res: Response) => {

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, ArrowRight, ChevronRight, Loader2, Lock } from "lucide-react";
+import { ArrowRight, ChevronRight, Loader2, Lock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { cleanTeamLabel } from "@/lib/cardStyle";
@@ -8,6 +8,8 @@ import { initialsOf } from "@/lib/generateWeeklyCards";
 import { spreadPoints, tickValues } from "@/lib/landscapeLayout";
 import { formatMetric, LANDSCAPE_PRESETS, type LandscapeAxis } from "@/lib/landscapePresets";
 import type { LandscapeResponse, LandscapeTeam } from "@/types/landscape";
+import { AxisCaption, LandscapeGate } from "@/components/LandscapeParts";
+import { PlayerLandscape } from "@/components/PlayerLandscape";
 
 /** The chart anyone can see; the rest come with a free account. */
 const FREE_PRESET = LANDSCAPE_PRESETS[0];
@@ -20,34 +22,52 @@ type Props = {
   /** Only teams from these competitions (an age group of a parent league); all of them when left out. */
   scopedLeagueIds?: string[];
   onTeamSelect?: (teamName: string) => void;
+  /** Opens a player's profile from the player landscape. */
+  onPlayerSelect?: (playerSlug: string) => void;
 };
 
-function AxisCaption({ axis, colour, upright = false }: { axis: LandscapeAxis; colour: string; upright?: boolean }) {
-  const [low, high] = axis.ends;
-  const end = "flex items-center gap-1 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider sm:text-[11px]";
-  return (
-    <div
-      className={`flex items-center justify-between gap-2 ${upright ? "h-full" : "w-full"}`}
-      // Turned so it reads from the bottom of the chart to the top, the better end uppermost.
-      style={upright ? { writingMode: "vertical-rl", transform: "rotate(180deg)" } : undefined}
-    >
-      <span className={`${end} text-[color:var(--ch-text-2)]`}>
-        <ArrowLeft className={`h-3 w-3 flex-none ${upright ? "rotate-90" : ""}`} />
-        {low}
-      </span>
-      <span className="hidden truncate text-[10px] font-medium uppercase tracking-widest text-[color:var(--ch-muted)] sm:block">
-        {axis.title}
-      </span>
-      <span className={end} style={{ color: axis.neutral ? "var(--ch-text-2)" : colour }}>
-        {high}
-        <ArrowRight className={`h-3 w-3 flex-none ${upright ? "rotate-90" : ""}`} />
-      </span>
+type View = "teams" | "players";
+
+/** The league landscape: teams by default, or every regular player as a dot in their team's colour. */
+export function LeagueLandscape({ onPlayerSelect, ...props }: Props) {
+  const [view, setView] = useState<View>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("landscape") === "players" ? "players" : "teams",
+  );
+  const choose = (next: View) => {
+    setView(next);
+    // Keeps a copied link on the view it was copied from.
+    const url = new URL(window.location.href);
+    if (next === "players") url.searchParams.set("landscape", "players");
+    else url.searchParams.delete("landscape");
+    window.history.replaceState(window.history.state, "", url);
+  };
+  const switcher = (
+    <div className="inline-flex flex-none rounded-lg border border-[color:var(--ch-border)] p-0.5" role="group" aria-label="Plot">
+      {(["teams", "players"] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => choose(v)}
+          aria-pressed={view === v}
+          data-testid={`landscape-view-${v}`}
+          className={`h-7 rounded-md px-3 text-xs font-semibold capitalize transition-colors ${
+            view === v ? "bg-[color:var(--ch-text)] text-[color:var(--ch-surface)]" : "text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
+          }`}
+        >
+          {v}
+        </button>
+      ))}
     </div>
+  );
+  return view === "players" ? (
+    <PlayerLandscape slug={props.slug} brandColor={props.brandColor} scopedLeagueIds={props.scopedLeagueIds} onPlayerSelect={onPlayerSelect} switcher={switcher} />
+  ) : (
+    <TeamLandscape {...props} switcher={switcher} />
   );
 }
 
 /** Every team in a league plotted by one season number against another, with the league's own figure in the middle. */
-export function LeagueLandscape({ slug, brandColor, scopedLeagueIds, onTeamSelect }: Props) {
+function TeamLandscape({ slug, brandColor, scopedLeagueIds, onTeamSelect, switcher }: Omit<Props, "onPlayerSelect"> & { switcher: ReactNode }) {
   const { user, isMember } = useAuth();
   const accent = brandColor || "var(--ch-accent)";
 
@@ -173,11 +193,14 @@ export function LeagueLandscape({ slug, brandColor, scopedLeagueIds, onTeamSelec
 
   return (
     <div className="ch-card space-y-4 p-3 md:p-5" data-testid="league-landscape">
-      <div>
-        <h3 className="text-base font-bold text-[color:var(--ch-text)] md:text-lg">League landscape</h3>
-        <p className="mt-0.5 text-xs text-[color:var(--ch-text-2)] md:text-sm">
-          {preset.hint} The better end of each axis is to the right and at the top; the lines mark the league average.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-bold text-[color:var(--ch-text)] md:text-lg">League landscape</h3>
+          <p className="mt-0.5 text-xs text-[color:var(--ch-text-2)] md:text-sm">
+            {preset.hint} The better end of each axis is to the right and at the top; the lines mark the league average.
+          </p>
+        </div>
+        {switcher}
       </div>
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Chart">
@@ -328,38 +351,15 @@ export function LeagueLandscape({ slug, brandColor, scopedLeagueIds, onTeamSelec
           </div>
 
           {wanted && (
-            <div className="absolute inset-0 z-40 flex items-center justify-center p-3">
-              <div className="w-full max-w-sm rounded-2xl border border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-5 text-center shadow-2xl" data-testid="landscape-gate">
-                <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-full text-white" style={{ backgroundColor: accent }}>
-                  <Lock className="h-4 w-4" />
-                </span>
-                <h4 className="mt-3 text-base font-bold text-[color:var(--ch-text)]">{wanted.label} is a members' chart</h4>
-                <p className="mt-1 text-sm text-[color:var(--ch-text-2)]">
-                  {user
-                    ? "Confirm your email address to unlock it, along with the rest of the league landscape."
-                    : `${wanted.hint} A free account unlocks it and ${lockedCount - 1} more.`}
-                </p>
-                {!user && (
-                  <Link
-                    href="/auth?tab=register"
-                    className="mt-4 inline-flex h-10 w-full items-center justify-center rounded-lg text-sm font-semibold text-white"
-                    style={{ backgroundColor: accent }}
-                  >
-                    Create free account
-                  </Link>
-                )}
-                <div className="mt-3 flex items-center justify-center gap-4 text-xs">
-                  {!user && (
-                    <Link href="/auth" className="font-medium text-[color:var(--ch-text-2)] underline-offset-2 hover:underline">
-                      Sign in
-                    </Link>
-                  )}
-                  <button type="button" onClick={() => setWantedId(null)} className="font-medium text-[color:var(--ch-text-2)] underline-offset-2 hover:underline">
-                    Back to {preset.label.toLowerCase()}
-                  </button>
-                </div>
-              </div>
-            </div>
+            <LandscapeGate
+              label={wanted.label}
+              hint={wanted.hint}
+              lockedCount={lockedCount}
+              signedIn={!!user}
+              accent={accent}
+              backTo={preset.label}
+              onBack={() => setWantedId(null)}
+            />
           )}
         </div>
       )}

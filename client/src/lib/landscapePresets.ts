@@ -6,8 +6,8 @@
 import type { LandscapeMetricKey } from "@/types/landscape";
 
 /** One side of a chart. The better (or simply higher) end is always drawn to the right, or at the top. */
-export type LandscapeAxis = {
-  metric: LandscapeMetricKey;
+export type LandscapeAxis<K extends string = LandscapeMetricKey> = {
+  metric: K;
   /** In the hover details, e.g. "Offensive rating". */
   label: string;
   /** Beside a value where space is short, e.g. "OFF". */
@@ -27,7 +27,7 @@ export type LandscapeAxis = {
 /** The four corners of a chart, as they sit on the card. */
 export type QuadrantLabels = { topLeft: string; topRight: string; bottomLeft: string; bottomRight: string };
 
-export type LandscapePreset = {
+export type LandscapePreset<K extends string = LandscapeMetricKey> = {
   id: string;
   /** In the studio's menu. */
   label: string;
@@ -35,15 +35,15 @@ export type LandscapePreset = {
   hint: string;
   /** The card's headline. */
   title: string;
-  x: LandscapeAxis;
-  y: LandscapeAxis;
+  x: LandscapeAxis<K>;
+  y: LandscapeAxis<K>;
   quadrants: QuadrantLabels;
   /** Whether top right is the place to be, and is picked out in the card's colour. */
   bestTopRight: boolean;
   /** Both axes are in the same unit and share one league average, so they share one scale. */
   sharedScale?: boolean;
   /** Added to a highlighted team's name instead of its two values. */
-  highlightMetric?: { metric: LandscapeMetricKey; short: string };
+  highlightMetric?: { metric: K; short: string };
   /** Small print in the footer. */
   footnote: string;
 };
