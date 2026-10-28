@@ -1915,7 +1915,23 @@ export default function LeaguePage() {
           // would otherwise return 0 children for parents whose kids have
           // been hidden from search via is_public=false.
           try {
-            const competitions = await fetchLeagueChildren(data.league_id);
+            let competitions = await fetchLeagueChildren(data.league_id);
+            // A parent with games of its own (a summer league with its finals as a
+            // child) lists itself first, or its page would show only the children's
+            // games. Container parents like REBA SL seasons have none.
+            if (competitions.length > 0) {
+              const ownId = getDataLeagueId(slug, data.league_id);
+              const { count: ownGames } = await db
+                .from("game_schedule")
+                .select("game_key", { count: "exact", head: true })
+                .eq("league_id", ownId);
+              if (ownGames) {
+                competitions = [
+                  { league_id: ownId, name: data.name, slug: data.slug, logo_url: data.logo_url, age_group: null, stop: null, gender: null },
+                  ...competitions,
+                ];
+              }
+            }
             setChildCompetitions(competitions);
             fetchedChildCompetitions = competitions;
           } catch (competitionsError) {
