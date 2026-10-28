@@ -21,6 +21,36 @@ export function periodLabel(
   return period <= 4 ? `Q${period}` : `OT${period - 4}`;
 }
 
+interface PeriodMarker {
+  action_type?: string | null;
+  sub_type?: string | null;
+  period?: number | null;
+  period_type?: string | null;
+  action_number?: number | null;
+}
+
+/**
+ * The break a live game is in: "Halftime" after Q2, "End Q1" / "End Q3" /
+ * "End Q4" / "End OT1" after the others, or null while a period is on.
+ *
+ * Read from the latest period marker (action_type "period", "start"/"end" in
+ * sub_type), not the latest play: the next period's substitutions come in
+ * before its start marker, so the latest play reads "Q3 10:00" all through
+ * halftime. Markers are compared by action_number; without one, the first in
+ * the list wins, so pass newest first.
+ */
+export function periodBreakLabel(events: PeriodMarker[]): string | null {
+  let latest: PeriodMarker | null = null;
+  for (const e of events) {
+    if (e.action_type !== "period") continue;
+    if (!latest || (e.action_number ?? 0) > (latest.action_number ?? 0)) latest = e;
+  }
+  if (!latest || latest.sub_type !== "end") return null;
+  if (!isOvertimeType(latest.period_type) && latest.period === 2) return "Halftime";
+  const label = periodLabel(latest.period, latest.period_type);
+  return label ? `End ${label}` : null;
+}
+
 /**
  * One continuous period number: Q1-Q4 are 1-4 and overtime carries on at 5, 6, 7...
  *

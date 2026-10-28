@@ -16,7 +16,7 @@ import { ScorersTableBadge, ScorersTableNote, useCapturedWithScorersTable } from
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "./game/GameOverview";
 import { playerPath, teamPath } from "@shared/seo";
 import { gameRecap } from "@shared/recaps";
-import { normalizeEventPeriods, normalizeShotPeriods, periodLabel } from "@/lib/periodLabel";
+import { normalizeEventPeriods, normalizeShotPeriods, periodBreakLabel, periodLabel } from "@/lib/periodLabel";
 
 export interface GameInfo {
   date: string;
@@ -107,6 +107,8 @@ interface LiveClock {
   period: number | null;
   periodType: string | null;
   clock: string | null;
+  /** "Halftime", "End Q3"... while the game is between periods. */
+  breakLabel: string | null;
 }
 
 function parseMinutes(s: string | null | undefined): string {
@@ -534,15 +536,30 @@ export function InlineGameDetail({
 
     let active = true;
     const fetchLiveClock = async () => {
-      const { data } = await supabase
-        .from("live_events")
-        .select("period,period_type,clock")
-        .eq("game_key", gameKey)
-        .order("action_number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const [{ data }, { data: marker }] = await Promise.all([
+        supabase
+          .from("live_events")
+          .select("period,period_type,clock")
+          .eq("game_key", gameKey)
+          .order("action_number", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("live_events")
+          .select("action_type,sub_type,period,period_type,action_number")
+          .eq("game_key", gameKey)
+          .eq("action_type", "period")
+          .order("action_number", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
       if (active && data) {
-        setLiveClock({ period: data.period ?? null, periodType: data.period_type ?? null, clock: data.clock ?? null });
+        setLiveClock({
+          period: data.period ?? null,
+          periodType: data.period_type ?? null,
+          clock: data.clock ?? null,
+          breakLabel: periodBreakLabel(marker ? [marker] : []),
+        });
       }
     };
 
@@ -690,7 +707,8 @@ export function InlineGameDetail({
       })
     : [];
   const liveLabel = isLive && liveClock
-    ? [periodLabel(liveClock.period, liveClock.periodType), formatLiveClock(liveClock.clock)]
+    ? liveClock.breakLabel
+      ?? [periodLabel(liveClock.period, liveClock.periodType), formatLiveClock(liveClock.clock)]
         .filter(Boolean).join(" · ")
     : null;
   const BoxScoreTable = ({ players, teamName, score, color, totals }: { players: PlayerStat[]; teamName: string; score: number; color: string; totals: TeamStatRow | null }) => (

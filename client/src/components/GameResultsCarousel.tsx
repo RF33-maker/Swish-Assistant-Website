@@ -3,7 +3,7 @@ import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase"
 import { TeamLogo } from "./TeamLogo";
 import EntityLink from "./EntityLink";
 import { gamePath } from "@shared/seo";
-import { periodLabel } from "@/lib/periodLabel";
+import { periodBreakLabel, periodLabel } from "@/lib/periodLabel";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface GameItem {
@@ -18,6 +18,8 @@ interface GameItem {
   current_period?: number | null;
   current_period_type?: string | null;
   current_clock?: string | null;
+  /** "Halftime", "End Q3"... while the game is between periods. */
+  current_break?: string | null;
   age_group?: string;
   round?: string;
   hasGamePage?: boolean;
@@ -275,16 +277,18 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
         const liveKeys = allLive.map(g => g.game_key);
         const { data: liveEventsData } = await supabase
           .from("live_events")
-          .select("game_key, period, period_type, clock, created_at")
+          .select("game_key, period, period_type, clock, created_at, action_type, sub_type, action_number")
           .in("game_key", liveKeys)
           .order("created_at", { ascending: false });
 
         const latestByGame: Record<string, { period: number; period_type: string | null; clock: string; created_at: string }> = {};
+        const eventsByGame: Record<string, NonNullable<typeof liveEventsData>> = {};
         if (liveEventsData) {
           liveEventsData.forEach(ev => {
             if (!latestByGame[ev.game_key]) {
               latestByGame[ev.game_key] = { period: ev.period, period_type: ev.period_type, clock: ev.clock, created_at: ev.created_at };
             }
+            (eventsByGame[ev.game_key] ||= []).push(ev);
           });
         }
 
@@ -296,6 +300,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
             game.current_period = latest.period;
             game.current_period_type = latest.period_type;
             game.current_clock = latest.clock;
+            game.current_break = periodBreakLabel(eventsByGame[game.game_key] ?? []);
             const timeSinceLastEvent = now.getTime() - new Date(latest.created_at).getTime();
             if (timeSinceLastEvent >= FOUR_HOURS_MS) {
               game.status = 'FINAL';
@@ -497,8 +502,8 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                               <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                               LIVE
                             </span>
-                            {periodLabel(game.current_period, game.current_period_type) && (
-                              <span className="text-[8px] text-red-400/60 mt-0.5">{periodLabel(game.current_period, game.current_period_type)}</span>
+                            {(game.current_break || periodLabel(game.current_period, game.current_period_type)) && (
+                              <span className="text-[8px] text-red-400/60 mt-0.5 whitespace-nowrap">{game.current_break || periodLabel(game.current_period, game.current_period_type)}</span>
                             )}
                           </div>
                         ) : game.status === 'SCHEDULED' ? (
