@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { type MyClaim, claimEntry, useMyClaim } from "@/lib/playerClaims";
+import { compactLogoUrl } from "@/lib/compactLogo";
 
 type SuggestedLeague = {
   name: string;
@@ -458,7 +459,7 @@ export default function DashboardLanding() {
                   >
                     <span className="h-12 w-12 flex-none rounded-xl ch-tile flex items-center justify-center overflow-hidden">
                       {league.logoUrl ? (
-                        <img src={league.logoUrl} alt="" className="h-10 w-10 object-contain" />
+                        <img src={compactLogoUrl(league.logoUrl)} alt="" className="h-10 w-10 object-contain" />
                       ) : (
                         <Trophy className="h-5 w-5 text-[color:var(--ch-accent)]" />
                       )}

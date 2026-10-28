@@ -6,6 +6,7 @@ import { TeamLogo } from "@/components/TeamLogo"
 import { useGlobalSearch } from "@/hooks/useGlobalSearch"
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar"
 import SiteNav from "@/components/layout/SiteNav"
+import { compactLogoUrl } from "@/lib/compactLogo"
 
 /**
  * The public site header and navigation.
@@ -116,7 +117,7 @@ export default function SiteHeader({ hideSearch = false }: { hideSearch?: boolea
                       {item.type === 'competition' ? (
                         item.logo_url ? (
                           <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
-                            <img src={item.logo_url} alt={item.name} className="h-7 w-7 object-contain" />
+                            <img src={compactLogoUrl(item.logo_url)} alt={item.name} className="h-7 w-7 object-contain" />
                           </div>
                         ) : (
                           <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center flex-shrink-0">
@@ -126,7 +127,7 @@ export default function SiteHeader({ hideSearch = false }: { hideSearch?: boolea
                       ) : item.type === 'league' ? (
                         item.logo_url ? (
                           <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
-                            <img src={item.logo_url} alt={item.name} className="h-7 w-7 object-contain" />
+                            <img src={compactLogoUrl(item.logo_url)} alt={item.name} className="h-7 w-7 object-contain" />
                           </div>
                         ) : (
                           <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">

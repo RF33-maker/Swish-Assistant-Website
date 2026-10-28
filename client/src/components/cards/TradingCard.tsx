@@ -7,6 +7,7 @@ import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { generateTradingCardBlob, type TradingCardPalette } from "@/lib/generateTradingCard";
 import { useIsDarkMode } from "@/hooks/useReadableColor";
 import { relativeLuminance } from "@/lib/colorContrast";
+import { compactLogoUrl } from "@/lib/compactLogo";
 
 /** One game's stat line, as the trading card shows it. */
 export interface TradingCardPerformance {
@@ -138,7 +139,7 @@ export default function TradingCard({
 
   const [leagueLogoFailed, setLeagueLogoFailed] = useState(false);
   useEffect(() => setLeagueLogoFailed(false), [perf.leagueLogo]);
-  const leagueLogoUrl = leagueLogoFailed ? null : perf.leagueLogo || null;
+  const leagueLogoUrl = leagueLogoFailed ? null : compactLogoUrl(perf.leagueLogo) || null;
   const leagueName = perf.leagueName || undefined;
   const fullDate = formatFullCardDate(perf.gameDate);
 

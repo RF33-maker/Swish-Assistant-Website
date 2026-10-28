@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useGlobalSearch } from "@/hooks/useGlobalSearch";
 import SectionHeader from "@/components/home/SectionHeader";
 import { Reveal } from "@/components/home/motion";
+import { compactLogoUrl } from "@/lib/compactLogo";
 
 function cleanLeagueName(name: string): string {
   return name
@@ -163,7 +164,7 @@ export default function ExploreSection() {
                   </div>
                   <span className="ch-dribble-target h-9 w-9 sm:h-12 sm:w-12 rounded-lg sm:rounded-xl bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-lg">
                     {league.logo_url
-                      ? <img src={league.logo_url} alt={`${league.name} logo`} className="h-7 w-7 sm:h-10 sm:w-10 object-contain" />
+                      ? <img src={compactLogoUrl(league.logo_url)} alt={`${league.name} logo`} className="h-7 w-7 sm:h-10 sm:w-10 object-contain" />
                       : <Trophy className="h-5 w-5 text-orange-500" />}
                   </span>
                 </div>

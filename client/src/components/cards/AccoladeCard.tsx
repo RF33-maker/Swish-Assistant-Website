@@ -5,6 +5,7 @@ import type { Accolade } from "@/lib/accolades";
 import { accoladeCardText, accoladeSetLine, accoladeTierStyle } from "@/lib/accoladeCards";
 import { generateAccoladeCardBlob } from "@/lib/generateAccoladeCard";
 import type { TradingCardPalette } from "@/lib/generateTradingCard";
+import { compactLogoUrl } from "@/lib/compactLogo";
 
 /** Emblem shapes (24×24), shared with the canvas download. */
 export const EMBLEM_PATHS = {
@@ -95,7 +96,7 @@ export default function AccoladeCard({
 
   const [logoFailed, setLogoFailed] = useState(false);
   useEffect(() => setLogoFailed(false), [competitionLogo]);
-  const logoUrl = logoFailed ? null : competitionLogo || null;
+  const logoUrl = logoFailed ? null : compactLogoUrl(competitionLogo) || null;
 
   const generateCardBlob = () => {
     const styles = frontRef.current ? getComputedStyle(frontRef.current) : null;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getTeamLogoCached, invalidateLogoCacheEntry } from "@/utils/teamLogoCache";
 import { debugLog } from "@/utils/debug";
+import { compactLogoUrl } from "@/lib/compactLogo";
 
 interface TeamLogoProps {
   teamName: string;
@@ -124,7 +125,7 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
     return (
       <div className={`${baseClasses} overflow-hidden`}>
         <img
-          src={logoUrl}
+          src={compactLogoUrl(logoUrl)}
           alt={`${teamName} logo`}
           className="max-w-full max-h-full object-contain"
           onError={handleImageError}
