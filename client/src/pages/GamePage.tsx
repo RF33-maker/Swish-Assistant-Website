@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import BoxScoreTable from "@/components/BoxScoreTable";
+import { ScorersTableBadge, ScorersTableNote } from "@/components/game/ScorersTableCredit";
 import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
@@ -39,6 +40,8 @@ interface GameSchedule {
 }
 
 interface PlayerStat {
+  /** 'swish_stats' when the game was scored in Scorers Table. */
+  source_type?: string | null;
   firstname?: string;
   familyname?: string;
   full_name?: string;
@@ -66,6 +69,7 @@ interface PlayerStat {
 }
 
 interface TeamStat {
+  source_type?: string | null;
   name: string;
   side: string;
   source_type?: string | null;
@@ -999,6 +1003,10 @@ export default function GamePage() {
   const awayScore = awayTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[1] : null);
   const isForfeit = teamStats?.some(t => t.source_type === 'forfeit') ?? false;
 
+  // Scored in Scorers Table rather than taken from a LiveStats feed.
+  const capturedWithScorersTable =
+    !!playerStats?.some(p => p.source_type === 'swish_stats') || !!teamStats?.some(t => t.source_type === 'swish_stats');
+
   const heroState: GameHeroState = isLive
     ? 'live'
     : isFinal || hasStatsData
@@ -1036,8 +1044,13 @@ export default function GamePage() {
             homeHref={teamPath(gameData.hometeam, leagueSlug) || undefined}
             awayHref={teamPath(gameData.awayteam, leagueSlug) || undefined}
             colors={colors}
-            badges={isTestMode ? (
-              <span className="rounded-full bg-purple-600 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-white">Test mode</span>
+            badges={isTestMode || capturedWithScorersTable ? (
+              <>
+                {isTestMode && (
+                  <span className="rounded-full bg-purple-600 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-white">Test mode</span>
+                )}
+                {capturedWithScorersTable && <ScorersTableBadge />}
+              </>
             ) : null}
             meta={[
               { icon: <Calendar />, label: formatDate(gameData.matchtime) },
@@ -1354,6 +1367,7 @@ export default function GamePage() {
                         headerColor={colors.awayFill}
                         formatMinutes={parseMinutes}
                       />
+                      {capturedWithScorersTable && <ScorersTableNote />}
                     </>
                   )}
                 </TabsContent>
