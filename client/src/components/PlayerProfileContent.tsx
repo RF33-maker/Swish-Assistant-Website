@@ -16,6 +16,7 @@ import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analys
 import { normalizeInstagramHandle } from "@/lib/instagram";
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerBanner } from "@/components/PlayerBanner";
+import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
 import { PillTabBar } from "@/components/PillTabBar";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
@@ -2755,12 +2756,23 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         </div>
         </>}
 
-        {/* Team Performance Splits (on/off ORTG/DRTG impact, <PlayerPerformanceSplits>)
-            is hidden for now — the underlying numbers are too inconsistent to trust
-            yet and need more work on the tracking/attribution side before showing
-            them to users. The rest of the Splits tab (shooting splits, shot chart)
-            is unaffected. See git history on this file for the removed JSX to
-            restore once that's sorted. */}
+        {activeTab === 'splits' && playerInfo?.playerId && (
+          selectedLeagueIds.size > 1 ? (
+            <div className="ch-card p-5 text-center text-sm text-[color:var(--ch-text-2)]">
+              Select a single league to see on/off impact.
+            </div>
+          ) : (
+            <PlayerPerformanceSplits
+              playerId={playerInfo.playerId}
+              leagueIds={Array.from(expandedCompIds)}
+              playerName={playerInfo.name}
+              playerTeam={playerInfo.team}
+              playerPhotoUrl={playerPhotoUrl}
+              primaryColor={primaryColor}
+              teamLogoUrl={shareTeamLogoUrl}
+            />
+          )
+        )}
 
         {activeTab === 'stats' && <>
         {(careerHighs.length > 0 || seasonHighs.length > 0) && (() => {
