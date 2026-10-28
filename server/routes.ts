@@ -4043,7 +4043,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const gameKeys = unique.map(g => g.game_key);
         const [tsResp, leResp] = await Promise.all([
           db.from("team_stats").select("game_key, name, tot_spoints").in("game_key", gameKeys),
-          db.from("live_events").select("game_key, period, period_type, clock, created_at")
+          db.from("live_events").select("game_key, period, period_type, clock, created_at, action_type, sub_type, action_number")
             .in("game_key", gameKeys).order("created_at", { ascending: false }),
         ]);
         teamStats = tsResp.data || [];

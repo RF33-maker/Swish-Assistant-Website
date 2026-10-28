@@ -8,7 +8,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
-import { normalizeEventPeriods, normalizeShotPeriods, periodLabel } from "@/lib/periodLabel";
+import { normalizeEventPeriods, normalizeShotPeriods, periodBreakLabel, periodLabel } from "@/lib/periodLabel";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -958,6 +958,7 @@ export default function GamePage() {
   const latestEvent = liveEvents && liveEvents.length > 0 ? liveEvents[0] : null;
   const currentPeriod = latestEvent?.period || null;
   const currentClock = latestEvent?.clock || null;
+  const currentBreak = periodBreakLabel(liveEvents ?? []);
 
   // Only auto-expire to FINAL if the DB status is ambiguous (not explicitly live/in_progress).
   // If the status field explicitly says live, trust it — don't override with the time check.
@@ -1036,7 +1037,9 @@ export default function GamePage() {
             homeScore={isGamePlayed ? homeScore : null}
             awayScore={isGamePlayed ? awayScore : null}
             state={heroState}
-            liveLabel={isLive && currentPeriod
+            liveLabel={isLive && currentBreak
+              ? currentBreak
+              : isLive && currentPeriod
               ? `${periodLabel(currentPeriod, latestEvent?.period_type)}${currentClock ? ` · ${currentClock.split(':').slice(0, 2).join(':')}` : ''}`
               : null}
             homeSub={homeTeamRecord ? `${homeTeamRecord.wins}-${homeTeamRecord.losses}` : undefined}
