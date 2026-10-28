@@ -219,13 +219,22 @@ const UploadSectionLA = ({ leagues }: any) => {
         const explicitIds: string[] | undefined = Array.isArray(data?.created_league_ids)
           ? data.created_league_ids
           : undefined;
-        const rowsWritten: number = data?.rows_written ?? 0;
+        // Excel uploads report rows_written; PDFs report counts per report type
+        // (a box score's player rows are counts.player_count).
+        const rowsWritten: number = data?.rows_written ?? data?.counts?.player_count ?? 0;
         const rowLabel = rowsWritten === 1 ? "record" : "records";
-        setStatusMessage(
-          rowsWritten > 0
-            ? `✅ Parsing complete! ${rowsWritten} player stat ${rowLabel} written to database.`
-            : "✅ Parsing complete! (0 records written — check that the file has recognisable player data)"
-        );
+        const game = data?.home_team && data?.away_team ? ` (${data.home_team} vs ${data.away_team})` : "";
+        if (data?.status === "skipped") {
+          setStatusMessage(`⚠️ ${data.message || "This PDF was skipped."}`);
+        } else if (data?.report_type && data.report_type !== "box_score") {
+          setStatusMessage(`✅ Parsing complete! ${String(data.report_type).replace(/_/g, " ")} saved${game}.`);
+        } else {
+          setStatusMessage(
+            rowsWritten > 0
+              ? `✅ Parsing complete! ${rowsWritten} player stat ${rowLabel} written to database${game}.`
+              : "✅ Parsing complete! (0 records written — check that the file has recognisable player data)"
+          );
+        }
         const linkedChildIds = await backfillParentLeagueId(selectedLeagueId, snapshot, explicitIds);
         const targetIds = Array.from(new Set([selectedLeagueId, ...(explicitIds || []), ...linkedChildIds]));
         await syncTeamIdentities(targetIds);
