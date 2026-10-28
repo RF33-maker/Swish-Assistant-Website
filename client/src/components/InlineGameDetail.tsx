@@ -168,6 +168,7 @@ export function InlineGameDetail({
   const [leagueId, setLeagueId] = useState<string | null>(null);
   const [competitionName, setCompetitionName] = useState<string | null>(null);
   const [homeTeamStats, setHomeTeamStats] = useState<TeamStatRow | null>(null);
+  const [forfeit, setForfeit] = useState(false);
   const [awayTeamStats, setAwayTeamStats] = useState<TeamStatRow | null>(null);
   const [homePlayerStats, setHomePlayerStats] = useState<PlayerStat[]>([]);
   const [awayPlayerStats, setAwayPlayerStats] = useState<PlayerStat[]>([]);
@@ -203,6 +204,7 @@ export function InlineGameDetail({
       setCompetitionName(null);
       setHomeTeamStats(null);
       setAwayTeamStats(null);
+      setForfeit(false);
       setHomePlayerStats([]);
       setAwayPlayerStats([]);
     }
@@ -324,6 +326,15 @@ export function InlineGameDetail({
 
         if (homeName) setHomeTeamStats(makeTeamRow("home", homeName));
         if (awayName) setAwayTeamStats(makeTeamRow("away", awayName));
+
+        // A forfeit has a final score but no box score (v_game_detail has no source_type)
+        const { data: forfeitRows } = await supabase
+          .from("team_stats")
+          .select("game_key")
+          .eq("game_key", gameKey)
+          .eq("source_type", "forfeit")
+          .limit(1);
+        setForfeit((forfeitRows?.length ?? 0) > 0);
 
         let { data: boxRows, error: boxErr } = await supabase
           .from("v_box_score")
@@ -787,6 +798,7 @@ export function InlineGameDetail({
                 events={eventsLoading ? null : liveEvents}
                 colors={colors}
                 recap={recap}
+                forfeit={forfeit}
               />
             </TabsContent>
 
@@ -798,7 +810,7 @@ export function InlineGameDetail({
 
             {/* TEAM STATS TAB */}
             <TabsContent value="teamstats" className="mt-0">
-              <TeamStatsComparison homeTeam={hometeam} awayTeam={awayteam} home={homeTeamStats} away={awayTeamStats} colors={colors} />
+              <TeamStatsComparison homeTeam={hometeam} awayTeam={awayteam} home={homeTeamStats} away={awayTeamStats} colors={colors} forfeit={forfeit} />
             </TabsContent>
 
             {/* SHOTS TAB */}

@@ -68,6 +68,7 @@ interface PlayerStat {
 interface TeamStat {
   name: string;
   side: string;
+  source_type?: string | null;
   score: number;
   tot_spoints: number;
   tot_sreboundstotal: number;
@@ -996,6 +997,7 @@ export default function GamePage() {
     : null;
   const homeScore = homeTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[0] : null);
   const awayScore = awayTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[1] : null);
+  const isForfeit = teamStats?.some(t => t.source_type === 'forfeit') ?? false;
 
   const heroState: GameHeroState = isLive
     ? 'live'
@@ -1306,6 +1308,7 @@ export default function GamePage() {
                     awayPlayers={awayPlayerStats.map(toLeader)}
                     events={liveEvents}
                     colors={colors}
+                    forfeit={isForfeit}
                     recap={isFinal && homeScore != null && awayScore != null ? gameRecap({
                       home: gameData.hometeam,
                       away: gameData.awayteam,
@@ -1362,6 +1365,7 @@ export default function GamePage() {
                     home={teamStats && teamStats.length >= 2 ? homeTeamStats ?? null : null}
                     away={teamStats && teamStats.length >= 2 ? awayTeamStats ?? null : null}
                     colors={colors}
+                    forfeit={isForfeit}
                   />
                 </TabsContent>
 
