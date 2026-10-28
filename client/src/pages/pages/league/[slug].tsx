@@ -1000,9 +1000,27 @@ export default function LeaguePage() {
     return candidates.map(c => c.league_id);
   }, [selectedAgeGroup, selectedStop, childCompetitions, league?.name]);
 
+  // Seasons run as stops filter stop first, then age group. Switching stop keeps
+  // the age group when that stop has it, otherwise moves to the stop's first one.
   useEffect(() => {
-    setSelectedStop('all');
-  }, [selectedAgeGroup]);
+    if (selectedStop === 'all' || visibleAgeGroupLabels.length === 0) return;
+    if (!visibleAgeGroupLabels.includes(selectedAgeGroup)) {
+      setSelectedAgeGroup(visibleAgeGroupLabels[0]);
+      setFilterAgeGroup(visibleAgeGroupLabels[0]);
+    }
+  }, [selectedStop, visibleAgeGroupLabels]);
+
+  const filterChip = (key: string, label: string, active: boolean, onClick: () => void) => (
+    <button
+      key={key}
+      onClick={onClick}
+      className={`ch-chip px-3 py-1.5 text-xs md:text-[13px] whitespace-nowrap ${active ? '!text-white' : ''}`}
+      style={active ? { borderColor: brandColor, backgroundColor: brandColor } : {}}
+    >
+      {label}
+    </button>
+  );
+  const pickAgeGroup = (label: string) => { setSelectedAgeGroup(label); setFilterAgeGroup(label); setStandingsView('full'); };
 
   useEffect(() => {
     if (isParentLeague && ageGroupLabels.length > 0 && selectedAgeGroup === 'all') {
@@ -4396,39 +4414,34 @@ export default function LeaguePage() {
             </nav>
           </div>
 
-              {/* Competition filter pills for parent leagues (gender / age-group) */}
+              {/* Competition filter pills for parent leagues (gender / age-group);
+                  seasons run as stops pick the stop first, then the age group. */}
               {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && !(activeSection === 'game' && selectedGameKey) && (
-                <div className="flex items-center gap-2 flex-wrap py-3 border-t border-[color:var(--ch-border)]" data-testid="age-group-tabs">
-                  <div className="flex gap-1.5 flex-wrap">
-                    {visibleAgeGroupLabels.map((label) => (
-                      <button
-                        key={label}
-                        onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); setStandingsView('full'); }}
-                        className={`ch-chip px-3 py-1.5 text-xs md:text-[13px] whitespace-nowrap ${
-                          selectedAgeGroup === label
-                            ? '!text-white'
-                            : ''
-                        }`}
-                        style={selectedAgeGroup === label ? { borderColor: brandColor, backgroundColor: brandColor } : {}}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                availableStopsForAgeGroup.length > 0 ? (
+                  <div className="space-y-2 py-3 border-t border-[color:var(--ch-border)]" data-testid="age-group-tabs">
+                    <div className="flex items-center gap-2" data-testid="stop-chips">
+                      <span className="w-12 flex-none text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ch-muted)]">Stop</span>
+                      <div className="flex min-w-0 gap-1.5 overflow-x-auto scrollbar-hide">
+                        {filterChip('all', 'All stops', selectedStop === 'all', () => setSelectedStop('all'))}
+                        {availableStopsForAgeGroup.map(stop =>
+                          filterChip(String(stop), stopLabel(stop, stopNames.get(String(stop))), selectedStop === String(stop), () => setSelectedStop(String(stop))),
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-12 flex-none text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ch-muted)]">Age</span>
+                      <div className="flex min-w-0 gap-1.5 overflow-x-auto scrollbar-hide">
+                        {visibleAgeGroupLabels.map(label => filterChip(label, label, selectedAgeGroup === label, () => pickAgeGroup(label)))}
+                      </div>
+                    </div>
                   </div>
-                  {(availableStopsForAgeGroup.length > 1 || stopNames.size > 0) && (
-                    <select
-                      value={selectedStop}
-                      onChange={(e) => setSelectedStop(e.target.value)}
-                      className="ch-input px-3 h-8 text-xs md:text-[13px] font-medium cursor-pointer border"
-                      style={{ borderColor: selectedStop !== 'all' ? brandColor : '#e5e7eb' }}
-                    >
-                      <option value="all">All Stops</option>
-                      {availableStopsForAgeGroup.map(stop => (
-                        <option key={stop} value={String(stop)}>{stopLabel(stop, stopNames.get(String(stop)))}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2 flex-wrap py-3 border-t border-[color:var(--ch-border)]" data-testid="age-group-tabs">
+                    <div className="flex gap-1.5 flex-wrap">
+                      {visibleAgeGroupLabels.map(label => filterChip(label, label, selectedAgeGroup === label, () => pickAgeGroup(label)))}
+                    </div>
+                  </div>
+                )
               )}
 
         </div>
