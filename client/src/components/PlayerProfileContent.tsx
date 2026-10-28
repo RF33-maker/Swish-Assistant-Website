@@ -40,6 +40,7 @@ import { computePastSeasonAccolades, computePlayerAccolades } from "@/lib/accola
 import { AccoladeChips, AccoladeCollection } from "@/components/cards/AccoladeCollection";
 import type { AccoladeCardPlayer } from "@/components/cards/AccoladeCard";
 import { fetchPlayerRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
+import { stopLabel } from "@/lib/leagueChildren";
 
 const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
 
@@ -1238,7 +1239,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           new Set(matches.map((m) => m.league_id).filter(Boolean))
         );
 
-        type LeagueInfo = { name: string; slug?: string | null; parent_league_id?: string | null; age_group?: string | null; stop?: number | null };
+        type LeagueInfo = { name: string; slug?: string | null; parent_league_id?: string | null; age_group?: string | null; stop?: number | null; stop_name?: string | null };
         type LeagueRow = { league_id: string } & LeagueInfo;
 
         const statsPromise = Promise.all(
@@ -1263,7 +1264,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               body: JSON.stringify({ ids }),
             });
             if (!resp.ok) return [];
-            const map = await resp.json() as Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null }>;
+            const map = await resp.json() as Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null; stop_name?: string | null }>;
             return Object.entries(map).map(([league_id, info]) => ({ league_id, ...info }));
           } catch {
             return [];
@@ -1493,6 +1494,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 parent_league_id: league.parent_league_id,
                 age_group: league.age_group,
                 stop: league.stop,
+                stop_name: league.stop_name,
               });
               if (league.parent_league_id) parentIds.push(league.parent_league_id);
             }
@@ -1508,11 +1510,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             );
             const userId = stats.length > 0 ? stats[0].user_id : null;
 
-            const extraLeagueInfoFetch: Promise<Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null }>> =
+            const extraLeagueInfoFetch: Promise<Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null; stop_name?: string | null }>> =
               extraLeagueIds.length > 0
                 ? fetchLeagueInfo(extraLeagueIds).then(rows => {
                     const result: Record<string, any> = {};
-                    rows.forEach(row => { result[row.league_id] = { name: row.name, slug: row.slug || null, parent_league_id: row.parent_league_id || null, age_group: row.age_group || null, stop: row.stop ?? null }; });
+                    rows.forEach(row => { result[row.league_id] = { name: row.name, slug: row.slug || null, parent_league_id: row.parent_league_id || null, age_group: row.age_group || null, stop: row.stop ?? null, stop_name: row.stop_name ?? null }; });
                     return result;
                   }).catch(() => ({}))
                 : Promise.resolve({});
@@ -1537,7 +1539,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             // Convert the server response back into the shape expected by the
             // enrichment loop below (same fields as the old Supabase response).
             const extraLeaguesResp = {
-              data: Object.entries(extraLeagueInfoMap as Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null }>).map(
+              data: Object.entries(extraLeagueInfoMap as Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null; stop_name?: string | null }>).map(
                 ([league_id, info]) => ({ league_id, ...info })
               ),
             };
@@ -1551,6 +1553,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 parent_league_id: league.parent_league_id,
                 age_group: league.age_group,
                 stop: league.stop,
+                stop_name: league.stop_name,
               });
               if (league.parent_league_id) parentIds.push(league.parent_league_id);
             }
@@ -1609,7 +1612,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 groupKey = `${info.parent_league_id}${agePart}${stopPart}`;
                 const parentName = leagueMapLocal.get(info.parent_league_id) || info.parent_league_id;
                 const ageSuffix = info.age_group ? ` ${info.age_group}` : '';
-                const stopSuffix = info.stop != null ? ` Stop ${info.stop}` : '';
+                const stopSuffix = info.stop != null ? ` ${stopLabel(info.stop, info.stop_name)}` : '';
                 groupLabel = `${parentName}${ageSuffix}${stopSuffix}`;
               } else {
                 groupKey = lid;

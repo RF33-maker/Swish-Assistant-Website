@@ -11,9 +11,15 @@ export type LeagueChild = {
   logo_url: string | null;
   age_group: string | null;
   stop: number | null;
+  stop_name: string | null;
   gender: string | null;
   season: string | null;
 };
+
+// "Stop 2 · Bristol" when the stop has a name, "Stop 2" otherwise.
+export function stopLabel(stop: number | string, stopName?: string | null): string {
+  return stopName ? `Stop ${stop} · ${stopName}` : `Stop ${stop}`;
+}
 
 const cache = new Map<string, Promise<LeagueChild[]>>();
 
