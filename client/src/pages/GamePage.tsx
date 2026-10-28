@@ -1401,6 +1401,10 @@ export default function GamePage() {
                     events={liveEvents || []}
                     homeTeam={gameData.hometeam}
                     awayTeam={gameData.awayteam}
+                    homeColor={colors.homeFill}
+                    awayColor={colors.awayFill}
+                    isLive={isLive}
+                    loading={liveEvents === undefined}
                     emptyMessage={isTestMode ? 'No play-by-play events yet. Events will appear here as the game progresses.' : 'Play-by-play data coming soon.'}
                     describeEvent={(event) => event.description || buildEventDescription(event.action_type || 'event', event.sub_type, event.success, event.points)}
                   />

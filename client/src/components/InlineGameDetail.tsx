@@ -837,6 +837,9 @@ export function InlineGameDetail({
                 events={liveEvents}
                 homeTeam={hometeam}
                 awayTeam={awayteam}
+                homeColor={colors.homeFill}
+                awayColor={colors.awayFill}
+                isLive={isLive}
                 loading={eventsLoading}
                 emptyMessage="Play-by-play data coming soon."
                 describeEvent={(event, previousScoredEvent) =>

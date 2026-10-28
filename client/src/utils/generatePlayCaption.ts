@@ -1,3 +1,16 @@
+// Feed codes that read badly as-is in team-level captions.
+const TEAM_PLAY_WORDS: Record<string, string> = {
+  "24sec": "shot clock",
+  "8sec": "8 seconds",
+  "5sec": "5 seconds",
+  "3sec": "3 seconds",
+  outofbounds: "out of bounds",
+  ballhandling: "ball handling",
+  badpass: "bad pass",
+  heldball: "held ball",
+  headcoachchallenge: "coach's challenge",
+};
+
 export function generatePlayCaption(play: any, previousPlay?: any): string {
   const rawAction = play.action_type?.toLowerCase() || "";
   const sub = play.sub_type || "";
@@ -61,15 +74,19 @@ export function generatePlayCaption(play: any, previousPlay?: any): string {
   const isSystemEvent = systemEvents.some(evt => action.includes(evt)) || !player;
 
   if (isSystemEvent) {
+    // FIBA feeds send period/game markers as action "period" or "game" with the start/end in sub_type.
+    const subLower = sub.toLowerCase();
+    const isMarker = action === "period" || action === "game";
+
     // Period starts
-    if (action.includes("start") || action.includes("begin")) {
+    if (action.includes("start") || action.includes("begin") || (isMarker && subLower === "start")) {
       const quarterNames = ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"];
       const periodName = period && period <= 4 ? quarterNames[period - 1] : `Period ${period || ""}`;
       return `Start of ${periodName} 🏀`;
     }
 
     // Period ends
-    if (action.includes("end")) {
+    if (action.includes("end") || (isMarker && subLower === "end")) {
       const quarterNames = ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"];
       const periodName = period && period <= 4 ? quarterNames[period - 1] : `Period ${period || ""}`;
       return `End of ${periodName}`;
@@ -90,11 +107,18 @@ export function generatePlayCaption(play: any, previousPlay?: any): string {
       return `Team rebound 💪`;
     }
 
+    // Team plays with no player credited
+    const detail = TEAM_PLAY_WORDS[subLower] ?? subLower;
+    if (action === "rebound") return `Team ${detail ? `${detail} ` : ""}rebound 💪`;
+    if (action === "turnover") return `Team turnover${detail ? ` (${detail})` : ""} ⚡`;
+    if (action === "foul") return `Team foul${detail ? ` (${detail})` : ""} 🚫`;
+    const shotWord = action === "2pt" ? "2-pointer" : action === "3pt" ? "3-pointer" : action === "freethrow" ? "free throw" : null;
+    if (shotWord) return derivedSuccess === null ? `${shotWord.charAt(0).toUpperCase()}${shotWord.slice(1)}` : `${derivedSuccess ? "Made" : "Missed"} ${shotWord}`;
+
     // Generic system event
-    if (sub) {
-      return `${sub}`;
-    }
-    return action.charAt(0).toUpperCase() + action.slice(1);
+    const actionLabel = TEAM_PLAY_WORDS[action] ?? action;
+    const capitalised = actionLabel.charAt(0).toUpperCase() + actionLabel.slice(1);
+    return detail ? `${capitalised} (${detail})` : capitalised;
   }
 
   // Player-based events
