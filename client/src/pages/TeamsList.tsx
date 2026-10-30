@@ -271,7 +271,7 @@ export default function TeamsList() {
                 </span>
               </span>
             </SelectTrigger>
-            <SelectContent className="rounded-xl p-1 shadow-xl max-h-[60vh]" style={{ fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" }}>
+            <SelectContent className="rounded-xl p-1 shadow-xl max-h-[60vh]" style={{ fontFamily: "var(--font-body)" }}>
               <SelectItem value={ALL} className="rounded-lg py-2 pr-3 text-sm font-medium">
                 <span className="flex items-center gap-2.5">
                   <CompetitionMark />

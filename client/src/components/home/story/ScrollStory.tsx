@@ -857,7 +857,7 @@ function GhostContent({ iconRef, textRef, buttonRef, buttonRectRef, buttonTextRe
         <circle cx="9" cy="9" r="6.5" />
         <path d="M 14 14 L 18.5 18.5" />
       </g>
-      <text ref={textRef} fill="var(--ch-muted)" style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif" }}>
+      <text ref={textRef} fill="var(--ch-muted)" style={{ fontFamily: "var(--font-body)" }}>
         Search any player, team or league
       </text>
       <g ref={buttonRef}>
@@ -866,7 +866,7 @@ function GhostContent({ iconRef, textRef, buttonRef, buttonRectRef, buttonTextRe
           ref={buttonTextRef}
           fill="#ffffff"
           textAnchor="middle"
-          style={{ fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif", fontSize: "14px", fontWeight: 600 }}
+          style={{ fontFamily: "var(--font-body)", fontSize: "14px", fontWeight: 600 }}
         >
           Search
         </text>
