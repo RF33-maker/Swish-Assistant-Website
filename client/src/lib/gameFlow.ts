@@ -51,11 +51,63 @@ export interface LeadChangeSummary {
   biggestLead: { margin: number; teamNo: 1 | 2; period: number; clock: string | null } | null;
 }
 
+/** "05:49:00" → hundredths of a second left, or null without a clock. */
+function clockHundredths(clock: string | null | undefined): number | null {
+  if (!clock) return null;
+  const [m, s, h] = clock.split(":").map(Number);
+  return Number.isFinite(m) ? m * 6000 + (s || 0) * 100 + (h || 0) : null;
+}
+
+interface OrderedEvent {
+  action_number?: number | null;
+  period?: number | null;
+  clock?: string | null;
+  action_type?: string | null;
+  sub_type?: string | null;
+}
+
+/**
+ * Plays in the order they happened. action_number is the order they were
+ * entered, so a scorer's correction made after a period has finished arrives
+ * with the highest number but the period and clock of the original play. Those
+ * rows go back to their place in their period; everything else keeps its
+ * action_number order, because clocks wobble within a period and sorting every
+ * row by clock would put more scores out of order than it fixes.
+ */
+export function inGameOrder<T extends OrderedEvent>(rawEvents: T[]): T[] {
+  const sorted = rawEvents.slice().sort((a, b) => (a.action_number ?? 0) - (b.action_number ?? 0));
+  const out: T[] = [];
+  const ended = new Set<number>();
+  let reached = 0;
+  for (const e of sorted) {
+    const period = e.period ?? 0;
+    const isPeriodEnd = e.action_type === "period" && e.sub_type === "end";
+    const late = period > 0 && e.action_type !== "game" && (period < reached || ended.has(period));
+    if (late) {
+      const clock = clockHundredths(e.clock);
+      let at = out.findIndex(o => {
+        if (o.action_type === "game") return false;
+        if ((o.period ?? 0) > period) return true;
+        if (o.period !== period) return false;
+        if (o.action_type === "period" && o.sub_type === "end") return true;
+        const oClock = clockHundredths(o.clock);
+        return clock != null && oClock != null && oClock < clock;
+      });
+      if (at === -1) at = out.length;
+      out.splice(at, 0, e);
+    } else {
+      out.push(e);
+      reached = Math.max(reached, period);
+    }
+    if (isPeriodEnd) ended.add(period);
+  }
+  return out;
+}
+
 /** Chronological, made-basket-only events with the running score parsed out. */
 export function parseGameFlow(rawEvents: RawGameEvent[]): FlowPoint[] {
-  const made = rawEvents
-    .filter(e => e.scoring && e.success && e.score && (e.team_no === 1 || e.team_no === 2))
-    .sort((a, b) => (a.action_number ?? 0) - (b.action_number ?? 0));
+  const made = inGameOrder(rawEvents)
+    .filter(e => e.scoring && e.success && e.score && (e.team_no === 1 || e.team_no === 2));
 
   const points: FlowPoint[] = [];
   made.forEach((e, i) => {

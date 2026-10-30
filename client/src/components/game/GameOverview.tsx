@@ -106,10 +106,15 @@ function QuarterTable({ homeTeam, awayTeam, home, away, leagueId, colors, events
       ? split.map((o) => ({ key: `ot${o.period}`, label: `OT${o.period - 4}`, home: o.home, away: o.away }))
       : [{ key: "ot", label: "OT", home: ot.home, away: ot.away }];
 
+  // Fixed layout: a long team name is truncated instead of pushing the score
+  // columns out of the card. The minimum keeps a name column when overtimes pile
+  // up, and past that the table scrolls inside its card.
+  const scoreColumns = quarters.length + otColumns.length;
+
   return (
     <GameSection title="Quarter by quarter">
       <div className="overflow-x-auto">
-        <table className="ch-table w-full text-sm">
+        <table className="ch-table w-full table-fixed text-sm" style={{ minWidth: `${6 + scoreColumns * 2.75 + 3}rem` }}>
           <thead>
             <tr className="border-b border-[color:var(--ch-border)]">
               <th className="text-left py-2 pr-2">Team</th>
@@ -299,8 +304,9 @@ export function GameOverviewSections({
       )}
       {hasTeamStats && (
         // grid-cols-1 is minmax(0, 1fr): without it a wide table (a 4-5 overtime game) stretches
-        // the whole column on a phone instead of scrolling inside its own card.
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        // the whole column on a phone instead of scrolling inside its own card. Side by side
+        // waits for 2xl: beside the game feed, half the column is too narrow for every quarter.
+        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
           <QuarterTable homeTeam={homeTeam} awayTeam={awayTeam} home={home!} away={away!} leagueId={leagueId} colors={colors} events={events} />
           <GameSection title="Shooting">
             <ShootingRows home={home!} away={away!} colors={colors} />

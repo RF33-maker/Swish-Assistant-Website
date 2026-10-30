@@ -8,6 +8,8 @@
 //
 // team_no=1 is the home side, team_no=2 the away side (see gameFlow.ts).
 
+import { inGameOrder } from "./gameFlow";
+
 export interface CommentaryEvent {
   action_number: number | null;
   period: number | null;
@@ -176,10 +178,7 @@ interface Moment {
 }
 
 export function buildCommentary(input: CommentaryInput): CommentaryItem[] {
-  const events = input.events
-    .filter((e) => e.action_number != null)
-    .slice()
-    .sort((a, b) => (a.action_number ?? 0) - (b.action_number ?? 0));
+  const events = inGameOrder(input.events.filter((e) => e.action_number != null));
   if (events.length === 0) return [];
 
   const shotByAction = new Map<number, CommentaryShot>();
@@ -343,7 +342,7 @@ export function buildCommentary(input: CommentaryInput): CommentaryItem[] {
       if (n.action_type === "assist" && !assistName) assistName = nameOf(n);
       if (n.action_type === "freethrow" && n.sub_type === "1of1" && n.success && isShot(e)) andOne = true;
     }
-    const offSteal = !!lastSteal && lastSteal.teamNo === teamNo && (e.action_number! - lastSteal.action) <= 4 && isShot(e);
+    const offSteal = !!lastSteal && lastSteal.teamNo === teamNo && Math.abs(e.action_number! - lastSteal.action) <= 4 && isShot(e);
 
     // --- importance ---
     let importance = type === "3pt" ? 30 : type === "2pt" ? 16 : 8;
@@ -475,12 +474,15 @@ export function buildCommentary(input: CommentaryInput): CommentaryItem[] {
 
   if (input.isFinal) {
     const last = events[events.length - 1];
-    const winner = home >= away ? 1 : 2;
+    // The game-end row carries the official score; the running one is the fallback.
+    const gameEnd = events.filter((e) => e.action_type === "game" && e.sub_type === "end").pop();
+    const [finalHome, finalAway] = parseScore(gameEnd?.score ?? null) ?? [home, away];
+    const winner = finalHome >= finalAway ? 1 : 2;
     moments.push({ event: last, kind: "final", importance: 100, emoji: "🏆", notes: [],
-      headline: home === away
-        ? `Final: it finishes level at ${home}.`
-        : `Final: ${teamName(winner)} win ${Math.max(home, away)}-${Math.min(home, away)}.`,
-      line: null, shot: null, homeScore: home, awayScore: away, playerKey: null });
+      headline: finalHome === finalAway
+        ? `Final: it finishes level at ${finalHome}.`
+        : `Final: ${teamName(winner)} win ${Math.max(finalHome, finalAway)}-${Math.min(finalHome, finalAway)}.`,
+      line: null, shot: null, homeScore: finalHome, awayScore: finalAway, playerKey: null });
   }
 
   return moments.map((m) => ({
