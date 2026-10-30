@@ -682,6 +682,24 @@
 /* Motion */
 @keyframes ch-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .sa-pro .ch-rise { animation: ch-rise .38s cubic-bezier(.2,.7,.2,1) both; }
+/* A live play arriving at the top of a feed: the row opens, easing the list
+   down, and the play settles in over a wash of team colour that fades away.
+   usePacedReveal's ENTERING_MS must outlast the wash. */
+@keyframes ch-flow-open { from { grid-template-rows: 0fr; } to { grid-template-rows: 1fr; } }
+/* No `to`: padding eases back to whatever the row has. A grid row can't shrink
+   past its item's padding, so without this it would open from that, not zero. */
+@keyframes ch-flow-pad { from { padding-block: 0; } }
+@keyframes ch-flow-settle { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+@keyframes ch-flow-wash { from { background-color: var(--ch-flow-tint, var(--ch-accent-soft)); } to { background-color: transparent; } }
+.sa-pro .ch-flow-in {
+  display: grid;
+  animation: ch-flow-open .34s cubic-bezier(.2,.7,.2,1) both, ch-flow-wash 1.6s ease-out both;
+}
+.sa-pro .ch-flow-in > * {
+  min-height: 0;
+  overflow: hidden;
+  animation: ch-flow-pad .34s cubic-bezier(.2,.7,.2,1) both, ch-flow-settle .38s .05s cubic-bezier(.2,.7,.2,1) both;
+}
 @keyframes ch-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
 .sa-pro .ch-skel {
   border-radius: 8px;
@@ -690,7 +708,7 @@
   animation: ch-shimmer 1.4s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .sa-pro .ch-rise, .sa-pro .ch-skel { animation: none; }
+  .sa-pro .ch-rise, .sa-pro .ch-skel, .sa-pro .ch-flow-in, .sa-pro .ch-flow-in > * { animation: none; }
 }
 
 /* Harmonise shared (non-hub) components rendered inside the hub — they keep

@@ -8,6 +8,7 @@ import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { HalfCourt, projectShot, CW, CH, COLOR_MADE, COLOR_MISSED } from "@/components/ShotChart";
 import { KEY_MOMENT_IMPORTANCE, keyMoments, type CommentaryItem } from "@/lib/liveCommentary";
 import type { CommentaryPlayer } from "@/hooks/useLiveCommentary";
+import { flowTint, usePacedReveal } from "@/hooks/usePacedReveal";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 
 interface ChartShot {
@@ -31,6 +32,9 @@ interface FeedProps {
 }
 
 const ALL_PLAYS_IMPORTANCE = 0;
+
+const itemId = (item: CommentaryItem) => `${item.id}-${item.kind}`;
+const itemTime = (item: CommentaryItem) => ({ period: item.period, clock: item.clock });
 
 function timeLabel(item: CommentaryItem): string {
   const q = item.period <= 4 ? `Q${item.period}` : `OT${item.period - 4}`;
@@ -197,10 +201,12 @@ export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeC
   const [fresh, setFresh] = useState(0);
   const topIdRef = useRef<number | null>(null);
 
-  const shown = useMemo(
-    () => keyMoments(items, mode === "key" ? KEY_MOMENT_IMPORTANCE : ALL_PLAYS_IMPORTANCE),
+  const oldestFirst = useMemo(
+    () => [...keyMoments(items, mode === "key" ? KEY_MOMENT_IMPORTANCE : ALL_PLAYS_IMPORTANCE)].reverse(),
     [items, mode],
   );
+  const { visible, isEntering } = usePacedReveal(oldestFirst, { getId: itemId, timeOf: itemTime, live: isLive, resetKey: mode });
+  const shown = useMemo(() => [...visible].reverse(), [visible]);
   const open = openId != null ? items.find((i) => i.id === openId && i.kind !== "final") ?? null : null;
 
   // New plays slide in at the top; if the reader has scrolled down, offer a pill instead of jumping.
@@ -280,8 +286,9 @@ export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeC
                       )}
                     </>
                   );
+                  const entering = isEntering(itemId(item)) && (scrollRef.current?.scrollTop ?? 0) <= 40;
                   return (
-                    <li key={`${item.id}-${item.kind}`}>
+                    <li key={itemId(item)} className={entering ? "ch-flow-in" : undefined} style={entering ? flowTint(color) : undefined}>
                       {tappable ? (
                         <button type="button" onClick={() => setOpenId(item.id)} className="flex w-full gap-3 px-4 py-3 hover:bg-[color:var(--ch-surface-2)] focus-visible:outline-none focus-visible:bg-[color:var(--ch-surface-2)]">
                           {body}

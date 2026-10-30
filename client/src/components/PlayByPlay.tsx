@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flowTint, usePacedReveal } from "@/hooks/usePacedReveal";
+import { clockSeconds } from "@/lib/playPacing";
 
 export interface PlayByPlayEvent {
   id: number | string;
@@ -34,12 +36,8 @@ interface Props<T extends PlayByPlayEvent> {
 const DEFAULT_HOME = "#f97316";
 const DEFAULT_AWAY = "#3b82f6";
 
-function parseClockSeconds(clock: string | null | undefined): number {
-  if (!clock) return 0;
-  const parts = clock.split(":").map(Number);
-  if (parts.length >= 2) return (parts[0] || 0) * 60 + (parts[1] || 0);
-  return parts[0] || 0;
-}
+const playId = (event: PlayByPlayEvent) => event.id;
+const playTime = (event: PlayByPlayEvent) => ({ period: event.period, clock: event.clock });
 
 function formatClock(clock: string | null | undefined): string {
   const [m, s] = (clock || "").split(":").map(Number);
@@ -136,7 +134,7 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
     };
     return [...events].sort((a, b) => {
       if (a.period !== b.period) return a.period - b.period;
-      const byClock = parseClockSeconds(b.clock) - parseClockSeconds(a.clock);
+      const byClock = clockSeconds(b.clock) - clockSeconds(a.clock);
       if (byClock !== 0) return byClock;
       return edge(a) - edge(b) || (a.action_number ?? 0) - (b.action_number ?? 0);
     });
@@ -188,16 +186,23 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
     }
   }, [viewMode, quarterFilter, playerFilter, periods, players]);
 
+  // Plays come through the worker in bursts; let a live game's out one at a time.
+  const displayable = useMemo(
+    () => chronological.filter((e) => markerLabel(e, finalPeriods) !== ""),
+    [chronological, finalPeriods]
+  );
+  const { visible, isEntering } = usePacedReveal(displayable, { getId: playId, timeOf: playTime, live: isLive });
+
   // Newest play first, so live plays land at the top.
   const latestFirst = useMemo(() => {
-    let shown = chronological.filter((e) => markerLabel(e, finalPeriods) !== "");
+    let shown = visible;
     if (viewMode === "quarter" && quarterFilter != null) {
       shown = shown.filter((e) => e.period === quarterFilter);
     } else if (viewMode === "player" && playerFilter) {
       shown = shown.filter((e) => e.player_name === playerFilter);
     }
-    return shown.reverse();
-  }, [chronological, finalPeriods, viewMode, quarterFilter, playerFilter]);
+    return [...shown].reverse();
+  }, [visible, viewMode, quarterFilter, playerFilter]);
 
   const groups = useMemo(() => {
     const out: { period: number; items: T[] }[] = [];
@@ -334,18 +339,22 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
                   )}
                   <ul className="divide-y divide-[color:var(--ch-border)]">
                     {group.items.map((event, idx) => {
+                      // A reader scrolled down keeps their place, so nothing opens up above them.
+                      const entering = isEntering(event.id) && (scrollRef.current?.scrollTop ?? 0) <= 40;
                       const marker = markerLabel(event, finalPeriods);
                       if (marker) {
                         return (
-                          <li key={event.id ?? idx} className="flex items-center gap-3 px-4 py-2">
-                            <span className="h-px flex-1 bg-[color:var(--ch-border-strong)]" aria-hidden="true" />
-                            <span className="ch-eyebrow !text-[color:var(--ch-text-2)]">
-                              {marker}
-                              {event.score && event.sub_type === "end" && (
-                                <span className="ch-num ml-1.5 normal-case tracking-normal">{formatScore(event.score)}</span>
-                              )}
-                            </span>
-                            <span className="h-px flex-1 bg-[color:var(--ch-border-strong)]" aria-hidden="true" />
+                          <li key={event.id ?? idx} className={entering ? "ch-flow-in" : undefined}>
+                            <div className="flex items-center gap-3 px-4 py-2">
+                              <span className="h-px flex-1 bg-[color:var(--ch-border-strong)]" aria-hidden="true" />
+                              <span className="ch-eyebrow !text-[color:var(--ch-text-2)]">
+                                {marker}
+                                {event.score && event.sub_type === "end" && (
+                                  <span className="ch-num ml-1.5 normal-case tracking-normal">{formatScore(event.score)}</span>
+                                )}
+                              </span>
+                              <span className="h-px flex-1 bg-[color:var(--ch-border-strong)]" aria-hidden="true" />
+                            </div>
                           </li>
                         );
                       }
@@ -354,29 +363,31 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
                       const color = teamColor(event.team_no);
                       const scored = isMadeShot(event, previousScored);
                       return (
-                        <li key={event.id ?? idx} className="flex gap-3 px-4 py-2.5">
-                          <span className="w-[3px] shrink-0 self-stretch rounded-full" style={{ background: color }} aria-hidden="true" />
-                          <span className="w-10 shrink-0 pt-px text-[11px] font-semibold tabular-nums text-[color:var(--ch-muted)]">
-                            {formatClock(event.clock)}
-                          </span>
-                          <span className={`min-w-0 flex-1 text-[13.5px] leading-snug ${scored ? "text-[color:var(--ch-text)]" : "text-[color:var(--ch-text-2)]"}`}>
-                            <Caption text={caption} name={event.player_name?.trim()} />
-                          </span>
-                          <span className="flex shrink-0 items-start gap-1.5 pt-px">
-                            {scored && (
-                              <span
-                                className="ch-num rounded-md px-1.5 text-[11px] font-bold leading-[18px] text-[color:var(--ch-text)]"
-                                style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}
-                              >
-                                +{pointsFor(event)}
-                              </span>
-                            )}
-                            {event.score && (
-                              <span className={`ch-num w-12 text-right text-xs leading-[18px] ${scored ? "font-bold text-[color:var(--ch-text)]" : "text-[color:var(--ch-muted)]"}`}>
-                                {formatScore(event.score)}
-                              </span>
-                            )}
-                          </span>
+                        <li key={event.id ?? idx} className={entering ? "ch-flow-in" : undefined} style={entering ? flowTint(color) : undefined}>
+                          <div className="flex gap-3 px-4 py-2.5">
+                            <span className="w-[3px] shrink-0 self-stretch rounded-full" style={{ background: color }} aria-hidden="true" />
+                            <span className="w-10 shrink-0 pt-px text-[11px] font-semibold tabular-nums text-[color:var(--ch-muted)]">
+                              {formatClock(event.clock)}
+                            </span>
+                            <span className={`min-w-0 flex-1 text-[13.5px] leading-snug ${scored ? "text-[color:var(--ch-text)]" : "text-[color:var(--ch-text-2)]"}`}>
+                              <Caption text={caption} name={event.player_name?.trim()} />
+                            </span>
+                            <span className="flex shrink-0 items-start gap-1.5 pt-px">
+                              {scored && (
+                                <span
+                                  className="ch-num rounded-md px-1.5 text-[11px] font-bold leading-[18px] text-[color:var(--ch-text)]"
+                                  style={{ background: `color-mix(in srgb, ${color} 18%, transparent)` }}
+                                >
+                                  +{pointsFor(event)}
+                                </span>
+                              )}
+                              {event.score && (
+                                <span className={`ch-num w-12 text-right text-xs leading-[18px] ${scored ? "font-bold text-[color:var(--ch-text)]" : "text-[color:var(--ch-muted)]"}`}>
+                                  {formatScore(event.score)}
+                                </span>
+                              )}
+                            </span>
+                          </div>
                         </li>
                       );
                     })}
