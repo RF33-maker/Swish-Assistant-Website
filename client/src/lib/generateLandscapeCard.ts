@@ -10,8 +10,8 @@
 import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
 import type { LandscapeMetrics, LandscapeTeam } from "@/types/landscape";
 import type { WeeklyCardBrand } from "@/types/weeklyAwards";
-import { spreadPoints, tickValues } from "@/lib/landscapeLayout";
-import { formatMetric, type LandscapeAxis, type LandscapePreset, type QuadrantLabels } from "@/lib/landscapePresets";
+import { placeLabels, spreadPoints, tickValues } from "@/lib/landscapeLayout";
+import { formatMetric, landscapeCallouts, type LandscapeAxis, type LandscapePreset, type QuadrantLabels } from "@/lib/landscapePresets";
 import {
   INK,
   cleanTeamLabel,
@@ -60,6 +60,8 @@ export type LandscapeCardOptions = {
   highlightId?: string | null;
   /** Small print added to the footer, e.g. "Min. 2 games". */
   footnote?: string;
+  /** Names the best and worst teams beside their crests. */
+  showCallouts?: boolean;
 };
 
 /** Where a team's crest ended up on the card, for the studio's hover details. */
@@ -207,8 +209,39 @@ function fitPillText(ctx: CanvasRenderingContext2D, text: string, o: TextOpts): 
   return fitted;
 }
 
+const WORST_RED = "#ff8f7d";
+
+/** The words beside the standout teams: ranks for the best, and who is bottom of each number. */
+function drawCallouts(ctx: CanvasRenderingContext2D, teams: LandscapeTeam[], preset: LandscapePreset, at: { x: number; y: number }[], r: number, theme: Theme) {
+  const callouts = landscapeCallouts(teams, preset);
+  if (callouts.length === 0) return;
+  const size = teams.length > 16 ? 19 : 22;
+  const line: TextOpts = { size, weight: 700 };
+  const cap = capHeight(ctx, line);
+  const gap = Math.round(size * 0.42);
+  const pad = 9;
+  const sizes = callouts.map((c) => ({
+    w: Math.ceil(Math.max(...c.lines.map((l) => spacedWidth(ctx, l.text, 1.2, line)))) + pad * 2,
+    h: c.lines.length * cap + (c.lines.length - 1) * gap + pad * 2,
+  }));
+  const crests = at.map((p) => ({ ...p, r }));
+  const targets = callouts.map((c) => crests[teams.findIndex((t) => t.id === c.teamId)]);
+  const boxes = placeLabels(targets, sizes, crests, { left: PLOT_L + 8, top: PLOT_T + 8, right: PLOT_R - 8, bottom: PLOT_B - 8 });
+  callouts.forEach((c, i) => {
+    const b = boxes[i];
+    ctx.save();
+    roundedRect(ctx, b.x, b.y, b.w, b.h, 8);
+    ctx.fillStyle = "rgba(8,8,10,0.74)";
+    ctx.fill();
+    ctx.restore();
+    c.lines.forEach((l, n) => {
+      drawSpaced(ctx, l.text, b.x + pad, b.y + pad + n * (cap + gap), 1.2, { ...line, color: l.tone === "best" ? theme.accent : WORST_RED });
+    });
+  });
+}
+
 export async function renderLandscapeCard(opts: LandscapeCardOptions): Promise<{ canvas: HTMLCanvasElement; plotted: PlottedTeam[] }> {
-  const { style = "league", preset, teams, averages, banner, brand, teamLogoUrls = [], highlightId, footnote } = opts;
+  const { style = "league", preset, teams, averages, banner, brand, teamLogoUrls = [], highlightId, footnote, showCallouts = false } = opts;
   const quadrants = opts.quadrants ?? preset.quadrants;
   const { x: xAxis, y: yAxis } = preset;
   await ensureDisplayFont();
@@ -323,6 +356,8 @@ export async function renderLandscapeCard(opts: LandscapeCardOptions): Promise<{
     const label = cleanTeamLabel(teams[i].name);
     drawCrest(ctx, at[i].x, at[i].y, r, clubLogos[i] ?? null, initialsOf(label), theme);
   }
+
+  if (showCallouts) drawCallouts(ctx, teams, preset, at, r, theme);
 
   const hi = highlightId ? teams.findIndex((t) => t.id === highlightId) : -1;
   if (hi >= 0) {

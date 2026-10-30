@@ -48,6 +48,67 @@ export type LandscapePreset<K extends string = LandscapeMetricKey> = {
   footnote: string;
 };
 
+/** One line of words beside a standout team on the card. */
+export type CalloutLine = { text: string; tone: "best" | "worst" };
+export type LandscapeCallout = { teamId: string; lines: CalloutLine[] };
+
+type RankedMetric<K extends string> = { metric: K; short: string; lowerIsBetter?: boolean; best: string; worst: string };
+type RankableTeam<K extends string> = { id: string; metrics: Record<K, number | null> };
+
+/** How many of the top teams on a chart's headline number get their full ranks spelled out. */
+const RANKED_TEAMS = 3;
+
+/** "WORSE OFFENCE" reads as "WORST OFFENCE" beside a team; other axes fall back on their short name. */
+function axisWords<K extends string>(axis: LandscapeAxis<K>): Pick<RankedMetric<K>, "best" | "worst"> {
+  const word = axis.ends[0].startsWith("WORSE ") ? axis.ends[0].slice(6) : axis.short;
+  return { best: `BEST ${word}`, worst: `WORST ${word}` };
+}
+
+/** 1 for the best, with tied teams sharing a place. */
+function ranksFor<K extends string>(teams: RankableTeam<K>[], m: RankedMetric<K>): Map<string, number> {
+  const known = teams.filter((t) => t.metrics[m.metric] != null);
+  const value = (t: RankableTeam<K>) => t.metrics[m.metric] as number;
+  const ahead = (a: number, b: number) => (m.lowerIsBetter ? a < b : a > b);
+  return new Map(known.map((t) => [t.id, 1 + known.filter((o) => ahead(value(o), value(t))).length]));
+}
+
+/**
+ * Who to point out on a chart. A chart with a headline number (net rating) spells out the ranks
+ * of its top teams; every chart names the best and worst on each axis that has a good end.
+ * In a very small field the words would say nothing, so it gets none.
+ */
+export function landscapeCallouts<K extends string>(teams: RankableTeam<K>[], preset: LandscapePreset<K>): LandscapeCallout[] {
+  if (teams.length < 4) return [];
+  const axes = [preset.x, preset.y]
+    .filter((a) => !a.neutral)
+    .map((a): RankedMetric<K> => ({ metric: a.metric, short: a.short, lowerIsBetter: a.lowerIsBetter, ...axisWords(a) }));
+  const hm = preset.highlightMetric;
+  const headline: RankedMetric<K> | null = hm ? { metric: hm.metric, short: hm.short, best: `BEST ${hm.short}`, worst: `WORST ${hm.short}` } : null;
+  const ranked = (headline ? [headline, ...axes] : axes).map((m) => ({ m, ranks: ranksFor(teams, m) }));
+
+  const lines = new Map<string, CalloutLine[]>();
+  const add = (teamId: string, line: CalloutLine) => lines.set(teamId, [...(lines.get(teamId) ?? []), line]);
+
+  const spelledOut = new Set<string>();
+  if (headline) {
+    const order = Array.from(ranked[0].ranks.entries()).sort((a, b) => a[1] - b[1]);
+    for (const [teamId, rank] of order) {
+      if (rank > RANKED_TEAMS) continue;
+      spelledOut.add(teamId);
+      for (const { m, ranks } of ranked) if (ranks.has(teamId)) add(teamId, { text: `#${ranks.get(teamId)} ${m.short}`, tone: "best" });
+    }
+  }
+  for (const { m, ranks } of ranked) {
+    const last = Math.max(...Array.from(ranks.values()));
+    ranks.forEach((rank, teamId) => {
+      if (spelledOut.has(teamId)) return;
+      if (rank === 1) add(teamId, { text: m.best, tone: "best" });
+      else if (rank === last) add(teamId, { text: m.worst, tone: "worst" });
+    });
+  }
+  return Array.from(lines.entries()).map(([teamId, l]) => ({ teamId, lines: l }));
+}
+
 export const LANDSCAPE_PRESETS: LandscapePreset[] = [
   {
     id: "efficiency",
