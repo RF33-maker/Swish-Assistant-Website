@@ -19,6 +19,8 @@ export type Leader = {
   value: number;
   /** Formatted for the card: "27.4", "48.1%", "+12.3". */
   display: string;
+  /** What's behind the value, where it's built from others: "6.1 AST · 1.2 BAD PASSES". */
+  detail?: string | null;
   photoUrl: string | null;
   photoFocusY: number | null;
 };

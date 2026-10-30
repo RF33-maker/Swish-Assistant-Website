@@ -53,3 +53,36 @@ export function spreadPoints(truth: Point[], r: number, bounds: Bounds, gap = 6)
   }
   return at;
 }
+
+export type Box = { x: number; y: number; w: number; h: number };
+
+const overlap = (a: Box, b: Box) =>
+  Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+
+/**
+ * Finds a spot beside each of `targets` for a label of `sizes[i]`: whichever side covers the
+ * least of `obstacles` and the labels already placed. Each label stays inside `bounds`.
+ */
+export function placeLabels(targets: (Point & { r: number })[], sizes: { w: number; h: number }[], obstacles: (Point & { r: number })[], bounds: Bounds, gap = 8): Box[] {
+  const placed: Box[] = [];
+  const crests: Box[] = obstacles.map((c) => ({ x: c.x - c.r, y: c.y - c.r, w: c.r * 2, h: c.r * 2 }));
+  targets.forEach((c, i) => {
+    const { w, h } = sizes[i];
+    const sides: Point[] = [
+      { x: c.x + c.r + gap, y: c.y - h / 2 },
+      { x: c.x - c.r - gap - w, y: c.y - h / 2 },
+      { x: c.x - w / 2, y: c.y + c.r + gap },
+      { x: c.x - w / 2, y: c.y - c.r - gap - h },
+    ];
+    const boxes = sides.map((p) => ({
+      x: Math.max(bounds.left, Math.min(bounds.right - w, p.x)),
+      y: Math.max(bounds.top, Math.min(bounds.bottom - h, p.y)),
+      w,
+      h,
+    }));
+    const cost = (box: Box) => [...crests, ...placed].reduce((sum, other) => sum + overlap(box, other), 0);
+    // Ties go to the earlier side, so a clear chart reads the same way round every time.
+    placed.push(boxes.reduce((best, box) => (cost(box) < cost(best) ? box : best)));
+  });
+  return placed;
+}

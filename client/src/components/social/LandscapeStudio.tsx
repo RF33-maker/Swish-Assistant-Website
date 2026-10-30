@@ -14,6 +14,7 @@ import {
   SaveActions,
   SELECT_MENU,
   Stage,
+  Toggle,
   type CompetitionOption,
 } from "@/components/social/studioUi";
 import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
@@ -72,6 +73,7 @@ export default function LandscapeStudio() {
   const [bannerText, setBannerText] = useState<string | null>(null);
   const [group, setGroup] = useState(ALL);
   const [highlightId, setHighlightId] = useState(NONE);
+  const [showCallouts, setShowCallouts] = useState(true);
   const [quadrants, setQuadrants] = useState<QuadrantLabels>(preset.quadrants);
   const [logoUrls, setLogoUrls] = useState<Record<string, string | null>>({});
   const [plotted, setPlotted] = useState<PlottedTeam[]>([]);
@@ -190,6 +192,7 @@ export default function LandscapeStudio() {
       teamLogoUrls,
       quadrants,
       highlightId: activeHighlight,
+      showCallouts,
       footnote: data.minGames > 1 ? `Min. ${data.minGames} games` : undefined,
     })
       .then(({ canvas, plotted: placed }) => {
@@ -208,7 +211,7 @@ export default function LandscapeStudio() {
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [style, preset, data, teams, banner, brand, teamLogoUrls, quadrants, activeHighlight, fileName]);
+  }, [style, preset, data, teams, banner, brand, teamLogoUrls, quadrants, activeHighlight, showCallouts, fileName]);
 
   const download = async () => {
     const canvas = cardCanvasRef.current;
@@ -318,6 +321,14 @@ export default function LandscapeStudio() {
             </SelectContent>
           </Select>
         </Field>
+
+        <Toggle
+          checked={showCallouts}
+          onChange={setShowCallouts}
+          label="Best and worst callouts"
+          hint="Adds the top teams' ranks, and who is best and worst at each end, beside their crests."
+          testId="toggle-landscape-callouts"
+        />
 
         <Field
           label={`Minimum games${data ? ` (auto: ${data.minGames})` : ""}`}

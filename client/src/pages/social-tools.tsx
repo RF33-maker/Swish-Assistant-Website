@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardList, Flame, ImagePlus, Layers, Medal, ScatterChart, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Circle, ClipboardList, Flame, ImagePlus, Layers, Medal, ScatterChart, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
 import AdminPageShell from "@/components/layout/AdminPageShell";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TopPerformancesStudio from "@/components/social/TopPerformancesStudio";
@@ -8,12 +8,14 @@ import LeadersStudio from "@/components/social/LeadersStudio";
 import RecordsStudio from "@/components/social/RecordsStudio";
 import LineupsStudio from "@/components/social/LineupsStudio";
 import LandscapeStudio from "@/components/social/LandscapeStudio";
+import VennStudio from "@/components/social/VennStudio";
+import RankedBarsStudio from "@/components/social/RankedBarsStudio";
 import ScoresStudio from "@/components/social/ScoresStudio";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 import { FIELD, SELECT_MENU } from "@/components/social/studioUi";
 
-type SectionId = "performances" | "d2-results" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "game-records" | "best-lineup" | "photos";
+type SectionId = "performances" | "d2-results" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "team-venn" | "ranked-bars" | "game-records" | "best-lineup" | "photos";
 
 type Group = "Game cards" | "Weekly awards" | "League leaders" | "Lineups" | "Tools";
 
@@ -35,6 +37,8 @@ const SECTIONS: Section[] = [
   { id: "player-leaders", group: "League leaders", label: "Player leaders", icon: Medal },
   { id: "team-leaders", group: "League leaders", label: "Team leaders", icon: Shield },
   { id: "team-landscape", group: "League leaders", label: "Team landscape", icon: ScatterChart },
+  { id: "team-venn", group: "League leaders", label: "Team Venn", icon: Circle },
+  { id: "ranked-bars", group: "League leaders", label: "Ranked bars", icon: BarChart3 },
   { id: "game-records", group: "League leaders", label: "Single-game records", icon: Flame },
   { id: "best-lineup", group: "Lineups", label: "Best lineup", icon: Layers },
   { id: "photos", group: "Tools", label: "Player photos", icon: ImagePlus },
@@ -169,6 +173,16 @@ export default function SocialToolsPage() {
         {visited.has("team-landscape") && (
           <div className={show("team-landscape")}>
             <LandscapeStudio />
+          </div>
+        )}
+        {visited.has("team-venn") && (
+          <div className={show("team-venn")}>
+            <VennStudio />
+          </div>
+        )}
+        {visited.has("ranked-bars") && (
+          <div className={show("ranked-bars")}>
+            <RankedBarsStudio />
           </div>
         )}
         {visited.has("game-records") && (
