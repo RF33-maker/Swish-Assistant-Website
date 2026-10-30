@@ -256,7 +256,7 @@ export default function TrendingPerformanceSection({
           </span>
         </span>
       </SelectTrigger>
-      <SelectContent className="rounded-xl p-1 shadow-xl" style={{ fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif" }}>
+      <SelectContent className="rounded-xl p-1 shadow-xl" style={{ fontFamily: "var(--font-body)" }}>
         <SelectItem value={LATEST} className="rounded-lg py-2 pr-3 text-sm font-medium">
           <span className="flex items-center gap-2.5">
             <CompetitionMark />

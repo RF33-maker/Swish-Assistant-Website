@@ -222,7 +222,7 @@ export default function BoxScoreTable({
         <h4 className="font-semibold flex-1 truncate">
           {teamHref ? <EntityLink href={teamHref} className="hover:underline underline-offset-2">{teamName}</EntityLink> : teamName}
         </h4>
-        {score != null && <span className="ml-auto text-2xl font-bold tabular-nums">{score}</span>}
+        {score != null && <span className="ml-auto ch-score text-2xl tabular-nums">{score}</span>}
       </div>
 
       {players.length > 0 ? (
