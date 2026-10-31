@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import swishAssistantLogo from "@/assets/Swish Assistant Logo.png";
+import { HalloweenPanelWebs } from "./HalloweenCardOverlay";
 
 type PhotoOverlayData = PlayerPerformanceV1Data & {
   background_photo_url?: string;
@@ -12,6 +13,8 @@ type PhotoOverlayData = PlayerPerformanceV1Data & {
 type Props = {
   data: PlayerPerformanceV1Data;
   reel?: boolean;
+  /** Seasonal: faint white cobwebs in the stats panel's corners. */
+  halloween?: boolean;
 };
 
 const ORANGE = "#f58220";
@@ -172,7 +175,7 @@ function LogoRow({ data }: { data: PhotoOverlayData }) {
  * Share-ready, photographic performance card. The fixed canvas is intentional:
  * social-tools captures each variant at its native export dimensions.
  */
-export function PhotoOverlayPlayerPerformanceCardV1({ data, reel = false }: Props) {
+export function PhotoOverlayPlayerPerformanceCardV1({ data, reel = false, halloween = false }: Props) {
   const overlayData = data as PhotoOverlayData;
   const photo = overlayData.background_photo_url || overlayData.photo_url;
   const won = Boolean(data.didWin);
@@ -326,8 +329,11 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data, reel = false }: Prop
           padding: "26px 28px 24px",
           position: "absolute",
           width: panelWidth,
+          // Its own stacking context, so the Halloween webs can sit behind the text but above the fill.
+          ...(halloween ? { zIndex: 1 } : {}),
         }}
       >
+        {halloween && <HalloweenPanelWebs width={panelWidth} height={panelHeight} />}
         <div
           style={{
             alignItems: "end",
