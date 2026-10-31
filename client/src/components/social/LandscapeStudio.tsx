@@ -21,7 +21,7 @@ import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePick
 import { supabase } from "@/lib/supabase";
 import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
-import { cleanTeamLabel } from "@/lib/cardStyle";
+import { cleanTeamLabel, usesLeagueColour } from "@/lib/cardStyle";
 import { canvasToBlob, CARD_H, CARD_W, ensureDisplayFont } from "@/lib/generateWeeklyCards";
 import { renderLandscapeCard, type PlottedTeam } from "@/lib/generateLandscapeCard";
 import { formatMetric, LANDSCAPE_PRESETS, type QuadrantLabels } from "@/lib/landscapePresets";
@@ -375,7 +375,7 @@ export default function LandscapeStudio() {
 
         <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
 
-        {style !== "swish" && <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />}
+        {usesLeagueColour(style) && <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />}
 
         {error && <p className={ERROR}>{error}</p>}
       </Panel>

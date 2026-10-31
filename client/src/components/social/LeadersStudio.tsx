@@ -20,6 +20,7 @@ import {
   type CompetitionOption,
 } from "@/components/social/studioUi";
 import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
+import { usesLeagueColour } from "@/lib/cardStyle";
 import { photoChangeLendsTo, usePlayerPhotoChange } from "@/lib/playerPhotos";
 import { supabase } from "@/lib/supabase";
 import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
@@ -284,7 +285,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
 
         <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
 
-        {style !== "swish" && <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />}
+        {usesLeagueColour(style) && <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />}
 
         {error && <p className={ERROR}>{error}</p>}
       </Panel>

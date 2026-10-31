@@ -17,6 +17,7 @@ import {
   Stage,
 } from "@/components/social/studioUi";
 import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
+import { usesLeagueColour } from "@/lib/cardStyle";
 import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
 import { useStudioCard, useStudioCompetitions } from "@/hooks/useStudioCard";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
@@ -181,7 +182,7 @@ export default function RankedBarsStudio() {
 
         <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
 
-        {style !== "swish" && <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />}
+        {usesLeagueColour(style) && <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />}
 
         {error && <p className={ERROR}>{error}</p>}
       </Panel>
