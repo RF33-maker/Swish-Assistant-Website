@@ -1,5 +1,7 @@
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import { PhotoOverlayPlayerPerformanceCardV1 } from "./PhotoOverlayPlayerPerformanceCardV1";
+import { HalloweenCardOverlay } from "./HalloweenCardOverlay";
+import { parseCardTemplate } from "@/lib/socialCardCapture";
 
 type Props = { data: PlayerPerformanceV1Data; template?: string };
 
@@ -18,12 +20,19 @@ const TEMPLATES: Record<string, string> = {
   "reba-sl": "/card-templates/REBA-SL-PP.png",
 };
 
-export function PlayerPerformanceCardV1({ data, template = "default" }: Props) {
-  if (template === "photo-overlay") {
-    return <PhotoOverlayPlayerPerformanceCardV1 data={data} />;
-  }
-  if (template === "photo-overlay-reel") {
-    return <PhotoOverlayPlayerPerformanceCardV1 data={data} reel />;
+export function PlayerPerformanceCardV1({ data, template: templateKey = "default" }: Props) {
+  const { base: template, halloween } = parseCardTemplate(templateKey);
+  if (template === "photo-overlay" || template === "photo-overlay-reel") {
+    const reel = template === "photo-overlay-reel";
+    const card = <PhotoOverlayPlayerPerformanceCardV1 data={data} reel={reel} />;
+    if (!halloween) return card;
+    // Same outer size as the card itself, so the capture still takes the card's first child.
+    return (
+      <div style={{ position: "relative", width: 1080, height: reel ? 1920 : 1350, overflow: "hidden" }}>
+        {card}
+        <HalloweenCardOverlay height={reel ? 1920 : 1350} />
+      </div>
+    );
   }
 
   const nameFontSize = getNameFontSize(data.player_name);
@@ -226,6 +235,8 @@ export function PlayerPerformanceCardV1({ data, template = "default" }: Props) {
           </div>
         )}
       </div>
+
+      {halloween && <HalloweenCardOverlay height={1350} />}
     </div>
   );
 }
