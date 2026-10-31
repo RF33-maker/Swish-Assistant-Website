@@ -24,7 +24,7 @@ export function PlayerPerformanceCardV1({ data, template: templateKey = "default
   const { base: template, halloween } = parseCardTemplate(templateKey);
   if (template === "photo-overlay" || template === "photo-overlay-reel") {
     const reel = template === "photo-overlay-reel";
-    const card = <PhotoOverlayPlayerPerformanceCardV1 data={data} reel={reel} />;
+    const card = <PhotoOverlayPlayerPerformanceCardV1 data={data} reel={reel} halloween={halloween} />;
     if (!halloween) return card;
     // Same outer size as the card itself, so the capture still takes the card's first child.
     return (

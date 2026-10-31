@@ -8,7 +8,7 @@
 const W = 1080;
 
 /** The cobweb: spokes fanning from the corner, joined by strands that sag back towards it. */
-function cobwebPath(cx: number, cy: number, reach: number, from: number, to: number): string {
+export function cobwebPath(cx: number, cy: number, reach: number, from: number, to: number): string {
   const spokes = 6;
   const rings = [0.2, 0.38, 0.58, 0.8];
   const angle = (i: number) => from + ((to - from) * i) / (spokes - 1);
@@ -73,6 +73,30 @@ export function HalloweenCardOverlay({ height }: { height: number }) {
       </g>
       <Bat x={W - 230} y={34} size={28} tilt={-8} />
       <Bat x={W - 50} y={305} size={18} tilt={14} />
+    </svg>
+  );
+}
+
+/**
+ * Faint white cobwebs strung into two corners of the stats panel (top-right and
+ * bottom-left), so the Halloween touch still reads on a busy or bright photo. Sits
+ * behind the panel's text: the panel gets its own stacking context and this goes at z -1.
+ */
+export function HalloweenPanelWebs({ width, height }: { width: number; height: number }) {
+  const reach = Math.round(Math.min(width, height) * 0.36);
+  return (
+    <svg
+      aria-hidden="true"
+      data-testid="halloween-panel-webs"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none", zIndex: -1 }}
+    >
+      <g fill="none" stroke="rgba(255,255,255,0.26)" strokeWidth={1.5} strokeLinecap="round">
+        <path d={cobwebPath(width, 0, reach, Math.PI / 2, Math.PI)} />
+        <path d={cobwebPath(0, height, reach * 0.85, -Math.PI / 2, 0)} />
+      </g>
     </svg>
   );
 }
