@@ -1,6 +1,6 @@
 /**
  * A light seasonal layer for the Top performances cards: a cobweb strung across the
- * top-right corner and a few bats drifting out of it, with a faint purple-and-pumpkin
+ * top-right corner and a few bats drifting out of it, with a faint pumpkin-orange
  * glow behind. It is drawn as one inline SVG over the card (inline SVG captures
  * reliably with html2canvas) and stays out of the way of the photo, numbers and logos.
  */
@@ -53,8 +53,8 @@ export function HalloweenCardOverlay({ height }: { height: number }) {
     >
       <defs>
         <radialGradient id="hw-glow-top" cx="1" cy="0" r="1">
-          <stop offset="0" stopColor="#7c3aed" stopOpacity="0.32" />
-          <stop offset="1" stopColor="#7c3aed" stopOpacity="0" />
+          <stop offset="0" stopColor="#f97316" stopOpacity="0.34" />
+          <stop offset="1" stopColor="#f97316" stopOpacity="0" />
         </radialGradient>
         <radialGradient id="hw-glow-bottom" cx="0" cy="1" r="1">
           <stop offset="0" stopColor="#f97316" stopOpacity="0.18" />
@@ -63,9 +63,9 @@ export function HalloweenCardOverlay({ height }: { height: number }) {
       </defs>
       <rect x={W - 420} y={0} width={420} height={360} fill="url(#hw-glow-top)" />
       <rect x={0} y={height - 300} width={440} height={300} fill="url(#hw-glow-bottom)" />
-      <path d={cobwebPath(W, 0, 190, Math.PI / 2, Math.PI)} fill="none" stroke="rgba(255,255,255,0.32)" strokeWidth={1.8} strokeLinecap="round" />
+      <path d={cobwebPath(W, 0, 190, Math.PI / 2, Math.PI)} fill="none" stroke="rgba(251,146,60,0.7)" strokeWidth={2} strokeLinecap="round" />
       {/* A spider dropping on its thread. */}
-      <line x1={W - 118} y1={0} x2={W - 118} y2={232} stroke="rgba(255,255,255,0.3)" strokeWidth={1.4} />
+      <line x1={W - 118} y1={0} x2={W - 118} y2={232} stroke="rgba(251,146,60,0.6)" strokeWidth={1.4} />
       <g transform={`translate(${W - 118} 240)`} fill="#0a0612" stroke="rgba(251,146,60,0.6)" strokeWidth={1}>
         <path d="M-7 -4L-15 -11M-7 0L-17 -1M-7 4L-15 11M7 -4L15 -11M7 0L17 -1M7 4L15 11" fill="none" stroke="#0a0612" strokeWidth={2.4} strokeLinecap="round" />
         <circle r={8} />
