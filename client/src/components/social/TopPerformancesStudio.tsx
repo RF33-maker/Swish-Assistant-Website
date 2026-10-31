@@ -9,7 +9,8 @@ import { normalizeTeamName } from "@/lib/teamUtils";
 import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { generateMaskedPhoto } from "@/lib/photoMasking";
 import { photoChangeReaches, playerPhotoUrl, usePlayerPhotoChange } from "@/lib/playerPhotos";
-import { renderSocialCardToBlob } from "@/lib/socialCardCapture";
+import { HALLOWEEN_SUFFIX, renderSocialCardToBlob } from "@/lib/socialCardCapture";
+import { isHalloweenSeason } from "@/lib/cardStyle";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { useStoredState } from "@/hooks/useStoredState";
@@ -372,6 +373,10 @@ export default function TopPerformancesStudio() {
   const [performanceSearch, setPerformanceSearch] = useStoredState<string>(`${STORE}:search`, "", "session");
   const timeFilter = TIME_FILTERS.some((t) => t.value === storedTimeFilter) ? storedTimeFilter : "all-time";
   const selectedTemplate = TEMPLATES.some((t) => t.value === storedTemplate) ? storedTemplate : "default";
+  // Seasonal: a light Halloween layer (cobweb, bats, a spider) over whichever template is picked.
+  const halloweenSeason = isHalloweenSeason();
+  const [halloweenTouch, setHalloweenTouch] = useStoredState<boolean>(`${STORE}:halloween`, true);
+  const cardTemplate = halloweenSeason && halloweenTouch ? `${selectedTemplate}${HALLOWEEN_SUFFIX}` : selectedTemplate;
   const [hierarchyReady, setHierarchyReady] = useState(false);
   const [queueIds, setQueueIds] = useState<string[]>([]);
   const [queueCardCache, setQueueCardCache] = useState<Record<string, PlayerPerformanceV1Data>>({});
@@ -900,9 +905,9 @@ export default function TopPerformancesStudio() {
         ...previous,
         [selectedId]: nextData,
       }));
-      generatePreview(nextData, selectedTemplate);
+      generatePreview(nextData, cardTemplate);
     }
-  }, [generatePreview, selectedData, selectedId, selectedTemplate]);
+  }, [generatePreview, selectedData, selectedId, cardTemplate]);
 
   const handleSponsorFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -955,10 +960,10 @@ export default function TopPerformancesStudio() {
       window.clearTimeout(framingPreviewTimerRef.current);
     }
     framingPreviewTimerRef.current = window.setTimeout(() => {
-      generatePreview(nextData, selectedTemplate);
+      generatePreview(nextData, cardTemplate);
       framingPreviewTimerRef.current = null;
     }, 160);
-  }, [generatePreview, selectedData, selectedId, selectedTemplate]);
+  }, [generatePreview, selectedData, selectedId, cardTemplate]);
 
   useEffect(() => () => {
     if (framingPreviewTimerRef.current !== null) {
@@ -977,10 +982,10 @@ export default function TopPerformancesStudio() {
   // Regenerate preview when template changes (if a performance is already selected).
   useEffect(() => {
     if (!selectedId || selectedData === defaultData) return;
-    generatePreview(selectedData, selectedTemplate);
+    generatePreview(selectedData, cardTemplate);
   // We intentionally run only when template changes after a selection.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTemplate]);
+  }, [cardTemplate]);
 
   const buildCard = async (perf: TopPerformance) => {
     const competition = await resolvePerformanceCompetition(perf, competitionById);
@@ -1008,7 +1013,7 @@ export default function TopPerformancesStudio() {
       }
 
       // Generate the preview PNG immediately after building card data.
-      generatePreview(cardData, selectedTemplate);
+      generatePreview(cardData, cardTemplate);
     } catch (err) {
       if (selectionTokenRef.current !== token) return;
       console.error("[SocialTools] could not build the card:", err);
@@ -1074,7 +1079,7 @@ export default function TopPerformancesStudio() {
     
     try {
       // Reuse the already-generated blob; regenerate only if unavailable.
-      const blob = socialBlobRef.current ?? await renderSocialCardToBlob(selectedData, selectedTemplate);
+      const blob = socialBlobRef.current ?? await renderSocialCardToBlob(selectedData, cardTemplate);
       if (!blob) {
         console.error("[SocialTools] download: failed to generate blob");
         return;
@@ -1320,7 +1325,7 @@ export default function TopPerformancesStudio() {
                   <span className="px-4 text-center text-sm">Preview failed</span>
                   <button
                     type="button"
-                    onClick={() => (selectedData === defaultData ? showPerformance(selectedPerf) : generatePreview(selectedData, selectedTemplate))}
+                    onClick={() => (selectedData === defaultData ? showPerformance(selectedPerf) : generatePreview(selectedData, cardTemplate))}
                     className={BTN_GHOST}
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
@@ -1358,7 +1363,7 @@ export default function TopPerformancesStudio() {
                 selectedId !== null && (
                   <button
                     type="button"
-                    onClick={() => generatePreview(selectedData, selectedTemplate)}
+                    onClick={() => generatePreview(selectedData, cardTemplate)}
                     disabled={drawing || selectedData === defaultData}
                     title="Regenerate preview"
                     aria-label="Regenerate preview"
@@ -1499,6 +1504,18 @@ export default function TopPerformancesStudio() {
               </div>
             )}
 
+            {halloweenSeason && (
+              <label className="flex cursor-pointer items-center justify-center gap-2 text-[13px] text-[color:var(--ch-text-2)]" data-testid="toggle-halloween">
+                <input
+                  type="checkbox"
+                  checked={halloweenTouch}
+                  onChange={(e) => setHalloweenTouch(e.target.checked)}
+                  className="h-4 w-4 accent-[#f97316]"
+                />
+                🎃 Halloween touch <span className="opacity-70">(cobweb and bats, until 7 Nov)</span>
+              </label>
+            )}
+
             <p className={`text-center ${HINT}`}>
               Card size: {selectedTemplate === "photo-overlay-reel" ? "1080×1920px (9:16 Reel cover)" : "1080×1350px (Instagram portrait)"}
             </p>
@@ -1508,7 +1525,7 @@ export default function TopPerformancesStudio() {
 
       <PostQueueSection 
         cards={queueCards} 
-        template={selectedTemplate}
+        template={cardTemplate}
         loading={queueLoading} 
         onRemove={handleRemoveFromQueue}
         onClear={handleClearQueue}
