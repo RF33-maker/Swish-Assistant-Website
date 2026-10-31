@@ -14,6 +14,7 @@ import {
   Stage,
 } from "@/components/social/studioUi";
 import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
+import { usesLeagueColour } from "@/lib/cardStyle";
 import { canvasToBlob, ensureDisplayFont } from "@/lib/generateWeeklyCards";
 import { GAMES_PER_CARD, renderScoresCard, type ScoreGame } from "@/lib/generateScoresCards";
 import { fetchNblScores, refreshNblScores } from "@/lib/nblScores";
@@ -284,7 +285,7 @@ export default function ScoresStudio() {
 
         <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
 
-        {style !== "swish" && <ColourField value={primaryHex} custom={!!colour} onChange={updateColour} onReset={resetColour} />}
+        {usesLeagueColour(style) && <ColourField value={primaryHex} custom={!!colour} onChange={updateColour} onReset={resetColour} />}
 
         {error && <p className={ERROR}>{error}</p>}
         <p className={HINT}>

@@ -20,18 +20,50 @@ import {
 } from "@/lib/generateWeeklyCards";
 
 /**
- * The three looks a card comes in:
- * - `league`: the competition's colour falling to black;
- * - `court`:  black sinking into the competition's colour, over half-court markings;
- * - `swish`:  Swish Assistant's own black and orange, with the court arcs from the site's dark panels.
+ * The looks a card comes in:
+ * - `league`:    the competition's colour falling to black;
+ * - `court`:     black sinking into the competition's colour, over half-court markings;
+ * - `swish`:     Swish Assistant's own black and orange, with the court arcs from the site's dark panels;
+ * - `halloween`: a seasonal look (October into early November): midnight purple and pumpkin
+ *                orange, with a moon, a few bats and a cobweb kept to the card's corners.
  */
-export type CardStyle = "league" | "court" | "swish";
+export type CardStyle = "league" | "court" | "swish" | "halloween";
 
-export const CARD_STYLES: { id: CardStyle; label: string; hint: string }[] = [
+export type CardStyleOption = {
+  id: CardStyle;
+  label: string;
+  hint: string;
+  /** Seasonal looks are only offered while this returns true. */
+  inSeason?: (now: Date) => boolean;
+};
+
+/** 1 October to 7 November, so the look is there for the build-up and the week after. */
+export function isHalloweenSeason(now: Date = new Date()): boolean {
+  const m = now.getMonth();
+  return m === 9 || (m === 10 && now.getDate() <= 7);
+}
+
+export const CARD_STYLES: CardStyleOption[] = [
   { id: "league", label: "League colour", hint: "The competition's colour, top to bottom" },
   { id: "court", label: "Court", hint: "Black into the competition's colour, with court lines" },
   { id: "swish", label: "Swish", hint: "Swish Assistant black and orange" },
+  {
+    id: "halloween",
+    label: "Halloween",
+    hint: "Midnight purple and pumpkin orange, with a moon, bats and a cobweb",
+    inSeason: isHalloweenSeason,
+  },
 ];
+
+/** The looks on offer today: every year-round look, plus any seasonal one that is in season. */
+export function availableCardStyles(now: Date = new Date()): CardStyleOption[] {
+  return CARD_STYLES.filter((s) => !s.inSeason || s.inSeason(now));
+}
+
+/** Whether a look is built from the competition's colour (the others bring their own palette). */
+export function usesLeagueColour(style: CardStyle): boolean {
+  return style === "league" || style === "court";
+}
 
 /** Side margin shared by the cards' text. */
 export const SIDE = 60;
@@ -40,6 +72,9 @@ export const INK = "#0b0706";
 
 const SWISH_ORANGE = "#f97316";
 const SWISH_PANEL = "#111317";
+const HALLOWEEN_PURPLE = "#6d28d9";
+const HALLOWEEN_NIGHT = "#140b22";
+const PUMPKIN = "#fb923c";
 
 export type Theme = {
   style: CardStyle;
@@ -73,6 +108,12 @@ function luminance(hex: string): number {
 }
 
 export function themeFor(style: CardStyle, primaryHex: string): Theme {
+  if (style === "halloween") {
+    return {
+      style, base: HALLOWEEN_PURPLE, accent: PUMPKIN, rank: PUMPKIN, ink: HALLOWEEN_NIGHT,
+      banner: SWISH_ORANGE, kicker: "#d8b4fe", photoTint: 0.2, shadow: "#07050c", glow: 0.3,
+    };
+  }
   if (style === "swish") {
     return {
       style, base: SWISH_ORANGE, accent: SWISH_ORANGE, rank: SWISH_ORANGE, ink: SWISH_PANEL,
@@ -262,6 +303,146 @@ function drawCornerWash(ctx: CanvasRenderingContext2D, x: number, y: number, rx:
   ctx.restore();
 }
 
+// ── halloween ──────────────────────────────────────────────────────────────
+
+/** A tiny repeatable random sequence, so the stars land in the same places on every export. */
+function seeded(seed: number) {
+  let t = seed >>> 0;
+  return () => {
+    t = (t + 0x6d2b79f5) >>> 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** A harvest moon tucked into a corner, with a warm halo round it. */
+function drawMoon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  drawGlow(ctx, cx, cy, r * 4.2, "#fdba74", 0.32);
+  ctx.save();
+  const face = ctx.createRadialGradient(cx - r * 0.35, cy + r * 0.3, r * 0.1, cx, cy, r);
+  face.addColorStop(0, "#fff4dc");
+  face.addColorStop(0.7, "#fde2b0");
+  face.addColorStop(1, "#f6b56b");
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = face;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  // A few soft craters.
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = "#b45309";
+  ([[-0.38, 0.32, 0.2], [0.05, 0.62, 0.13], [-0.62, -0.05, 0.1]] as const).forEach(([dx, dy, rr]) => {
+    ctx.beginPath();
+    ctx.arc(cx + dx * r, cy + dy * r, rr * r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+/** A bat in silhouette, `s` pixels from body to wingtip, tilted by `tilt` radians. */
+function drawBat(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, tilt: number, fill: string) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(tilt);
+  ctx.scale(s, s);
+  ctx.fillStyle = fill;
+  const wing = () => {
+    ctx.beginPath();
+    ctx.moveTo(0.08, -0.18);
+    ctx.quadraticCurveTo(0.5, -0.7, 1, -0.42);
+    ctx.quadraticCurveTo(0.84, -0.26, 0.8, 0.06);
+    ctx.quadraticCurveTo(0.64, -0.08, 0.46, 0.1);
+    ctx.quadraticCurveTo(0.3, -0.02, 0.12, 0.26);
+    ctx.closePath();
+    ctx.fill();
+  };
+  wing();
+  ctx.scale(-1, 1);
+  wing();
+  ctx.scale(-1, 1);
+  // Body, head and ears.
+  ctx.beginPath();
+  ctx.ellipse(0, 0.04, 0.13, 0.26, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-0.11, -0.16);
+  ctx.lineTo(-0.1, -0.36);
+  ctx.lineTo(-0.03, -0.22);
+  ctx.lineTo(0.03, -0.22);
+  ctx.lineTo(0.1, -0.36);
+  ctx.lineTo(0.11, -0.16);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/** A cobweb strung across the corner at (x, y), its threads fanning between `from` and `to` radians. */
+function drawCobweb(ctx: CanvasRenderingContext2D, x: number, y: number, reach: number, from: number, to: number, alpha: number) {
+  const spokes = 6;
+  const rings = [0.2, 0.38, 0.58, 0.8];
+  const angle = (i: number) => from + ((to - from) * i) / (spokes - 1);
+  ctx.save();
+  ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  for (let i = 0; i < spokes; i += 1) {
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(angle(i)) * reach, y + Math.sin(angle(i)) * reach);
+  }
+  rings.forEach((k) => {
+    const r = reach * k;
+    for (let i = 0; i < spokes - 1; i += 1) {
+      const a = angle(i);
+      const b = angle(i + 1);
+      const mid = (a + b) / 2;
+      // Each strand sags back towards the corner between its two spokes.
+      const sag = r * 0.82;
+      ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+      ctx.quadraticCurveTo(x + Math.cos(mid) * sag, y + Math.sin(mid) * sag, x + Math.cos(b) * r, y + Math.sin(b) * r);
+    }
+  });
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Night sky, moon and bats up top, a cobweb in the corner, and a low mist along the bottom. */
+function drawHalloweenBackdrop(ctx: CanvasRenderingContext2D, theme: Theme) {
+  ctx.fillStyle = verticalGradient(ctx, 0, CARD_H, [[0, "#1d1033"], [0.45, HALLOWEEN_NIGHT], [1, "#060409"]]);
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  drawCornerWash(ctx, 0, CARD_H, CARD_W * 0.95, CARD_H * 0.55, theme.base, [[0, 0.3], [1, 0]]);
+  drawCornerWash(ctx, CARD_W, CARD_H, CARD_W * 0.7, CARD_H * 0.35, SWISH_ORANGE, [[0, 0.16], [1, 0]]);
+
+  // A light scatter of stars across the top of the sky.
+  const rand = seeded(1031);
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  for (let i = 0; i < 46; i += 1) {
+    const sx = rand() * CARD_W;
+    const sy = rand() * CARD_H * 0.5;
+    ctx.globalAlpha = 0.08 + rand() * 0.22;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 0.8 + rand() * 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  drawMoon(ctx, CARD_W - 64, 70, 96);
+  drawBat(ctx, CARD_W - 120, 118, 34, -0.12, "#0a0612");
+  drawBat(ctx, CARD_W - 236, 196, 24, 0.18, "#0a0612");
+  drawBat(ctx, CARD_W - 168, 262, 16, -0.22, "#0a0612");
+  drawCobweb(ctx, 0, 0, 230, 0, Math.PI / 2, 0.13);
+
+  // Low mist drifting along the bottom.
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ([[CARD_W * 0.2, CARD_H - 40, 420, 70], [CARD_W * 0.72, CARD_H - 10, 520, 80], [CARD_W * 0.48, CARD_H + 20, 600, 90]] as const).forEach(
+    ([mx, my, rx, ry]) => drawCornerWash(ctx, mx, my, rx, ry, "#c4b5fd", [[0, 0.1], [1, 0]]),
+  );
+  ctx.restore();
+}
+
 /**
  * Fills the card with the style's backdrop. `court` is where the middle of the baseline
  * sits in the `court` style, so each card can stand its own artwork in the paint.
@@ -272,6 +453,10 @@ export function drawBackdrop(
   leagueLogo: HTMLImageElement | null,
   court: { x: number; y: number },
 ) {
+  if (theme.style === "halloween") {
+    drawHalloweenBackdrop(ctx, theme);
+    return;
+  }
   if (theme.style === "swish") {
     // The "free account" panel from the sign-in page: charcoal, orange pouring out of the top-right corner.
     ctx.fillStyle = verticalGradient(ctx, 0, CARD_H, [[0, SWISH_PANEL], [1, "#08090b"]]);
