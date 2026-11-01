@@ -337,11 +337,11 @@ export function TeamLineupsPanel({ slug, teamName, accentColor, teamRgb }: Props
   }
 
   return (
-    <div className="rounded-xl bg-white p-4 shadow dark:bg-neutral-900 md:p-6">
+    <div>
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-slate-800 dark:text-white md:text-lg">Best lineups - {displayTeam}</h2>
-          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400 md:text-sm">
+          <h2 className="ch-section-title">Best lineups</h2>
+          <p className="mt-1.5 text-xs text-[color:var(--ch-text-2)] md:text-sm">
             The five-man units that have played best together. Tap one to build its card.
           </p>
         </div>

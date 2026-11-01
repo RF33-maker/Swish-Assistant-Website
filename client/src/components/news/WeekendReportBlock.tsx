@@ -287,7 +287,7 @@ export default function WeekendReportBlock({ data }: { data: WeekendReportData }
 
   return (
     <div className="not-prose space-y-8" data-testid="weekend-report">
-      <section aria-label="Weekend summary" className="rounded-2xl border border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-4 md:p-5">
+      <section aria-label="Weekend summary" className="border-t border-[color:var(--ch-border-strong)] pt-4 md:pt-5">
         <div className="ch-eyebrow">{formatWeekendRange(data.from, data.to)}</div>
         <p className="mt-2 text-[15px] leading-relaxed text-[color:var(--ch-text-2)]">{data.lede}</p>
         {data.games.length > 0 && (

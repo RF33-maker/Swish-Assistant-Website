@@ -211,7 +211,7 @@ export default function ScoutRoster({ data, opponentName, color, notes }: { data
   const [lo, hi] = data.poolRange;
   return (
     <>
-      <section className="ch-card p-4 md:p-6" aria-label={`${opponentName} roster`}>
+      <section aria-label={`${opponentName} roster`}>
         <div className="flex items-center gap-2.5 mb-2">
           <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-3))', color: `var(--sr-ink, ${color})` }}>
             <Users className="w-4 h-4" />
@@ -226,7 +226,7 @@ export default function ScoutRoster({ data, opponentName, color, notes }: { data
       </section>
 
       {data.profiles.length > 0 && (
-        <section className="ch-card p-4 md:p-6" aria-label={`${opponentName} player profiles`}>
+        <section aria-label={`${opponentName} player profiles`}>
           <div className="flex items-center gap-2.5 mb-2">
             <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-3))', color: `var(--sr-ink, ${color})` }}>
             <Target className="w-4 h-4" />

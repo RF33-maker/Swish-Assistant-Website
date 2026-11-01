@@ -43,7 +43,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
 function NotFound({ message }: { message: string }) {
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-6 py-10" data-testid="news-not-found">
-      <div className="ch-card p-10 text-center">
+      <div className="py-10 text-center">
         <Newspaper className="h-9 w-9 mx-auto text-[color:var(--ch-muted)] mb-3" />
         <h1 className="ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2rem] text-[color:var(--ch-text)]">
           Article not found

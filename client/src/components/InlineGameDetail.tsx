@@ -673,7 +673,7 @@ export function InlineGameDetail({
 
   if (!gameInfo) {
     return (
-      <div className="ch-card py-16 text-center">
+      <div className="py-16 text-center">
         <p className="text-[color:var(--ch-text-2)]">Game not found.</p>
         <button onClick={onBack} className="mt-4 ch-btn ch-btn-ghost h-9 px-3 text-sm">
           <ArrowLeft className="w-4 h-4" /> Back
@@ -885,7 +885,7 @@ export function InlineGameDetail({
           )}
           </div>
         ) : (
-          <div className="ch-card p-5 text-center">
+          <div className="py-5 text-center">
             <p className="text-sm text-[color:var(--ch-text-2)]">
               Live stats and play-by-play data will appear when the game starts.
             </p>

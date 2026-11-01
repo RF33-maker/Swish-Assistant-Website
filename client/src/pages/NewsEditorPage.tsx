@@ -364,7 +364,7 @@ export default function NewsEditorPage() {
         {loadState === "loading" ? (
           <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-muted)]" />
         ) : (
-          <div className="ch-card max-w-md p-8 text-center">
+          <div className="max-w-md py-8 text-center">
             <Newspaper className="mx-auto mb-3 h-8 w-8 text-[color:var(--ch-muted)]" />
             <h1 className="text-lg font-semibold">{loadState === "missing" ? "Article not found" : "Couldn't load the article"}</h1>
             <p className="mt-1.5 text-sm text-[color:var(--ch-text-2)]">
@@ -504,7 +504,7 @@ export default function NewsEditorPage() {
 
         <aside className="mt-5 space-y-4 lg:sticky lg:top-[4.5rem] lg:mt-0 lg:max-h-[calc(100vh-5.5rem)] lg:self-start lg:overflow-y-auto lg:pb-2">
           {published.isPublished && (
-            <section className="ch-card p-4">
+            <section>
               <div className={LABEL}>Published</div>
               <p className="mt-1 text-[13px] text-[color:var(--ch-text-2)]">
                 {published.publishedAt ? `Live since ${formatDay(published.publishedAt)}.` : "This article is live."} Changes go live when you press Update.
@@ -526,7 +526,7 @@ export default function NewsEditorPage() {
             </section>
           )}
 
-          <section className="ch-card p-4">
+          <section>
             <div className={LABEL}>Type</div>
             <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Article type">
               {ARTICLE_TYPES.map((type) => (
@@ -545,13 +545,13 @@ export default function NewsEditorPage() {
             </div>
           </section>
 
-          <section className="ch-card p-4">
+          <section>
             <div className={LABEL}>Tags</div>
             <p className={`${HINT} mb-3`}>The league, teams, players and games this article is about. Readers can jump to each from the article.</p>
             <TagPicker tags={draft.tags} onChange={(tags) => update({ tags })} />
           </section>
 
-          <section className="ch-card p-4">
+          <section>
             <label htmlFor="article-slug" className={LABEL}>
               Web address
             </label>
@@ -579,7 +579,7 @@ export default function NewsEditorPage() {
             </p>
           </section>
 
-          <details className="ch-card p-4">
+          <details>
             <summary className={`${LABEL} cursor-pointer select-none`}>More options</summary>
             <label htmlFor="article-source" className={`${LABEL} mt-4`}>
               Link to a story elsewhere

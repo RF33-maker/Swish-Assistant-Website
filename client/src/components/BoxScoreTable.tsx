@@ -144,17 +144,14 @@ function secondsToClock(total: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
-// Striping makes a long row easier to track across to the right-hand columns
-// on a narrow screen.
-//
-// These must be fully opaque: the number and name cells are pinned, and a
-// translucent background lets the stat columns scroll visibly underneath them.
-function stripeBg(idx: number): string {
-  return idx % 2 === 1 ? 'bg-orange-50 dark:bg-neutral-900' : 'bg-white dark:bg-neutral-800';
+// The number and name cells are pinned, so they need an opaque background or
+// the stat columns scroll visibly underneath them. They follow the row's hover.
+function stripeBg(_idx: number): string {
+  return 'bg-[color:var(--ch-bg)] group-hover:bg-[color:var(--ch-surface-2)]';
 }
 
 const STAT_HEAD = 'text-center py-2 px-2 font-medium';
-const STAT_CELL = 'text-center py-2 px-2 text-slate-500 dark:text-slate-400 tabular-nums';
+const STAT_CELL = 'text-center py-2 px-2 text-[color:var(--ch-text-2)] tabular-nums';
 
 // Pinned column geometry. The name column's left offset has to match the
 // number column's width exactly, or the two overlap while scrolling.
@@ -162,7 +159,7 @@ const NO_COL = 'w-10 min-w-[2.5rem]';
 const NAME_COL = 'w-[7.5rem] min-w-[7.5rem] md:w-48 md:min-w-[12rem]';
 const NAME_LEFT = 'left-10';
 
-const TOTAL_BG = 'bg-orange-100 dark:bg-neutral-700';
+const TOTAL_BG = 'bg-[color:var(--ch-surface-2)]';
 const TOTAL_CELL = 'text-center py-2 px-2 tabular-nums';
 
 export default function BoxScoreTable({
@@ -213,33 +210,33 @@ export default function BoxScoreTable({
   const teamLineBg = stripeBg(players.length);
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg overflow-hidden border border-orange-100 dark:border-neutral-700">
+    <div>
       <div
-        className="px-4 py-3 flex items-center gap-3 text-white"
-        style={{ backgroundColor: headerColor || 'rgb(249, 115, 22)' }}
+        className="pb-2.5 mb-1 flex items-center gap-3 border-b-[3px] text-[color:var(--ch-text)]"
+        style={{ borderBottomColor: headerColor || 'rgb(249, 115, 22)' }}
       >
         {leagueId && <TeamLogo teamName={teamName} leagueId={leagueId} size="sm" />}
-        <h4 className="font-semibold flex-1 truncate">
+        <h4 className="ch-section-title flex-1 truncate">
           {teamHref ? <EntityLink href={teamHref} className="hover:underline underline-offset-2">{teamName}</EntityLink> : teamName}
         </h4>
-        {score != null && <span className="ml-auto text-2xl font-bold tabular-nums">{score}</span>}
+        {score != null && <span className="ml-auto ch-display text-2xl font-bold tabular-nums">{score}</span>}
       </div>
 
       {players.length > 0 ? (
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
-            <thead className="bg-orange-50 dark:bg-neutral-900 text-slate-600 dark:text-slate-400">
-              <tr>
+            <thead className="text-[color:var(--ch-text-2)]">
+              <tr className="border-b border-[color:var(--ch-border-strong)]">
                 {anyNumbers && (
                   <th
-                    className={`${NO_COL} text-center py-2 px-1 sticky left-0 z-20 bg-orange-50 dark:bg-neutral-900 text-[11px] font-medium`}
+                    className={`${NO_COL} text-center py-2 px-1 sticky left-0 z-20 bg-[color:var(--ch-bg)] text-[11px] font-medium`}
                     scope="col"
                   >
                     NO.
                   </th>
                 )}
                 <th
-                  className={`${NAME_COL} ${anyNumbers ? NAME_LEFT : 'left-0'} text-left py-2 px-2 sticky z-20 bg-orange-50 dark:bg-neutral-900 font-medium border-r border-orange-100 dark:border-neutral-700`}
+                  className={`${NAME_COL} ${anyNumbers ? NAME_LEFT : 'left-0'} text-left py-2 px-2 sticky z-20 bg-[color:var(--ch-bg)] font-medium border-r border-[color:var(--ch-border)]`}
                   scope="col"
                 >
                   PLAYER
@@ -259,7 +256,7 @@ export default function BoxScoreTable({
                 {anyPlusMinus && <th className={STAT_HEAD}>+/-</th>}
               </tr>
             </thead>
-            <tbody className="text-slate-800 dark:text-slate-200">
+            <tbody className="text-[color:var(--ch-text)]">
               {players.map((player, idx) => {
                 const name = resolveName(player);
                 const number = squadNumber(player);
@@ -270,17 +267,17 @@ export default function BoxScoreTable({
                 return (
                   <tr
                     key={idx}
-                    className={`border-t border-orange-100 dark:border-neutral-700 ${rowBg} hover:bg-orange-50 dark:hover:bg-neutral-700/60`}
+                    className={`group border-t border-[color:var(--ch-border)] hover:bg-[color:var(--ch-surface-2)]`}
                   >
                     {anyNumbers && (
                       <td
-                        className={`${NO_COL} text-center py-2 px-1 sticky left-0 z-10 ${rowBg} text-xs font-semibold text-slate-400 dark:text-slate-500 tabular-nums`}
+                        className={`${NO_COL} text-center py-2 px-1 sticky left-0 z-10 ${rowBg} text-xs font-semibold text-[color:var(--ch-muted)] tabular-nums`}
                       >
                         {number}
                       </td>
                     )}
                     <td
-                      className={`${NAME_COL} ${anyNumbers ? NAME_LEFT : 'left-0'} py-2 px-2 sticky z-10 ${rowBg} font-medium border-r border-orange-100 dark:border-neutral-700`}
+                      className={`${NAME_COL} ${anyNumbers ? NAME_LEFT : 'left-0'} py-2 px-2 sticky z-10 ${rowBg} font-medium border-r border-[color:var(--ch-border)]`}
                       title={name}
                     >
                       {player.href ? (
@@ -296,7 +293,7 @@ export default function BoxScoreTable({
                       )}
                     </td>
                     <td className={`${STAT_CELL} whitespace-nowrap`}>{formatMinutes(player.sminutes == null ? null : String(player.sminutes))}</td>
-                    <td className="text-center py-2 px-2 font-semibold text-orange-500 tabular-nums">
+                    <td className="text-center py-2 px-2 font-semibold tabular-nums">
                       {player.spoints || 0}
                     </td>
                     <td className="text-center py-2 px-2 tabular-nums">{player.sreboundstotal || 0}</td>
@@ -314,7 +311,7 @@ export default function BoxScoreTable({
                     <td className={`${STAT_CELL} whitespace-nowrap`}>
                       {player.sfreethrowsmade || 0}/{player.sfreethrowsattempted || 0}
                     </td>
-                    <td className="text-center py-2 px-2 font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
+                    <td className="text-center py-2 px-2 font-semibold text-[color:var(--ch-text-2)] tabular-nums">
                       {efficiency(player)}
                     </td>
                     {anyPlusMinus && (
@@ -326,12 +323,12 @@ export default function BoxScoreTable({
                 );
               })}
             </tbody>
-            <tfoot className="text-slate-800 dark:text-slate-200">
+            <tfoot className="text-[color:var(--ch-text)]">
               {(teamRebounds > 0 || teamTurnovers > 0) && (
-                <tr className={`border-t border-orange-100 dark:border-neutral-700 ${teamLineBg} text-slate-500 dark:text-slate-400`}>
+                <tr className={`group border-t border-[color:var(--ch-border)] text-[color:var(--ch-text-2)]`}>
                   {anyNumbers && <td className={`${NO_COL} sticky left-0 z-10 ${teamLineBg}`} />}
                   <td
-                    className={`${NAME_COL} ${nameLeft} py-2 px-2 sticky z-10 ${teamLineBg} font-medium italic border-r border-orange-100 dark:border-neutral-700`}
+                    className={`${NAME_COL} ${nameLeft} py-2 px-2 sticky z-10 ${teamLineBg} font-medium italic border-r border-[color:var(--ch-border)]`}
                   >
                     Team
                   </td>
@@ -342,15 +339,15 @@ export default function BoxScoreTable({
                   <td colSpan={anyPlusMinus ? 6 : 5} />
                 </tr>
               )}
-              <tr className={`border-t-2 border-orange-200 dark:border-neutral-600 ${TOTAL_BG} font-semibold`}>
+              <tr className={`border-t-2 border-[color:var(--ch-border-strong)] ${TOTAL_BG} font-semibold`}>
                 {anyNumbers && <td className={`${NO_COL} sticky left-0 z-10 ${TOTAL_BG}`} />}
                 <td
-                  className={`${NAME_COL} ${nameLeft} text-left py-2 px-2 sticky z-10 ${TOTAL_BG} border-r border-orange-200 dark:border-neutral-600`}
+                  className={`${NAME_COL} ${nameLeft} text-left py-2 px-2 sticky z-10 ${TOTAL_BG} border-r border-[color:var(--ch-border)]`}
                 >
                   Totals
                 </td>
                 <td className={`${TOTAL_CELL} whitespace-nowrap`}>{totalSeconds > 0 ? secondsToClock(totalSeconds) : ''}</td>
-                <td className={`${TOTAL_CELL} text-orange-500`}>{totals.spoints}</td>
+                <td className={TOTAL_CELL}>{totals.spoints}</td>
                 <td className={TOTAL_CELL}>{totals.sreboundstotal}</td>
                 <td className={TOTAL_CELL}>{totals.sassists}</td>
                 <td className={TOTAL_CELL}>{totals.ssteals}</td>
@@ -367,7 +364,7 @@ export default function BoxScoreTable({
           </table>
         </div>
       ) : (
-        <p className="p-4 text-slate-500 text-center italic">No player stats available</p>
+        <p className="py-4 text-[color:var(--ch-text-2)] text-center">No player stats available</p>
       )}
     </div>
   );

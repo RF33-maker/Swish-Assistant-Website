@@ -192,10 +192,10 @@ function TeamLandscape({ slug, brandColor, scopedLeagueIds, onTeamSelect, switch
   const lockedCount = LANDSCAPE_PRESETS.length - 1;
 
   return (
-    <div className="ch-card space-y-4 p-3 md:p-5" data-testid="league-landscape">
+    <div className="space-y-4" data-testid="league-landscape">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-bold text-[color:var(--ch-text)] md:text-lg">League landscape</h3>
+          <h3 className="ch-section-title">League landscape</h3>
           <p className="mt-0.5 text-xs text-[color:var(--ch-text-2)] md:text-sm">
             {preset.hint} The better end of each axis is to the right and at the top; the lines mark the league average.
           </p>
@@ -365,7 +365,7 @@ function TeamLandscape({ slug, brandColor, scopedLeagueIds, onTeamSelect, switch
       )}
 
       {selected && !wanted && (
-        <div className="ch-tile flex flex-wrap items-center justify-between gap-3 p-3" data-testid="landscape-selected">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--ch-border-strong)] pt-3" data-testid="landscape-selected">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-[color:var(--ch-text)]">{cleanTeamLabel(selected.name)}</p>
             <p className="ch-num mt-0.5 text-xs text-[color:var(--ch-text-2)]">

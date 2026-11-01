@@ -122,7 +122,7 @@ export default function ContactSalesPage() {
         <SiteHeader />
         <main className="max-w-6xl mx-auto px-4 md:px-6 py-8 md:py-12">
           {submitted ? (
-            <div className="ch-card ch-rise max-w-xl mx-auto p-8 md:p-10 text-center" data-testid="contact-sent">
+            <div className="ch-rise max-w-xl mx-auto py-8 md:py-10 text-center" data-testid="contact-sent">
               <span className="mx-auto h-12 w-12 rounded-full flex items-center justify-center bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="h-6 w-6" />
               </span>
@@ -190,7 +190,7 @@ export default function ContactSalesPage() {
                       </span>
                       <ArrowRight className="h-4 w-4 text-[color:var(--ch-accent)]" />
                     </Link>
-                    <div className="mt-4 ch-tile p-4">
+                    <div className="mt-4 border-t border-[color:var(--ch-border)] pt-4">
                       <div className="text-sm font-semibold text-[color:var(--ch-text)]">What happens next</div>
                       <ol className="mt-2 space-y-1.5 text-sm text-[color:var(--ch-text-2)] list-decimal pl-5">
                         <li>We check it's really you, usually through your club, coach or social accounts.</li>

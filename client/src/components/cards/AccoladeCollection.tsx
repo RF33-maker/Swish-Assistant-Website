@@ -45,7 +45,7 @@ export function AccoladeCollection({
 
   if (total === 0) {
     return (
-      <div className="ch-card overflow-hidden">
+      <div>
         <div className="acc-binder p-6 md:p-8 flex flex-col sm:flex-row items-center gap-6">
           <div className="tc-sizes shrink-0">
             <div
@@ -104,8 +104,8 @@ export function AccoladeCollection({
   return (
     <div className="space-y-5" data-testid="accolade-collection">
       {holders.map((holder) => (
-        <section key={holder.key} className="ch-card overflow-hidden" aria-label={`${holder.eyebrow}: ${holder.title}`}>
-          <header className="flex items-center justify-between gap-3 px-4 md:px-5 py-3.5 border-b border-[color:var(--ch-border)]">
+        <section key={holder.key} aria-label={`${holder.eyebrow}: ${holder.title}`}>
+          <header className="flex items-center justify-between gap-3 pb-3.5 border-b border-[color:var(--ch-border-strong)]">
             <div className="flex items-center gap-3 min-w-0">
               <span className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-[color:var(--ch-surface-3)] overflow-hidden">
                 {holder.logo
@@ -124,7 +124,7 @@ export function AccoladeCollection({
             </span>
           </header>
           {/* The binder page: swipe through on phones, rows on wider screens */}
-          <div className="acc-binder tc-sizes px-4 md:px-5 pt-5">
+          <div className="acc-binder tc-sizes pt-5">
             <div className="flex gap-4 md:gap-5 overflow-x-auto md:overflow-visible md:flex-wrap snap-x snap-mandatory scrollbar-hide -mx-4 px-4 scroll-px-4 md:mx-0 md:px-0 md:scroll-px-0 pb-7">
               {holder.cards.map(({ accolade, number }) => (
                 <div key={`${number}-${accolade.label}`} className="acc-sleeve snap-start shrink-0" style={{ width: "var(--fan-card-w)" }}>

@@ -289,7 +289,7 @@ export default function LeagueTeams() {
                         <Star className="h-4 w-4 text-[color:var(--ch-accent)]" />
                         Top Player
                       </h4>
-                      <div className="ch-tile flex items-center gap-3 p-3">
+                      <div className="flex items-center gap-3 py-1">
                         <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-[color:var(--ch-accent-soft)] text-sm font-bold text-[color:var(--ch-accent)]">
                           {team.topPlayer.name.charAt(0)}
                         </div>
@@ -313,7 +313,7 @@ export default function LeagueTeams() {
                     </h4>
                     <div className="space-y-2">
                       {team.recentGames.slice(0, 3).map((game, idx) => (
-                        <div key={idx} className="ch-tile flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                        <div key={idx} className="flex items-center justify-between gap-3 py-1.5 text-sm border-b border-[color:var(--ch-border)]">
                           <span className="min-w-0 truncate text-[color:var(--ch-text-2)]">vs {game.opponent}</span>
                           <span className="ch-num flex-none font-bold text-[color:var(--ch-accent)]">{game.totalPoints} PTS</span>
                         </div>

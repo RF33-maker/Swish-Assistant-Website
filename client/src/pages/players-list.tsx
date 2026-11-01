@@ -266,11 +266,11 @@ export default function PlayersListPage() {
               {Array.from({ length: 6 }, (_, i) => <div key={i} className="ch-skel h-[84px] rounded-[14px]" />)}
             </div>
           ) : isError ? (
-            <div className="ch-card p-8 text-center text-sm text-[color:var(--ch-text-2)]">
+            <div className="py-8 text-center text-sm text-[color:var(--ch-text-2)]">
               Search isn't available right now. Please try again in a moment.
             </div>
           ) : results.length === 0 ? (
-            <div className="ch-card border-dashed p-10 text-center" data-testid="players-empty">
+            <div className="py-10 text-center" data-testid="players-empty">
               <Users className="h-9 w-9 text-[color:var(--ch-muted)] mx-auto mb-3" aria-hidden="true" />
               <p className="font-medium text-[color:var(--ch-text)] text-lg">No players match “{term}”</p>
               <p className="text-sm text-[color:var(--ch-text-2)] mt-1">Try their surname, or find them through their team.</p>
@@ -297,7 +297,7 @@ export default function PlayersListPage() {
       <TrendingPerformanceSection headerClassName="max-w-6xl mx-auto px-4 md:px-6" />
 
       <section className="max-w-6xl mx-auto px-4 md:px-6 pb-16" aria-labelledby="claim-heading">
-        <div className="ch-card p-5 md:p-7 flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+        <div className="border-t-2 border-[color:var(--ch-border-strong)] pt-6 flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
           <span className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0 bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]">
             <BadgeCheck className="h-6 w-6" aria-hidden="true" />
           </span>

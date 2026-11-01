@@ -89,16 +89,16 @@ export default function GameFlowSummary({ events, homeTeam, awayTeam, homeColor 
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-center">
-        <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-lg p-2.5">
-          <div className="text-lg font-bold text-slate-800 dark:text-white">{leadInfo.changes}</div>
-          <div className="text-[11px] text-slate-500 dark:text-neutral-400">Lead changes</div>
+      <div className="grid grid-cols-2 gap-x-6">
+        <div>
+          <div className="ch-display text-[2rem] font-bold leading-none tabular-nums text-[color:var(--ch-text)]">{leadInfo.changes}</div>
+          <div className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--ch-text-2)]">Lead changes</div>
         </div>
-        <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-lg p-2.5">
-          <div className="text-lg font-bold text-slate-800 dark:text-white">
+        <div>
+          <div className="ch-display text-[2rem] font-bold leading-none tabular-nums text-[color:var(--ch-text)]">
             {leadInfo.biggestLead ? `+${leadInfo.biggestLead.margin}` : '—'}
           </div>
-          <div className="text-[11px] text-slate-500 dark:text-neutral-400">
+          <div className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--ch-text-2)]">
             Biggest lead{leadInfo.biggestLead ? ` (${leadInfo.biggestLead.teamNo === 1 ? homeTeam : awayTeam})` : ''}
           </div>
         </div>
@@ -106,18 +106,18 @@ export default function GameFlowSummary({ events, homeTeam, awayTeam, homeColor 
 
       {runs.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-neutral-500 mb-2 flex items-center gap-1.5">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)] pb-2 border-b border-[color:var(--ch-border-strong)] flex items-center gap-1.5">
             <Flame className="w-3.5 h-3.5" /> Biggest runs
           </h4>
-          <div className="space-y-1.5">
+          <div>
             {runs.map((run, i) => (
-              <div key={i} className="flex items-center justify-between text-sm bg-gray-50 dark:bg-neutral-800/60 rounded-lg px-3 py-2">
+              <div key={i} className="flex items-center justify-between text-sm border-b border-[color:var(--ch-border)] py-2">
                 <span className="font-medium text-slate-800 dark:text-white flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: run.teamNo === 1 ? homeColor : awayColor }} />
                   {run.teamNo === 1 ? homeTeam : awayTeam}
                   <span className="font-bold" style={{ color: run.teamNo === 1 ? homeColor : awayColor }}>{run.points}-0 run</span>
                 </span>
-                <span className="text-xs text-slate-400 dark:text-neutral-500">
+                <span className="text-xs text-[color:var(--ch-text-2)]">
                   Q{run.startPeriod} {formatClock(run.startClock)} – Q{run.endPeriod} {formatClock(run.endClock)}
                 </span>
               </div>

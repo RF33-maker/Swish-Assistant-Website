@@ -105,8 +105,8 @@ export default function OnCourt({ homeTeam, awayTeam, homeColor, awayColor, home
   // A side whose five cannot be worked out is left out rather than shown wrong.
   if (!home && !away) return null;
   return (
-    <section className="ch-card mb-4 p-4" aria-label="On court now">
-      <h3 className="ch-display mb-3 text-sm font-semibold text-[color:var(--ch-text)]">On court</h3>
+    <section className="mb-8" aria-label="On court now">
+      <h3 className="ch-section-title mb-4">On court</h3>
       <div className="grid gap-4 sm:grid-cols-2">
         {home && <Side team={homeTeam} color={homeColor} five={home} players={players} />}
         {away && <Side team={awayTeam} color={awayColor} five={away} players={players} />}

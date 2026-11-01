@@ -83,7 +83,7 @@ export default function PlatformStatsStrip() {
   if (!platform) return null;
 
   return (
-    <div ref={ref} className={`ch-card overflow-hidden ch-reveal ${seen ? "is-in" : ""}`}>
+    <div ref={ref} className={`ch-reveal border-y border-[color:var(--ch-border)] ${seen ? "is-in" : ""}`}>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[color:var(--ch-border)]">
         <Figure value={platform.players} label="Player profiles" run={seen} />
         <Figure value={platform.games} label="Games tracked" run={seen} />

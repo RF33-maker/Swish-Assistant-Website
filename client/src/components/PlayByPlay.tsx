@@ -226,9 +226,9 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
   const teamColor = (teamNo: number) => (teamNo === 1 ? homeColor : teamNo === 2 ? awayColor : "transparent");
 
   return (
-    <div className="ch-card overflow-hidden" data-testid="play-by-play">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--ch-border)] px-4 py-3">
-        <h3 className="ch-eyebrow flex items-center gap-2">
+    <div data-testid="play-by-play">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--ch-border-strong)] pb-3">
+        <h3 className="ch-section-title flex items-center gap-2">
           {isLive && (
             <span className="relative flex h-2 w-2" aria-hidden="true">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75 motion-reduce:animate-none" />
@@ -254,7 +254,7 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
       </div>
 
       {viewMode === "quarter" && periods.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-b border-[color:var(--ch-border)] px-4 py-2.5">
+        <div className="flex flex-wrap gap-1.5 border-b border-[color:var(--ch-border)] py-2.5">
           {periods.map((p) => (
             <button
               key={p}
@@ -271,7 +271,7 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
       )}
 
       {viewMode === "player" && players.length > 0 && (
-        <div className="border-b border-[color:var(--ch-border)] px-4 py-2.5">
+        <div className="border-b border-[color:var(--ch-border)] py-2.5">
           <select
             value={playerFilter ?? ""}
             onChange={(e) => setPlayerFilter(e.target.value || null)}
@@ -297,13 +297,13 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
       )}
 
       {loading ? (
-        <div className="space-y-2 p-4">
+        <div className="space-y-2 py-4">
           {[0, 1, 2, 3, 4].map((i) => <div key={i} className="ch-skel h-9" />)}
         </div>
       ) : chronological.length === 0 ? (
-        <p className="px-4 py-10 text-center text-sm text-[color:var(--ch-muted)]">{emptyMessage}</p>
+        <p className="py-10 text-center text-sm text-[color:var(--ch-text-2)]">{emptyMessage}</p>
       ) : latestFirst.length === 0 ? (
-        <p className="px-4 py-10 text-center text-sm text-[color:var(--ch-muted)]">No plays match this filter.</p>
+        <p className="py-10 text-center text-sm text-[color:var(--ch-text-2)]">No plays match this filter.</p>
       ) : (
         <div className="relative">
           {fresh > 0 && (
@@ -325,7 +325,7 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
               return (
                 <section key={group.period} aria-label={periodName(group.period)}>
                   {viewMode !== "quarter" && (
-                    <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)] px-4 py-1.5">
+                    <div className="sticky top-0 z-[1] flex items-center justify-between border-b border-[color:var(--ch-border)] bg-[color:var(--ch-bg)] py-1.5">
                       <span className="ch-eyebrow">{periodName(group.period)}</span>
                       {periodScore && (
                         <span className="ch-num text-[11px] font-semibold text-[color:var(--ch-text-2)]">{formatScore(periodScore)}</span>
@@ -337,7 +337,7 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
                       const marker = markerLabel(event, finalPeriods);
                       if (marker) {
                         return (
-                          <li key={event.id ?? idx} className="flex items-center gap-3 px-4 py-2">
+                          <li key={event.id ?? idx} className="flex items-center gap-3 py-2">
                             <span className="h-px flex-1 bg-[color:var(--ch-border-strong)]" aria-hidden="true" />
                             <span className="ch-eyebrow !text-[color:var(--ch-text-2)]">
                               {marker}
@@ -354,7 +354,7 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
                       const color = teamColor(event.team_no);
                       const scored = isMadeShot(event, previousScored);
                       return (
-                        <li key={event.id ?? idx} className="flex gap-3 px-4 py-2.5">
+                        <li key={event.id ?? idx} className="flex gap-3 py-2.5">
                           <span className="w-[3px] shrink-0 self-stretch rounded-full" style={{ background: color }} aria-hidden="true" />
                           <span className="w-10 shrink-0 pt-px text-[11px] font-semibold tabular-nums text-[color:var(--ch-muted)]">
                             {formatClock(event.clock)}
@@ -388,7 +388,7 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
         </div>
       )}
 
-      <div className="flex items-center justify-center gap-4 border-t border-[color:var(--ch-border)] px-4 py-2 text-[11px] text-[color:var(--ch-muted)]">
+      <div className="flex items-center justify-center gap-4 border-t border-[color:var(--ch-border)] py-2 text-[11px] text-[color:var(--ch-text-2)]">
         <span className="flex items-center gap-1.5"><span className="h-3 w-[3px] rounded-full" style={{ backgroundColor: homeColor }} />{homeTeam}</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-[3px] rounded-full" style={{ backgroundColor: awayColor }} />{awayTeam}</span>
       </div>

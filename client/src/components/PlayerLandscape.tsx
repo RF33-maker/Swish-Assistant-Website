@@ -278,7 +278,7 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
 
   return (
     <div
-      className={expanded ? "fixed inset-0 z-[70] space-y-3 overflow-y-auto bg-[color:var(--ch-surface)] p-3 md:p-5" : "ch-card space-y-4 p-3 md:p-5"}
+      className={expanded ? "fixed inset-0 z-[70] space-y-3 overflow-y-auto bg-[color:var(--ch-surface)] p-3 md:p-5" : "space-y-4"}
       data-testid="player-landscape"
       role={expanded ? "dialog" : undefined}
       aria-modal={expanded || undefined}
@@ -567,7 +567,7 @@ export function PlayerLandscape({ slug, brandColor, scopedLeagueIds, onPlayerSel
       )}
 
       {selected && !wanted && (
-        <div className="ch-tile flex flex-wrap items-center justify-between gap-3 p-3" data-testid="player-landscape-selected">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--ch-border-strong)] pt-3" data-testid="player-landscape-selected">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-[color:var(--ch-text)]">
               <span className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: colourOf(selected) }} />

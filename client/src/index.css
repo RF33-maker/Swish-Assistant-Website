@@ -689,6 +689,7 @@
   color: var(--ch-muted);
 }
 /* Table sitting on the page: its rules are the edge, so the text lines up with the headings above */
+.sa-pro .ch-table-flat thead th { color: var(--ch-text-2); }
 .sa-pro .ch-table-flat th:first-child, .sa-pro .ch-table-flat td:first-child { padding-left: 0; }
 .sa-pro .ch-table-flat th:last-child, .sa-pro .ch-table-flat td:last-child { padding-right: 0; }
 .sa-pro .ch-table tbody tr { transition: background .12s ease; }

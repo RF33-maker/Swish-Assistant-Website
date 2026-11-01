@@ -78,8 +78,8 @@ export function StandingsRowSkeleton() {
 
 export function LeaderCardSkeleton() {
   return (
-    <div className="bg-gray-50 rounded-lg p-4 shadow-inner">
-      <LoadingSkeleton height="h-4" width="w-24" className="mx-auto mb-3" />
+    <div className="py-1">
+      <LoadingSkeleton height="h-4" width="w-24" className="mb-3" />
       <div className="space-y-2">
         {Array.from({ length: 3 }).map((_, i) => (
           <div key={i} className="flex justify-between items-center">

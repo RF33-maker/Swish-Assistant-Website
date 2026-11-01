@@ -42,6 +42,8 @@ interface LeagueLeadersShareCardProps {
   fileSlug: string;
   /** In-page card the share button overlays. */
   children: ReactNode;
+  /** The list sits on the page, so the share button lines up with its heading. */
+  flat?: boolean;
 }
 
 export default function LeagueLeadersShareCard({
@@ -56,6 +58,7 @@ export default function LeagueLeadersShareCard({
   footnote,
   fileSlug,
   children,
+  flat,
 }: LeagueLeadersShareCardProps) {
   // The downloadable card is drawn on a canvas in the Swish Social look, in the league's colour.
   const generateCardBlob = () =>
@@ -73,6 +76,7 @@ export default function LeagueLeadersShareCard({
     <ShareableCard
       title={title}
       fileSlug={fileSlug}
+      flat={flat}
       player={{
         name: leagueName,
         team: contextLabel || "",

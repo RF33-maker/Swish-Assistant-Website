@@ -37,11 +37,11 @@ export function Panel({
   bodyClassName?: string;
 }) {
   return (
-    <section className={`ch-card min-w-0 ${className}`}>
+    <section className={`min-w-0 ${className}`}>
       {(title || action) && (
-        <header className="flex flex-wrap items-start justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[color:var(--ch-border-strong)] pb-3">
           <div className="min-w-0">
-            <h2 className="ch-display flex items-center gap-2 text-[1.4rem] font-bold uppercase leading-none tracking-tight text-[color:var(--ch-text)]">
+            <h2 className="ch-section-title flex items-center gap-2">
               {Icon && <Icon className="h-[18px] w-[18px] flex-none text-[color:var(--ch-accent)]" />}
               {title}
             </h2>
@@ -50,7 +50,7 @@ export function Panel({
           {action}
         </header>
       )}
-      <div className={`p-4 sm:p-5 ${bodyClassName}`}>{children}</div>
+      <div className={`pt-4 ${bodyClassName}`}>{children}</div>
     </section>
   );
 }

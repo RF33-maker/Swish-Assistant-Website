@@ -355,7 +355,7 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
   const short = (name: string) => shortTeamName(name) || name;
 
   return (
-    <div className="ch-card p-4 md:p-6" data-testid="team-comparison">
+    <div className="min-w-0" data-testid="team-comparison">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Team comparison</h2>
         {team1Stats && team2Stats && <CopyLinkButton testId="button-team-compare-link" />}

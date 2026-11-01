@@ -302,7 +302,7 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
         {children}
 
         {/* Game footage — StatsThread partnership placeholder. */}
-        <div className="ch-card p-4 md:p-5 flex items-center gap-4">
+        <div className="flex items-center gap-4 border-t border-[color:var(--ch-border-strong)] pt-4">
           <div className="w-10 h-10 rounded-xl ch-tile flex items-center justify-center shrink-0">
             <Video className="w-5 h-5 text-[color:var(--ch-muted)]" />
           </div>

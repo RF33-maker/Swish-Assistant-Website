@@ -78,10 +78,10 @@ export default function PlaybookSharePage() {
     <div className="coach-hub sa-pro min-h-screen">
       <div className="max-w-3xl mx-auto px-4 py-6 pb-host">
         {state.kind === 'loading' && (
-          <div className="ch-card p-8 text-center text-[13px] text-[color:var(--ch-text-2)]">Opening the playbook…</div>
+          <div className="py-8 text-center text-[13px] text-[color:var(--ch-text-2)]">Opening the playbook…</div>
         )}
         {state.kind === 'missing' && (
-          <div className="ch-card p-8 text-center">
+          <div className="py-8 text-center">
             <p className="text-sm text-[color:var(--ch-text)]">This playbook link isn't valid. Ask your coach for a fresh one.</p>
           </div>
         )}

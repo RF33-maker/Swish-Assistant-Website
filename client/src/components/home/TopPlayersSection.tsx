@@ -317,7 +317,7 @@ export default function TopPlayersSection() {
             ))}
           </div>
         ) : !hasData ? (
-          <div className="rounded-2xl border border-dashed border-orange-200 dark:border-neutral-800 p-10 text-center text-slate-500 dark:text-slate-400">
+          <div className="py-10 text-center text-[color:var(--ch-text-2)]">
             <Trophy className="h-8 w-8 text-orange-400 mx-auto mb-3" />
             No player stats yet for this league.
           </div>

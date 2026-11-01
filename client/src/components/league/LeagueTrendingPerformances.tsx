@@ -163,7 +163,7 @@ function PerfCard({
         onKeyDown={canViewProfile ? (e) => {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToPlayer(); }
         } : undefined}
-        className={`group w-full text-left rounded-xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm transition-all px-3 pt-2.5 pb-2 focus:outline-none focus:ring-2 focus:ring-orange-400 ${canViewProfile ? "hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 cursor-pointer" : ""}`}
+        className={`group w-full text-left ch-tile transition-all px-3 pt-2.5 pb-2 focus:outline-none focus:ring-2 focus:ring-orange-400 ${canViewProfile ? "hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 cursor-pointer" : ""}`}
         data-testid="league-trending-perf-card"
       >
         {/* Top row: avatar + name + team — pr-9 leaves room for the share button */}
@@ -206,7 +206,7 @@ function PerfCard({
         </div>
 
         {/* Divider */}
-        <div className="border-t border-slate-100 dark:border-neutral-800 mb-2" />
+        <div className="border-t border-[color:var(--ch-border)] mb-2" />
 
         {/* Stats — full width, evenly spaced */}
         <div className="flex items-center justify-between">
@@ -264,11 +264,11 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
 
   if (isLoading) {
     return (
-      <div className="w-full py-4 px-4 md:px-6">
+      <div className="w-full">
         <div className="h-5 w-48 bg-slate-200 dark:bg-neutral-800 rounded animate-pulse mb-3" />
         <div className="flex flex-col gap-2">
           {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex items-center gap-3 rounded-xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 px-3 py-2.5 animate-pulse">
+            <div key={i} className="flex items-center gap-3 ch-tile px-3 py-2.5 animate-pulse">
               <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-neutral-800 shrink-0" />
               <div className="flex-1 space-y-1.5">
                 <div className="h-3 w-32 bg-slate-200 dark:bg-neutral-800 rounded" />
@@ -291,9 +291,9 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
   const accentColor = brandColor || "#f97316";
 
   return (
-    <div className="w-full py-4 px-4 md:px-6">
-      <div className="flex items-center gap-2 mb-3">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wide">
+    <div className="w-full">
+      <div className="flex items-center gap-3 mb-4">
+        <h3 className="ch-section-title">
           Top Performances
         </h3>
         <div

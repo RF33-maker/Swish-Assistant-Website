@@ -319,10 +319,10 @@ export function CupBracket({ leagueId, rows, onOpenGame }: { leagueId: string; r
   const shown = view === "full" || knockout.length === 0 ? rounds : knockout;
 
   return (
-    <div className="ch-card p-4 md:p-6">
+    <div>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Knockout bracket</h2>
+          <h2 className="ch-section-title">Knockout bracket</h2>
           <p className="mt-1 text-[13px] text-[color:var(--ch-text-2)]">
             {champ ? (
               <span className="inline-flex items-center gap-1.5 font-semibold text-[color:var(--ch-text)]">

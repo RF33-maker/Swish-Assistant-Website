@@ -449,7 +449,7 @@ export default function PlayerClaimsAdminPage() {
         </nav>
 
         {loadError && (
-          <div className="ch-card p-4 mb-4">
+          <div className="mb-6">
             <ErrorLine message={loadError} />
           </div>
         )}
@@ -532,7 +532,7 @@ function RequestsTab({
 
   if (error && !requests) {
     return (
-      <div className="ch-card p-4">
+      <div>
         <ErrorLine message={error} />
       </div>
     );
@@ -614,7 +614,7 @@ function RequestsTab({
     <div className="space-y-3">
       <ErrorLine message={actionError} />
       {fresh.length === 0 ? (
-        <div className="ch-card p-8 text-center text-sm text-[color:var(--ch-text-2)]">
+        <div className="py-8 text-center text-sm text-[color:var(--ch-text-2)]">
           No claim requests waiting. New ones from the “Claim this page” form show up here.
         </div>
       ) : (
@@ -642,7 +642,7 @@ function ClaimList({
   render: (c: AdminClaimRow) => React.ReactNode;
 }) {
   if (rows.length === 0) {
-    return <div className="ch-card p-8 text-center text-sm text-[color:var(--ch-text-2)]">{empty}</div>;
+    return <div className="py-8 text-center text-sm text-[color:var(--ch-text-2)]">{empty}</div>;
   }
   return <div className="space-y-3">{rows.map(render)}</div>;
 }
@@ -1206,7 +1206,7 @@ function FindPlayers({
       <ErrorLine message={error} />
 
       {rows && rows.length === 0 && (
-        <div className="ch-card p-8 text-center text-sm text-[color:var(--ch-text-2)]">No players match “{query}”.</div>
+        <div className="py-8 text-center text-sm text-[color:var(--ch-text-2)]">No players match “{query}”.</div>
       )}
 
       {rows && rows.length > 0 && (

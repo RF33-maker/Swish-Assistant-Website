@@ -65,5 +65,5 @@ export default function AdminPageShell({
 
 /** Centred spinner or message for a page that is loading or has nothing to show yet. */
 export function AdminPageNotice({ children }: { children: ReactNode }) {
-  return <div className="ch-card px-5 py-14 text-center text-sm text-[color:var(--ch-text-2)]">{children}</div>;
+  return <div className="py-14 text-center text-sm text-[color:var(--ch-text-2)]">{children}</div>;
 }

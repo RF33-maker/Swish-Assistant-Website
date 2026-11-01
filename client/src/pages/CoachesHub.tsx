@@ -827,7 +827,7 @@ export default function CoachesHub() {
   if (!user) {
     return (
       <div className="coach-hub sa-pro min-h-screen flex items-center justify-center px-4" style={hubStyle}>
-        <div className="ch-card max-w-sm w-full p-8 text-center">
+        <div className="max-w-sm w-full py-8 text-center">
           <div className="w-12 h-12 rounded-xl ch-tile flex items-center justify-center mx-auto mb-5">
             <Lock className="w-5 h-5 text-[color:var(--ch-text-2)]" />
           </div>
@@ -928,7 +928,7 @@ export default function CoachesHub() {
     const pct = stat.rank ? (stat.rank.of > 1 ? (stat.rank.of - stat.rank.rank) / (stat.rank.of - 1) : 1) : 0;
     const topThird = stat.rank ? stat.rank.rank <= Math.max(1, Math.ceil(stat.rank.of / 3)) : false;
     return (
-      <div key={stat.label} className="ch-tile p-4">
+      <div key={stat.label} className="border-t border-[color:var(--ch-border)] pt-3">
         <div className="flex items-center justify-between gap-2">
           <span className="ch-eyebrow">{stat.label}</span>
           {stat.rank && topThird && (
@@ -955,7 +955,7 @@ export default function CoachesHub() {
   };
 
   const plainTile = (label: string, value: string | number, Icon: LucideIcon, small = false) => (
-    <div key={label} className="ch-tile p-4">
+    <div key={label} className="border-t border-[color:var(--ch-border)] pt-3">
       <div className="ch-eyebrow flex items-center gap-1.5">
         <Icon className="w-3.5 h-3.5" /> {label}
       </div>
@@ -978,13 +978,13 @@ export default function CoachesHub() {
 
   const loadingPanels = (
     <div className="space-y-4 md:space-y-5">
-      <div className="ch-card p-5 md:p-6">
+      <div>
         <div className="ch-skel h-4 w-40 mb-5" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[0, 1, 2, 3].map((i) => <div key={i} className="ch-skel h-[104px]" />)}
         </div>
       </div>
-      <div className="ch-card p-5 md:p-6">
+      <div>
         <div className="ch-skel h-4 w-32 mb-5" />
         <div className="space-y-3">
           {[0, 1, 2].map((i) => <div key={i} className="ch-skel h-9" />)}
@@ -997,7 +997,7 @@ export default function CoachesHub() {
   // CoachTeamOverview's main column) and the league-owner overview.
   const seasonPanels = statsLoading && !hasStats ? loadingPanels : hasStats ? (
     <>
-      <div className="ch-card p-5 md:p-6">
+      <div>
         <SectionKicker n="01" label={myTeam ? `${myTeam.team_name} in this competition` : 'Season snapshot'} color={readableBrand} />
         {myTeam && teamRanks ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1020,11 +1020,11 @@ export default function CoachesHub() {
         )}
       </div>
 
-      <div className="ch-card p-5 md:p-6">
+      <div>
         <SectionKicker n="02" label={myRosterLeaders ? 'Your squad' : 'Team leaders'} color={readableBrand} />
         {myRosterLeaders ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="ch-tile p-4">
+            <div className="border-t border-[color:var(--ch-border)] pt-3">
               <h4 className="ch-eyebrow mb-3">Leading scorers</h4>
               <div className="space-y-1">
                 {myRosterLeaders.scorers.map((player, index) => {
@@ -1056,7 +1056,7 @@ export default function CoachesHub() {
               </div>
             </div>
 
-            <div className="ch-tile p-4">
+            <div className="border-t border-[color:var(--ch-border)] pt-3">
               <h4 className="ch-eyebrow mb-3">Who leads what</h4>
               <div className="divide-y divide-[color:var(--ch-border)]">
                 {[
@@ -1097,7 +1097,7 @@ export default function CoachesHub() {
             </div>
           </div>
         ) : (
-          <div className="ch-tile p-4 md:max-w-lg">
+          <div className="border-t border-[color:var(--ch-border)] pt-3 md:max-w-lg">
             <h4 className="ch-eyebrow mb-3">Top scoring teams</h4>
             <div className="space-y-1">
               {teamSeasonAverages.slice(0, 3).map((team, index) => (
@@ -1122,7 +1122,7 @@ export default function CoachesHub() {
       </div>
     </>
   ) : (
-    <div className="ch-card p-10 text-center">
+    <div className="py-10 text-center">
       <div className="w-12 h-12 rounded-xl ch-tile flex items-center justify-center mx-auto mb-4">
         <BarChart3 className="w-5 h-5 text-[color:var(--ch-muted)]" />
       </div>
@@ -1134,7 +1134,7 @@ export default function CoachesHub() {
   );
 
   const quickActions = selectedLeague && (
-    <div className="ch-card p-5">
+    <div>
       <SectionKicker n="03" label="Quick actions" color={readableBrand} />
       <div className="-mx-2 space-y-0.5">
         {[
@@ -1161,7 +1161,7 @@ export default function CoachesHub() {
   );
 
   const emptyState = (Icon: LucideIcon, title: string, body: string) => (
-    <div className="ch-card p-10 text-center">
+    <div className="py-10 text-center">
       <div className="w-12 h-12 rounded-xl ch-tile flex items-center justify-center mx-auto mb-4">
         <Icon className="w-5 h-5 text-[color:var(--ch-muted)]" />
       </div>
@@ -1340,7 +1340,7 @@ export default function CoachesHub() {
         {/* Shortcuts — top public leagues, for fast navigation while no
             league is selected yet (whether or not the coach has their own). */}
         {!selectedLeague && (
-          <div className="ch-card p-5 md:p-6 mb-5 md:mb-6">
+          <div className="mb-8 md:mb-10">
             <div className="flex items-end justify-between gap-3 mb-4">
               <div>
                 <div className="ch-eyebrow flex items-center gap-1.5 mb-1">
@@ -1389,7 +1389,7 @@ export default function CoachesHub() {
         )}
 
         {leagues.length === 0 ? (
-          <div className="ch-card p-10 md:p-14 text-center">
+          <div className="py-10 md:py-14 text-center">
             <div className="w-14 h-14 rounded-2xl ch-tile flex items-center justify-center mx-auto mb-5">
               <Users className="w-6 h-6 text-[color:var(--ch-text-2)]" />
             </div>
@@ -1405,7 +1405,7 @@ export default function CoachesHub() {
         ) : !selectedLeague ? (
           /* League chooser — full search card until one's picked; once
              picked it collapses to the switcher in the section bar. */
-          <div className="ch-card p-5 md:p-6">
+          <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Select league</h3>
               <div className="text-[12px] text-[color:var(--ch-muted)] ch-num">{leagues.length} available</div>

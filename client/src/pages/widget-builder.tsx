@@ -260,7 +260,7 @@ export default function WidgetBuilder() {
     >
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-5">
         <div className="space-y-4 lg:col-span-2">
-          <section className="ch-card space-y-4 p-4 sm:p-5">
+          <section className="space-y-4">
             <h2 className={heading}>
               {step(1)}
               Widget Type
@@ -286,7 +286,7 @@ export default function WidgetBuilder() {
             </div>
           </section>
 
-          <section className="ch-card space-y-4 p-4 sm:p-5">
+          <section className="space-y-4">
             <h2 className={heading}>
               {step(2)}
               Data Source
@@ -339,7 +339,7 @@ export default function WidgetBuilder() {
             )}
           </section>
 
-          <section className="ch-card space-y-4 p-4 sm:p-5">
+          <section className="space-y-4">
             <h2 className={heading}>
               {step(3)}
               Appearance
@@ -371,7 +371,7 @@ export default function WidgetBuilder() {
             </Field>
           </section>
 
-          <section className="ch-card space-y-4 p-4 sm:p-5">
+          <section className="space-y-4">
             <h2 className={heading}>
               {step(4)}
               Size & Layout
@@ -423,7 +423,7 @@ export default function WidgetBuilder() {
             </div>
           </section>
 
-          <section className="ch-card space-y-3 p-4 sm:p-5">
+          <section className="space-y-3">
             <h2 className={heading}>
               <Code className="h-4 w-4 text-[color:var(--ch-accent)]" />
               Embed Code
@@ -460,7 +460,7 @@ export default function WidgetBuilder() {
         </div>
 
         <div className="lg:sticky lg:top-4 lg:col-span-3">
-          <section className="ch-card p-4 sm:p-5">
+          <section className="min-w-0">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="ch-display text-[1.4rem] font-bold uppercase leading-none tracking-tight text-[color:var(--ch-text)]">Live preview</h2>
               <span className={`ch-num ${HINT}`}>{dimensions.width} x {dimensions.height}px</span>

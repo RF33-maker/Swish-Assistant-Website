@@ -308,7 +308,7 @@ export default function TeamLogoManager() {
       )}
 
       {/* Help Section */}
-      <div className="ch-card mt-8 p-5">
+      <div className="mt-10 border-t border-[color:var(--ch-border-strong)] pt-5">
         <h3 className="text-sm font-semibold text-[color:var(--ch-text)]">Logo guidelines</h3>
         <ul className="mt-2 space-y-1 text-sm text-[color:var(--ch-text-2)]">
           <li>• Logos should be square (1:1 aspect ratio) for best results</li>

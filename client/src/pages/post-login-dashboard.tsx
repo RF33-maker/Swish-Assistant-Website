@@ -439,12 +439,12 @@ export default function DashboardLanding() {
                 {[0, 1, 2, 3].map((i) => <div key={i} className="ch-skel h-[88px] rounded-[14px]" />)}
               </div>
             ) : leaguesError ? (
-              <div className="ch-card px-5 py-8 text-center" data-testid="suggested-leagues-error">
+              <div className="py-8 text-center" data-testid="suggested-leagues-error">
                 <p className="font-medium text-[color:var(--ch-text)]">League suggestions are temporarily unavailable.</p>
                 <Link href="/" className="mt-3 ch-btn ch-btn-ghost h-10 px-4">Browse from the home page</Link>
               </div>
             ) : suggestedLeagues.length === 0 ? (
-              <div className="ch-card px-5 py-8 text-center" data-testid="suggested-leagues-empty">
+              <div className="py-8 text-center" data-testid="suggested-leagues-empty">
                 <p className="font-medium text-[color:var(--ch-text)]">No featured leagues are available right now.</p>
                 <Link href="/" className="mt-3 ch-btn ch-btn-ghost h-10 px-4">Browse all public content</Link>
               </div>

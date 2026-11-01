@@ -211,7 +211,7 @@ export default function CompetitionPage() {
       <div className={`${SITE_RAIL_OFFSET} sa-pro min-h-screen`}>
         <SiteHeader />
         <main className="max-w-xl mx-auto px-4 py-16">
-          <div className="ch-card p-10 text-center">
+          <div className="py-10 text-center">
             <Trophy className="w-10 h-10 mx-auto text-[color:var(--ch-muted)]" />
             <h1 className="mt-3 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2rem] text-[color:var(--ch-text)]">League not found</h1>
             <p className="mt-2 text-sm text-[color:var(--ch-text-2)]">No league with the slug "{slug}" exists.</p>
@@ -328,7 +328,7 @@ export default function CompetitionPage() {
         )}
 
         {seasons.length === 0 && (
-          <div className="mt-6 ch-card p-12 text-center text-sm text-[color:var(--ch-text-2)]">
+          <div className="mt-6 py-12 text-center text-sm text-[color:var(--ch-text-2)]">
             No competitions available yet.
           </div>
         )}

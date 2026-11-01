@@ -199,8 +199,8 @@ export default function SeasonPreview({ previousSlug, seasonLabel, instagramUrl 
   ];
 
   return (
-    <div className="space-y-6" data-testid="season-preview">
-      <section className="ch-card p-5 md:p-7">
+    <div className="space-y-10" data-testid="season-preview">
+      <section>
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">
           <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
           {seasonLabel} preview
@@ -214,9 +214,9 @@ export default function SeasonPreview({ previousSlug, seasonLabel, instagramUrl 
         </p>
         <p className="mt-2 text-sm font-semibold text-[color:var(--ch-text)]">Season 2 starts October 26 to 29.</p>
 
-        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5">
           {numbers.map((n) => (
-            <div key={n.label} className="rounded-xl border border-[color:var(--ch-border)] px-4 py-3">
+            <div key={n.label} className="min-w-0">
               <div className="ch-display text-[1.7rem] md:text-[2rem] font-bold leading-none tabular-nums text-[color:var(--ch-text)]">
                 {"display" in n && n.display ? n.display : n.value.toLocaleString("en-GB")}
               </div>
@@ -229,9 +229,9 @@ export default function SeasonPreview({ previousSlug, seasonLabel, instagramUrl 
           <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--ch-muted)]">
             {previousLabel} exposure and outcomes
           </div>
-          <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-5">
             {REACH.map((r) => (
-              <div key={r.label} className="rounded-xl border border-[color:var(--ch-accent)] px-4 py-3">
+              <div key={r.label} className="min-w-0">
                 <div className="ch-display text-[1.7rem] md:text-[2rem] font-bold leading-none tabular-nums text-[color:var(--ch-text)]">{r.value}</div>
                 <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">{r.label}</div>
               </div>
@@ -251,8 +251,8 @@ export default function SeasonPreview({ previousSlug, seasonLabel, instagramUrl 
       </section>
 
       {signings.length > 0 && (
-        <section className="ch-card p-4 md:p-6" aria-labelledby="season-preview-signings" data-testid="season-signings">
-          <h2 id="season-preview-signings" className="flex items-center gap-2 text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">
+        <section aria-labelledby="season-preview-signings" data-testid="season-signings">
+          <h2 id="season-preview-signings" className="ch-section-title flex items-center gap-2">
             <GraduationCap className="h-4 w-4 text-[color:var(--ch-accent)]" aria-hidden="true" />
             Where they signed
           </h2>
@@ -263,7 +263,7 @@ export default function SeasonPreview({ previousSlug, seasonLabel, instagramUrl 
         </section>
       )}
 
-      <section className="ch-card p-5 md:p-6 border-[color:var(--ch-accent)]" data-testid="season-cta">
+      <section className="border-t border-[color:var(--ch-border-strong)] pt-6" data-testid="season-cta">
         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">{seasonLabel}</div>
         <h2 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[1.6rem] md:text-[2rem] text-[color:var(--ch-text)]">
           Could you be next?
@@ -286,10 +286,10 @@ export default function SeasonPreview({ previousSlug, seasonLabel, instagramUrl 
       </section>
 
       {group && (
-        <section className="ch-card p-4 md:p-6" aria-labelledby="season-preview-leaders">
+        <section aria-labelledby="season-preview-leaders">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 id="season-preview-leaders" className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">
+              <h2 id="season-preview-leaders" className="ch-section-title">
                 {previousLabel} standouts
               </h2>
               <p className="mt-0.5 text-xs text-[color:var(--ch-muted)]">

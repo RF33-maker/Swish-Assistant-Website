@@ -68,7 +68,7 @@ export default function PublicProfilePage() {
             <Loader2 className="h-7 w-7 animate-spin text-[color:var(--ch-muted)]" />
           </div>
         ) : profile === null ? (
-          <div className="ch-card ch-rise p-10 text-center">
+          <div className="ch-rise py-10 text-center">
             <UserRound className="mx-auto h-10 w-10 text-[color:var(--ch-muted)]" />
             <h1 className="mt-3 ch-display uppercase font-bold text-2xl text-[color:var(--ch-text)]">Profile not found</h1>
             <p className="mt-2 text-sm text-[color:var(--ch-text-2)]">
@@ -100,7 +100,7 @@ function ProfileCard({ profile, isOwner }: { profile: PublicProfile; isOwner: bo
   if (profile.date_of_birth) facts.push({ label: "Born", value: formatDob(profile.date_of_birth) });
 
   return (
-    <article className="space-y-4">
+    <article className="space-y-8">
       <section className="ch-card ch-rise overflow-hidden">
         <div className="flex flex-col sm:flex-row">
           <div className="sm:w-56 shrink-0 bg-[color:var(--ch-surface-3)] aspect-[4/5] sm:aspect-auto sm:min-h-[260px] relative">
@@ -180,8 +180,8 @@ function ProfileCard({ profile, isOwner }: { profile: PublicProfile; isOwner: bo
       </section>
 
       {profile.bio && (
-        <section className="ch-card ch-rise p-5 md:p-7" style={{ animationDelay: "60ms" }}>
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-muted)]">About</h2>
+        <section className="ch-rise" style={{ animationDelay: "60ms" }}>
+          <h2 className="ch-section-title">About</h2>
           <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-[color:var(--ch-text)]">{profile.bio}</p>
         </section>
       )}
@@ -236,9 +236,9 @@ function ProfileStats({ slug, statsSlug }: { slug: string; statsSlug: string | n
   const label = (l: ProfileStatLine) => l.competition_name || l.team_name || "Competition";
 
   return (
-    <section className="ch-card ch-rise p-5 md:p-7 space-y-4" style={{ animationDelay: "120ms" }}>
+    <section className="ch-rise space-y-4" style={{ animationDelay: "120ms" }}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-muted)]">Stats</h2>
+        <h2 className="ch-section-title">Stats</h2>
         {statsSlug && (
           <Link href={`/player/${statsSlug}`} className="text-[13px] font-medium text-[color:var(--ch-accent)] hover:underline underline-offset-2">
             Full game log →

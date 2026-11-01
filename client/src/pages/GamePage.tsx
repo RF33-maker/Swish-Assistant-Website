@@ -1070,28 +1070,28 @@ export default function GamePage() {
 
           <div className="mt-4 md:mt-5">
             {!isGamePlayed ? (
-              <div className="space-y-4 md:space-y-6">
+              <div className="space-y-8 md:space-y-10">
                 {/* Countdown Timer */}
                 {timeLeft && (
-                  <div className="ch-card p-4 md:p-6">
-                    <h3 className="ch-eyebrow text-center mb-3 md:mb-4">
+                  <div>
+                    <h3 className="ch-section-title text-center mb-4">
                       <Clock className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
                       Countdown to Tip-Off
                     </h3>
                     <div className="grid grid-cols-4 gap-2 md:gap-4 max-w-md mx-auto">
-                      <div className="ch-tile p-2 md:p-3 text-center">
+                      <div className="text-center">
                         <div className="ch-display ch-num text-3xl md:text-5xl font-bold text-[color:var(--ch-text)]">{timeLeft.days}</div>
                         <div className="text-[10.5px] uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">Days</div>
                       </div>
-                      <div className="ch-tile p-2 md:p-3 text-center">
+                      <div className="text-center">
                         <div className="ch-display ch-num text-3xl md:text-5xl font-bold text-[color:var(--ch-text)]">{timeLeft.hours.toString().padStart(2, '0')}</div>
                         <div className="text-[10.5px] uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">Hours</div>
                       </div>
-                      <div className="ch-tile p-2 md:p-3 text-center">
+                      <div className="text-center">
                         <div className="ch-display ch-num text-3xl md:text-5xl font-bold text-[color:var(--ch-text)]">{timeLeft.minutes.toString().padStart(2, '0')}</div>
                         <div className="text-[10.5px] uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">Mins</div>
                       </div>
-                      <div className="ch-tile p-2 md:p-3 text-center">
+                      <div className="text-center">
                         <div className="ch-display ch-num text-3xl md:text-5xl font-bold text-[color:var(--ch-text)]">{timeLeft.seconds.toString().padStart(2, '0')}</div>
                         <div className="text-[10.5px] uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">Secs</div>
                       </div>
@@ -1100,14 +1100,14 @@ export default function GamePage() {
                 )}
 
                 {/* Team Form - Last 5 Games */}
-                <div className="ch-card p-4 md:p-5">
-                  <h3 className="ch-eyebrow mb-3.5 flex items-center gap-2">
-                    <TrendingUp className="w-3.5 h-3.5" />
+                <div>
+                  <h3 className="ch-section-title mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-[color:var(--ch-accent)]" />
                     Recent Form
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     {/* Home Team Form */}
-                    <div className="ch-tile p-3 md:p-4">
+                    <div>
                       <div className="flex items-center gap-2 mb-3">
                         <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
                         <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{gameData.hometeam}</span>
@@ -1134,7 +1134,7 @@ export default function GamePage() {
                     </div>
 
                     {/* Away Team Form */}
-                    <div className="ch-tile p-3 md:p-4">
+                    <div>
                       <div className="flex items-center gap-2 mb-3">
                         <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
                         <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{gameData.awayteam}</span>
@@ -1163,21 +1163,21 @@ export default function GamePage() {
                 </div>
 
                 {/* Players to Watch */}
-                <div className="ch-card p-4 md:p-5">
-                  <h3 className="ch-eyebrow mb-3.5 flex items-center gap-2">
-                    <Users className="w-3.5 h-3.5" />
+                <div>
+                  <h3 className="ch-section-title mb-4 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-[color:var(--ch-accent)]" />
                     Players to Watch
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     {/* Home Team Top Players */}
-                    <div className="space-y-2 md:space-y-3">
-                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[color:var(--ch-border)]">
+                    <div>
+                      <div className="flex items-center gap-2 pb-2 border-b border-[color:var(--ch-border-strong)]">
                         <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
                         <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{gameData.hometeam}</span>
                       </div>
                       {homeTeamRoster && homeTeamRoster.length > 0 ? (
                         homeTeamRoster.map((player, idx) => (
-                          <div key={idx} className="ch-tile p-2.5 md:p-3 flex items-center justify-between">
+                          <div key={idx} className="flex items-center justify-between py-2.5 border-b border-[color:var(--ch-border)]">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
                                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface-3)]">
@@ -1218,14 +1218,14 @@ export default function GamePage() {
                     </div>
 
                     {/* Away Team Top Players */}
-                    <div className="space-y-2 md:space-y-3">
-                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[color:var(--ch-border)]">
+                    <div>
+                      <div className="flex items-center gap-2 pb-2 border-b border-[color:var(--ch-border-strong)]">
                         <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
                         <span className="font-medium text-sm md:text-base text-[color:var(--ch-text)] truncate">{gameData.awayteam}</span>
                       </div>
                       {awayTeamRoster && awayTeamRoster.length > 0 ? (
                         awayTeamRoster.map((player, idx) => (
-                          <div key={idx} className="ch-tile p-2.5 md:p-3 flex items-center justify-between">
+                          <div key={idx} className="flex items-center justify-between py-2.5 border-b border-[color:var(--ch-border)]">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
                                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface-3)]">
@@ -1268,7 +1268,7 @@ export default function GamePage() {
                 </div>
 
                 {/* Coming Soon Notice */}
-                <div className="ch-card p-4 text-center">
+                <div className="text-center">
                   <p className="text-[color:var(--ch-text-2)] text-sm">
                     Live stats and play-by-play data will appear when the game starts.
                   </p>
@@ -1342,7 +1342,7 @@ export default function GamePage() {
                   />
                 </TabsContent>
 
-                <TabsContent value="boxscore" className="mt-0 space-y-5">
+                <TabsContent value="boxscore" className="mt-0 space-y-10">
                   {statsLoading ? (
                     <div className="space-y-4">
                       <div className="ch-skel h-48 !rounded-[14px]" />

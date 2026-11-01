@@ -178,7 +178,7 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
 
       {tab === 'profile' ? (
         <div className="space-y-4">
-          <div className="ch-card p-4 md:p-6">
+          <div>
             <div className="flex items-baseline justify-between mb-3">
               <div className="flex items-center gap-2.5">
                 <span className="ch-kicker-n" style={{ color: readableBrand.body }}>01</span>
@@ -198,7 +198,7 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
             </div>
           </div>
 
-          <div className="ch-card p-4 md:p-6">
+          <div>
             <div className="flex items-center gap-2.5 mb-3">
               <span className="ch-kicker-n" style={{ color: readableBrand.body }}>02</span>
               <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Roster</h3>
@@ -237,7 +237,7 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
             )}
           </div>
 
-          <div className="ch-card p-4 md:p-6">
+          <div>
             <div className="flex items-center gap-2.5 mb-3">
               <span className="ch-kicker-n" style={{ color: readableBrand.body }}>03</span>
               <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Game log</h3>
@@ -290,7 +290,7 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
       ) : tab === 'lineups' ? (
         <AdvancedInsights leagueId={team.league_id} teamId={team.team_id} />
       ) : (
-        <div className="ch-card p-8 text-center">
+        <div className="py-8 text-center">
           <Video className="w-12 h-12 text-gray-300 dark:text-neutral-700 mx-auto mb-3" />
           <h3 className="text-base font-semibold text-slate-800 dark:text-white mb-1">Video is on the way</h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">

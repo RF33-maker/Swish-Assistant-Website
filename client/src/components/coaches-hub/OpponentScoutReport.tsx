@@ -83,7 +83,7 @@ function Section({ n, title, subtitle, color, children, narrative }: {
   n: string; title: string; subtitle?: string; color: string; children: React.ReactNode; narrative?: string;
 }) {
   return (
-    <div className="ch-card p-4 md:p-6">
+    <div>
       <div className="flex items-center gap-2.5 mb-1">
         <span className="ch-kicker-n" style={{ color: `var(--sr-ink, ${color})` }}>{n}</span>
         <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h3>
@@ -338,7 +338,7 @@ export default function OpponentScoutReport({
         <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="py-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           No season data for {opponentName} in this competition yet.
         </div>
       </div>

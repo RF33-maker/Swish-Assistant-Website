@@ -26,7 +26,7 @@ export default function ScoreGameCard({ game, kind }: { game: ScoreGame; kind: "
   return (
     <Link
       href={`/competition/${game.league_slug}/game/${encodeURIComponent(game.game_key)}`}
-      className="block rounded-2xl border border-slate-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 py-3 active:scale-[0.99] hover:border-orange-300 dark:hover:border-neutral-600 transition"
+      className="block ch-tile ch-hover px-4 py-3 active:scale-[0.99] hover:border-orange-300 dark:hover:border-neutral-600 transition"
     >
       <div className="flex items-center justify-between gap-3 mb-2.5 text-xs">
         <span className="truncate text-slate-500 dark:text-neutral-400">{game.league_name}</span>

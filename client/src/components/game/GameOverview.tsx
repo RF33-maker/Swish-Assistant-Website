@@ -54,8 +54,8 @@ const LEADER_CATEGORIES = [
 /** A titled card on the game view. */
 export function GameSection({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`ch-card p-4 md:p-5 ${className}`}>
-      <h3 className="ch-eyebrow mb-3.5">{title}</h3>
+    <section className={`min-w-0 ${className}`}>
+      <h3 className="ch-section-title mb-4">{title}</h3>
       {children}
     </section>
   );
@@ -63,7 +63,7 @@ export function GameSection({ title, children, className = "" }: { title: string
 
 export function GameEmptyCard({ children }: { children: ReactNode }) {
   return (
-    <div className="ch-card p-8 text-center">
+    <div className="py-8 text-center">
       <p className="text-sm text-[color:var(--ch-text-2)]">{children}</p>
     </div>
   );
@@ -217,7 +217,7 @@ function LeadersCard({ homeTeam, awayTeam, homePlayers, awayPlayers, leagueId, c
           { team: homeTeam, players: homePlayers, color: colors.home },
           { team: awayTeam, players: awayPlayers, color: colors.away },
         ].map(({ team, players, color }) => (
-          <div key={team} className="ch-tile p-3 border-t-[3px]" style={{ borderTopColor: color }}>
+          <div key={team} className="border-t-[3px] pt-3" style={{ borderTopColor: color }}>
             <div className="flex items-center gap-2 mb-2.5">
               {leagueId && <TeamLogo teamName={team} leagueId={leagueId} size="xs" />}
               <span className="truncate text-sm font-semibold text-[color:var(--ch-text)]">{team}</span>
@@ -291,7 +291,7 @@ export function GameOverviewSections({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       {recap && recap.length > 0 && (
         <GameSection title="Game recap">
           <p className="text-[15px] leading-relaxed text-[color:var(--ch-text)]" data-testid="game-recap">{recap.join(" ")}</p>
@@ -300,7 +300,7 @@ export function GameOverviewSections({
       {hasTeamStats && (
         // grid-cols-1 is minmax(0, 1fr): without it a wide table (a 4-5 overtime game) stretches
         // the whole column on a phone instead of scrolling inside its own card.
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
           <QuarterTable homeTeam={homeTeam} awayTeam={awayTeam} home={home!} away={away!} leagueId={leagueId} colors={colors} events={events} />
           <GameSection title="Shooting">
             <ShootingRows home={home!} away={away!} colors={colors} />
@@ -334,7 +334,7 @@ export function TeamStatsComparison({ homeTeam, awayTeam, home, away, colors, fo
   if (forfeit) return <ForfeitCard homeTeam={homeTeam} awayTeam={awayTeam} home={home} away={away} />;
   if (!home || !away) return <GameEmptyCard>Team stats will appear when available.</GameEmptyCard>;
   return (
-    <section className="ch-card p-4 md:p-5">
+    <section>
       <div className="mb-4 flex items-center justify-between gap-3 text-sm font-semibold">
         <span className="flex min-w-0 items-center gap-2">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors.home }} />

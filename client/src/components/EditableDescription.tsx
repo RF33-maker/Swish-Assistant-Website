@@ -88,11 +88,11 @@ export function EditableDescription({
   return (
     <div className="relative group">
       {description ? (
-        <p className="text-gray-700 leading-relaxed whitespace-pre-wrap" data-testid="text-description">
+        <p className="text-[color:var(--ch-text-2)] leading-relaxed whitespace-pre-wrap" data-testid="text-description">
           {description}
         </p>
       ) : canEdit ? (
-        <p className="text-gray-400 italic" data-testid="text-no-description">
+        <p className="text-[color:var(--ch-text-2)] italic" data-testid="text-no-description">
           {placeholder}
         </p>
       ) : null}

@@ -26,7 +26,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 import { generateShotChartCardBlob, generateStatTilesCardBlob } from "@/lib/generateProfileCards";
 import ShareableCard from "@/components/ShareableCard";
-import { withAlpha } from "@/lib/colorContrast";
+import { FlatStat, StatBar } from "@/components/FlatStat";
+import { parseMinutesPlayed, playedInGame } from "@/lib/gamesPlayed";
 import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { useHeadshotUrl } from "@/components/PlayerHeadshot";
@@ -245,28 +246,6 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-// A number on the page, no box: the figure and its label are the shape.
-function FlatStat({ label, value, rank, rankColor, children }: {
-  label: string;
-  value: ReactNode;
-  rank?: string;
-  rankColor?: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="ch-display font-bold tabular-nums leading-none text-[2rem] text-[color:var(--ch-text)]">
-        {value}
-      </div>
-      <div className="mt-1.5 flex items-baseline gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--ch-text-2)]">
-        {label}
-        {rank ? <span className="normal-case tracking-normal tabular-nums" style={{ color: rankColor }}>{rank}</span> : null}
-      </div>
-      {children}
     </div>
   );
 }
@@ -511,7 +490,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     // Compute averages from the filtered game set (all, selected, or combined).
     // expandedCompIds maps selected parent league IDs → their competition IDs.
     const scopedGames = playerStats.filter(
-      (s: any) => (expandedCompIds.size === 0 || expandedCompIds.has(s.league_id)) && parseMinutesPlayed(s) > 0
+      (s: any) => (expandedCompIds.size === 0 || expandedCompIds.has(s.league_id)) && playedInGame(s)
     );
     if (scopedGames.length === 0) return;
 
@@ -696,18 +675,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     return num + "th";
   };
 
-  const parseMinutesPlayed = (stat: any): number => {
-    const minutes = stat.sminutes || stat.minutes_played;
-    if (!minutes) return 0;
-    if (typeof minutes === 'number') return minutes;
-    if (typeof minutes === 'string') {
-      const parts = minutes.split(':');
-      if (parts.length === 2) return parseInt(parts[0]) + parseInt(parts[1]) / 60;
-      return parseFloat(minutes) || 0;
-    }
-    return 0;
-  };
-
   const calculateRankings = async (leagueId: string, currentAverages: SeasonAverages, playerName: string, knownPlayerIds: string[] = []): Promise<PlayerRankings | null> => {
     try {
       // Narrow column set + pagination. A `select('*')` over an entire
@@ -747,7 +714,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
       if (!allStats || allStats.length === 0) return null;
 
-      const playedStats = allStats.filter(stat => parseMinutesPlayed(stat) > 0);
+      const playedStats = allStats.filter(stat => playedInGame(stat));
       if (playedStats.length === 0) return null;
 
       const playerTotals = new Map<string, any>();
@@ -1350,7 +1317,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         setPlayerStats(stats);
         setPlayerInfo(pInfo);
 
-        const gamesPlayed = stats.filter(stat => parseMinutesPlayed(stat) > 0);
+        const gamesPlayed = stats.filter(stat => playedInGame(stat));
 
         if (gamesPlayed.length > 0) {
           const sourceStats = gamesPlayed.length > 0 ? gamesPlayed : stats;
@@ -1701,7 +1668,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         return statLeagueId && expandedCompIds.has(statLeagueId);
       });
     }
-    return stats.filter(stat => parseMinutesPlayed(stat) > 0);
+    return stats.filter(stat => playedInGame(stat));
   }, [playerStats, expandedCompIds]);
 
   // Once the log mixes competitions (e.g. SLB and ENBL for the same club), each
@@ -1971,7 +1938,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
     const seasons: any[] = [];
     leagueGroups.forEach((stats) => {
-      const played = stats.filter((s: any) => parseMinutesPlayed(s) > 0);
+      const played = stats.filter((s: any) => playedInGame(s));
       if (played.length === 0) return;
       const gp = played.length;
       const totals = played.reduce((acc: any, g: any) => ({
@@ -2071,7 +2038,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   // "career" means career. Season highs auto-detect the most recently played
   // league/season (the same one the "Most Recent" pinned game comes from).
   const playedCareerGames = useMemo(
-    () => (playerStats as any[]).filter(s => parseMinutesPlayed(s) > 0),
+    () => (playerStats as any[]).filter(s => playedInGame(s)),
     [playerStats]
   );
   const careerHighs = useMemo(() => computeHighs(playedCareerGames), [playedCareerGames]);
@@ -2708,12 +2675,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 <div className="pp-tiles-6 grid grid-cols-3 gap-x-6 gap-y-5">
                   {shootingStats.map((stat, i) => (
                     <FlatStat key={i} label={stat.label} value={formatPercentage(stat.value)} rank={stat.rank ? getOrdinalSuffix(stat.rank) : undefined} rankColor={readablePrimary.body}>
-                      <div className="w-full mt-2 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: withAlpha(readablePrimary.accent, 0.18) }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readablePrimary.accent }}
-                        />
-                      </div>
+                      <StatBar percent={stat.value} color={readablePrimary.accent} />
                     </FlatStat>
                   ))}
                 </div>
