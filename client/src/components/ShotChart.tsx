@@ -39,6 +39,8 @@ interface ShotChartProps {
   pulseRecent?: boolean;
   /** Strips interactive chrome and forces a horizontal layout for share-card capture. */
   shareMode?: boolean;
+  /** Sits on the page under the caller's own heading: no panels and no second title. */
+  flat?: boolean;
 }
 
 export const CW = 500;
@@ -301,6 +303,7 @@ export default function ShotChart({
   compact = false,
   pulseRecent = false,
   shareMode = false,
+  flat = false,
 }: ShotChartProps) {
   const {
     showPlayerFilter = false,
@@ -590,7 +593,7 @@ export default function ShotChart({
       )}
 
       {hasFilters && (
-        <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 border border-gray-200 dark:border-neutral-700">
+        <div className={flat ? undefined : "bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 border border-gray-200 dark:border-neutral-700"}>
           <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-start md:items-center justify-between">
             <div className="flex flex-wrap gap-2 md:gap-3 w-full md:w-auto">
               {showPlayerFilter && players.length > 0 && (
@@ -713,21 +716,23 @@ export default function ShotChart({
         </div>
       )}
 
-      <div className="rounded-xl p-4 md:p-5 border bg-white border-slate-200 dark:bg-black dark:border-slate-700/50">
+      <div className={flat ? undefined : "rounded-xl p-4 md:p-5 border bg-white border-slate-200 dark:bg-black dark:border-slate-700/50"}>
         {/* Header inside the panel */}
-        <div className="flex items-baseline justify-between mb-3 md:mb-4">
-          <div>
-            <div className="text-slate-900 dark:text-white font-bold text-base md:text-lg leading-tight">Shot chart</div>
-            <div className="text-slate-500 dark:text-slate-400 text-xs md:text-sm mt-0.5 tabular-nums">
-              {makes}-{total} FG ({percentage}%)
+        {!flat && (
+          <div className="flex items-baseline justify-between mb-3 md:mb-4">
+            <div>
+              <div className="text-slate-900 dark:text-white font-bold text-base md:text-lg leading-tight">Shot chart</div>
+              <div className="text-slate-500 dark:text-slate-400 text-xs md:text-sm mt-0.5 tabular-nums">
+                {makes}-{total} FG ({percentage}%)
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
+        <div className={`flex flex-col lg:flex-row gap-4 md:gap-6 ${flat ? "lg:justify-between" : ""}`}>
           {/* Court */}
-          <div className="flex-1 min-w-0">
-            <div className="mx-auto relative" style={{ maxWidth: compact ? 420 : 560 }}>
+          <div className={flat ? "w-full min-w-0 lg:max-w-[580px]" : "flex-1 min-w-0"}>
+            <div className={`${flat ? "" : "mx-auto"} relative`} style={{ maxWidth: flat ? undefined : compact ? 420 : 560 }}>
               <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-auto">
                 <defs>
                   <filter id="shotGlowMade" x="-50%" y="-50%" width="200%" height="200%">
@@ -852,7 +857,7 @@ export default function ShotChart({
           </div>
 
           {/* Zone breakdown */}
-          <div className="lg:w-48 flex-shrink-0">
+          <div className={`${flat ? "lg:w-56" : "lg:w-48"} flex-shrink-0`}>
             {!shareMode && (
               <div className="mb-3 pb-3 border-b border-gray-200 dark:border-neutral-700">
                 <label className="flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1.5">
@@ -975,7 +980,7 @@ export default function ShotChart({
           </div>
 
           {distribution.explanation.length > 0 && (
-            <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-lg border border-gray-200 dark:border-neutral-700 p-3">
+            <div className={flat ? undefined : "bg-gray-50 dark:bg-neutral-800/60 rounded-lg border border-gray-200 dark:border-neutral-700 p-3"}>
               <h5 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">
                 What this shows
               </h5>

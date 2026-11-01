@@ -64,6 +64,11 @@ interface ShareableCardProps {
    */
   wide?: boolean;
   /**
+   * The content sits straight on the page rather than in a box, so the share
+   * button lines up with its heading instead of being inset for padding.
+   */
+  flat?: boolean;
+  /**
    * When provided, this element is what gets captured as the PNG instead of
    * the default big banner card. Use this to produce a compact card that
    * mirrors the website UI. Colors should be explicit inline styles so dark
@@ -181,6 +186,7 @@ export default function ShareableCard({
   shareCaption,
   teamLogos,
   wide,
+  flat,
   captureCard,
   generateCardBlob,
 }: ShareableCardProps) {
@@ -998,7 +1004,7 @@ export default function ShareableCard({
               setAuthOpen(true);
             }
           }}
-          className="absolute top-2 right-2 md:top-3 md:right-3 z-10 inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/90 dark:bg-neutral-800/90 border border-gray-200 dark:border-neutral-700 text-slate-600 dark:text-slate-300 hover:text-orange-600 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-all shadow-sm opacity-60 hover:opacity-100 focus:opacity-100"
+          className={`absolute ${flat ? "-top-1 right-0" : "top-2 right-2 md:top-3 md:right-3"} z-10 inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/90 dark:bg-neutral-800/90 border border-gray-200 dark:border-neutral-700 text-slate-600 dark:text-slate-300 hover:text-orange-600 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-all shadow-sm opacity-60 hover:opacity-100 focus:opacity-100`}
           aria-label={`Download ${title}`}
           title={isMember ? `Download ${title}` : "Sign in to download"}
           data-testid={`share-${slug}`}

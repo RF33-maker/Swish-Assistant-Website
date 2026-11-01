@@ -227,13 +227,13 @@ function Headshot({ url, name, off }: { url?: string | null; name: string; off?:
 }
 
 function ImpactTile({
-  label, value, decimals, rank, of, tone,
-}: { label: string; value: number | null; decimals: number; rank: number | null; of: number | null; tone: string }) {
+  label, value, decimals, rank, of, tone, boxed = false,
+}: { label: string; value: number | null; decimals: number; rank: number | null; of: number | null; tone: string; boxed?: boolean }) {
   return (
-    <div className="ch-tile px-3 py-2.5">
+    <div className={boxed ? "ch-tile px-3 py-2.5" : undefined}>
       <div className={`ch-display ch-num text-[1.75rem] font-bold leading-none ${tone}`}>{fmt(value, decimals, false, true)}</div>
       <div className="mt-1.5 flex items-baseline gap-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">{label}</span>
+        <span className={`text-[10px] font-semibold uppercase tracking-[0.1em] ${boxed ? "text-[color:var(--ch-muted)]" : "text-[color:var(--ch-text-2)]"}`}>{label}</span>
         {rank != null && (
           <span className="text-[10px] font-semibold text-[color:var(--ch-text-2)]">
             {ordinal(rank)}
@@ -248,16 +248,18 @@ function ImpactTile({
 function SplitTable({
   row, view, name, photoUrl, compact = false,
 }: { row: OnOffRow; view: View; name: string; photoUrl?: string | null; compact?: boolean }) {
-  const cell = compact ? "px-2.5 py-1.5" : "px-3 py-2";
+  const cell = compact ? "px-2.5 py-1.5" : "pr-3 py-2";
+  // On the page every column starts on the same line as the numbers above it.
+  const align = compact ? "text-center" : "text-left";
   return (
-    <div className="overflow-hidden rounded-xl border border-[color:var(--ch-border)]">
-      <table className="ch-table w-full">
+    <div className={compact ? "overflow-hidden rounded-xl border border-[color:var(--ch-border)]" : undefined}>
+      <table className={`ch-table w-full ${compact ? "" : "ch-table-flat table-fixed"}`}>
         <thead>
-          <tr className="border-b border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]">
+          <tr className={compact ? "border-b border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]" : "border-b border-[color:var(--ch-border-strong)]"}>
             <th className={`${cell} text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]`}>Stat</th>
-            <th className={`${cell} text-center`}><div className="flex justify-center"><Headshot url={photoUrl} name={name} /></div></th>
-            <th className={`${cell} text-center`}><div className="flex justify-center"><Headshot url={photoUrl} name={name} off /></div></th>
-            <th className={`${cell} text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]`}>Diff</th>
+            <th className={`${cell} ${align}`}><div className={`flex ${compact ? "justify-center" : ""}`}><Headshot url={photoUrl} name={name} /></div></th>
+            <th className={`${cell} ${align}`}><div className={`flex ${compact ? "justify-center" : ""}`}><Headshot url={photoUrl} name={name} off /></div></th>
+            <th className={`${cell} ${compact ? "text-right" : "text-left"} text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]`}>Diff</th>
           </tr>
         </thead>
         <tbody>
@@ -268,16 +270,16 @@ function SplitTable({
             return (
               <tr
                 key={m.label}
-                className={`border-t border-[color:var(--ch-border)] ${i % 2 ? "bg-[color:var(--ch-surface-2)]/60" : ""}`}
+                className={`border-t border-[color:var(--ch-border)] ${compact && i % 2 ? "bg-[color:var(--ch-surface-2)]/60" : ""}`}
               >
                 <td className={`${cell} text-[11px] font-semibold tracking-[0.08em] text-[color:var(--ch-text-2)]`}>{m.label}</td>
-                <td className={`${cell} ch-num text-center ${compact ? "text-[13px]" : "text-[15px]"} font-semibold text-[color:var(--ch-text)]`}>
+                <td className={`${cell} ch-num ${align} ${compact ? "text-[13px]" : "text-[15px]"} font-semibold text-[color:var(--ch-text)]`}>
                   {fmt(on, m.decimals, m.pct, m.signed)}
                 </td>
-                <td className={`${cell} ch-num text-center ${compact ? "text-[13px]" : "text-[15px]"} font-semibold text-[color:var(--ch-text)]`}>
+                <td className={`${cell} ch-num ${align} ${compact ? "text-[13px]" : "text-[15px]"} font-semibold text-[color:var(--ch-text)]`}>
                   {fmt(off, m.decimals, m.pct, m.signed)}
                 </td>
-                <td className={`${cell} ch-num text-right ${compact ? "text-[13px]" : "text-[15px]"} font-bold ${diffTone(diff, m, view)}`}>
+                <td className={`${cell} ch-num ${compact ? "text-right" : "text-left"} ${compact ? "text-[13px]" : "text-[15px]"} font-bold ${diffTone(diff, m, view)}`}>
                   {m.noDiff ? "—" : fmt(diff, m.decimals, m.pct, true)}
                 </td>
               </tr>
@@ -345,12 +347,12 @@ export function PlayerPerformanceSplits({
   const row = rows?.find((r) => r.league_id === pickedLeagueId) ?? rows?.find((r) => r.qualified) ?? rows?.[0] ?? null;
 
   const shell = (body: JSX.Element) => (
-    <div className="ch-card p-4 md:p-5" data-testid="player-performance-splits-card">
-      {/* pr-8 keeps the competition picker clear of the share button in the corner. */}
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 pr-8">
+    <div data-testid="player-performance-splits-card">
+      {/* pr-10 keeps the competition picker clear of the share button in the corner. */}
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-2 pr-10">
         <div>
-          <h3 className="ch-display text-xl font-bold uppercase tracking-[0.02em] text-[color:var(--ch-text)]">On/Off Impact</h3>
-          <p className="text-xs text-[color:var(--ch-muted)]">
+          <h3 className="ch-section-title">On/Off Impact</h3>
+          <p className="mt-1.5 text-xs text-[color:var(--ch-text-2)]">
             {row?.competition
               ? `${row.competition} · ${row.games} game${row.games === 1 ? "" : "s"}`
               : "How his team performs with him on the court and off it"}
@@ -402,15 +404,15 @@ export function PlayerPerformanceSplits({
       ? "text-[color:var(--ch-win)]"
       : "text-[color:var(--ch-loss)]";
 
-  const tiles = (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-      <ImpactTile label="Raw +/-" value={row.plus_minus_diff} decimals={0} rank={row.plus_minus_diff_rank} of={of}
+  const tiles = (boxed: boolean) => (
+    <div className={`grid grid-cols-2 md:grid-cols-4 ${boxed ? "gap-2" : "gap-y-5"}`}>
+      <ImpactTile boxed={boxed} label="Raw +/-" value={row.plus_minus_diff} decimals={0} rank={row.plus_minus_diff_rank} of={of}
         tone={toneFor(row.plus_minus_diff, true, 0)} />
-      <ImpactTile label="ORTG +/-" value={row.ortg_diff} decimals={1} rank={row.ortg_diff_rank} of={of}
+      <ImpactTile boxed={boxed} label="ORTG +/-" value={row.ortg_diff} decimals={1} rank={row.ortg_diff_rank} of={of}
         tone={toneFor(row.ortg_diff, true, 2)} />
-      <ImpactTile label="DRTG +/-" value={row.drtg_diff} decimals={1} rank={row.drtg_diff_rank} of={of}
+      <ImpactTile boxed={boxed} label="DRTG +/-" value={row.drtg_diff} decimals={1} rank={row.drtg_diff_rank} of={of}
         tone={toneFor(row.drtg_diff, false, 2)} />
-      <ImpactTile label="Net +/-" value={row.nrtg_diff} decimals={1} rank={row.nrtg_diff_rank} of={of}
+      <ImpactTile boxed={boxed} label="Net +/-" value={row.nrtg_diff} decimals={1} rank={row.nrtg_diff_rank} of={of}
         tone={toneFor(row.nrtg_diff, true, 2)} />
     </div>
   );
@@ -454,7 +456,7 @@ export function PlayerPerformanceSplits({
     <div className="flex flex-col" style={{ gap: 14 }}>
       <span className="ch-display text-2xl font-bold uppercase">On/Off Impact</span>
       {row.competition && <span className="text-sm opacity-70">{row.competition}</span>}
-      {tiles}
+      {tiles(true)}
       <SplitTable row={row} view="own" name={playerName} photoUrl={playerPhotoUrl} compact />
       {footnote}
     </div>
@@ -467,17 +469,18 @@ export function PlayerPerformanceSplits({
       player={{ name: playerName, team: playerTeam, photoUrl: playerPhotoUrl, primaryColor, teamLogoUrl }}
       shareContent={shareContent}
       wide
+      flat
     >
       {shell(
-        <div className="space-y-3">
-          {tiles}
+        <div className="space-y-5">
+          {tiles(false)}
           {sampleNote && (
-            <div className="flex items-start gap-2 rounded-lg bg-[color:var(--ch-surface-2)] px-3 py-2 text-xs text-[color:var(--ch-text-2)]">
+            <div className="flex items-start gap-2 text-xs text-[color:var(--ch-text-2)]">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{sampleNote}</span>
             </div>
           )}
-          <div className="flex justify-center">{viewToggle}</div>
+          <div>{viewToggle}</div>
           <SplitTable row={row} view={view} name={playerName} photoUrl={playerPhotoUrl} />
           <button
             type="button"

@@ -477,6 +477,18 @@
   color: var(--ch-muted);
 }
 
+/* Section heading on a page with no boxes: one size everywhere, so headings
+   sitting side by side share a baseline. */
+.sa-pro .ch-section-title {
+  font-family: 'Barlow Condensed', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  text-transform: uppercase;
+  color: var(--ch-text);
+}
+
 /* Scouting report, branded to the coach's club. OpponentScoutReport sets the
    --sr-* colours inline (brandVars in lib/brandColor.ts); the ink is the club
    colour made readable on this theme's surface, so a yellow or near-black club
@@ -676,6 +688,9 @@
   text-transform: uppercase;
   color: var(--ch-muted);
 }
+/* Table sitting on the page: its rules are the edge, so the text lines up with the headings above */
+.sa-pro .ch-table-flat th:first-child, .sa-pro .ch-table-flat td:first-child { padding-left: 0; }
+.sa-pro .ch-table-flat th:last-child, .sa-pro .ch-table-flat td:last-child { padding-right: 0; }
 .sa-pro .ch-table tbody tr { transition: background .12s ease; }
 .sa-pro .ch-table tbody tr:hover { background: var(--ch-surface-2); }
 
@@ -920,17 +935,23 @@
 .pp-overview { container-type: inline-size; }
 .pp-overview-grid {
   display: grid;
-  gap: 1.25rem;
+  gap: 2.5rem;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
 }
+.pp-side { display: flex; flex-direction: column; gap: 2.5rem; }
 @container (min-width: 560px) {
   .pp-overview .pp-tiles-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 @container (min-width: 880px) {
-  .pp-overview-grid { grid-template-columns: auto minmax(0, 1fr); }
+  /* Both columns run the same height: headings on one line, the first stats
+     level with the top of the cards, the last section ending with them. One
+     accolade here so that holds however many a player has. */
+  .pp-overview-grid { grid-template-columns: auto minmax(0, 1fr); align-items: stretch; }
   .pp-overview-grid > :only-child { grid-column: 1 / -1; }
   .pp-overview-grid > :not(:only-child) .pp-tiles-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pp-overview-grid > :not(:only-child).pp-side-fill { justify-content: space-between; gap: 1.5rem; }
+  .pp-overview-grid > :not(:only-child) .pp-accolades > div > :nth-child(n + 2) { display: none; }
 }
 
 /* Collectible accolade cards (components/cards/AccoladeCard): a card that
