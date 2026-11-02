@@ -5903,9 +5903,9 @@ export default function LeaguePage() {
                     // Common card renderer used by all 4 (subject × category) variants.
                     // Minimum attempt thresholds for percentage leaderboards —
                     // must match the constants in league-leaders/[slug].tsx.
-                    const MIN_FGA_INLINE = 12;
-                    const MIN_3PA_INLINE = 6;
-                    const MIN_FTA_INLINE = 8;
+                    const MIN_FGA_INLINE = 18;
+                    const MIN_3PA_INLINE = 10;
+                    const MIN_FTA_INLINE = 12;
 
                     const renderCard = (opts: {
                       title: string;
