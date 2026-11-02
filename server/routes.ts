@@ -5693,7 +5693,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // /sitemap.xml, /sitemap/N.xml and /api/public/team-page/:key — built from
+  // /sitemap.xml, /sitemap/<section>.xml and /api/public/team-page/:key — built from
   // the shared SEO index (see seoIndex.ts).
   registerSeoRoutes(app);
 
