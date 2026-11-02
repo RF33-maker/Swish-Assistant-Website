@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import { TeamLogo } from "@/components/TeamLogo";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
@@ -184,6 +184,67 @@ function Watermark({ teamName, leagueId, side }: { teamName: string; leagueId?: 
   );
 }
 
+const COUNT_UP_MS = 700;
+
+/**
+ * The number a live score shows: it runs up (or down, after a correction) to
+ * each new total instead of jumping, with a small pop as it lands. The first
+ * render shows the real total straight away, and reduced-motion gets no tween.
+ */
+function useCountUp(target: number) {
+  const [shown, setShown] = useState(target);
+  const [pop, setPop] = useState(0);
+  const fromRef = useRef(target);
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    if (from === target) return;
+    const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (still) {
+      fromRef.current = target;
+      setShown(target);
+      return;
+    }
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / COUNT_UP_MS);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const value = Math.round(from + (target - from) * eased);
+      setShown(value);
+      if (t < 1) {
+        frameRef.current = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = target;
+        setPop((n) => n + 1);
+      }
+    };
+    frameRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (frameRef.current != null) cancelAnimationFrame(frameRef.current);
+      // Interrupted by another change: carry on from where the number got to.
+      fromRef.current = shown;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  return { shown, pop };
+}
+
+function Score({ value, dim, className, testId }: { value: number; dim: boolean; className: string; testId: string }) {
+  const { shown, pop } = useCountUp(value);
+  return (
+    <span
+      key={pop}
+      className={`${className} ${pop > 0 ? "ch-score-pop" : ""}`}
+      style={{ opacity: dim ? 0.75 : 1 }}
+      data-testid={testId}
+    >
+      {shown}
+    </span>
+  );
+}
+
 export default function GameScoreHero({
   leagueId, homeTeam, awayTeam, homeScore, awayScore, state, liveLabel, center,
   homeSub, awaySub, homeExtra, awayExtra, homeHref, awayHref, meta, badges, footer, colors: providedColors,
@@ -232,9 +293,9 @@ export default function GameScoreHero({
           <div className={`flex flex-col items-center ${center ? "col-span-2 row-start-2 sm:col-span-1 sm:row-start-auto" : ""}`}>
             {center ?? (hasScore ? (
               <div className="flex items-center gap-2.5 sm:gap-4 md:gap-6">
-                <span className={scoreClass} style={{ opacity: homeLost ? 0.75 : 1 }} data-testid="home-score">{homeScore}</span>
+                <Score value={homeScore as number} dim={homeLost} className={scoreClass} testId="home-score" />
                 <span aria-hidden="true" className="h-8 sm:h-12 md:h-16 w-px bg-white/30" />
-                <span className={scoreClass} style={{ opacity: awayLost ? 0.75 : 1 }} data-testid="away-score">{awayScore}</span>
+                <Score value={awayScore as number} dim={awayLost} className={scoreClass} testId="away-score" />
               </div>
             ) : (
               <span className="ch-display font-bold uppercase leading-none text-white/90 text-[2.25rem] md:text-[3.5rem]">VS</span>

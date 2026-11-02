@@ -1045,3 +1045,14 @@
   .acc-flip-inner { transition: none; }
   .acc-foil, .acc-sheen { animation: none; }
 }
+
+/* ── Live score: the number pops once it has counted up to a new total ───── */
+@keyframes ch-score-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.sa-pro .ch-score-pop { display: inline-block; animation: ch-score-pop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .sa-pro .ch-score-pop { animation: none; }
+}
