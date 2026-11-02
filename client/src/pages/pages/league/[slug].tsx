@@ -19,6 +19,7 @@ import GameDetailModal from "@/components/GameDetailModal";
 
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
+import LeagueStandingsTable, { buildTeamForm, EMPTY_TEAM_FORM, StandingsLegend } from "@/components/league/LeagueStandingsTable";
 import { CupBracket, useCupBracketRows } from "@/components/league/CupBracket";
 import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
@@ -711,7 +712,6 @@ export default function LeaguePage() {
   // Trophy's "North"/"Midlands"/"South 1"/"South 2", not just two), each
   // shown as its own stacked table instead of a two-way toggle.
   const [groupedStandings, setGroupedStandings] = useState<{ name: string; standings: any[] }[]>([]);
-  const [previousRankings, setPreviousRankings] = useState<Record<string, number>>({});
   const [hasPools, setHasPools] = useState(false); // Track if league has pools
   const [viewMode, setViewMode] = useState<'standings' | 'bracket'>('standings'); // Toggle between standings and bracket
   const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming');
@@ -3372,7 +3372,7 @@ export default function LeaguePage() {
 
         const { data: gameResults, error: gameResultsError } = await db
           .from("v_game_results")
-          .select("home_team, away_team, home_score, away_score, pool")
+          .select("home_team, away_team, home_score, away_score, pool, match_time")
           .eq("league_id", leagueId)
           .or(EXCLUDE_LIVE_GAMES);
 
@@ -3413,6 +3413,7 @@ export default function LeaguePage() {
         };
 
         const buildStatsFromGames = (games: any[], teamNames?: Map<string, string>) => {
+          const teamForm = buildTeamForm(games, normalizeDynamic);
           const statsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, originalName: string }> = {};
 
           const ensureTeam = (normalized: string, original: string) => {
@@ -3493,7 +3494,7 @@ export default function LeaguePage() {
               if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
               return b.avgPoints - a.avgPoints;
             })
-            .map((team, index) => ({ ...team, rank: index + 1, movement: 'same' }));
+            .map((team, index) => ({ ...team, ...(teamForm.get(team.team) ?? EMPTY_TEAM_FORM), rank: index + 1 }));
         };
 
         const teamNameMap = new Map<string, string>();
@@ -3560,7 +3561,7 @@ export default function LeaguePage() {
 
         const { data: gameResults, error: gameResultsError } = await db
           .from("v_game_results")
-          .select("home_team, away_team, home_score, away_score")
+          .select("home_team, away_team, home_score, away_score, match_time")
           .eq("league_id", leagueId)
           .or(EXCLUDE_LIVE_GAMES);
 
@@ -3671,6 +3672,8 @@ export default function LeaguePage() {
           }
         });
 
+        const teamForm = buildTeamForm(gameResults || [], normalizeDynamic2);
+
         // Filter out zero-game teams (e.g. D1 ghost teams that leaked in via brand league_id)
         const finalStandings = Array.from(mergedStandings.values())
           .filter(t => t.games > 0)
@@ -3678,7 +3681,8 @@ export default function LeaguePage() {
             if (b.winPct !== a.winPct) return b.winPct - a.winPct;
             if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
             return b.avgPoints - a.avgPoints;
-          });
+          })
+          .map(team => ({ ...team, ...(teamForm.get(team.team) ?? EMPTY_TEAM_FORM) }));
 
         setStandings(finalStandings);
       } catch (error) {
@@ -3774,7 +3778,7 @@ export default function LeaguePage() {
       setStandings(standingsArray);
     };
 
-    // Calculate pool-based standings with movement tracking
+    // Calculate pool-based standings
     const calculatePoolStandings = async (leagueId: string, parentLeagueId?: string) => {
       try {
         setIsLoadingStandings(true);
@@ -3882,7 +3886,7 @@ export default function LeaguePage() {
           });
         }
 
-        // Convert to standings format with movement tracking
+        // Convert to standings format
         const formatStandings = (teams: any[], poolFilter?: string) => {
           const filtered = poolFilter 
             ? teams.filter(t => t.pool === poolFilter && t.games > 0)
@@ -3894,18 +3898,7 @@ export default function LeaguePage() {
               if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
               return b.avgPoints - a.avgPoints;
             })
-            .map((team, index) => {
-              const currentRank = index + 1;
-              const previousRank = previousRankings[team.team];
-              let movement = 'same';
-              
-              if (previousRank !== undefined) {
-                if (currentRank < previousRank) movement = 'up';
-                else if (currentRank > previousRank) movement = 'down';
-              }
-              
-              return { ...team, rank: currentRank, movement };
-            });
+            .map((team, index) => ({ ...team, rank: index + 1 }));
         };
 
         const allTeamsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
@@ -3950,7 +3943,9 @@ export default function LeaguePage() {
           }
         });
 
-        const mergedTeamsArray = Array.from(mergedTeams.values());
+        const teamForm = buildTeamForm(scheduleData || [], normalizeAndMapTeamName);
+        const mergedTeamsArray = Array.from(mergedTeams.values())
+          .map(team => ({ ...team, ...(teamForm.get(team.team) ?? EMPTY_TEAM_FORM) }));
 
         // Set standings for each view
         const fullStandings = formatStandings(mergedTeamsArray);
@@ -3979,13 +3974,6 @@ export default function LeaguePage() {
         // Check if pools exist (any team has pool data)
         const poolsExist = groups.length > 0 || poolAStandings.length > 0 || poolBStandings.length > 0;
         setHasPools(poolsExist);
-
-        // Update previous rankings for next calculation
-        const newRankings: Record<string, number> = {};
-        fullStandings.forEach((team, index) => {
-          newRankings[team.team] = index + 1;
-        });
-        setPreviousRankings(newRankings);
 
       } catch (error) {
         console.error("Error calculating pool standings:", error);
@@ -4574,61 +4562,8 @@ export default function LeaguePage() {
                       </div>
                     ) : (() => {
                       const renderParentStandingsTable = (rows: any[]) => (
-                        <div className="overflow-x-auto -mx-4 md:mx-0 mb-4">
-                          <table className="ch-table w-full text-sm min-w-[600px]">
-                            <thead>
-                              <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
-                                <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
-                                <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
-                                <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
-                                <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
-                                <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
-                                <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
-                                <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
-                                <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
-                                <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {rows.map((team: any, index: number) => (
-                                <tr
-                                  key={`${team.team}-${index}`}
-                                  className="border-b border-gray-100 dark:border-neutral-700 hover:bg-[color:var(--ch-surface-2)] transition-colors group"
-                                >
-                                  <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-[color:var(--ch-surface-2)] z-10 transition-colors">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
-                                      <TeamLogo
-                                        teamName={team.originalName || team.team}
-                                        leagueId={league?.league_id}
-                                        size="sm"
-                                        logoUrl={getTeamLogoUrl(team.originalName || team.team)}
-                                      />
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
-                                    <EntityLink href={teamPath(team.originalName || team.team, slug)} className="truncate hover:underline underline-offset-2">{team.team}</EntityLink>
-                                  </td>
-                                  <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
-                                  <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
-                                  <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
-                                  <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
-                                  <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
-                                  <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                                    {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
-                                  </td>
-                                  <td className="py-3 px-3 text-center">
-                                    {team.movement === 'up' && <span className="text-green-600 font-bold text-sm">▲</span>}
-                                    {team.movement === 'down' && <span className="text-red-600 font-bold text-sm">▼</span>}
-                                    {team.movement === 'same' && <span className="text-gray-400 text-sm">▬</span>}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                          {rows.length === 0 && (
-                            <div className="text-center py-4 text-gray-500 text-sm">No standings data available</div>
-                          )}
+                        <div className="mb-4">
+                          <LeagueStandingsTable rows={rows} leagueId={league?.league_id} slug={slug} getLogoUrl={getTeamLogoUrl} />
                         </div>
                       );
 
@@ -4673,71 +4608,7 @@ export default function LeaguePage() {
                 {/* Non-parent League Standings */}
                 {!isParentLeague && (() => {
                   const renderStandingsTable = (rows: any[]) => (
-                    <div className="overflow-x-auto -mx-4 md:mx-0">
-                      <table className="ch-table w-full text-sm min-w-[600px]">
-                        <thead>
-                          <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
-                            <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
-                            <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
-                            <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
-                            <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
-                            <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
-                            <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
-                            <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
-                            <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
-                            <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map((team, index) => (
-                            <tr
-                              key={`${team.team}-${index}`}
-                              className="border-b border-gray-100 dark:border-neutral-700 hover:bg-[color:var(--ch-surface-2)] transition-colors group"
-                            >
-                              <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-[color:var(--ch-surface-2)] z-10 transition-colors">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
-                                  <TeamLogo
-                                    teamName={team.originalName || team.team}
-                                    leagueId={league?.league_id}
-                                    size="sm"
-                                    logoUrl={getTeamLogoUrl(team.originalName || team.team)}
-                                  />
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
-                                <EntityLink href={teamPath(team.originalName || team.team, slug)} className="truncate hover:underline underline-offset-2">{team.team}</EntityLink>
-                              </td>
-                              <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
-                              <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
-                              <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
-                              <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
-                              <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
-                              <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                                {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
-                              </td>
-                              <td className="py-3 px-3 text-center">
-                                {team.movement === 'up' && (
-                                  <span className="text-green-600 font-bold text-sm">▲</span>
-                                )}
-                                {team.movement === 'down' && (
-                                  <span className="text-red-600 font-bold text-sm">▼</span>
-                                )}
-                                {team.movement === 'same' && (
-                                  <span className="text-gray-400 text-sm">▬</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-
-                      {rows.length === 0 && (
-                        <div className="text-center py-8 text-gray-500">
-                          No standings data available
-                        </div>
-                      )}
-                    </div>
+                    <LeagueStandingsTable rows={rows} leagueId={league?.league_id} slug={slug} getLogoUrl={getTeamLogoUrl} />
                   );
 
                   if (isLoadingStandings) {
@@ -6814,9 +6685,9 @@ export default function LeaguePage() {
                         <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">#</th>
                         <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Team</th>
                         <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Record</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Win%</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PA</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PCT</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PPG</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">OPPG</th>
                         <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Diff</th>
                       </tr>
                     </thead>
@@ -6832,64 +6703,9 @@ export default function LeaguePage() {
                   ? standings.filter((s: any) => s.ageGroup === filterAgeGroup)
                   : standings).filter((s: any) => s.games > 0);
                 return overviewStandings.length > 0 ? (
-                <div className="overflow-x-auto -mx-4 md:mx-0">
-                  <table className="ch-table w-full text-sm min-w-[600px]">
-                    <thead>
-                      <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
-                        <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12 sticky left-0 bg-white dark:bg-neutral-900 z-10">#</th>
-                        <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 max-w-[180px] sticky left-12 md:static bg-white dark:bg-neutral-900 z-10">Team</th>
-                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">W</th>
-                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">L</th>
-                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
-                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
-                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
-                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {overviewStandings.map((team: any, index: number) => {
-                        const rowBg = index < 3 
-                          ? 'bg-green-50 dark:bg-green-900/20' 
-                          : index >= standings.length - 2 
-                            ? 'bg-red-50 dark:bg-red-900/20' 
-                            : 'bg-white dark:bg-neutral-900';
-                        const stickyBg = index < 3 
-                          ? 'bg-green-50 dark:bg-[#0d2818]' 
-                          : index >= standings.length - 2 
-                            ? 'bg-red-50 dark:bg-[#2a1215]' 
-                            : 'bg-white dark:bg-neutral-900';
-                        return (
-                        <tr 
-                          key={team.team} 
-                          className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-[color:var(--ch-surface-2)] transition-colors ${rowBg}`}
-                        >
-                          <td className={`py-3 px-3 font-medium text-slate-600 dark:text-slate-400 sticky left-0 z-10 ${stickyBg}`}>{index + 1}</td>
-                          <td className={`py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[180px] sticky left-12 md:static z-10 ${stickyBg}`}>
-                            <div className="flex items-center gap-2">
-                              <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" logoUrl={getTeamLogoUrl(team.team)} />
-                              <EntityLink href={teamPath((team as { team: string }).team, slug)} className="truncate hover:underline underline-offset-2">{team.team}</EntityLink>
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
-                          <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
-                          <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
-                          <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
-                          <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
-                          <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
-                        </tr>
-                      );})}
-                    </tbody>
-                  </table>
-                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-neutral-700 text-xs text-slate-500 dark:text-slate-400">
-                    <div className="flex gap-4 flex-wrap">
-                      <span><span className="font-semibold">W</span> = Wins</span>
-                      <span><span className="font-semibold">L</span> = Losses</span>
-                      <span><span className="font-semibold">Win%</span> = Win Percentage</span>
-                      <span><span className="font-semibold">PF</span> = Points For</span>
-                      <span><span className="font-semibold">PA</span> = Points Against</span>
-                      <span><span className="font-semibold">Diff</span> = Point Differential</span>
-                    </div>
-                  </div>
+                <div>
+                  <LeagueStandingsTable rows={overviewStandings.map((team: any, index: number) => ({ ...team, rank: index + 1 }))} leagueId={league?.league_id} slug={slug} getLogoUrl={getTeamLogoUrl} />
+                  <StandingsLegend />
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
