@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from '@/hooks/use-toast';
-import LeagueChatbot from '@/components/LeagueChatbot';
+import AskSwishPanel from '@/components/ask-swish/AskSwishPanel';
+import { useAskScope } from '@/components/ask-swish/AskSwishProvider';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
   FileText,
@@ -179,6 +180,7 @@ export default function UnifiedScoutingEditor({
 }: UnifiedScoutingEditorProps) {
   const { user } = useAuth();
   const leagueId = leagueContext?.leagueId ?? null;
+  useAskScope(leagueContext ? { leagueId: leagueContext.leagueId, leagueName: leagueContext.leagueName } : null, 'coaches-hub');
   const [activeTab, setActiveTab] = useState('blocks');
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -762,22 +764,20 @@ export default function UnifiedScoutingEditor({
                       <p className="text-xs text-gray-500">Get intelligent insights and content suggestions</p>
                     </div>
                     {leagueContext ? (
-                      <div className="h-full">
-                        <LeagueChatbot
-                          leagueId={leagueContext.leagueId}
-                          leagueName={leagueContext.leagueName}
-                          onResponseReceived={(content) => {
+                      <div className="h-[600px] rounded-xl border border-gray-200 overflow-hidden">
+                        <AskSwishPanel
+                          autoFocus={false}
+                          onAnswer={(content) => {
                             if (editor && onChatInsert) {
                               editor.chain().focus().insertContent(`<p>${content}</p>`).run();
                               onChatInsert(content);
                             }
                             // Also try to parse as scouting report data
                             const parsed = safelyParseReport(content);
-                            if (parsed) { 
-                              onReportDataChange?.(parsed); 
+                            if (parsed) {
+                              onReportDataChange?.(parsed);
                             }
                           }}
-                          isPanelMode={true}
                         />
                       </div>
                     ) : (
@@ -916,18 +916,18 @@ export default function UnifiedScoutingEditor({
 
                   <TabsContent value="assistant">
                     {leagueContext ? (
-                      <LeagueChatbot
-                        leagueId={leagueContext.leagueId}
-                        leagueName={leagueContext.leagueName}
-                        onResponseReceived={(content) => {
-                          if (editor && onChatInsert) {
-                            editor.chain().focus().insertContent(`<p>${content}</p>`).run();
-                            onChatInsert(content);
-                          }
-                          setShowMobileMenu(false);
-                        }}
-                        isPanelMode={true}
-                      />
+                      <div className="h-[70vh] rounded-xl border border-gray-200 overflow-hidden">
+                        <AskSwishPanel
+                          autoFocus={false}
+                          onAnswer={(content) => {
+                            if (editor && onChatInsert) {
+                              editor.chain().focus().insertContent(`<p>${content}</p>`).run();
+                              onChatInsert(content);
+                            }
+                            setShowMobileMenu(false);
+                          }}
+                        />
+                      </div>
                     ) : (
                       <Card>
                         <CardContent className="p-6 text-center">

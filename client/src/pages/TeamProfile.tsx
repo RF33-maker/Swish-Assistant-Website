@@ -7,6 +7,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import React from "react";
 import { EditableDescription } from "@/components/EditableDescription";
 import { useAuth } from "@/hooks/use-auth";
+import { useAskScope } from "@/components/ask-swish/AskSwishProvider";
 import { Helmet } from "react-helmet-async";
 import { gamePath, teamPath, teamSeoDescription, teamSeoTitle } from "@shared/seo";
 import { clubSlug } from "@shared/teamIdentity";
@@ -436,6 +437,13 @@ export default function TeamProfile() {
   const leagueSlug = competitionSlug || legacyLeagueSlug || pageCompetition?.slug;
   const [location, navigate] = useLocation();
   const [team, setTeam] = useState<Team | null>(null);
+  // Ask Swish answers about this team by default while the page is open.
+  useAskScope(team?.name ? {
+    teamName: team.name,
+    leagueId: (team as any)?.league?.league_id ?? null,
+    leagueName: (team as any)?.league?.name ?? null,
+    leagueSlug: leagueSlug ?? null,
+  } : null);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
   const [upcomingGames, setUpcomingGames] = useState<UpcomingGame[]>([]);
   const [loading, setLoading] = useState(true);

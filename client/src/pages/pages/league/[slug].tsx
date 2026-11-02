@@ -17,7 +17,7 @@ import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
 import GameDetailModal from "@/components/GameDetailModal";
 
-import LeagueChatbot from "@/components/LeagueChatbot";
+import { useAskScope } from "@/components/ask-swish/AskSwishProvider";
 import { TeamLogo } from "@/components/TeamLogo";
 import LeagueStandingsTable, { buildTeamForm, EMPTY_TEAM_FORM, StandingsLegend } from "@/components/league/LeagueStandingsTable";
 import { CupBracket, useCupBracketRows } from "@/components/league/CupBracket";
@@ -591,6 +591,8 @@ export default function LeaguePage() {
     const [location, navigate] = useLocation();
     // Site search now lives in the shared SiteHeader.
     const [league, setLeague] = useState(null);
+    // Ask Swish answers about this competition by default while the page is open.
+    useAskScope((league as any)?.league_id ? { leagueId: (league as any).league_id, leagueName: (league as any).name ?? null, leagueSlug: slug ?? null } : null);
     // A knockout cup has a saved bracket; every other competition gets an empty list and no Bracket tab.
     const { data: cupBracketRows = [] } = useCupBracketRows((league as any)?.league_id);
     // A knockout cup is decided by the bracket, not a table, so it has no standings anywhere.
@@ -6981,15 +6983,6 @@ export default function LeaguePage() {
           />
         )}
 
-        {/* Floating AI assistant widget — fixed bottom-right, always accessible */}
-        {league?.league_id && (
-          <LeagueChatbot
-            isFloatingWidget
-            leagueId={league.league_id}
-            leagueName={league.name || 'League'}
-            leagueSlug={slug}
-          />
-        )}
         </div>
       </div>
      );

@@ -20,7 +20,7 @@ import CoachTeamBanner from '@/components/coaches-hub/CoachTeamBanner';
 import AdminTeamPicker, { AdminOpponentPicker } from '@/components/coaches-hub/AdminTeamPicker';
 import ManageBilling from '@/components/coaches-hub/ManageBilling';
 import { findCoachTeam, nextFixtureFor, opponentIn } from '@/lib/coachTeam';
-import LeagueChatbot from '@/components/LeagueChatbot';
+import { useAskScope, useAskSwish } from '@/components/ask-swish/AskSwishProvider';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, Search, User, Calendar, Trophy, X, ChevronDown, Check, Lock, LayoutDashboard, LayoutGrid, ArrowLeftRight, ListOrdered, LineChart, ClipboardList, Route, Sparkles, Shield, Upload, ArrowUpRight, LogOut, type LucideIcon } from 'lucide-react';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
@@ -246,6 +246,9 @@ export default function CoachesHub() {
   const { query: search, setQuery: setSearch, suggestions, handleSelect: handleSelectSearch, handleSubmit: handleSubmitSearch } = useGlobalSearch();
   const [leagues, setLeagues] = useState<any[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<any>(null);
+  // The hub's assistant is Ask Swish with the play-by-play and lineup tools on.
+  const { open: openAskSwish } = useAskSwish();
+  useAskScope(selectedLeague?.league_id ? { leagueId: selectedLeague.league_id, leagueName: selectedLeague.name ?? null, leagueSlug: selectedLeague.slug ?? null } : null, 'coaches-hub');
   // The coach's own team name — resolved alongside their league in
   // fetchUserLeagues, purely for a "Coaching {team}" label in the UI.
   const [coachTeamName, setCoachTeamName] = useState<string | null>(null);
@@ -254,7 +257,6 @@ export default function CoachesHub() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredLeagues, setFilteredLeagues] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<HubTab>('overview');
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [leaguePickerOpen, setLeaguePickerOpen] = useState(false);
   // Deep-dive drill-in — set from a Rankings/roster row click, cleared by the
   // detail view's own back button or a league switch. Lives above the tab
@@ -1682,7 +1684,7 @@ export default function CoachesHub() {
       {selectedLeague && (
         <>
           <button
-            onClick={() => setIsAssistantOpen(true)}
+            onClick={() => openAskSwish()}
             className="fixed right-4 md:right-6 bottom-5 md:bottom-6 z-40 flex items-center gap-2 h-12 pl-3.5 pr-4 md:pr-5 rounded-full bg-[color:var(--ch-text)] text-[color:var(--ch-surface)] shadow-[0_12px_32px_-8px_rgba(0,0,0,0.45)] ring-1 ring-white/10 hover:scale-[1.03] active:scale-[0.99] transition-transform"
             aria-label="Open League Assistant"
           >
@@ -1692,46 +1694,6 @@ export default function CoachesHub() {
             <span className="text-[13px] font-semibold hidden sm:inline">League Assistant</span>
           </button>
 
-          {isAssistantOpen && (
-            <div className="fixed inset-0 z-50">
-              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] animate-[ch-fade_.2s_ease-out]" onClick={() => setIsAssistantOpen(false)} />
-              <div className="absolute right-0 top-0 bottom-0 w-full sm:w-[460px] flex flex-col bg-[color:var(--ch-bg)] border-l border-[color:var(--ch-border)] shadow-2xl animate-[ch-slide_.28s_cubic-bezier(.2,.7,.2,1)]">
-                {/* LeagueChatbot's own panel-mode header already shows the icon/title,
-                    so this just adds a close button above it rather than a second header. */}
-                <div className="flex items-center justify-between px-4 h-12 border-b border-[color:var(--ch-border)] shrink-0">
-                  <span className="ch-eyebrow flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" style={{ color: readableBrand }} /> {selectedLeague.name}
-                  </span>
-                  <button
-                    onClick={() => setIsAssistantOpen(false)}
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)] hover:bg-[color:var(--ch-surface-3)] transition-colors"
-                    aria-label="Close League Assistant"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex-1 overflow-hidden p-2">
-                  <LeagueChatbot
-                    leagueId={selectedLeague.league_id}
-                    leagueName={selectedLeague.name}
-                    onResponseReceived={(response: string) => {
-                      setChatbotResponse(response);
-                      const parsed = safelyParseReport(response);
-                      if (parsed) {
-                        setReportData(parsed);
-                        setParseError(null);
-                      } else {
-                        setReportData(null);
-                        setParseError("Could not parse a valid report JSON.");
-                      }
-                    }}
-                    isPanelMode={true}
-                    brandColor={brandColor}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
