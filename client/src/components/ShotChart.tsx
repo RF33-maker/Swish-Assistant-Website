@@ -39,7 +39,7 @@ interface ShotChartProps {
   pulseRecent?: boolean;
   /** Strips interactive chrome and forces a horizontal layout for share-card capture. */
   shareMode?: boolean;
-  /** Sits on the page under the caller's own heading: no panels and no second title. */
+  /** Sits on the page under the caller's own heading: no panels and no second title. The default; pass false for the boxed look. */
   flat?: boolean;
 }
 
@@ -303,7 +303,7 @@ export default function ShotChart({
   compact = false,
   pulseRecent = false,
   shareMode = false,
-  flat = false,
+  flat = true,
 }: ShotChartProps) {
   const {
     showPlayerFilter = false,
@@ -586,9 +586,14 @@ export default function ShotChart({
   return (
     <div className="space-y-4">
       {title && (
-        <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-          <Target className="w-5 h-5 text-orange-500" />
+        <h3 className="ch-section-title flex items-baseline gap-2.5">
+          <Target className="w-4 h-4 self-center text-[color:var(--ch-accent)]" />
           {title}
+          {flat && (
+            <span className="text-sm font-normal normal-case tracking-normal tabular-nums text-[color:var(--ch-text-2)]">
+              {makes}-{total} FG ({percentage}%)
+            </span>
+          )}
         </h3>
       )}
 
