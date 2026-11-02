@@ -192,7 +192,7 @@ export function youthLeagueIds(competitions: Array<{ league_id: string; name?: s
 
 async function buildSeoIndex(): Promise<SeoIndex> {
   const now = Date.now();
-  const today = day(now)!;
+  const today = day(new Date(now).toISOString())!;
   const sides = await getLeagueSides();
 
   const [competitionRows, gameRows, statRows, playerRows, articleRows] = await Promise.all([
@@ -462,44 +462,80 @@ function xmlEscape(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
-export function sitemapEntries(index: SeoIndex): Array<{ path: string; lastmod: string | null }> {
-  const entries: Array<{ path: string; lastmod: string | null }> = [];
+/**
+ * Player pages with fewer games than this stay live, linked and indexable, but
+ * are left out of the sitemap: a one-off appearance is a thin page, and a few
+ * thousand of them make Google slower to crawl the rest. A player in a weekly
+ * league passes this within a few weeks.
+ */
+export const SITEMAP_MIN_PLAYER_GAMES = 3;
+
+export interface SitemapEntry { path: string; lastmod: string | null }
+
+/**
+ * The sitemap's sections, in order. Each is served as its own file behind
+ * /sitemap.xml, so Search Console reports indexing per section.
+ */
+export function sitemapSections(index: SeoIndex): Array<{ name: string; entries: SitemapEntry[] }> {
   const seen = new Set<string>();
-  const add = (path: string, lastmod: string | null) => {
-    if (seen.has(path)) return;
-    seen.add(path);
-    entries.push({ path, lastmod });
-  };
+  const section = (name: string, entries: SitemapEntry[]) => ({
+    name,
+    entries: entries.filter((e) => !seen.has(e.path) && !!seen.add(e.path)),
+  });
   const adultComps = index.competitions.filter((c) => !c.youth);
   const latest = adultComps.reduce<string | null>((acc, c) => later(acc, c.lastmod), null);
   const latestNews = index.articles.reduce<string | null>((acc, a) => later(acc, a.lastmod), null);
+  // An upcoming fixture hasn't changed on its tip-off date yet; a future lastmod makes Google distrust them all.
+  const today = new Date(index.builtAt).toISOString().split("T")[0];
+  const gameLastmod = (date: string | null) => {
+    const d = date ? date.split("T")[0] : null;
+    return d && d <= today ? d : null;
+  };
 
-  add("/", latest);
-  add("/news", latestNews);
-  add("/teams", latest);
-  add("/players", latest);
-  add("/scores", latest);
-  for (const a of index.articles) add(`/news/${encodeURIComponent(a.segment)}`, a.lastmod);
-  for (const c of adultComps) add(`/competition/${encodeURIComponent(c.slug)}`, c.lastmod);
-  // One permanent page per team side (not one per season).
-  for (const club of index.clubs) if (!club.youth) add(`/team/${club.slug}`, club.lastmod);
-  for (const p of index.players) if (!p.youth) add(`/player/${encodeURIComponent(p.segment)}`, p.lastmod);
-  for (const g of index.games) if (!g.youth) add(`/competition/${encodeURIComponent(g.competitionSlug)}/game/${encodeURIComponent(g.gameKey)}`, g.date ? g.date.split("T")[0] : null);
-  // Legal pages: indexable, but no meaningful last-modified date to give.
-  for (const p of ["/privacy", "/terms", "/cookies", "/swish-score"]) add(p, null);
-  return entries;
+  return [
+    section("pages", [
+      { path: "/", lastmod: latest },
+      { path: "/news", lastmod: latestNews },
+      { path: "/teams", lastmod: latest },
+      { path: "/players", lastmod: latest },
+      { path: "/scores", lastmod: latest },
+      // Legal pages: indexable, but no meaningful last-modified date to give.
+      ...["/swish-score", "/privacy", "/terms", "/cookies"].map((path) => ({ path, lastmod: null })),
+    ]),
+    section("news", index.articles.map((a) => ({ path: `/news/${encodeURIComponent(a.segment)}`, lastmod: a.lastmod }))),
+    section("competitions", adultComps.map((c) => ({ path: `/competition/${encodeURIComponent(c.slug)}`, lastmod: c.lastmod }))),
+    // One permanent page per team side (not one per season).
+    section("teams", index.clubs.filter((club) => !club.youth).map((club) => ({ path: `/team/${club.slug}`, lastmod: club.lastmod }))),
+    section("players", index.players
+      .filter((p) => !p.youth && p.games >= SITEMAP_MIN_PLAYER_GAMES)
+      .map((p) => ({ path: `/player/${encodeURIComponent(p.segment)}`, lastmod: p.lastmod }))),
+    section("games", index.games
+      .filter((g) => !g.youth)
+      .map((g) => ({ path: `/competition/${encodeURIComponent(g.competitionSlug)}/game/${encodeURIComponent(g.gameKey)}`, lastmod: gameLastmod(g.date) }))),
+  ];
 }
 
-function sitemapDocuments(index: SeoIndex): string[] {
-  const entries = sitemapEntries(index);
-  const docs: string[] = [];
-  for (let start = 0; start < entries.length; start += SITEMAP_URL_LIMIT) {
-    const urls = entries.slice(start, start + SITEMAP_URL_LIMIT)
-      .map((e) => `  <url>\n    <loc>${xmlEscape(SITE_BASE + e.path)}</loc>\n${e.lastmod ? `    <lastmod>${e.lastmod}</lastmod>\n` : ""}  </url>\n`)
-      .join("");
-    docs.push(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`);
+/** One file per section ("players.xml"), split as "players-2.xml" and on if a section outgrows the limit. */
+function sitemapFiles(index: SeoIndex): Array<{ file: string; entries: SitemapEntry[]; lastmod: string | null }> {
+  const files: Array<{ file: string; entries: SitemapEntry[]; lastmod: string | null }> = [];
+  for (const { name, entries } of sitemapSections(index)) {
+    for (let start = 0, part = 1; start < entries.length; start += SITEMAP_URL_LIMIT, part++) {
+      const chunk = entries.slice(start, start + SITEMAP_URL_LIMIT);
+      files.push({
+        file: part === 1 ? name : `${name}-${part}`,
+        entries: chunk,
+        lastmod: chunk.reduce<string | null>((acc, e) => later(acc, e.lastmod), null),
+      });
+    }
   }
-  return docs;
+  return files;
+}
+
+function urlsetXml(entries: SitemapEntry[]): string {
+  const urls = entries
+    .map((e) => `  <url>\n    <loc>${xmlEscape(SITE_BASE + e.path)}</loc>\n${e.lastmod ? `    <lastmod>${e.lastmod}</lastmod>\n` : ""}  </url>\n`)
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`;
 }
 
 export function registerSeoRoutes(app: Express) {
@@ -511,12 +547,9 @@ export function registerSeoRoutes(app: Express) {
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     try {
-      const index = await getSeoIndex(req.query.refresh === "1");
-      const docs = sitemapDocuments(index);
-      if (docs.length === 1) return sendXml(res, docs[0]);
-      const lastmod = new Date(index.builtAt).toISOString().split("T")[0];
-      sendXml(res, `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${docs
-        .map((_, i) => `  <sitemap>\n    <loc>${SITE_BASE}/sitemap/${i + 1}.xml</loc>\n    <lastmod>${lastmod}</lastmod>\n  </sitemap>\n`)
+      const files = sitemapFiles(await getSeoIndex(req.query.refresh === "1"));
+      sendXml(res, `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${files
+        .map((f) => `  <sitemap>\n    <loc>${SITE_BASE}/sitemap/${f.file}.xml</loc>\n${f.lastmod ? `    <lastmod>${f.lastmod}</lastmod>\n` : ""}  </sitemap>\n`)
         .join("")}</sitemapindex>`);
     } catch (err: any) {
       console.error("Sitemap generation error:", err?.message || err);
@@ -524,12 +557,11 @@ export function registerSeoRoutes(app: Express) {
     }
   });
 
-  app.get(/^\/sitemap\/(\d+)\.xml$/, async (req: Request, res: Response) => {
+  app.get(/^\/sitemap\/([a-z]+(?:-\d+)?)\.xml$/, async (req: Request, res: Response) => {
     try {
-      const docs = sitemapDocuments(await getSeoIndex());
-      const doc = docs[Number(req.params[0]) - 1];
-      if (!doc) return res.status(404).send("Sitemap not found");
-      sendXml(res, doc);
+      const file = sitemapFiles(await getSeoIndex()).find((f) => f.file === req.params[0]);
+      if (!file) return res.status(404).send("Sitemap not found");
+      sendXml(res, urlsetXml(file.entries));
     } catch (err: any) {
       console.error("Sitemap page generation error:", err?.message || err);
       res.status(500).send("Failed to generate sitemap");

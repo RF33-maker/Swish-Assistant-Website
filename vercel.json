@@ -45,6 +45,7 @@
     { "source": "/privacy", "destination": "/api/index" },
     { "source": "/terms", "destination": "/api/index" },
     { "source": "/cookies", "destination": "/api/index" },
+    { "source": "/swish-score", "destination": "/api/index" },
     { "source": "/chart_summary/:path*", "destination": "/api/index" },
     { "source": "/(.*)", "destination": "/app.html" }
   ]
