@@ -5,14 +5,19 @@ import { useAuth } from "@/hooks/use-auth";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { cleanTeamLabel } from "@/lib/cardStyle";
 import { initialsOf } from "@/lib/generateWeeklyCards";
-import { spreadPoints, tickValues } from "@/lib/landscapeLayout";
-import { formatMetric, LANDSCAPE_PRESETS, type LandscapeAxis } from "@/lib/landscapePresets";
+import { placeLabels, spreadPoints, tickValues } from "@/lib/landscapeLayout";
+import { formatMetric, LANDSCAPE_PRESETS, landscapeCallouts, type LandscapeAxis } from "@/lib/landscapePresets";
 import type { LandscapeResponse, LandscapeTeam } from "@/types/landscape";
 import { AxisCaption, LandscapeGate } from "@/components/LandscapeParts";
 import { PlayerLandscape } from "@/components/PlayerLandscape";
 
 /** The chart anyone can see; the rest come with a free account. */
 const FREE_PRESET = LANDSCAPE_PRESETS[0];
+
+// The size of a best/worst label's text (10px bold capitals), for finding it a clear spot before it's drawn.
+const CALLOUT_CHAR_W = 6.8;
+const CALLOUT_LINE_H = 13;
+const CALLOUT_PAD = 2;
 
 type Props = {
   /** The competition's slug, as in the page's address. */
@@ -164,11 +169,32 @@ function TeamLandscape({ slug, brandColor, scopedLeagueIds, onTeamSelect, switch
 
     const truth = teams.map((t) => ({ x: toX(valueOf(t, preset.x)), y: toY(valueOf(t, preset.y)) }));
     const at = spreadPoints(truth, r, { left: 0, top: 0, right: w, bottom: h }, 3);
+
+    // The best and worst teams named beside their crests, as on the Swish Social card.
+    const crests = at.map((p) => ({ ...p, r }));
+    // A phone-sized chart has no room for a top team's every rank, so it keeps the first (its net rating's).
+    const callouts = landscapeCallouts(teams, preset).map((c) =>
+      w < 480 ? { ...c, lines: c.lines.filter((l, n) => n === 0 || !l.text.startsWith("#")) } : c,
+    );
+    const targets = callouts.map((c) => crests[teams.findIndex((t) => t.id === c.teamId)]);
+    const boxes = placeLabels(
+      targets,
+      callouts.map((c) => ({
+        w: Math.ceil(Math.max(...c.lines.map((l) => l.text.length)) * CALLOUT_CHAR_W) + CALLOUT_PAD * 2,
+        h: c.lines.length * CALLOUT_LINE_H + CALLOUT_PAD * 2,
+      })),
+      crests,
+      // Kept below the league average along the top.
+      { left: 6, top: 28, right: w - 6, bottom: h - 6 },
+      4,
+    );
     return {
       r,
       avgX,
       avgY,
       at,
+      // Words to the left of a crest line up on their right, so they sit against it.
+      callouts: callouts.map((c, i) => ({ ...c, box: boxes[i], alignRight: boxes[i].x + boxes[i].w <= targets[i].x })),
       xTicks: tickValues(avgX, (halfX * (w / 2)) / (w / 2 - padX)).map((v) => ({ v, at: toX(v) })).filter((t) => t.at > 28 && t.at < w - 28),
       yTicks: tickValues(avgY, (halfY * (h / 2)) / (h / 2 - padY)).map((v) => ({ v, at: toY(v) })).filter((t) => t.at > 18 && t.at < h - 18),
     };
@@ -296,23 +322,55 @@ function TeamLandscape({ slug, brandColor, scopedLeagueIds, onTeamSelect, switch
                           onFocus={() => setHoverId(t.id)}
                           onBlur={() => setHoverId((id) => (id === t.id ? null : id))}
                           data-testid={`landscape-team-${t.id}`}
-                          className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full bg-white shadow-md outline-none ring-1 ring-black/10 transition-[left,top,box-shadow,transform] duration-500 hover:z-20 hover:scale-110 focus-visible:z-20 focus-visible:scale-110 ${on ? "z-10" : ""}`}
+                          className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center outline-none transition-[left,top,filter,transform] duration-500 hover:z-20 hover:scale-110 focus-visible:z-20 focus-visible:scale-110 ${
+                            // The logo sits straight on the chart: a soft shadow lifts a pale one, and in the dark a faint white glow keeps a black one in sight.
+                            on
+                              ? "z-10 scale-110"
+                              : "[filter:drop-shadow(0_1px_2px_rgba(0,0,0,0.35))] dark:[filter:drop-shadow(0_0_1px_rgba(255,255,255,0.45))_drop-shadow(0_0_6px_rgba(255,255,255,0.2))]"
+                          }`}
                           style={{
                             left: p.x,
                             top: p.y,
                             width: layout.r * 2,
                             height: layout.r * 2,
-                            boxShadow: on ? `0 0 0 3px ${accent}, 0 4px 14px rgba(0,0,0,0.3)` : undefined,
+                            // The chosen team glows in the league's colour.
+                            filter: on ? `drop-shadow(0 0 2px ${accent}) drop-shadow(0 0 4px ${accent})` : undefined,
                           }}
                         >
                           {logo ? (
-                            <img src={logo} alt="" className="h-[72%] w-[72%] object-contain" loading="lazy" />
+                            <img src={logo} alt="" className="h-full w-full object-contain" loading="lazy" />
                           ) : (
-                            <span className="text-[10px] font-bold text-slate-700">{initialsOf(name)}</span>
+                            // No logo to show: the initials keep a small disc so they read as a team, not a label.
+                            <span className="flex h-[78%] w-[78%] items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-700 ring-1 ring-black/10">
+                              {initialsOf(name)}
+                            </span>
                           )}
                         </button>
                       );
                     })}
+
+                    {layout.callouts.map((c) => (
+                      <div
+                        key={`callout-${c.teamId}`}
+                        aria-hidden="true"
+                        data-testid={`landscape-callout-${c.teamId}`}
+                        // Just the words: a halo in the chart's own colour keeps them clear of the gridlines.
+                        className={`pointer-events-none absolute z-[15] transition-[left,top] duration-500 [text-shadow:0_0_3px_#f8fafc,0_0_3px_#f8fafc] dark:[text-shadow:0_0_3px_#000,0_0_3px_#000] ${c.alignRight ? "text-right" : ""}`}
+                        style={{ left: c.box.x, top: c.box.y, width: c.box.w, padding: CALLOUT_PAD }}
+                      >
+                        {c.lines.map((l) => (
+                          <span
+                            key={l.text}
+                            className={`block whitespace-nowrap text-[10px] font-bold uppercase tracking-wide ${
+                              l.tone === "best" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                            }`}
+                            style={{ lineHeight: `${CALLOUT_LINE_H}px` }}
+                          >
+                            {l.text}
+                          </span>
+                        ))}
+                      </div>
+                    ))}
 
                     {shown && layout.at[shownIndex] && (
                       <div
