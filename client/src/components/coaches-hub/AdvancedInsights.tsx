@@ -382,7 +382,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
 
   if (loading) {
     return (
-      <div className="ch-card p-4 md:p-6">
+      <div>
         {showHeading && (
           <div className="flex items-center gap-3 mb-4">
             <LineChart className="w-5 md:w-6 h-5 md:h-6 text-slate-400 dark:text-neutral-500" />
@@ -409,7 +409,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
   // has been processed for this league/team at all" below.
   if (noRecentGames) {
     return (
-      <div className="ch-card p-4 md:p-6">
+      <div>
         {showHeading && (
           <div className="flex items-center gap-3 mb-4">
             <LineChart className="w-5 md:w-6 h-5 md:h-6 text-slate-400 dark:text-neutral-500" />
@@ -426,7 +426,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
 
   if (!hasAnyData) {
     return (
-      <div className="ch-card p-4 md:p-6">
+      <div>
         {showHeading && (
           <div className="flex items-center gap-3 mb-2">
             <LineChart className="w-5 md:w-6 h-5 md:h-6 text-slate-400 dark:text-neutral-500" />
@@ -441,7 +441,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
   }
 
   return (
-    <div className="ch-card p-3 sm:p-4 md:p-6">
+    <div>
       {showHeading && (
         <div className="flex items-center gap-3 mb-4 md:mb-6">
           <LineChart className="w-5 md:w-6 h-5 md:h-6 text-slate-400 dark:text-neutral-500" />
@@ -495,7 +495,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Plus-minus leaders */}
-        <div className="ch-tile p-4">
+        <div className="border-t border-[color:var(--ch-border)] pt-3">
           <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
             <Activity className="w-4 h-4 text-slate-400 dark:text-neutral-500" />
             Plus-Minus Leaders
@@ -524,7 +524,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
         </div>
 
         {/* Minutes leaders */}
-        <div className="ch-tile p-4">
+        <div className="border-t border-[color:var(--ch-border)] pt-3">
           <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
             <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             Minutes Leaders

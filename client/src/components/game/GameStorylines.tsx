@@ -98,9 +98,9 @@ export default function GameStorylines({
   };
 
   return (
-    <section className="mt-5" aria-labelledby="storylines-heading">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-        <h2 id="storylines-heading" className="ch-display text-[1.5rem] md:text-[1.75rem] font-bold uppercase leading-none tracking-tight text-[color:var(--ch-text)]">
+    <section className="mt-10" aria-labelledby="storylines-heading">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+        <h2 id="storylines-heading" className="ch-section-title">
           Storylines
         </h2>
         {seasonNote && <span className="text-xs font-medium text-[color:var(--ch-muted)]">{seasonNote}</span>}

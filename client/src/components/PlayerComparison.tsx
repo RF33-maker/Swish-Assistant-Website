@@ -648,7 +648,7 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor, preselectSl
   const cell = "py-2 px-3";
 
   return (
-    <div className="ch-card p-4 md:p-6" data-testid="player-comparison">
+    <div className="min-w-0" data-testid="player-comparison">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Player comparison</h2>
         {player1Stats && player2Stats && <CopyLinkButton testId="button-player-compare-link" />}

@@ -184,16 +184,16 @@ export default function Playbook({ teamName, leagueId = null, brandColor = null,
   return (
     <div className="pb-host">
       {load.kind === 'loading' && (
-        <div className="ch-card p-8 text-center text-[13px] text-[color:var(--ch-text-2)]">Opening your playbook…</div>
+        <div className="py-8 text-center text-[13px] text-[color:var(--ch-text-2)]">Opening your playbook…</div>
       )}
       {load.kind === 'signedOut' && (
-        <div className="ch-card p-8 text-center">
+        <div className="py-8 text-center">
           <Lock className="w-5 h-5 mx-auto mb-3 text-[color:var(--ch-text-2)]" />
           <p className="text-sm text-[color:var(--ch-text-2)]">Sign in to open your team's playbook.</p>
         </div>
       )}
       {load.kind === 'error' && (
-        <div className="ch-card p-8 text-center">
+        <div className="py-8 text-center">
           <AlertTriangle className="w-5 h-5 mx-auto mb-3 text-[color:var(--ch-loss)]" />
           <p className="text-sm text-[color:var(--ch-text)] mb-4">{load.message}</p>
           <button type="button" className="ch-btn ch-btn-primary h-9 px-4" onClick={() => setAttempt((n) => n + 1)}>Try again</button>

@@ -113,7 +113,7 @@ function Section({ n, title, subtitle, color, children, narrative }: {
   n: string; title: string; subtitle?: string; color: string; children: React.ReactNode; narrative?: string;
 }) {
   return (
-    <div className="ch-card p-4 md:p-6">
+    <div>
       <div className="flex items-center gap-2.5 mb-1">
         <span className="ch-kicker-n" style={{ color }}>{n}</span>
         <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h3>
@@ -129,7 +129,7 @@ function GapCard({ gap, youColor, themName }: { gap: Gap; youColor: string; them
   const tag = gap.favours === 'you' ? 'Your edge' : gap.favours === 'them' ? 'Their edge' : 'Style difference';
   const tagColor = gap.favours === 'you' ? youColor : gap.favours === 'them' ? '#64748b' : '#a78bfa';
   return (
-    <div className="ch-tile p-3 md:p-4">
+    <div className="border-t border-[color:var(--ch-border)] pt-3">
       <div className="flex flex-wrap items-center gap-2 mb-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: tagColor }}>
           {tag}
@@ -394,15 +394,15 @@ export default function FormComparison({
       </div>
 
       {!opponent ? (
-        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="py-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           No other teams in this competition to compare against yet.
         </div>
       ) : loading || !mine || !theirs ? (
-        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="py-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           Loading recent games…
         </div>
       ) : !analysis ? (
-        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="py-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           {mine.games.length === 0 ? 'Your team has' : `${themName} have`} no completed games with box scores in this competition yet.
         </div>
       ) : (

@@ -62,12 +62,12 @@ export default function NewsIndexPage() {
         {isLoading ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
             <div className="ch-skel lg:col-span-2 h-[420px] lg:h-[520px] rounded-[14px]" />
-            <div className="ch-card p-4 space-y-4">
+            <div className="space-y-4">
               {[0, 1, 2, 3].map((i) => <div key={i} className="ch-skel h-[68px]" />)}
             </div>
           </div>
         ) : !lead ? (
-          <div className="ch-card border-dashed p-12 text-center">
+          <div className="py-12 text-center">
             <Newspaper className="h-9 w-9 text-[color:var(--ch-muted)] mx-auto mb-3" />
             <p className="font-medium text-[color:var(--ch-text)] text-lg">No news yet</p>
             <p className="text-sm text-[color:var(--ch-text-2)] mt-1">Check back soon — fresh stories will land here.</p>
@@ -79,8 +79,8 @@ export default function NewsIndexPage() {
                 <FeatureStory article={lead} />
               </div>
               {headlines.length > 0 && (
-                <div className="ch-card px-4 py-2 md:px-5 md:py-3 flex flex-col">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-muted)] pt-2 pb-1">More headlines</div>
+                <div className="flex flex-col">
+                  <div className="ch-section-title pb-2 border-b border-[color:var(--ch-border-strong)]">More headlines</div>
                   <div className="divide-y divide-[color:var(--ch-border)] flex-1">
                     {headlines.map((a) => (
                       <div key={a.id} className="py-1">

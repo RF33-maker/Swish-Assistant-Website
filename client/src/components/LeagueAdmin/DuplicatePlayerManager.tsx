@@ -394,7 +394,7 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
   const loadingPlaceholder: PlayerStatPreview = { gp: 0, ppg: 0, rpg: 0, apg: 0, loading: true, error: false };
 
   return (
-    <div className="ch-card md:col-span-2 p-4 sm:p-5">
+    <div className="md:col-span-2">
       <button
         onClick={handleExpand}
         className="w-full flex items-center justify-between gap-3 text-left"

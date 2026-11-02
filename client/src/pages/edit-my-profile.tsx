@@ -204,7 +204,7 @@ export default function EditMyProfilePage() {
             <Loader2 className="h-6 w-6 animate-spin text-[color:var(--ch-muted)]" />
           </div>
         ) : claim?.status !== "approved" ? (
-          <div className="ch-card ch-rise p-6 text-center space-y-3">
+          <div className="ch-rise py-6 text-center space-y-3">
             <p className="text-sm text-[color:var(--ch-text-2)]">
               {claim?.status === "pending"
                 ? "Your claim is waiting for verification. You'll be able to edit your profile once it's approved."

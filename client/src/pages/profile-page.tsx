@@ -382,7 +382,7 @@ export default function AccountCentre() {
         )}
 
         {/* ── Profile ── */}
-        <Card className="ch-card ch-rise text-[color:var(--ch-text)]">
+        <Card className="ch-rise border-0 bg-transparent shadow-none text-[color:var(--ch-text)]">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 ch-display uppercase tracking-tight text-[1.35rem] leading-none">
               <User className="h-4 w-4 text-[color:var(--ch-accent)]" />
@@ -467,7 +467,7 @@ export default function AccountCentre() {
         </Card>
 
         {/* ── Change password ── */}
-        <Card className="ch-card ch-rise text-[color:var(--ch-text)]">
+        <Card className="ch-rise border-0 bg-transparent shadow-none text-[color:var(--ch-text)]">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 ch-display uppercase tracking-tight text-[1.35rem] leading-none">
               <Lock className="h-4 w-4 text-[color:var(--ch-accent)]" />
@@ -546,7 +546,7 @@ export default function AccountCentre() {
         </Card>
 
         {/* ── Data rights ── */}
-        <Card className="ch-card ch-rise text-[color:var(--ch-text)]">
+        <Card className="ch-rise border-0 bg-transparent shadow-none text-[color:var(--ch-text)]">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 ch-display uppercase tracking-tight text-[1.35rem] leading-none">
               <Shield className="h-4 w-4 text-[color:var(--ch-accent)]" />

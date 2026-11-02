@@ -141,7 +141,7 @@ export default function ScoresPage() {
         )}
 
         {isError && !data && (
-          <div className="ch-card p-8 text-center text-sm text-[color:var(--ch-text-2)]">
+          <div className="py-8 text-center text-sm text-[color:var(--ch-text-2)]">
             Scores couldn't load. They'll retry automatically.
           </div>
         )}
@@ -185,7 +185,7 @@ export default function ScoresPage() {
         )}
 
         {nothingOn && !isError && (
-          <div className="ch-card flex flex-col items-center text-center gap-2 py-14 px-6">
+          <div className="flex flex-col items-center text-center gap-2 py-14">
             <CalendarClock className="w-9 h-9 text-[color:var(--ch-accent)]" />
             <p className="font-semibold text-[color:var(--ch-text)]">No games scheduled right now</p>
             <p className="text-sm text-[color:var(--ch-text-2)]">New fixtures appear here as soon as they're published.</p>

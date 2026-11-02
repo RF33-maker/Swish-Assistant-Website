@@ -65,7 +65,7 @@ export default function LegalPageShell({
           </p>
         )}
 
-        <article className="ch-card ch-rise p-6 md:p-10 text-[15px] [&_strong]:font-semibold [&_strong]:text-[color:var(--ch-text)] [&>h2:first-child]:mt-0 [&>p:first-child]:mt-0">
+        <article className="ch-rise text-[15px] [&_strong]:font-semibold [&_strong]:text-[color:var(--ch-text)] [&>h2:first-child]:mt-0 [&>p:first-child]:mt-0">
           {children}
         </article>
 

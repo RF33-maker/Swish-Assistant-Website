@@ -296,13 +296,13 @@ export default function TeamsList() {
             {Array.from({ length: 12 }, (_, i) => <div key={i} className="ch-skel h-[84px] rounded-[14px]" />)}
           </div>
         ) : isError ? (
-          <div className="ch-card p-10 text-center">
+          <div className="py-10 text-center">
             <p className="font-medium text-[color:var(--ch-text)] text-lg">We couldn't load the teams</p>
             <p className="text-sm text-[color:var(--ch-text-2)] mt-1">Check your connection and try again.</p>
             <button type="button" onClick={() => refetch()} className="mt-5 ch-btn ch-btn-primary h-10 px-5">Try again</button>
           </div>
         ) : results.length === 0 ? (
-          <div className="ch-card border-dashed p-10 md:p-12 text-center" data-testid="teams-empty">
+          <div className="py-10 md:py-12 text-center" data-testid="teams-empty">
             <Shield className="h-9 w-9 text-[color:var(--ch-muted)] mx-auto mb-3" aria-hidden="true" />
             <p className="font-medium text-[color:var(--ch-text)] text-lg">
               {query.trim() ? `No teams match “${query.trim()}”` : "No teams here yet"}

@@ -220,7 +220,7 @@ export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeC
   }, [shown]);
 
   return (
-    <div className={`ch-card flex min-h-0 flex-col overflow-hidden ${className}`} data-testid="live-feed">
+    <div className={`flex min-h-0 flex-col ${className}`} data-testid="live-feed">
       <div className={`flex items-center justify-between gap-2 border-b border-[color:var(--ch-border)] py-3 pl-4 ${inSheet ? "pr-12" : "pr-4"}`}>
         <h3 className="ch-eyebrow flex items-center gap-2">
           {isLive && (
@@ -329,7 +329,7 @@ export function LiveFeedStrip(props: FeedProps) {
       <button
         type="button"
         onClick={() => setSheet(true)}
-        className="ch-card w-full overflow-hidden text-left"
+        className="ch-tile ch-hover w-full overflow-hidden text-left"
         aria-label="Open the full game feed"
         data-testid="live-feed-strip"
       >

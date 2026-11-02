@@ -482,7 +482,7 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
         />
 
         {arrived && (
-          <div className="ch-card mt-4 flex flex-col gap-3 px-4 py-3 text-sm text-[color:var(--ch-text)] sm:flex-row sm:items-center sm:justify-between" style={{ boxShadow: "0 0 0 1px var(--ch-accent-soft), var(--ch-shadow)" }}>
+          <div className="mt-5 flex flex-col gap-3 border-l-[3px] border-[color:var(--ch-accent)] pl-4 text-sm text-[color:var(--ch-text)] sm:flex-row sm:items-center sm:justify-between">
             <span>Tip-off time has arrived. Live coverage will appear when the official game feed starts.</span>
             <button onClick={onRefresh} className="ch-btn ch-btn-ghost h-9 px-3 text-sm"><RefreshCw className="h-4 w-4" />Check for live coverage</button>
           </div>
@@ -506,9 +506,9 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
           }}
         />
 
-        <section className="ch-card mt-4 p-4 md:p-5">
+        <section className="mt-10">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="ch-eyebrow">Matchup context</h2>
+            <h2 className="ch-section-title">Matchup context</h2>
             {!contextLoading && context?.rows.length ? <span className="text-xs font-medium text-[color:var(--ch-text-2)]">{contextLabel}</span> : null}
           </div>
           <p className="mt-2 text-sm text-[color:var(--ch-text-2)]">
@@ -531,9 +531,9 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
         </section>
 
         {snapshotRows.length > 0 && (
-          <section className="ch-card mt-4 p-4 md:p-5">
+          <section className="mt-10">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="ch-eyebrow">Season snapshot</h2>
+              <h2 className="ch-section-title">Season snapshot</h2>
               <span className="text-xs font-medium text-[color:var(--ch-text-2)]">{contextLabel}</span>
             </div>
             <div className="mt-4 grid gap-x-8 gap-y-3.5 md:grid-cols-2">
@@ -554,8 +554,8 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
         )}
 
         {!contextLoading && (
-          <section className="ch-card mt-4 p-4 md:p-5">
-            <h2 className="ch-eyebrow">Head-to-head</h2>
+          <section className="mt-10">
+            <h2 className="ch-section-title">Head-to-head</h2>
             {headToHead.meetings.length > 0 ? (
               <div className="mt-3">
                 <div className="text-sm text-[color:var(--ch-text-2)]">
@@ -563,9 +563,9 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
                   <span className="ch-display ch-num text-base font-bold text-[color:var(--ch-text)]">{headToHead.homeWins}-{headToHead.awayWins}</span>{" "}
                   <span className="font-semibold text-[color:var(--ch-text)]">{game.awayteam}</span> {contextLabel.toLowerCase()}.
                 </div>
-                <div className="mt-3 space-y-1.5 text-sm">
+                <div className="mt-3 text-sm">
                   {headToHead.meetings.slice(0, 5).map((meeting) => (
-                    <div key={meeting.gameKey} className="ch-tile flex items-center justify-between px-3 py-1.5">
+                    <div key={meeting.gameKey} className="flex items-center justify-between border-b border-[color:var(--ch-border)] py-2">
                       <span className="text-[color:var(--ch-muted)]">Meeting</span>
                       <span className="ch-num font-semibold text-[color:var(--ch-text)]">
                         {game.hometeam} {meeting.homeScore} – {meeting.awayScore} {game.awayteam}
@@ -602,9 +602,9 @@ function LeaderColumn({
       <Link href={teamHref} className="block truncate text-xs font-semibold text-[color:var(--ch-text-2)] hover:underline">
         {teamName}
       </Link>
-      <div className="mt-2 space-y-1.5">
+      <div className="mt-2">
         {players.length ? players.map((player) => (
-          <div key={player.name} className="ch-tile px-3 py-2">
+          <div key={player.name} className="border-b border-[color:var(--ch-border)] py-2">
             {player.slug ? (
               <EntityLink
                 href={playerHref(player.slug)}

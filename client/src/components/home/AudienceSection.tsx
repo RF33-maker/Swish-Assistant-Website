@@ -39,7 +39,7 @@ export default function AudienceSection() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5 items-stretch">
           {/* Free */}
           <Reveal delay={0} className="h-full">
-          <div className="ch-card h-full p-6 md:p-7 flex flex-col" data-testid="plan-free">
+          <div className="h-full flex flex-col border-t-2 border-[color:var(--ch-border-strong)] pt-6" data-testid="plan-free">
             <div className="flex items-center justify-between">
               <span className="h-11 w-11 rounded-xl flex items-center justify-center bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]">
                 <UserRound className="h-5 w-5" />
@@ -105,7 +105,7 @@ export default function AudienceSection() {
 
           {/* Contact us */}
           <Reveal delay={220} className="h-full">
-          <div className="ch-card h-full p-6 md:p-7 flex flex-col" data-testid="plan-contact">
+          <div className="h-full flex flex-col border-t-2 border-[color:var(--ch-border-strong)] pt-6" data-testid="plan-contact">
             <div className="flex items-center justify-between">
               <span className="h-11 w-11 rounded-xl flex items-center justify-center bg-[color:var(--ch-accent-soft)] text-[color:var(--ch-accent)]">
                 <Building2 className="h-5 w-5" />
@@ -133,8 +133,8 @@ export default function AudienceSection() {
 
         {/* How players and coaches take ownership of their pages */}
         <Reveal delay={120}>
-        <div className="mt-4 md:mt-5 ch-card overflow-hidden grid grid-cols-1 lg:grid-cols-12" data-testid="own-your-page">
-          <div className="lg:col-span-7 p-6 md:p-8">
+        <div className="mt-10 md:mt-14 grid grid-cols-1 lg:grid-cols-12 gap-x-10 border-t-2 border-[color:var(--ch-border-strong)] pt-6" data-testid="own-your-page">
+          <div className="lg:col-span-7">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Own your page</div>
             <h3 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[1.9rem] md:text-[2.3rem] text-[color:var(--ch-text)]">
               It's your career. Run your page.
@@ -149,7 +149,7 @@ export default function AudienceSection() {
                 { n: "2", t: "Request to own it", d: "Tap “Claim this page” on your profile, or ask us here." },
                 { n: "3", t: "We verify you", d: "A quick check that it's really you, then it's yours." },
               ].map((step) => (
-                <li key={step.n} className="ch-tile p-3.5">
+                <li key={step.n} className="border-t border-[color:var(--ch-border)] pt-3">
                   <span className="ch-kicker-n text-[color:var(--ch-accent)]">{step.n}</span>
                   <div className="mt-2 text-sm font-semibold text-[color:var(--ch-text)]">{step.t}</div>
                   <div className="mt-1 text-xs text-[color:var(--ch-text-2)] leading-relaxed">{step.d}</div>

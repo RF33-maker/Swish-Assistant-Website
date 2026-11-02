@@ -103,7 +103,7 @@ function textAt(plan: unknown, path: string): string {
 
 function Card({ icon, title, color, children, className = '' }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`ch-card p-5 md:p-6 ${className}`}>
+    <section className={`min-w-0 ${className}`}>
       <header className="flex items-center gap-2.5 mb-4">
         <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-3))', color: ink(color) }}>
           {icon}
@@ -419,7 +419,7 @@ export default function AgentGamePlan({
   if (!full) {
     const ready = report?.status === 'ready' && plan;
     return (
-      <div className="ch-card p-5 md:p-7 space-y-5">
+      <div>
         {header}
         {ready ? (
           <>
@@ -461,7 +461,7 @@ export default function AgentGamePlan({
     const failed = report?.status === 'failed';
     const noData = report?.status === 'no_data';
     return (
-      <div className="ch-card p-5 md:p-7">
+      <div>
         {header}
         {building ? (
           <p className="text-sm text-gray-600 dark:text-neutral-300 flex items-center gap-2">

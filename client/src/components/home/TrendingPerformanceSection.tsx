@@ -314,7 +314,7 @@ export default function TrendingPerformanceSection({
             ))}
           </div>
         ) : perfs.length === 0 ? (
-          <div className="ch-card mx-auto max-w-md px-6 py-10 text-center text-sm text-[color:var(--ch-text-2)]">
+          <div className="mx-auto max-w-md py-10 text-center text-sm text-[color:var(--ch-text-2)]">
             No standout performances in this competition yet.
           </div>
         ) : (

@@ -64,8 +64,8 @@ export default function ScoresBlock() {
           : null;
 
   return (
-    <section className="ch-card overflow-hidden ch-rise" style={{ animationDelay: "300ms" }} aria-labelledby="scores-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-5 pt-4 md:pt-5">
+    <section className="ch-rise" style={{ animationDelay: "300ms" }} aria-labelledby="scores-heading">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-baseline gap-3 min-w-0">
           <h2 id="scores-heading" className="ch-display uppercase font-bold tracking-tight text-[1.6rem] md:text-[1.85rem] leading-none text-[color:var(--ch-text)]">
             Scores
@@ -90,13 +90,13 @@ export default function ScoresBlock() {
         </div>
       </div>
 
-      <div className="p-4 md:p-5">
+      <div className="pt-4 md:pt-5">
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className={`ch-skel h-[104px] rounded-2xl ${i >= 4 ? "hidden lg:block" : ""}`} />)}
           </div>
         ) : games.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center py-10 rounded-xl border border-dashed border-[color:var(--ch-border-strong)]">
+          <div className="flex flex-col items-center justify-center text-center py-10 border-t border-[color:var(--ch-border-strong)]">
             <CalendarClock className="h-6 w-6 text-[color:var(--ch-muted)] mb-2" />
             <p className="text-sm font-medium text-[color:var(--ch-text)]">
               {tab === "live" ? "No games live right now" : tab === "upcoming" ? "Nothing scheduled yet" : "No results in the last 24 hours"}

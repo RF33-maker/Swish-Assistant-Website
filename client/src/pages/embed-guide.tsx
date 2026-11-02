@@ -116,7 +116,7 @@ export default function EmbedGuide() {
           </p>
         </header>
 
-        <section className="ch-card p-5 md:p-6 mb-5">
+        <section className="mb-10">
           <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Quick start</h2>
           <ol className="list-decimal pl-5 space-y-2 text-sm text-[color:var(--ch-text-2)] marker:text-[color:var(--ch-muted)]">
             <li>Pick a widget type and find your league slug from the Widget Builder.</li>
@@ -125,7 +125,7 @@ export default function EmbedGuide() {
           </ol>
         </section>
 
-        <section className="ch-card p-5 md:p-6 mb-5">
+        <section className="mb-10">
           <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Fixed-size snippet</h2>
           <p className="text-sm text-[color:var(--ch-text-2)] mb-3">
             Best when you know exactly how much space you want the widget to occupy.
@@ -133,7 +133,7 @@ export default function EmbedGuide() {
           <CodeBlock>{fixedSnippet}</CodeBlock>
         </section>
 
-        <section className="ch-card p-5 md:p-6 mb-5">
+        <section className="mb-10">
           <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Responsive snippet</h2>
           <p className="text-sm text-[color:var(--ch-text-2)] mb-3">
             Fills the width of its container. Pair with the auto-resize script to also grow vertically.
@@ -141,7 +141,7 @@ export default function EmbedGuide() {
           <CodeBlock>{responsiveSnippet}</CodeBlock>
         </section>
 
-        <section id="auto-resize" className="ch-card p-5 md:p-6 mb-5">
+        <section id="auto-resize" className="mb-10">
           <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Auto-resize script</h2>
           <p className="text-sm text-[color:var(--ch-text-2)] mb-3">
             Paste this once anywhere on your page (just before <code>&lt;/body&gt;</code> works well).
@@ -151,7 +151,7 @@ export default function EmbedGuide() {
           <CodeBlock>{autoResizeSnippet}</CodeBlock>
         </section>
 
-        <section className="ch-card p-5 md:p-6 mb-5">
+        <section className="mb-10">
           <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-4">Widget types</h2>
           <div className="space-y-5">
             {widgetTypes.map(w => (
@@ -177,7 +177,7 @@ export default function EmbedGuide() {
           </div>
         </section>
 
-        <section className="ch-card p-5 md:p-6 mb-5">
+        <section className="mb-10">
           <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-4">Styling parameters</h2>
           <p className="text-sm text-[color:var(--ch-text-2)] mb-4">
             All widgets accept the same look-and-feel parameters via the URL.
@@ -200,7 +200,7 @@ export default function EmbedGuide() {
           </table>
         </section>
 
-        <section className="ch-card p-5 md:p-6 mb-5">
+        <section className="mb-10">
           <h2 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] md:text-[1.45rem] text-[color:var(--ch-text)] mb-3">Troubleshooting</h2>
           <ul className="space-y-3 text-sm text-[color:var(--ch-text-2)] [&_strong]:text-[color:var(--ch-text)]">
             <li>

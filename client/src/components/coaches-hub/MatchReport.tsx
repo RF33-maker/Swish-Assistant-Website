@@ -45,7 +45,7 @@ function Section({ n, title, subtitle, color, children, narrative }: {
   n: string; title: string; subtitle?: string; color: string; children: React.ReactNode; narrative?: string;
 }) {
   return (
-    <div className="ch-card p-4 md:p-6">
+    <div>
       <div className="flex items-center gap-2.5 mb-1">
         <span className="ch-kicker-n" style={{ color }}>{n}</span>
         <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h3>
@@ -211,7 +211,7 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
         <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <div className="ch-card p-8 text-center text-sm text-gray-500 dark:text-neutral-400">
+        <div className="py-8 text-center text-sm text-gray-500 dark:text-neutral-400">
           Building match report…
         </div>
       </div>
@@ -224,7 +224,7 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
         <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <div className="ch-card p-8 text-center">
+        <div className="py-8 text-center">
           <FileText className="w-12 h-12 text-gray-300 dark:text-neutral-700 mx-auto mb-3" />
           <p className="text-sm text-gray-500 dark:text-neutral-400">
             This game doesn't have a full box score yet, so there's nothing to report on.
@@ -304,7 +304,7 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
                     ? 'text-red-600 dark:text-red-400'
                     : 'text-gray-500 dark:text-neutral-400';
               return (
-                <div key={s.title} className="ch-tile p-3">
+                <div key={s.title} className="border-t border-[color:var(--ch-border)] pt-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Icon className={`w-4 h-4 ${tone}`} />
                     <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{s.title}</h4>

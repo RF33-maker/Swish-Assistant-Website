@@ -36,9 +36,9 @@ export default function LeagueNews({ competitionSlug, limit = 4 }: { competition
 
   if (!stories.length) return null;
   return (
-    <section className="ch-card p-4 md:p-6" aria-labelledby="league-news-heading" data-testid="league-news">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 id="league-news-heading" className="flex items-center gap-2 text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">
+    <section aria-labelledby="league-news-heading" data-testid="league-news">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 id="league-news-heading" className="ch-section-title flex items-center gap-2">
           <Newspaper className="h-4 w-4 text-orange-500" aria-hidden="true" />
           Match reports and news
         </h2>
@@ -47,9 +47,9 @@ export default function LeagueNews({ competitionSlug, limit = 4 }: { competition
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
         </Link>
       </div>
-      <div className="divide-y divide-[color:var(--ch-border)]" role="list">
+      <div className="divide-y divide-[color:var(--ch-border)] border-t border-[color:var(--ch-border-strong)]" role="list">
         {stories.map((a) => (
-          <ArticleLink key={a.id} article={a} className="group flex items-start gap-3 py-3 first:pt-0 last:pb-0">
+          <ArticleLink key={a.id} article={a} className="group flex items-start gap-3 py-3">
             <div role="listitem" className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--ch-muted)]">
                 {a.article_type && a.article_type !== "news" && <span className="text-orange-600 dark:text-orange-400">{articleTypeLabel(a.article_type)}</span>}

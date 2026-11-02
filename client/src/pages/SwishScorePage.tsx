@@ -57,7 +57,7 @@ function ScoreCalculator() {
   };
 
   return (
-    <div className="ch-card rounded-[var(--ch-radius)] border border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-4 md:p-6">
+    <div className="min-w-0">
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">
         <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
         Try it

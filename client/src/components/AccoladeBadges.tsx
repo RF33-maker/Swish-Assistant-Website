@@ -112,7 +112,7 @@ export function AccoladeBadges({ accolades, accentColor }: { accolades: Accolade
   if (accolades.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 px-1 py-2 mt-1" data-testid="accolade-badges">
+    <div className="flex flex-wrap items-center gap-2 py-2 mt-1" data-testid="accolade-badges">
       {accolades.map((a, i) => {
         const style = TIER_STYLE[a.tier];
         const title = [a.label, a.detail, a.seasonLabel].filter(Boolean).join(' — ');

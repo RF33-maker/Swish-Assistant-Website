@@ -302,7 +302,7 @@ export default function LeagueManagement() {
           />
 
           {/* Link to existing league */}
-          <div className="ch-tile p-4">
+          <div className="border-t border-[color:var(--ch-border)] pt-3">
             <button
               type="button"
               onClick={() => setShowLinkPicker(!showLinkPicker)}
@@ -361,7 +361,7 @@ export default function LeagueManagement() {
           </div>
 
           {/* Advanced details */}
-          <div className="ch-tile p-4">
+          <div className="border-t border-[color:var(--ch-border)] pt-3">
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}

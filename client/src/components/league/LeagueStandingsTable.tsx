@@ -89,11 +89,11 @@ export default function LeagueStandingsTable({ rows, leagueId, slug, getLogoUrl 
   }
 
   return (
-    <div className="overflow-x-auto -mx-4 md:mx-0">
-      <table className="ch-table w-full text-sm min-w-[700px]">
+    <div className="overflow-x-auto">
+      <table className="ch-table ch-table-flat w-full text-sm min-w-[700px]">
         <thead>
-          <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
-            <th className={`${headCell} text-left sticky left-0 bg-white dark:bg-neutral-900 z-10`}>Team</th>
+          <tr className="border-b border-[color:var(--ch-border-strong)]">
+            <th className={`${headCell} text-left sticky left-0 bg-[color:var(--ch-bg)] z-10`}>Team</th>
             <th className={`${headCell} text-center`}>W</th>
             <th className={`${headCell} text-center`}>L</th>
             <th className={`${headCell} text-center`}>PCT</th>
@@ -114,9 +114,9 @@ export default function LeagueStandingsTable({ rows, leagueId, slug, getLogoUrl 
             return (
               <tr
                 key={`${team.team}-${index}`}
-                className="border-b border-gray-100 dark:border-neutral-700 hover:bg-[color:var(--ch-surface-2)] transition-colors group"
+                className="border-b border-[color:var(--ch-border)] hover:bg-[color:var(--ch-surface-2)] transition-colors group"
               >
-                <td className="py-3 px-2.5 sticky left-0 z-10 max-w-[150px] md:max-w-[190px] xl:max-w-none bg-white dark:bg-neutral-900 group-hover:bg-[color:var(--ch-surface-2)] transition-colors">
+                <td className="py-3 px-2.5 sticky left-0 z-10 max-w-[150px] md:max-w-[190px] xl:max-w-none bg-[color:var(--ch-bg)] group-hover:bg-[color:var(--ch-surface-2)] transition-colors">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-5 shrink-0 text-right font-medium text-slate-600 dark:text-slate-400 text-xs tabular-nums">{team.rank ?? index + 1}</span>
                     <TeamLogo teamName={teamName} leagueId={leagueId ?? ""} size="sm" logoUrl={getLogoUrl(teamName)} />
@@ -152,7 +152,7 @@ export function StandingsLegend() {
     ["Last 5", "Most Recent Game on the Right"],
   ];
   return (
-    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-neutral-700 text-xs text-slate-500 dark:text-slate-400">
+    <div className="mt-4 pt-3 border-t border-[color:var(--ch-border)] text-xs text-[color:var(--ch-text-2)]">
       <div className="flex gap-x-4 gap-y-1 flex-wrap">
         {items.map(([label, meaning]) => (
           <span key={label}><span className="font-semibold">{label}</span> = {meaning}</span>

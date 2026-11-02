@@ -29,6 +29,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
+import { FlatStat, StatBar } from "@/components/FlatStat";
+import { parseMinutesPlayed, playedInGame } from "@/lib/gamesPlayed";
 
 interface InlineTeamProfileProps {
   teamName: string;
@@ -400,10 +402,9 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
           });
         }
         const p = playerStatsMap.get(playerId)!;
-        const mins = typeof stat.sminutes === 'string' ? parseFloat(stat.sminutes) || 0 : (stat.sminutes || 0);
-        if (mins > 0) {
+        if (playedInGame(stat)) {
           p.games += 1;
-          p.totalMinutes += mins;
+          p.totalMinutes += parseMinutesPlayed(stat);
           p.rawStats.push(stat);
           p.totalPoints += stat.spoints || 0;
           p.totalRebounds += stat.sreboundstotal || 0;
@@ -693,14 +694,14 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
       </div>
 
       {activeTab === 'overview' && isPreSeason && (
-        <div className="ch-card overflow-hidden">
-          <div className="px-4 py-3 border-b border-[color:var(--ch-border)] flex items-center justify-between">
-            <span className="text-base md:text-lg font-bold text-[color:var(--ch-text)]">Squad</span>
+        <div className="pt-2">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="ch-section-title">Squad</h2>
             <span className="text-xs text-amber-600 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-900/30 px-2.5 py-1 rounded-full">
               No games played yet — showing registered squad
             </span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {teamData.preSeasonRoster.map((player: any) => (
               <div
                 key={player.id}
@@ -736,16 +737,16 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             ))}
           </div>
           {teamData.preSeasonRoster.length === 0 && (
-            <div className="p-8 text-center text-[color:var(--ch-muted)] text-sm">No registered players found.</div>
+            <div className="text-sm text-[color:var(--ch-text-2)]">No registered players found.</div>
           )}
         </div>
       )}
 
       {activeTab === 'overview' && !isPreSeason && (
-        <>
-          <div className="ch-card p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-muted)] mb-3 block">Team Averages</span>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
+        <div className="space-y-10 pt-2">
+          <section>
+            <h2 className="ch-section-title mb-4">Team Averages</h2>
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-x-6 gap-y-5">
               {[
                 { value: teamData.perGame.spoints || 0, label: "PTS" },
                 { value: teamData.perGame.sreboundstotal || 0, label: "REB" },
@@ -753,43 +754,57 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 { value: teamData.perGame.ssteals || 0, label: "STL" },
                 { value: teamData.perGame.sblocks || 0, label: "BLK" },
                 { value: teamData.perGame.sturnovers || 0, label: "TO" },
-              ].map((stat, i) => (
-                <div key={i} className="text-center py-2">
-                  <div className="text-xs text-[color:var(--ch-muted)] uppercase tracking-wide mb-0.5">{stat.label}</div>
-                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: readableBrand.body }}>{stat.value.toFixed(1)}</div>
-                </div>
+              ].map((stat) => (
+                <FlatStat key={stat.label} label={stat.label} value={stat.value.toFixed(1)} />
               ))}
             </div>
+          </section>
+
+          {/* One gap at both levels, so these six columns sit under the six above */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-10">
+            <section>
+              <h2 className="ch-section-title mb-4">Shooting</h2>
+              <div className="grid grid-cols-3 gap-x-6">
+                {[
+                  { value: teamData.totals.sfieldgoalsattempted > 0 ? (teamData.totals.sfieldgoalsmade / teamData.totals.sfieldgoalsattempted) * 100 : 0, label: "FG%" },
+                  { value: teamData.totals.sthreepointersattempted > 0 ? (teamData.totals.sthreepointersmade / teamData.totals.sthreepointersattempted) * 100 : 0, label: "3PT%" },
+                  { value: teamData.totals.sfreethrowsattempted > 0 ? (teamData.totals.sfreethrowsmade / teamData.totals.sfreethrowsattempted) * 100 : 0, label: "FT%" },
+                ].map((stat) => (
+                  <FlatStat key={stat.label} label={stat.label} value={`${stat.value.toFixed(1)}%`}>
+                    <StatBar percent={stat.value} color={readableBrand.accent} />
+                  </FlatStat>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h2 className="ch-section-title mb-4">Record</h2>
+              <div className="grid grid-cols-3 gap-x-6">
+                {[
+                  { label: "Overall", games: teamData.games },
+                  { label: "Home", games: teamData.games.filter((g: any) => g.isHome) },
+                  { label: "Away", games: teamData.games.filter((g: any) => !g.isHome) },
+                ].map(({ label, games }) => {
+                  const wins = games.filter((g: any) => g.isWin).length;
+                  const losses = games.length - wins;
+                  return (
+                    <FlatStat key={label} label={label} value={`${wins}-${losses}`}>
+                      <StatBar percent={games.length > 0 ? (wins / games.length) * 100 : 0} color={readableBrand.accent} />
+                    </FlatStat>
+                  );
+                })}
+              </div>
+            </section>
           </div>
 
-          <div className="ch-card p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-muted)] mb-3 block">Shooting</span>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { value: teamData.totals.sfieldgoalsattempted > 0 ? (teamData.totals.sfieldgoalsmade / teamData.totals.sfieldgoalsattempted) * 100 : 0, label: "FG%" },
-                { value: teamData.totals.sthreepointersattempted > 0 ? (teamData.totals.sthreepointersmade / teamData.totals.sthreepointersattempted) * 100 : 0, label: "3PT%" },
-                { value: teamData.totals.sfreethrowsattempted > 0 ? (teamData.totals.sfreethrowsmade / teamData.totals.sfreethrowsattempted) * 100 : 0, label: "FT%" },
-              ].map((stat, i) => (
-                <div key={i} className="text-center">
-                  <div className="text-xs text-[color:var(--ch-muted)] uppercase tracking-wide mb-0.5">{stat.label}</div>
-                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: readableBrand.body }}>{stat.value.toFixed(1)}%</div>
-                  <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readableBrand.accent }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="ch-card overflow-hidden">
-            <div className="px-4 py-3 border-b border-[color:var(--ch-border)]">
-              <span className="text-base md:text-lg font-bold text-[color:var(--ch-text)]">Roster</span>
-            </div>
+          <section>
+            <h2 className="ch-section-title mb-4">Roster</h2>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="ch-table ch-table-flat w-full text-xs">
                 <thead>
-                  <tr className="border-b border-[color:var(--ch-border)] text-[color:var(--ch-muted)] uppercase text-[10px] tracking-wider">
-                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap sticky left-0 bg-[color:var(--ch-surface)] z-10">Player</th>
+                  <tr className="border-b border-[color:var(--ch-border-strong)]">
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap sticky left-0 bg-[color:var(--ch-bg)] z-10">Player</th>
                     <th className="px-2 py-1.5 text-center font-semibold">GP</th>
                     <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
                     <th className="px-2 py-1.5 text-center font-semibold">REB</th>
@@ -800,16 +815,16 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                   </tr>
                 </thead>
                 <tbody>
-                  {teamData.roster.map((player: any, idx: number) => (
+                  {teamData.roster.map((player: any) => (
                     <tr
                       key={player.id}
-                      className={`border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] ${idx % 2 === 1 ? 'bg-[color:var(--ch-surface-2)]' : ''} ${player.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700' : ''}`}
+                      className={`group border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] ${player.slug ? 'cursor-pointer' : ''}`}
                       onClick={() => {
                         if (player.slug && onPlayerClick) onPlayerClick(player.slug);
                         else if (player.slug) navigate(`/player/${player.slug}`);
                       }}
                     >
-                      <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-[color:var(--ch-surface)] z-10">
+                      <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-[color:var(--ch-bg)] group-hover:bg-[color:var(--ch-surface-2)] transition-colors z-10">
                         {player.slug ? (
                           <Link
                             href={`/competition/${leagueSlug}/player/${encodeURIComponent(player.slug)}`}
@@ -831,19 +846,17 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 </tbody>
               </table>
             </div>
-          </div>
+          </section>
 
-          <div className="ch-card overflow-hidden">
-            <div className="px-4 py-3 border-b border-[color:var(--ch-border)]">
-              <span className="text-base md:text-lg font-bold text-[color:var(--ch-text)]">Recent Games</span>
-            </div>
+          <section>
+            <h2 className="ch-section-title mb-4">Recent Games</h2>
             {teamData.games.length === 0 ? (
-              <div className="p-6 text-center text-[color:var(--ch-muted)] text-sm">No games found.</div>
+              <div className="text-sm text-[color:var(--ch-text-2)]">No games found.</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="ch-table ch-table-flat w-full text-xs">
                   <thead>
-                    <tr className="border-b border-[color:var(--ch-border)] text-[color:var(--ch-muted)] uppercase text-[10px] tracking-wider">
+                    <tr className="border-b border-[color:var(--ch-border-strong)]">
                       <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Date</th>
                       <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">OPP</th>
                       <th className="px-2 py-1.5 text-center font-semibold">W/L</th>
@@ -853,13 +866,11 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                   </thead>
                   <tbody>
                     {teamData.games.map((game: any, idx: number) => (
-                      <tr key={idx} className={`border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] ${idx % 2 === 1 ? 'bg-[color:var(--ch-surface-2)]' : ''}`}>
-                        <td className="px-2 py-1.5 text-xs text-[color:var(--ch-muted)] whitespace-nowrap">{formatDate(game.date)}</td>
+                      <tr key={idx} className="border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)]">
+                        <td className="px-2 py-1.5 text-xs text-[color:var(--ch-text-2)] whitespace-nowrap">{formatDate(game.date)}</td>
                         <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap">{game.isHome ? 'vs' : '@'} {game.opponent}</td>
-                        <td className="px-2 py-1.5 text-xs text-center">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${game.isWin ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400'}`}>
-                            {game.isWin ? 'W' : 'L'}
-                          </span>
+                        <td className={`px-2 py-1.5 text-xs text-center font-bold ${game.isWin ? 'text-[color:var(--ch-win)]' : 'text-[color:var(--ch-loss)]'}`}>
+                          {game.isWin ? 'W' : 'L'}
                         </td>
                         <td className="px-2 py-1.5 text-xs text-center font-bold text-[color:var(--ch-text)]">{game.totalPoints}</td>
                         <td className="px-2 py-1.5 text-xs text-center">{game.opponentScore}</td>
@@ -869,17 +880,17 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 </table>
               </div>
             )}
-          </div>
-        </>
+          </section>
+        </div>
       )}
 
       {activeTab === 'playerStats' && (
-        <div className="ch-card overflow-hidden">
-          <div className="p-4 pb-0">
-            <span className="text-base md:text-lg font-bold text-[color:var(--ch-text)]">Player Statistics</span>
-            <div className="flex flex-col md:flex-row gap-3 mt-3">
+        <div className="pt-2">
+          <div>
+            <h2 className="ch-section-title">Player Statistics</h2>
+            <div className="flex flex-col md:flex-row gap-3 mt-4">
               <div className="flex-1">
-                <label className="block text-[10px] font-medium text-[color:var(--ch-muted)] mb-1 uppercase tracking-wider">Category</label>
+                <label className="block text-[10px] font-medium text-[color:var(--ch-text-2)] mb-1 uppercase tracking-wider">Category</label>
                 <Select value={playerStatsCategory} onValueChange={(v) => setPlayerStatsCategory(v as any)}>
                   <SelectTrigger className="w-full h-8 text-xs bg-[color:var(--ch-surface)] border-gray-200 dark:border-neutral-600">
                     <SelectValue />
@@ -892,7 +903,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 </Select>
               </div>
               <div className="flex-1">
-                <label className="block text-[10px] font-medium text-[color:var(--ch-muted)] mb-1 uppercase tracking-wider">Mode</label>
+                <label className="block text-[10px] font-medium text-[color:var(--ch-text-2)] mb-1 uppercase tracking-wider">Mode</label>
                 <Select value={playerStatsView} onValueChange={(v) => setPlayerStatsView(v as any)}>
                   <SelectTrigger className="w-full h-8 text-xs bg-[color:var(--ch-surface)] border-gray-200 dark:border-neutral-600">
                     <SelectValue />
@@ -907,11 +918,11 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             </div>
           </div>
 
-          <div className="overflow-x-auto mt-3">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto mt-5">
+            <table className="ch-table ch-table-flat w-full text-xs">
               <thead>
-                <tr className="border-y border-[color:var(--ch-border)] text-[color:var(--ch-muted)] uppercase text-[10px] tracking-wider">
-                  <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap sticky left-0 bg-[color:var(--ch-surface)] z-10">Player</th>
+                <tr className="border-b border-[color:var(--ch-border-strong)]">
+                  <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap sticky left-0 bg-[color:var(--ch-bg)] z-10">Player</th>
                   <th
                     className={`px-2 py-1.5 text-center font-semibold cursor-pointer hover:bg-[color:var(--ch-surface-2)] ${statsSortColumn === 'GP' ? '' : ''}`}
                     style={statsSortColumn === 'GP' ? { color: readableBrand.body } : {}}
@@ -932,16 +943,16 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 </tr>
               </thead>
               <tbody>
-                {sortedRoster.map((player: any, idx: number) => (
+                {sortedRoster.map((player: any) => (
                   <tr
                     key={player.id}
-                    className={`border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] ${idx % 2 === 1 ? 'bg-[color:var(--ch-surface-2)]' : ''} ${player.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700' : ''}`}
+                    className={`group border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] ${player.slug ? 'cursor-pointer' : ''}`}
                     onClick={() => {
                       if (player.slug && onPlayerClick) onPlayerClick(player.slug);
                       else if (player.slug) navigate(`/player/${player.slug}`);
                     }}
                   >
-                    <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-[color:var(--ch-surface)] z-10">
+                    <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-[color:var(--ch-bg)] group-hover:bg-[color:var(--ch-surface-2)] transition-colors z-10">
                       {player.slug ? (
                         <Link
                           href={`/competition/${leagueSlug}/player/${encodeURIComponent(player.slug)}`}
@@ -977,9 +988,9 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
       )}
 
       {activeTab === 'shotChart' && (
-        <div className="ch-card p-4">
+        <div className="pt-2">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-muted)]">Shot Chart</span>
+            <h2 className="ch-section-title">Shot Chart</h2>
             <Select value={shotChartRange} onValueChange={setShotChartRange}>
               <SelectTrigger className="w-full md:w-48 h-8 text-sm border-gray-200 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white">
                 <SelectValue placeholder="Select range" />
@@ -1000,6 +1011,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             shots={shotEvents || []}
             loading={shotsLoading}
             compact
+            flat
             emptyMessage="No shot data available."
             filters={{ showPlayerFilter: true, showQuarterFilter: true, showResultFilter: true }}
           />

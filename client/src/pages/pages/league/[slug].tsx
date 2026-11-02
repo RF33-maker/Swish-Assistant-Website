@@ -4259,7 +4259,7 @@ export default function LeaguePage() {
 
           {/* SEO-Optimized About This League Section */}
           {league?.description && (
-            <div className="ch-card p-5 md:p-6 mt-4 md:mt-5 animate-fade-in-up">
+            <div className="mt-4 md:mt-5 animate-fade-in-up">
               <div className="flex items-center gap-3 mb-3">
                 {displayLogoUrl && (
                   <img
@@ -4268,7 +4268,7 @@ export default function LeaguePage() {
                     className="h-8 w-8 object-contain"
                   />
                 )}
-                <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">
+                <h2 className="ch-section-title">
                   About {league?.name}
                 </h2>
               </div>
@@ -4451,13 +4451,13 @@ export default function LeaguePage() {
         </div>
 
         <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-          <section className={`${activeSection === 'overview' ? 'md:col-span-2' : 'md:col-span-3'} space-y-6`}>
+          <section className={`${activeSection === 'overview' ? 'md:col-span-2' : 'md:col-span-3'} space-y-10`}>
             
             {/* Standings Section */}
             {activeSection === 'standings' && !isRebaSeasonParent && !hasBracket && (
-              <div className="ch-card p-4 md:p-6">
+              <div>
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
-                  <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">League Standings</h2>
+                  <h2 className="ch-section-title">League Standings</h2>
                   
                   {/* View Toggle - Only show for BCB Trophy */}
                   {slug === 'british-championship-basketball' && (
@@ -4662,9 +4662,9 @@ export default function LeaguePage() {
             
             {/* Stats Section - Comprehensive Player Averages */}
             {activeSection === 'stats' && (
-              <div className="ch-card p-4 md:p-6">
+              <div>
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
-                  <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Player Statistics - {league?.name}</h2>
+                  <h2 className="ch-section-title">Player Statistics - {league?.name}</h2>
                   <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
                     Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
                     {(statsSearch || filterAgeGroup !== 'all' || filterRound !== 'all') && ` (filtered from ${allPlayerAverages.length})`}
@@ -4800,10 +4800,10 @@ export default function LeaguePage() {
                 
                 {isLoadingStats ? (
                   <div className="overflow-x-auto">
-                    <table className="ch-table w-full text-sm">
+                    <table className="ch-table ch-table-flat w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-neutral-700">
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Player</th>
+                        <tr className="border-b border-[color:var(--ch-border-strong)]">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-[color:var(--ch-bg)]">Player</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">MIN</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGM</th>
@@ -4839,11 +4839,11 @@ export default function LeaguePage() {
                     </table>
                   </div>
                 ) : filteredPlayerAverages.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0 dark:border-neutral-700 rounded-lg" style={{ border: `1px solid ${brandBorderLight}` }}>
-                    <table className="ch-table w-full text-xs md:text-sm">
+                  <div className="overflow-x-auto">
+                    <table className="ch-table ch-table-flat w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
+                        <tr className="border-b border-[color:var(--ch-border-strong)]">
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-[color:var(--ch-bg)] z-10 min-w-[100px] md:min-w-[140px]">Player</th>
                           <th className="text-center py-2 md:py-3 px-1 md:px-2 font-semibold text-slate-700 dark:text-slate-200 min-w-[30px]">#</th>
                           <th 
                             onClick={() => {
@@ -4854,7 +4854,7 @@ export default function LeaguePage() {
                                 setStatsSortDirection('desc');
                               }
                             }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer dark:hover:bg-neutral-700 transition-colors ${statsSortColumn === 'GP' ? '' : 'text-slate-700 dark:text-slate-200'}`}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-[color:var(--ch-surface-3)] transition-colors ${statsSortColumn === 'GP' ? '' : 'text-slate-700 dark:text-slate-200'}`}
                             style={statsSortColumn === 'GP' ? { color: readableBrand.body } : {}}
                             data-testid="header-sort-gp"
                           >
@@ -4876,7 +4876,7 @@ export default function LeaguePage() {
                                   setStatsSortDirection('desc');
                                 }
                               }}
-                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer dark:hover:bg-neutral-700 transition-colors ${
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-[color:var(--ch-surface-3)] transition-colors ${
                                 statsSortColumn === column.label ? '' : 'text-slate-700 dark:text-slate-200'
                               }`}
                               style={statsSortColumn === column.label ? { color: readableBrand.body } : {}}
@@ -4896,7 +4896,7 @@ export default function LeaguePage() {
                         {filteredPlayerAverages.slice(0, displayedPlayerCount).map((player, index) => (
                           <tr 
                             key={`${player.name}-${index}`}
-                            className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-[color:var(--ch-surface-2)] transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
+                            className={`group border-b border-[color:var(--ch-border)] hover:bg-[color:var(--ch-surface-2)] transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
                                 handleSelectPlayer(player.slug, activeSection, player.playerIds ? Array.from(player.playerIds as Set<string>) : []);
@@ -4904,7 +4904,7 @@ export default function LeaguePage() {
                             }}
                             data-testid={`player-row-${player.id}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-[color:var(--ch-surface-2)] z-10">
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-[color:var(--ch-bg)] group-hover:bg-[color:var(--ch-surface-2)] transition-colors z-10">
                               <div className="min-w-0">
                                 {player.slug ? (
                                   <EntityLink
@@ -4989,7 +4989,7 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: readableBrand.body, borderTop: `1px solid ${brandBorderLight}` }}>
+                    <div className="md:hidden mt-2 text-xs text-[color:var(--ch-text-2)]">
                       ← Swipe to see all stats →
                     </div>
                     
@@ -5032,7 +5032,7 @@ export default function LeaguePage() {
                       </div>
                     )}
 
-                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+                    <div className="mt-6 pt-4 border-t border-[color:var(--ch-border)]">
                       <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
                         <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({playerStatsCategory}):</div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -5068,9 +5068,9 @@ export default function LeaguePage() {
 
             {/* Team Stats Section */}
             {activeSection === 'teamstats' && (
-              <div className="ch-card p-4 md:p-6">
+              <div>
                 <div className="mb-4 md:mb-6">
-                  <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-4">Team Statistics - {league?.name}</h2>
+                  <h2 className="ch-section-title mb-4">Team Statistics - {league?.name}</h2>
                 </div>
 
                 {/* Category Dropdown */}
@@ -5125,10 +5125,10 @@ export default function LeaguePage() {
 
                 {isLoadingTeamStats ? (
                   <div className="overflow-x-auto">
-                    <table className="ch-table w-full text-sm">
+                    <table className="ch-table ch-table-flat w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-neutral-700">
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Team</th>
+                        <tr className="border-b border-[color:var(--ch-border-strong)]">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-[color:var(--ch-bg)]">Team</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGM</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGA</th>
@@ -5159,7 +5159,7 @@ export default function LeaguePage() {
                       </thead>
                       <tbody>
                         {Array.from({ length: 8 }).map((_, index) => (
-                          <tr key={`skeleton-${index}`} className="border-b border-gray-100 dark:border-neutral-700">
+                          <tr key={`skeleton-${index}`} className="border-b border-[color:var(--ch-border)]">
                             <td className="py-3 px-2">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 bg-gray-200 dark:bg-neutral-700 rounded-full animate-pulse"></div>
@@ -5177,11 +5177,11 @@ export default function LeaguePage() {
                     </table>
                   </div>
                 ) : sortedTeamStats.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0 dark:border-neutral-700 rounded-lg" style={{ border: `1px solid ${brandBorderLight}` }}>
-                    <table className="ch-table w-full text-xs md:text-sm">
+                  <div className="overflow-x-auto">
+                    <table className="ch-table ch-table-flat w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-800 z-10 w-16">Logo</th>
+                        <tr className="border-b border-[color:var(--ch-border-strong)]">
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-[color:var(--ch-bg)] z-10 w-16">Logo</th>
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]">Team</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[45px]">
                             <div className="flex items-center justify-center gap-1">GP</div>
@@ -5200,7 +5200,7 @@ export default function LeaguePage() {
                                 }
                               }}
                               className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] ${
-                                column.sortable ? 'cursor-pointer dark:hover:bg-neutral-700' : ''
+                                column.sortable ? 'cursor-pointer hover:bg-[color:var(--ch-surface-3)]' : ''
                               } transition-colors ${
                                 teamStatsSortColumn === column.key ? '' : 'text-slate-700 dark:text-slate-200'
                               }`}
@@ -5217,7 +5217,7 @@ export default function LeaguePage() {
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100 dark:divide-neutral-700">
+                      <tbody className="divide-y divide-[color:var(--ch-border)]">
                         {sortedTeamStats.map((team, index) => (
                           <tr
                             key={`team-stats-${team.teamName}-${index}`}
@@ -5229,7 +5229,7 @@ export default function LeaguePage() {
                             }}
                             data-testid={`row-team-${team.teamName}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-[color:var(--ch-surface-2)] z-10 transition-colors">
+                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-[color:var(--ch-bg)] group-hover:bg-[color:var(--ch-surface-2)] z-10 transition-colors">
                               <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(team.teamName)} />
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 text-xs md:text-sm truncate">
@@ -5262,7 +5262,7 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: readableBrand.body, borderTop: `1px solid ${brandBorderLight}` }}>
+                    <div className="md:hidden mt-2 text-xs text-[color:var(--ch-text-2)]">
                       ← Swipe to see all stats →
                     </div>
                   </div>
@@ -5274,7 +5274,7 @@ export default function LeaguePage() {
                 )}
                 
                 {/* Dynamic Legend based on category */}
-                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+                <div className="mt-6 pt-4 border-t border-[color:var(--ch-border)]">
                   <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
                     <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({teamStatsCategory}):</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -5292,9 +5292,9 @@ export default function LeaguePage() {
 
             {/* Teams Section */}
             {activeSection === 'teams' && (
-              <div className="ch-card p-4 md:p-6">
+              <div>
                 <div className="flex items-baseline justify-between gap-3 mb-4 md:mb-5">
-                  <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Teams</h2>
+                  <h2 className="ch-section-title">Teams</h2>
                   {standings.length > 0 && <span className="text-xs text-[color:var(--ch-muted)]">{standings.length} teams</span>}
                 </div>
                 {standings.length > 0 ? (
@@ -5339,11 +5339,11 @@ export default function LeaguePage() {
             )}
 
             {activeSection === 'schedule' && (
-              <div className="ch-card p-4 md:p-6">
-                <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-3 md:mb-4">Game Schedule</h2>
+              <div>
+                <h2 className="ch-section-title mb-3 md:mb-4">Game Schedule</h2>
                 
                 {/* Tabs for Upcoming / Results */}
-                <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-neutral-700">
+                <div className="flex gap-2 mb-4 border-b border-[color:var(--ch-border)]">
                   <button
                     onClick={() => setScheduleView('upcoming')}
                     className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
@@ -5459,13 +5459,13 @@ export default function LeaguePage() {
                         
                         <>
                           {gamesToShow.length > 0 ? (
-                            <div className="divide-y divide-gray-200 dark:divide-neutral-700">
+                            <div className="divide-y divide-[color:var(--ch-border)]">
                               {scheduleView === 'upcoming' ? (
                                 /* Upcoming Games View */
                                 gamesToShow.map((game, index) => (
                                   <div 
                                     key={`upcoming-${game.game_id}-${index}`} 
-                                    className="py-2 md:py-3 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                                    className="py-2 md:py-3 hover:bg-[color:var(--ch-surface-2)] transition-colors cursor-pointer"
                                     onClick={() => {
                                        handleSelectGame(game.game_id, 'schedule');
                                     }}
@@ -5764,10 +5764,10 @@ export default function LeaguePage() {
 
             {activeSection === 'leaders' && (
               <div className="space-y-4 md:space-y-6">
-                <div className="ch-card p-4 md:p-6">
+                <div>
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">League Leaders</h2>
+                      <h2 className="ch-section-title">League Leaders</h2>
                       {isLoadingMoreStats && (
                         <span className="inline-flex items-center gap-1 text-xs text-orange-500 dark:text-orange-400">
                           <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -5924,6 +5924,7 @@ export default function LeaguePage() {
                       return (
                         <LeagueLeadersShareCard
                           key={title}
+                          flat
                           title={title}
                           leaders={shareLeaders}
                           leagueName={displayLeagueName || 'League Leaders'}
@@ -5933,9 +5934,9 @@ export default function LeaguePage() {
                           footnote={footnote}
                           fileSlug={`league-${slug}-${subject}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
                         >
-                          <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
-                            <div className="flex items-baseline gap-2 mb-3 px-1 pr-10">
-                              <h3 className="text-sm font-semibold" style={{ color: readableBrand.body }}>{title}</h3>
+                          <div>
+                            <div className="flex items-baseline gap-2 pb-2 pr-10 border-b border-[color:var(--ch-border-strong)]">
+                              <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)]">{title}</h3>
                               {minLabel && (
                                 <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">{minLabel}</span>
                               )}
@@ -5952,7 +5953,7 @@ export default function LeaguePage() {
                                 return (
                                   <div
                                     key={`${title}-${entity.slug || entity.teamName || entity.name}-${idx}`}
-                                    className={`flex items-center justify-between py-2 px-2 rounded-md transition-colors ${isClickable ? 'hover:bg-gray-100 dark:hover:bg-neutral-700 cursor-pointer' : ''}`}
+                                    className={`flex items-center justify-between py-2 border-b border-[color:var(--ch-border)] transition-colors ${isClickable ? 'hover:bg-[color:var(--ch-surface-2)] cursor-pointer' : ''}`}
                                     onClick={() => {
                                       if (isTeam && entity.teamName) {
                                         setSelectedTeamName(entity.teamName);
@@ -6018,7 +6019,7 @@ export default function LeaguePage() {
                               )}
                             </div>
                             {footnote && (
-                              <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700/60">
+                              <p className="text-[10px] text-[color:var(--ch-text-2)] pt-2">
                                 {footnote}
                               </p>
                             )}
@@ -6392,7 +6393,7 @@ export default function LeaguePage() {
 
                 {/* Top Performances This Week */}
                 {slug && (
-                  <div className="-mx-4 md:-mx-6">
+                  <div>
                     <LeagueTrendingPerformances
                       leagueSlug={slug}
                       brandColor={brandColorHex}
@@ -6404,9 +6405,9 @@ export default function LeaguePage() {
                 {slug && <LeagueNews competitionSlug={slug} />}
 
                 {/* League Leaders Quick View */}
-                <div className="ch-card p-4 md:p-6">
-                  <div className="flex justify-between items-center mb-4 md:mb-6">
-                    <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">League Leaders</h2>
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="ch-section-title">League Leaders</h2>
                     <button
                       onClick={() => {
                         setActiveSection('leaders');
@@ -6462,24 +6463,24 @@ export default function LeaguePage() {
                     });
 
                     const gridContent = isLoading ? (
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-6">
                         {Array.from({ length: 3 }).map((_, i) => (
                           <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
                         ))}
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-6">
                         {quickCategories.map(({ title, list, avgLabel, totalLabel }) => {
                           const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
                           return (
-                            <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
-                              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">{title}</h3>
-                              <ul className="divide-y divide-gray-100 dark:divide-neutral-700">
+                            <div key={title}>
+                              <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)] pb-2 border-b border-[color:var(--ch-border-strong)]">{title}</h3>
+                              <ul className="divide-y divide-[color:var(--ch-border)]">
                                 {Array.isArray(list) &&
                                   list.slice(0, 5).map((p, i) => (
                                     <li
                                       key={`${title}-${p.name}-${i}`}
-                                      className={`flex items-center justify-between py-2 ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-2 -mx-2 transition-colors' : 'px-2 -mx-2'}`}
+                                      className={`flex items-center justify-between py-2 ${p.slug ? 'cursor-pointer hover:bg-[color:var(--ch-surface-2)] transition-colors' : ''}`}
                                       onClick={() => {
                                         if (p.slug) {
                                           handleSelectPlayer(p.slug, activeSection);
@@ -6522,7 +6523,7 @@ export default function LeaguePage() {
                       <>
                         {gridContent}
                         {quickFootnote && (
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center mt-3">
+                          <p className="text-[10px] text-[color:var(--ch-text-2)] mt-3">
                             {quickFootnote}
                           </p>
                         )}
@@ -6531,6 +6532,7 @@ export default function LeaguePage() {
 
                     return (
                       <LeagueLeadersShareCard
+                        flat
                         title="League Leaders"
                         groups={shareGroups}
                         leagueName={displayLeagueName || 'League Leaders'}
@@ -6547,9 +6549,9 @@ export default function LeaguePage() {
                 </div>
 
                 {/* Team League Leaders */}
-                <div className="ch-card p-4 md:p-6">
-                  <div className="flex justify-between items-center mb-4 md:mb-6">
-                    <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)]">Team Leaders</h2>
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="ch-section-title">Team Leaders</h2>
                     <button
                       onClick={() => setActiveSection('teamstats')}
                       className="inline-flex items-center min-h-[36px] -my-2 px-1 -mx-1 text-xs md:text-sm font-medium hover:underline underline-offset-2"
@@ -6569,17 +6571,17 @@ export default function LeaguePage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-6">
                       {/* Top Scoring Teams */}
-                      <div className="ch-tile p-3 md:p-4">
-                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Scoring</h3>
-                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                      <div>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)] pb-2 border-b border-[color:var(--ch-border-strong)]">Top Scoring</h3>
+                        <ul className="text-xs md:text-sm text-[color:var(--ch-text)]">
                           {filteredTeamStats
                             .slice()
                             .sort((a: any, b: any) => parseFloat(b.ppg || '0') - parseFloat(a.ppg || '0'))
                             .slice(0, 5)
                             .map((team: any, i: number) => (
-                              <li key={`scoring-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
+                              <li key={`scoring-${team.teamName}-${i}`} className="flex justify-between items-center gap-2 py-2 border-b border-[color:var(--ch-border)]">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
                                   <span className="truncate">{team.teamName}</span>
@@ -6593,15 +6595,15 @@ export default function LeaguePage() {
                       </div>
 
                       {/* Top Rebounding Teams */}
-                      <div className="ch-tile p-3 md:p-4">
-                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Rebounding</h3>
-                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                      <div>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)] pb-2 border-b border-[color:var(--ch-border-strong)]">Top Rebounding</h3>
+                        <ul className="text-xs md:text-sm text-[color:var(--ch-text)]">
                           {filteredTeamStats
                             .slice()
                             .sort((a: any, b: any) => parseFloat(b.rpg || '0') - parseFloat(a.rpg || '0'))
                             .slice(0, 5)
                             .map((team: any, i: number) => (
-                              <li key={`rebounding-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
+                              <li key={`rebounding-${team.teamName}-${i}`} className="flex justify-between items-center gap-2 py-2 border-b border-[color:var(--ch-border)]">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
                                   <span className="truncate">{team.teamName}</span>
@@ -6615,15 +6617,15 @@ export default function LeaguePage() {
                       </div>
 
                       {/* Top Assists Teams */}
-                      <div className="ch-tile p-3 md:p-4">
-                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Playmaking</h3>
-                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                      <div>
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)] pb-2 border-b border-[color:var(--ch-border-strong)]">Top Playmaking</h3>
+                        <ul className="text-xs md:text-sm text-[color:var(--ch-text)]">
                           {filteredTeamStats
                             .slice()
                             .sort((a: any, b: any) => parseFloat(b.apg || '0') - parseFloat(a.apg || '0'))
                             .slice(0, 5)
                             .map((team: any, i: number) => (
-                              <li key={`assists-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
+                              <li key={`assists-${team.teamName}-${i}`} className="flex justify-between items-center gap-2 py-2 border-b border-[color:var(--ch-border)]">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
                                   <span className="truncate">{team.teamName}</span>
@@ -6664,8 +6666,8 @@ export default function LeaguePage() {
 
             {/* Tournament Bracket - Only for BCB Trophy */}
             {slug === 'british-championship-basketball' && league?.league_id && (
-              <div className="ch-card p-4 md:p-6">
-                <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-4 md:mb-6">Tournament Bracket</h2>
+              <div>
+                <h2 className="ch-section-title mb-4 md:mb-6">Tournament Bracket</h2>
                 <TournamentBracket 
                   leagueId={league.league_id} 
                   onGameClick={handleGameClick}
@@ -6675,13 +6677,13 @@ export default function LeaguePage() {
 
             {/* League Standings */}
             {!hasBracket && (
-            <div className="ch-card p-4 md:p-6">
-              <h2 className="text-[15px] md:text-base font-semibold tracking-tight text-[color:var(--ch-text)] mb-4">League Standings</h2>
+            <div>
+              <h2 className="ch-section-title mb-4">League Standings</h2>
               {isLoadingStandings ? (
                 <div className="overflow-x-auto">
-                  <table className="ch-table w-full text-sm">
+                  <table className="ch-table ch-table-flat w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200 dark:border-neutral-700">
+                      <tr className="border-b border-[color:var(--ch-border-strong)]">
                         <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">#</th>
                         <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Team</th>
                         <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Record</th>
@@ -6721,12 +6723,11 @@ export default function LeaguePage() {
           </section>
 
           {/* Sidebar */}
-          <aside className={`space-y-6 ${activeSection !== 'overview' ? 'hidden' : ''}`}>
+          <aside className={`space-y-10 ${activeSection !== 'overview' ? 'hidden' : ''}`}>
             {/* League Admin Panel */}
             {isOwner && league?.league_id && (
-              <div className="ch-card p-5 relative overflow-hidden">
-                <div className="absolute inset-x-0 top-0 h-[3px]" style={{ backgroundColor: readableBrand.accent }} />
-                <h3 className="text-[15px] font-semibold tracking-tight text-[color:var(--ch-text)] mb-3 flex items-center gap-2">
+              <div>
+                <h3 className="ch-section-title mb-3 flex items-center gap-2">
                   <svg className="w-4 h-4 text-[color:var(--ch-text-2)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.5 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -6763,7 +6764,7 @@ export default function LeaguePage() {
 
             {activeSection === 'overview' && (<>
             {/* Instagram Embed */}
-            <div className="ch-card p-4">
+            <div>
               {isOwner && (
                 <div className="flex justify-end mb-1">
                   <button
@@ -6878,9 +6879,9 @@ export default function LeaguePage() {
             </div>
 
             {/* YouTube Embed */}
-            <div className="ch-card p-4">
+            <div>
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Latest Highlights</h3>
+                <h3 className="ch-section-title">Latest Highlights</h3>
                 {isOwner && (
                   <button
                     onClick={() => setIsEditingYoutube(!isEditingYoutube)}
@@ -6960,9 +6961,9 @@ export default function LeaguePage() {
             </div>
 
             {/* Comment Section Placeholder */}
-            <div className="ch-card p-5">
+            <div>
               <div className="flex items-center gap-2 mb-1.5">
-                <h3 className="text-sm font-semibold text-[color:var(--ch-text)]">Community Comments</h3>
+                <h3 className="ch-section-title">Community Comments</h3>
                 <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[color:var(--ch-surface-3)] text-[color:var(--ch-text-2)]">Coming soon</span>
               </div>
               <p className="text-xs text-[color:var(--ch-text-2)]">Only logged-in users can post.</p>

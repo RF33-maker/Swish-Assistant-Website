@@ -46,12 +46,12 @@ export default function LatestNewsSection() {
         {loading ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
             <div className="ch-skel lg:col-span-2 h-[420px] lg:h-[560px] rounded-[14px]" />
-            <div className="ch-card p-4 space-y-4">
+            <div className="space-y-4">
               {[0, 1, 2, 3].map((i) => <div key={i} className="ch-skel h-[68px]" />)}
             </div>
           </div>
         ) : !lead ? (
-          <div className="ch-card border-dashed p-10 text-center">
+          <div className="py-10 text-center">
             <Newspaper className="h-8 w-8 text-[color:var(--ch-muted)] mx-auto mb-3" />
             <p className="text-[color:var(--ch-text)] font-medium">No news yet</p>
             <p className="text-sm text-[color:var(--ch-text-2)] mt-1">
@@ -64,8 +64,8 @@ export default function LatestNewsSection() {
               <FeatureStory article={lead} />
             </Reveal>
             {rest.length > 0 && (
-              <Reveal delay={120} className="ch-card px-4 py-2 md:px-5 md:py-3 flex flex-col">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-muted)] pt-2 pb-1">More headlines</div>
+              <Reveal delay={120} className="flex flex-col">
+                <div className="ch-section-title pb-2 border-b border-[color:var(--ch-border-strong)]">More headlines</div>
                 <div className="divide-y divide-[color:var(--ch-border)] flex-1">
                   {rest.slice(0, 5).map((a) => (
                     <div key={a.id} className="py-1">

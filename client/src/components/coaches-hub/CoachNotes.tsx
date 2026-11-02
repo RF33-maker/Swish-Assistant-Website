@@ -160,7 +160,7 @@ export default function CoachNotesPanel({
   const rest = players.filter((p) => !api.noteFor(p));
 
   return (
-    <section className="ch-card p-4 md:p-6 space-y-4" aria-label={`Your notes on ${opponentName}`}>
+    <section aria-label={`Your notes on ${opponentName}`}>
       <div>
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mb-2">
           <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: 'var(--sr-tint, var(--ch-surface-3))', color: `var(--sr-ink, ${color})` }}>

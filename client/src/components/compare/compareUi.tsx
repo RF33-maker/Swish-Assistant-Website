@@ -216,7 +216,7 @@ export function Suggestions({
   loading?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-[color:var(--ch-border-strong)] p-4 md:p-6" data-testid="compare-suggestions">
+    <div className="border-t border-[color:var(--ch-border-strong)] pt-4 md:pt-6" data-testid="compare-suggestions">
       <p className="text-center text-sm text-[color:var(--ch-text-2)]">{loading ? "Loading…" : intro}</p>
       {suggestions.length > 0 && (
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -466,7 +466,7 @@ export function CompareLoading() {
 
 export function CompareError({ message, onRetry, testId }: { message: string; onRetry?: () => void; testId?: string }) {
   return (
-    <div className="rounded-xl border border-[color:var(--ch-border-strong)] px-4 py-8 text-center" data-testid={testId}>
+    <div className="py-8 text-center" data-testid={testId}>
       <p className="text-sm font-semibold text-[color:var(--ch-loss)]">{message}</p>
       {onRetry && (
         <button type="button" onClick={onRetry} className="ch-btn ch-btn-ghost mt-3 justify-center" data-testid={testId ? `${testId}-retry` : undefined}>

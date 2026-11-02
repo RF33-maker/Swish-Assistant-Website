@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, type CSSProperties } from "react";
+import { useState, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
@@ -9,7 +9,7 @@ import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { getTeamAbbreviation } from "@/lib/teamUtils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, Filter, Instagram, LayoutDashboard, BarChart3, CalendarDays, Crosshair, Award, Lock, Clock, Star, X as XIcon, BadgeCheck } from "lucide-react";
+import { ArrowLeft, Trophy, Filter, Instagram, LayoutDashboard, BarChart3, CalendarDays, Crosshair, Award, Lock, X as XIcon, BadgeCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
@@ -26,7 +26,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 import { generateShotChartCardBlob, generateStatTilesCardBlob } from "@/lib/generateProfileCards";
 import ShareableCard from "@/components/ShareableCard";
-import { withAlpha } from "@/lib/colorContrast";
+import { FlatStat, StatBar } from "@/components/FlatStat";
+import { parseMinutesPlayed, playedInGame } from "@/lib/gamesPlayed";
 import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { useHeadshotUrl } from "@/components/PlayerHeadshot";
@@ -489,7 +490,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     // Compute averages from the filtered game set (all, selected, or combined).
     // expandedCompIds maps selected parent league IDs → their competition IDs.
     const scopedGames = playerStats.filter(
-      (s: any) => (expandedCompIds.size === 0 || expandedCompIds.has(s.league_id)) && parseMinutesPlayed(s) > 0
+      (s: any) => (expandedCompIds.size === 0 || expandedCompIds.has(s.league_id)) && playedInGame(s)
     );
     if (scopedGames.length === 0) return;
 
@@ -674,18 +675,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     return num + "th";
   };
 
-  const parseMinutesPlayed = (stat: any): number => {
-    const minutes = stat.sminutes || stat.minutes_played;
-    if (!minutes) return 0;
-    if (typeof minutes === 'number') return minutes;
-    if (typeof minutes === 'string') {
-      const parts = minutes.split(':');
-      if (parts.length === 2) return parseInt(parts[0]) + parseInt(parts[1]) / 60;
-      return parseFloat(minutes) || 0;
-    }
-    return 0;
-  };
-
   const calculateRankings = async (leagueId: string, currentAverages: SeasonAverages, playerName: string, knownPlayerIds: string[] = []): Promise<PlayerRankings | null> => {
     try {
       // Narrow column set + pagination. A `select('*')` over an entire
@@ -725,7 +714,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
       if (!allStats || allStats.length === 0) return null;
 
-      const playedStats = allStats.filter(stat => parseMinutesPlayed(stat) > 0);
+      const playedStats = allStats.filter(stat => playedInGame(stat));
       if (playedStats.length === 0) return null;
 
       const playerTotals = new Map<string, any>();
@@ -1328,7 +1317,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         setPlayerStats(stats);
         setPlayerInfo(pInfo);
 
-        const gamesPlayed = stats.filter(stat => parseMinutesPlayed(stat) > 0);
+        const gamesPlayed = stats.filter(stat => playedInGame(stat));
 
         if (gamesPlayed.length > 0) {
           const sourceStats = gamesPlayed.length > 0 ? gamesPlayed : stats;
@@ -1679,7 +1668,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         return statLeagueId && expandedCompIds.has(statLeagueId);
       });
     }
-    return stats.filter(stat => parseMinutesPlayed(stat) > 0);
+    return stats.filter(stat => playedInGame(stat));
   }, [playerStats, expandedCompIds]);
 
   // Once the log mixes competitions (e.g. SLB and ENBL for the same club), each
@@ -1699,10 +1688,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     const mostRecent = sorted[0];
     // Results aren't loaded yet here, so the win bonus is left out of the pick.
     const bestGame = [...filteredStats].sort((a, b) => computeSwishScoreFor(b) - computeSwishScoreFor(a))[0];
-    if (mostRecent.id === bestGame.id) return [{ stat: mostRecent, label: 'Latest · Best' }];
+    if (mostRecent.id === bestGame.id) return [{ stat: mostRecent, label: 'Latest · Best', heading: 'Latest & best game' }];
     return [
-      { stat: mostRecent, label: 'Latest' },
-      { stat: bestGame, label: 'Best' },
+      { stat: mostRecent, label: 'Latest', heading: 'Latest game' },
+      { stat: bestGame, label: 'Best', heading: 'Best game' },
     ];
   }, [filteredStats]);
 
@@ -1949,7 +1938,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
     const seasons: any[] = [];
     leagueGroups.forEach((stats) => {
-      const played = stats.filter((s: any) => parseMinutesPlayed(s) > 0);
+      const played = stats.filter((s: any) => playedInGame(s));
       if (played.length === 0) return;
       const gp = played.length;
       const totals = played.reduce((acc: any, g: any) => ({
@@ -2049,7 +2038,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   // "career" means career. Season highs auto-detect the most recently played
   // league/season (the same one the "Most Recent" pinned game comes from).
   const playedCareerGames = useMemo(
-    () => (playerStats as any[]).filter(s => parseMinutesPlayed(s) > 0),
+    () => (playerStats as any[]).filter(s => playedInGame(s)),
     [playerStats]
   );
   const careerHighs = useMemo(() => computeHighs(playedCareerGames), [playedCareerGames]);
@@ -2391,7 +2380,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     );
   })() : null;
 
-  const pillStyle = { backgroundColor: withAlpha(readablePrimary.accent, 0.14), color: readablePrimary.body };
+  const pillStyle = { color: readablePrimary.body };
+
+  // Beside the cards, the last section sits level with their bottom edge.
+  // Plenty of players have no accolades, so their highs take that slot.
+  const sideHighs = accoladeCollection.length > 0 ? [] : (seasonHighs.length > 0 ? seasonHighs : careerHighs).slice(0, 3);
 
   const collectionPlayer: AccoladeCardPlayer = {
     id: playerInfo?.playerId || playerSlug,
@@ -2499,7 +2492,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         {leagueFilter && <div className="pb-2 sm:pb-2.5 shrink-0">{leagueFilter}</div>}
       </div>
 
-      <div className="mt-5 md:mt-6 space-y-5">
+      <div className="mt-5 md:mt-6 space-y-8 md:space-y-10">
         {activeTab === 'overview' && <>
         {playerInfo && (
           <div className="flex flex-wrap items-center gap-2">
@@ -2565,22 +2558,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         <div className="pp-overview-grid">
           {pinnedGames.length > 0 && playerInfo && (
             <section className="min-w-0" aria-labelledby="player-performances-heading">
-              <h2
-                id="player-performances-heading"
-                className="ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]"
-              >
-                Performances
-              </h2>
-              {/* Room above and below for the cards' shadow inside the scroller */}
-              <div className="tc-sizes -mx-4 px-4 scroll-px-4 sm:mx-0 sm:px-0 sm:scroll-px-0 flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory scrollbar-hide pt-3 pb-8">
-                {pinnedGames.map(({ stat, label }) => (
+              <h2 id="player-performances-heading" className="sr-only">Performances</h2>
+              {/* Room below for the cards' shadow inside the scroller, given back
+                  so this column ends at the cards and lines up with the stats. */}
+              <div className="tc-sizes -mx-4 px-4 scroll-px-4 sm:mx-0 sm:px-0 sm:scroll-px-0 flex gap-4 md:gap-5 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-16 -mb-16">
+                {pinnedGames.map(({ stat, label, heading }) => (
                   <div key={stat.id} className="snap-start shrink-0" style={{ width: "var(--fan-card-w)" }}>
-                    <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[color:var(--ch-text)]">
-                      {label.includes('Best')
-                        ? <Star className="h-3.5 w-3.5" style={{ color: readablePrimary.body }} aria-hidden="true" />
-                        : <Clock className="h-3.5 w-3.5" style={{ color: readablePrimary.body }} aria-hidden="true" />}
-                      {label}
-                    </div>
+                    <h3 className="ch-section-title mb-4">{heading}</h3>
                     <TradingCard perf={toCardPerformance(stat)} shareTitle={`${label} performance`} />
                   </div>
                 ))}
@@ -2588,7 +2572,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             </section>
           )}
 
-          <div className="min-w-0 space-y-5">
+          <div className={`pp-side min-w-0 ${accoladeCollection.length > 0 || sideHighs.length > 0 ? 'pp-side-fill' : ''}`}>
         {filteredSeasonAverages && (() => {
           type StatTile = { value: number; label: string; rank?: number };
           const seasonStats: StatTile[] = [
@@ -2615,6 +2599,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
           return (
             <ShareableCard
+              flat
               title="Season Averages"
               fileSlug="season-averages"
               player={{
@@ -2629,32 +2614,18 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               // The image is drawn by generateCardBlob, so the hidden capture layout isn't needed.
               shareContent={<></>}
             >
-              <div className="ch-card p-4 md:p-5">
-                <div className="flex items-center justify-between gap-3 mb-3 pr-10">
-                  <h3 className="ch-eyebrow">Season averages</h3>
+              <div>
+                <div className="flex items-center justify-between gap-3 mb-4 pr-10">
+                  <h3 className="whitespace-nowrap ch-section-title">Season averages</h3>
                   {filterLabel && (
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full truncate" style={pillStyle}>
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] truncate" style={pillStyle}>
                       {filterLabel}
                     </span>
                   )}
                 </div>
-                <div className="pp-tiles-6 grid grid-cols-3 gap-2">
+                <div className="pp-tiles-6 grid grid-cols-3 gap-x-6 gap-y-5">
                   {seasonStats.map((stat, i) => (
-                    <div key={i} className="ch-tile px-2 py-3 flex flex-col items-center text-center">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">
-                        {stat.label}
-                      </div>
-                      <div className="ch-display font-bold tabular-nums leading-none text-[1.9rem] mt-1.5" style={{ color: readablePrimary.body }}>
-                        {stat.value.toFixed(1)}
-                      </div>
-                      <div className="mt-2 h-[18px] flex items-center">
-                        {stat.rank ? (
-                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums" style={pillStyle}>
-                            {getOrdinalSuffix(stat.rank)}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
+                    <FlatStat key={i} label={stat.label} value={stat.value.toFixed(1)} rank={stat.rank ? getOrdinalSuffix(stat.rank) : undefined} rankColor={readablePrimary.body} />
                   ))}
                 </div>
               </div>
@@ -2685,6 +2656,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
           return (
             <ShareableCard
+              flat
               title="Shooting Splits"
               fileSlug="shooting"
               player={{
@@ -2698,31 +2670,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               generateCardBlob={generateCardBlob}
               shareContent={<></>}
             >
-              <div className="ch-card p-4 md:p-5">
-                <h3 className="ch-eyebrow mb-3 pr-10">Shooting</h3>
-                <div className="grid grid-cols-3 gap-2">
+              <div>
+                <h3 className="ch-section-title mb-4 pr-10">Shooting</h3>
+                <div className="pp-tiles-6 grid grid-cols-3 gap-x-6 gap-y-5">
                   {shootingStats.map((stat, i) => (
-                    <div key={i} className="ch-tile px-2 py-3 flex flex-col items-center text-center">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">
-                        {stat.label}
-                      </div>
-                      <div className="ch-display font-bold tabular-nums leading-none text-[1.9rem] mt-1.5" style={{ color: readablePrimary.body }}>
-                        {formatPercentage(stat.value)}
-                      </div>
-                      <div className="mt-2 h-[18px] flex items-center">
-                        {stat.rank ? (
-                          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums" style={pillStyle}>
-                            {getOrdinalSuffix(stat.rank)}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="w-full mt-2 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: withAlpha(readablePrimary.accent, 0.18) }}>
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readablePrimary.accent }}
-                        />
-                      </div>
-                    </div>
+                    <FlatStat key={i} label={stat.label} value={formatPercentage(stat.value)} rank={stat.rank ? getOrdinalSuffix(stat.rank) : undefined} rankColor={readablePrimary.body}>
+                      <StatBar percent={stat.value} color={readablePrimary.accent} />
+                    </FlatStat>
                   ))}
                 </div>
               </div>
@@ -2730,10 +2684,19 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           );
         })()}
 
+        {sideHighs.length > 0 && (
+          <div>
+            <h3 className="ch-section-title mb-4">{seasonHighs.length > 0 ? 'Season highs' : 'Career highs'}</h3>
+            <div className="pp-tiles-6 grid grid-cols-3 gap-x-6 gap-y-5">
+              {sideHighs.map((stat) => <FlatStat key={stat.label} label={stat.label} value={stat.value} />)}
+            </div>
+          </div>
+        )}
+
         {accoladeCollection.length > 0 && (
-          <div className="ch-card p-4 md:p-5">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <h3 className="ch-eyebrow">Top accolades</h3>
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="ch-section-title">Accolades</h3>
               <button
                 type="button"
                 onClick={() => setActiveTab('accolades')}
@@ -2743,12 +2706,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 View the collection ({accoladeCollection.length})
               </button>
             </div>
-            <AccoladeChips
-              accolades={accoladeCollection}
-              teamColor={primaryColor || '#f97316'}
-              readableTeamColor={readablePrimary.body}
-              onOpen={() => setActiveTab('accolades')}
-            />
+            <div className="pp-accolades">
+              <AccoladeChips
+                accolades={accoladeCollection}
+                teamColor={primaryColor || '#f97316'}
+                readableTeamColor={readablePrimary.body}
+                onOpen={() => setActiveTab('accolades')}
+              />
+            </div>
           </div>
         )}
           </div>
@@ -2758,7 +2723,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
         {activeTab === 'splits' && playerInfo?.playerId && (
           selectedLeagueIds.size > 1 ? (
-            <div className="ch-card p-5 text-center text-sm text-[color:var(--ch-text-2)]">
+            <div className="py-5 text-sm text-[color:var(--ch-text-2)]">
               Select a single league to see on/off impact.
             </div>
           ) : (
@@ -2777,21 +2742,15 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         {activeTab === 'stats' && <>
         {(careerHighs.length > 0 || seasonHighs.length > 0) && (() => {
           const HighsGrid = ({ highs }: { highs: StatHigh[] }) => (
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-x-6 gap-y-5">
               {highs.map((stat, i) => (
-                <div key={i} className="ch-tile px-2 py-3 flex flex-col items-center text-center">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--ch-muted)]">
-                    {stat.label}
-                  </div>
-                  <div className="ch-display font-bold tabular-nums leading-none text-[1.9rem] mt-1.5" style={{ color: readablePrimary.body }}>
-                    {stat.value}
-                  </div>
-                  <div className="mt-2 text-[10px] leading-tight text-[color:var(--ch-muted)]">
+                <FlatStat key={i} label={stat.label} value={stat.value}>
+                  <div className="mt-1 text-[11px] leading-tight text-[color:var(--ch-text-2)]">
                     vs {stat.opponent}
                     <br />
                     {stat.date ? formatDate(stat.date) : ''}
                   </div>
-                </div>
+                </FlatStat>
               ))}
             </div>
           );
@@ -2799,13 +2758,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           // highs — showing both blocks would just be the same numbers twice.
           const isSingleSeason = !!currentSeason && currentSeason.games.length === playedCareerGames.length;
           return (
-            <div className="ch-card p-4 md:p-5 space-y-5">
+            <div className="space-y-8">
               {seasonHighs.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <h3 className="ch-eyebrow">{isSingleSeason ? 'Season / career high' : 'Season high'}</h3>
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <h3 className="whitespace-nowrap ch-section-title">{isSingleSeason ? 'Season / career high' : 'Season high'}</h3>
                     {currentSeason && (
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full truncate" style={pillStyle}>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] truncate" style={pillStyle}>
                         {currentSeason.label}
                       </span>
                     )}
@@ -2815,7 +2774,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               )}
               {careerHighs.length > 0 && !isSingleSeason && (
                 <div>
-                  <h3 className="ch-eyebrow mb-3">Career high</h3>
+                  <h3 className="ch-section-title mb-4">Career high</h3>
                   <HighsGrid highs={careerHighs} />
                 </div>
               )}
@@ -2824,9 +2783,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         })()}
 
         {careerStats.length > 0 && (
-          <div className="ch-card overflow-hidden">
-            <div className="p-4 md:p-5 pb-0 md:pb-0 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <h3 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] text-[color:var(--ch-text)]">Career stats</h3>
+          <div>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <h3 className="ch-section-title">Career stats</h3>
               <div className="ch-seg self-start" role="tablist" aria-label="Career stats view">
                 {["averages", "totals", "advanced"].map(tab => (
                   <button
@@ -2844,9 +2803,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               </div>
             </div>
             <div className="overflow-x-auto mt-4">
-              <table className="ch-table w-full text-xs">
+              <table className="ch-table ch-table-flat w-full text-xs">
                 <thead>
-                  <tr className="border-y border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]">
+                  <tr className="border-b border-[color:var(--ch-border-strong)]">
                     <th className="px-2 py-2 text-left whitespace-nowrap">Season</th>
                     <th className="px-2 py-2 text-left whitespace-nowrap">Team</th>
                     {careerStatsTab === "averages" && (
@@ -2941,8 +2900,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         )}
 
         {playerLeagues.length > 0 && (
-          <div className="ch-card p-4 md:p-5">
-            <h3 className="ch-eyebrow mb-3">Active leagues</h3>
+          <div>
+            <h3 className="ch-section-title mb-4">Active leagues</h3>
             <div className="flex flex-wrap gap-2">
               {playerLeagues.map((league) => (
                 <Link
@@ -2975,6 +2934,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         </>}
 
         {activeTab === 'splits' && <ShareableCard
+          flat
           title="Shot Chart"
           fileSlug="shot-chart"
           player={{
@@ -2992,9 +2952,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           // The image is drawn by generateCardBlob, so the hidden capture layout isn't needed.
           shareContent={<></>}
         >
-        <div className="ch-card p-4 md:p-5">
+        <div>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4 md:pr-10">
-            <h3 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] text-[color:var(--ch-text)]">Shot chart</h3>
+            <h3 className="ch-section-title">Shot chart</h3>
             <Select value={playerShotChartRange} onValueChange={setPlayerShotChartRange}>
               <SelectTrigger className="w-full md:w-52 h-9 text-sm rounded-lg border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] text-[color:var(--ch-text)]">
                 <SelectValue placeholder="Select range" />
@@ -3015,6 +2975,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             shots={playerShotData || []}
             loading={playerShotsLoading}
             compact
+            flat
             emptyMessage="No shot data available for this player."
             filters={{ showQuarterFilter: true, showResultFilter: true }}
           />
@@ -3024,7 +2985,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         {/* The game log is public (search engines index it too); making cards
             from games is what an account adds. */}
         {activeTab === 'games' && !user && (
-          <div className="ch-card mb-3 flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="games-signup-prompt">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-testid="games-signup-prompt">
             <p className="text-sm text-[color:var(--ch-text-2)]">
               Make a shareable card from any of {playerInfo?.name ? `${playerInfo.name.split(" ")[0]}'s` : "these"} games. It's free.
             </p>
@@ -3035,9 +2996,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           </div>
         )}
 
-        {activeTab === 'games' && <div className="ch-card overflow-hidden">
-          <div className="px-4 md:px-5 py-3.5 border-b border-[color:var(--ch-border)] flex flex-wrap items-center justify-between gap-2">
-            <h3 className="ch-display uppercase font-bold tracking-tight leading-none text-[1.35rem] text-[color:var(--ch-text)]">Game log</h3>
+        {activeTab === 'games' && <div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="ch-section-title">Game log</h3>
             <div className="flex items-center gap-3 text-xs text-[color:var(--ch-muted)]">
               {filteredStats.length > 0 && (
                 <span className="hidden sm:block">Tap a game for its card</span>
@@ -3052,14 +3013,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             </div>
           </div>
           {filteredStats.length === 0 ? (
-            <div className="p-6 md:p-8 text-center text-sm text-[color:var(--ch-text-2)]">
+            <div className="py-5 text-sm text-[color:var(--ch-text-2)]">
               No game statistics found for this player{selectedLeagueIds.size > 0 ? " in the selected league(s)" : ""}.
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="ch-table w-full text-xs">
+              <table className="ch-table ch-table-flat w-full text-xs">
                 <thead>
-                  <tr className="border-b border-[color:var(--ch-border)] bg-[color:var(--ch-surface-2)]">
+                  <tr className="border-b border-[color:var(--ch-border-strong)]">
                     <th className="px-2 py-2 text-left whitespace-nowrap">Date</th>
                     <th className="px-2 py-2 text-left whitespace-nowrap">Opp</th>
                     {showCompetitionColumn && <th className="px-2 py-2 text-left whitespace-nowrap">Competition</th>}
@@ -3141,7 +3102,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               <div>
                 <h2
                   id="player-collection-heading"
-                  className="ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]"
+                  className="ch-section-title"
                 >
                   The collection
                 </h2>

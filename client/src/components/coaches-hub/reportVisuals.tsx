@@ -298,14 +298,14 @@ export function NarrativeSummary({
 
   if (status === 'loading') {
     return (
-      <div className="ch-card p-4 md:p-6">
+      <div>
         <p className="text-sm text-gray-400 dark:text-neutral-500 italic">Writing the analysis…</p>
       </div>
     );
   }
 
   return (
-    <div className="ch-card p-4 md:p-6">
+    <div>
       <div className="flex items-center gap-2.5 mb-2">
         <span className="ch-kicker-n" style={{ color }}>
           ANALYSIS
