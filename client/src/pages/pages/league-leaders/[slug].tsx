@@ -43,9 +43,9 @@ interface League {
 type StatCategory = 'Traditional' | 'Advanced';
 
 // Minimum attempt thresholds for percentage leaderboards
-const MIN_FGA = 12;
-const MIN_3PA = 6;
-const MIN_FTA = 8;
+const MIN_FGA = 18;
+const MIN_3PA = 10;
+const MIN_FTA = 12;
 
 interface StatLeaderDef {
   key: string;
