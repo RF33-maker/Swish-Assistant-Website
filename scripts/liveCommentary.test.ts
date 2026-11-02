@@ -100,3 +100,56 @@ test("running totals are dropped for a player whose total doesn't match the box 
   assert.doesNotMatch(after.map((i) => i.text).join(" "), /for the night|points for|season high/);
   assert.equal(tallyMismatches(first, { p1: 12 }).size, 0);
 });
+
+test("a scorer's correction entered after the game keeps the real final score", async () => {
+  const { inGameOrder, parseGameFlow } = await import("../client/src/lib/gameFlow");
+  const marker = (o: Partial<CommentaryEvent>) =>
+    ev({ team_no: 0, player_name: "", player_id: null, action_type: "period", sub_type: "end", scoring: false, ...o });
+  const play = { action_type: "2pt", sub_type: "layup" };
+  const away = { team_no: 2, player_id: "p2", player_name: "L. Cvitanovic" };
+  n = 0;
+  const events = [
+    ev({ ...play, period: 3, clock: "06:12:00", score: "65-39", ...away }),
+    ev({ ...play, period: 3, clock: "05:38:00", score: "65-42", ...away }),
+    marker({ period: 3, clock: "00:00:00", score: "75-53" }),
+    ev({ ...play, period: 4, clock: "00:16:00", score: "101-78" }),
+    marker({ period: 4, clock: "00:00:00", score: "101-78" }),
+    // Entered last, but it happened at 05:49 of the third.
+    ev({ ...away, action_type: "freethrow", sub_type: "1of1", period: 3, clock: "05:49:00", score: "65-40" }),
+    marker({ action_type: "game", period: 4, clock: "00:00:00", score: "101-78" }),
+  ];
+
+  const ordered = inGameOrder(events).map((e) => e.action_number);
+  assert.deepEqual(ordered, [1, 6, 2, 3, 4, 5, 7]);
+
+  const items = buildCommentary({ ...base, events, isFinal: true });
+  const final = items[items.length - 1];
+  assert.equal(final.kind, "final");
+  assert.match(final.text, /win 101-78/);
+  assert.deepEqual([final.homeScore, final.awayScore], [101, 78]);
+  // The late free throw reads as a Q3 play, not as the last thing to happen.
+  const freeThrow = items.find((i) => i.kind === "free-throw")!;
+  assert.deepEqual([freeThrow.period, freeThrow.homeScore, freeThrow.awayScore], [3, 65, 40]);
+  assert.equal(items[items.length - 2].homeScore, 101);
+
+  const flow = parseGameFlow(events as any);
+  assert.deepEqual([flow[flow.length - 1].homeScore, flow[flow.length - 1].awayScore], [101, 78]);
+});
+
+test("without a game-end row the final line uses the running score", () => {
+  n = 0;
+  const events = [ev({ score: "60-58" }), ev({ clock: "00:05:00", score: "63-58" })];
+  const items = buildCommentary({ ...base, events, isFinal: true });
+  assert.match(items[items.length - 1].text, /win 63-58/);
+});
+
+test("rows in the right order are left alone, wobbling clocks included", async () => {
+  const { inGameOrder } = await import("../client/src/lib/gameFlow");
+  n = 0;
+  const events = [
+    ev({ period: 2, clock: "05:00:00", score: "10-8" }),
+    ev({ period: 2, clock: "05:10:00", score: "12-8" }), // clock runs backwards, still in sequence
+    ev({ period: 3, clock: "10:00:00", score: "12-8" }),
+  ];
+  assert.deepEqual(inGameOrder(events).map((e) => e.action_number), [1, 2, 3]);
+});

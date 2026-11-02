@@ -257,7 +257,7 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
         <div className="text-[11px] md:text-xs font-semibold uppercase tracking-wide text-white/70 mb-1">Match report</div>
         <div className="flex items-baseline gap-3 flex-wrap">
           <span className="px-2 py-0.5 rounded text-xs font-bold bg-white/20">{won ? 'WIN' : 'LOSS'}</span>
-          <h2 className="ch-display uppercase text-3xl md:text-5xl font-bold tracking-tight tabular-nums">{myScore ?? '—'}–{theirScore ?? '—'}</h2>
+          <h2 className="ch-score text-3xl md:text-5xl tabular-nums">{myScore ?? '—'}–{theirScore ?? '—'}</h2>
           <span className="text-sm md:text-base text-white/90">
             {teamName} vs {theirs.name}
           </span>

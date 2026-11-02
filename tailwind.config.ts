@@ -18,7 +18,7 @@ export default {
           foreground: "hsl(var(--card-foreground))",
         },
         fontFamily: {
-          sans: ['Poppins', 'ui-sans-serif', 'system-ui'],
+          sans: ['var(--font-body)', 'ui-sans-serif', 'system-ui'],
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",

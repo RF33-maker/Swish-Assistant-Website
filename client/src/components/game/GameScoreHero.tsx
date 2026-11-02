@@ -204,7 +204,7 @@ export default function GameScoreHero({
   ].join(", ");
   const lightTeams = relativeLuminance(colors.homeFill) > 0.12 && relativeLuminance(colors.awayFill) > 0.12;
 
-  const scoreClass = "ch-display font-bold leading-none tabular-nums text-white text-[3.25rem] sm:text-[4.5rem] md:text-[6rem] transition-opacity";
+  const scoreClass = "ch-score leading-none tabular-nums text-white text-[3.25rem] sm:text-[4.5rem] md:text-[6rem] transition-opacity";
 
   return (
     <section
@@ -232,9 +232,9 @@ export default function GameScoreHero({
           <div className={`flex flex-col items-center ${center ? "col-span-2 row-start-2 sm:col-span-1 sm:row-start-auto" : ""}`}>
             {center ?? (hasScore ? (
               <div className="flex items-center gap-2.5 sm:gap-4 md:gap-6">
-                <span className={scoreClass} style={{ opacity: homeLost ? 0.55 : 1 }} data-testid="home-score">{homeScore}</span>
+                <span className={scoreClass} style={{ opacity: homeLost ? 0.75 : 1 }} data-testid="home-score">{homeScore}</span>
                 <span aria-hidden="true" className="h-8 sm:h-12 md:h-16 w-px bg-white/30" />
-                <span className={scoreClass} style={{ opacity: awayLost ? 0.55 : 1 }} data-testid="away-score">{awayScore}</span>
+                <span className={scoreClass} style={{ opacity: awayLost ? 0.75 : 1 }} data-testid="away-score">{awayScore}</span>
               </div>
             ) : (
               <span className="ch-display font-bold uppercase leading-none text-white/90 text-[2.25rem] md:text-[3.5rem]">VS</span>

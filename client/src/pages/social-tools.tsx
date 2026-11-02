@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ClipboardList, Flame, ImagePlus, Layers, Medal, ScatterChart, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, Circle, ClipboardList, Flame, Ghost, ImagePlus, Layers, Medal, ScatterChart, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
 import AdminPageShell from "@/components/layout/AdminPageShell";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TopPerformancesStudio from "@/components/social/TopPerformancesStudio";
@@ -8,12 +8,16 @@ import LeadersStudio from "@/components/social/LeadersStudio";
 import RecordsStudio from "@/components/social/RecordsStudio";
 import LineupsStudio from "@/components/social/LineupsStudio";
 import LandscapeStudio from "@/components/social/LandscapeStudio";
+import VennStudio from "@/components/social/VennStudio";
+import RankedBarsStudio from "@/components/social/RankedBarsStudio";
 import ScoresStudio from "@/components/social/ScoresStudio";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 import { FIELD, SELECT_MENU } from "@/components/social/studioUi";
+import { setSharedCardStyle, useCardStyle } from "@/components/social/CardStylePicker";
+import { isHalloweenSeason } from "@/lib/cardStyle";
 
-type SectionId = "performances" | "d2-results" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "game-records" | "best-lineup" | "photos";
+type SectionId = "performances" | "d2-results" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "team-venn" | "ranked-bars" | "game-records" | "best-lineup" | "photos";
 
 type Group = "Game cards" | "Weekly awards" | "League leaders" | "Lineups" | "Tools";
 
@@ -35,6 +39,8 @@ const SECTIONS: Section[] = [
   { id: "player-leaders", group: "League leaders", label: "Player leaders", icon: Medal },
   { id: "team-leaders", group: "League leaders", label: "Team leaders", icon: Shield },
   { id: "team-landscape", group: "League leaders", label: "Team landscape", icon: ScatterChart },
+  { id: "team-venn", group: "League leaders", label: "Team Venn", icon: Circle },
+  { id: "ranked-bars", group: "League leaders", label: "Ranked bars", icon: BarChart3 },
   { id: "game-records", group: "League leaders", label: "Single-game records", icon: Flame },
   { id: "best-lineup", group: "Lineups", label: "Best lineup", icon: Layers },
   { id: "photos", group: "Tools", label: "Player photos", icon: ImagePlus },
@@ -78,12 +84,51 @@ export default function SocialToolsPage() {
     window.history.replaceState(null, "", url);
   };
 
+  // Seasonal: a small nudge towards the Halloween card style while it's on offer.
+  const halloween = isHalloweenSeason();
+  const [cardStyle] = useCardStyle();
+
   const show = (id: SectionId) => (active === id ? "" : "hidden");
   const current = SECTIONS.find((s) => s.id === active) ?? SECTIONS[0];
   const CurrentIcon = current.icon;
 
   return (
-    <AdminPageShell title="Swish Social" description="Create share-ready graphics from your competition stats." width="max-w-[1500px]">
+    <AdminPageShell
+      title="Swish Social"
+      description={halloween ? "Create share-ready graphics from your competition stats. 🎃" : "Create share-ready graphics from your competition stats."}
+      width="max-w-[1500px]"
+    >
+      {halloween && (
+        <div
+          className="ch-rise mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[#6d28d9]/40 bg-[linear-gradient(100deg,rgba(109,40,217,0.16),rgba(249,115,22,0.10))] px-3.5 py-2.5 text-[13px] text-[color:var(--ch-text)]"
+          data-testid="halloween-banner"
+        >
+          <Ghost className="h-4 w-4 flex-none text-[#fb923c]" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="font-semibold">Halloween special</span>
+            <span className="text-[color:var(--ch-text-2)]"> · a moonlit purple-and-pumpkin card style, here until 7 November.</span>
+          </span>
+          {cardStyle === "halloween" ? (
+            <button
+              type="button"
+              onClick={() => setSharedCardStyle("league")}
+              className="ch-chip inline-flex h-8 items-center px-3 text-[12px]"
+              data-testid="halloween-off"
+            >
+              Back to league colour
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSharedCardStyle("halloween")}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#f97316] px-3.5 text-[12px] font-semibold text-[#140b22] transition hover:bg-[#fb923c]"
+              data-testid="halloween-on"
+            >
+              🎃 Use Halloween style
+            </button>
+          )}
+        </div>
+      )}
       {/* Phones: one compact menu */}
       <div className="mb-4 md:hidden">
         <Select value={active} onValueChange={(v) => select(v as SectionId)}>
@@ -169,6 +214,16 @@ export default function SocialToolsPage() {
         {visited.has("team-landscape") && (
           <div className={show("team-landscape")}>
             <LandscapeStudio />
+          </div>
+        )}
+        {visited.has("team-venn") && (
+          <div className={show("team-venn")}>
+            <VennStudio />
+          </div>
+        )}
+        {visited.has("ranked-bars") && (
+          <div className={show("ranked-bars")}>
+            <RankedBarsStudio />
           </div>
         )}
         {visited.has("game-records") && (

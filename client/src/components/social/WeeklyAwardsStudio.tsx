@@ -39,6 +39,7 @@ import {
 import { renderPlayerOfTheWeek } from "@/lib/generatePlayerOfTheWeekCard";
 import { renderTeamOfTheWeek, teamPanelIndexAt } from "@/lib/generateTeamOfTheWeekCard";
 import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
+import { usesLeagueColour } from "@/lib/cardStyle";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import type { WeeklyAward, WeeklyAwardsResponse } from "@/types/weeklyAwards";
 
@@ -450,7 +451,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
 
         <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
 
-        {style !== "swish" && (
+        {usesLeagueColour(style) && (
           <ColourField
             value={primaryHex}
             custom={!!colorOverride}

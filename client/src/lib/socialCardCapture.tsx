@@ -3,6 +3,15 @@ import html2canvas from "html2canvas";
 import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCardV1";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 
+/** Seasonal layers ride along on the template key ("photo-overlay+halloween"), so every
+ *  caller that already passes a template carries them through untouched. */
+export const HALLOWEEN_SUFFIX = "+halloween";
+
+export function parseCardTemplate(template: string): { base: string; halloween: boolean } {
+  const halloween = template.endsWith(HALLOWEEN_SUFFIX);
+  return { base: halloween ? template.slice(0, -HALLOWEEN_SUFFIX.length) : template, halloween };
+}
+
 const CARD_WIDTH = 1080;
 const CARD_HEIGHT = 1350;
 const REEL_CARD_HEIGHT = 1920;
@@ -70,7 +79,7 @@ export async function renderSocialCardToBlob(
   data: PlayerPerformanceV1Data,
   template: string,
 ): Promise<Blob | null> {
-  const height = template === "photo-overlay-reel" ? REEL_CARD_HEIGHT : CARD_HEIGHT;
+  const height = parseCardTemplate(template).base === "photo-overlay-reel" ? REEL_CARD_HEIGHT : CARD_HEIGHT;
   const hiddenContainer = document.createElement("div");
   hiddenContainer.setAttribute("aria-hidden", "true");
   hiddenContainer.style.cssText = [

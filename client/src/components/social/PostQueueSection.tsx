@@ -4,7 +4,7 @@ import { PlayerPerformanceCardV1 } from "./PlayerPerformanceCardV1";
 import { BTN_GHOST, BTN_PRIMARY, ERROR, HINT, Panel } from "./studioUi";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import useEmblaCarousel from "embla-carousel-react";
-import { renderSocialCardToBlob } from "@/lib/socialCardCapture";
+import { parseCardTemplate, renderSocialCardToBlob } from "@/lib/socialCardCapture";
 
 type Props = {
   cards: PlayerPerformanceV1Data[];
@@ -15,7 +15,7 @@ type Props = {
 };
 
 export function PostQueueSection({ cards, loading = false, onRemove, onClear, template = "default" }: Props) {
-  const isReel = template === "photo-overlay-reel";
+  const isReel = parseCardTemplate(template).base === "photo-overlay-reel";
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);

@@ -4439,6 +4439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     { key: "stl", title: "Steals Per Game", label: "Steals", short: "SPG", col: "ssteals" },
     { key: "blk", title: "Blocks Per Game", label: "Blocks", short: "BPG", col: "sblocks" },
     { key: "tpm", title: "3-Pointers Made Per Game", label: "3-Pointers Made", short: "3PM", col: "sthreepointersmade" },
+    { key: "facilitator", title: "Facilitator", label: "Facilitator (assists minus bad passes)", short: "NET AST", signed: true },
     { key: "fg_pct", title: "Field Goal Percentage", label: "Field Goal %", short: "FG%", made: "sfieldgoalsmade", att: "sfieldgoalsattempted", minAtt: 5, minAttPerGame: 4 },
     { key: "tp_pct", title: "3-Point Percentage", label: "3-Point %", short: "3P%", made: "sthreepointersmade", att: "sthreepointersattempted", minAtt: 5, minAttPerGame: 3 },
     { key: "ft_pct", title: "Free Throw Percentage", label: "Free Throw %", short: "FT%", made: "sfreethrowsmade", att: "sfreethrowsattempted", minAtt: 5, minAttPerGame: 2 },
@@ -4457,13 +4458,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     { key: "ft_pct", title: "Free Throw Percentage", label: "Free Throw %", short: "FT%", made: "tot_sfreethrowsmade", att: "tot_sfreethrowsattempted", minAtt: 1 },
   ];
 
-  async function fetchAllLeagueRows(table: string, columns: string, leagueIds: string[]): Promise<Record<string, any>[]> {
+  async function fetchAllLeagueRows(
+    table: string,
+    columns: string,
+    leagueIds: string[],
+    narrow: (query: any) => any = (query) => query,
+  ): Promise<Record<string, any>[]> {
     const out: Record<string, any>[] = [];
     for (let from = 0; from < 60000; from += 1000) {
-      const { data, error } = await supabaseAdmin
-        .from(table)
-        .select(columns)
-        .in("league_id", leagueIds)
+      const { data, error } = await narrow(supabaseAdmin.from(table).select(columns).in("league_id", leagueIds))
         .order("id")
         .range(from, from + 999);
       if (error) throw new Error(error.message);
@@ -4478,6 +4481,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const m = /^(\d+):(\d+)/.exec(String(v ?? ""));
     return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
   };
+
+  const shirtKey = (gameKey: unknown, teamId: unknown, shirt: unknown) => `${gameKey}|${teamId}|${String(shirt ?? "").trim()}`;
+
+  // Bad-pass turnovers by game, team and shirt. The play-by-play's own player_id often points at
+  // a different record of the same player than the box score does; the shirt within a game does not.
+  async function fetchBadPasses(leagueIds: string[]) {
+    const events = await fetchAllLeagueRows("live_events", "game_key, team_id, shirt_number, action_number, sub_type", leagueIds, (q) =>
+      q.eq("action_type", "turnover"),
+    );
+    const games = new Set<string>();
+    const seen = new Set<string>();
+    const counts = new Map<string, number>();
+    for (const e of events) {
+      games.add(e.game_key);
+      const eventKey = `${e.game_key}|${e.action_number}`;
+      if (String(e.sub_type).toLowerCase() !== "badpass" || seen.has(eventKey)) continue;
+      seen.add(eventKey);
+      const key = shirtKey(e.game_key, e.team_id, e.shirt_number);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return { games, counts };
+  }
 
   app.get("/api/league/:slug/leaders", async (req: Request, res: Response) => {
     try {
@@ -4506,12 +4531,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let gamesCounted = 0;
       if (kind === "player") {
         const cols = ["player_id", "full_name", "team_id", "team_name", "league_id", "game_key", "sminutes", "spoints", "sreboundstotal", "sassists", "ssteals", "sblocks", "sthreepointersmade", "sthreepointersattempted", "sfieldgoalsmade", "sfieldgoalsattempted", "sfreethrowsmade", "sfreethrowsattempted"];
-        const rows = await fetchAllLeagueRows("player_stats", cols.join(","), leagueIds);
-        gamesCounted = new Set(rows.map((r) => r.game_key)).size;
+        const rows = await fetchAllLeagueRows("player_stats", [...cols, "shirtnumber"].join(","), leagueIds);
+        // Bad passes come from the play-by-play, so only games that have one count, or assists
+        // would be measured over games with no bad passes to take off them.
+        const badPasses = category.key === "facilitator" ? await fetchBadPasses(leagueIds) : null;
+        gamesCounted = new Set(rows.map((r) => r.game_key).filter((g) => !badPasses || badPasses.games.has(g))).size;
         // A box score can carry the same player twice; count each player once per game.
         const seenPlayerGames = new Set<string>();
         for (const r of rows) {
           if (!r.player_id) continue;
+          if (badPasses && !badPasses.games.has(r.game_key)) continue;
           const playerGame = `${r.player_id}|${r.game_key}`;
           if (seenPlayerGames.has(playerGame)) continue;
           seenPlayerGames.add(playerGame);
@@ -4519,6 +4548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!played) continue;
           const values: Record<string, number> = {};
           for (const c of cols.slice(7)) values[c] = num(r[c]);
+          if (badPasses) values.badPasses = badPasses.counts.get(shirtKey(r.game_key, r.team_id, r.shirtnumber)) ?? 0;
           bump(r.player_id, { id: r.player_id, name: r.full_name, team_name: r.team_name, team_id: r.team_id, league_id: r.league_id }, values);
         }
       } else {
@@ -4562,6 +4592,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (category.key === "diff") {
           const g = a.sums.oppGames || 0;
           if (g > 0) value = ((a.sums.tot_spoints || 0) - (a.sums.opp || 0)) / g;
+        } else if (category.key === "facilitator") {
+          value = ((a.sums.sassists || 0) - (a.sums.badPasses || 0)) / a.games;
         } else if (category.col) {
           value = (a.sums[category.col] || 0) / a.games;
         }
@@ -4611,6 +4643,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           games: agg.games,
           value: Math.round(value * 100) / 100,
           display,
+          detail:
+            category.key === "facilitator"
+              ? `${((agg.sums.sassists || 0) / agg.games).toFixed(1)} AST  ·  ${((agg.sums.badPasses || 0) / agg.games).toFixed(1)} BAD PASSES`
+              : null,
           photoUrl: kind === "player" ? photoUrl(info?.photo_path || borrow?.photo_path) : null,
           photoFocusY: info?.photo_path ? info?.photo_focus_y ?? 50 : borrow?.photo_focus_y ?? 50,
         };
