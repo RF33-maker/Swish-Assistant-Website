@@ -89,7 +89,7 @@ export default function LeagueStandingsTable({ rows, leagueId, slug, getLogoUrl 
   }
 
   return (
-    <div className="overflow-x-auto -mx-4 md:mx-0">
+    <div className="overflow-x-auto">
       <table className="ch-table ch-table-flat w-full text-sm min-w-[700px]">
         <thead>
           <tr className="border-b border-[color:var(--ch-border-strong)]">
