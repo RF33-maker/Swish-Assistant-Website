@@ -5,6 +5,7 @@ import { Helmet } from "react-helmet-async";
 import { gamePath, playerSeoDescription, playerSeoTitle, teamPath } from "@shared/seo";
 import { playerBio } from "@shared/recaps";
 import EntityLink from "@/components/EntityLink";
+import { useAskScope } from "@/components/ask-swish/AskSwishProvider";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { getTeamAbbreviation } from "@/lib/teamUtils";
@@ -259,6 +260,15 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
   const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null; instagramUrl?: string | null; instagramHandle?: string | null; dbCurrentTeam?: string | null; dbPreviousTeams?: string[] | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
+  // Ask Swish answers about this player by default while the profile is open.
+  useAskScope(playerInfo?.name ? {
+    playerName: playerInfo.name,
+    playerId: playerInfo.playerId ?? null,
+    teamName: playerInfo.team || null,
+    leagueId: playerInfo.leagueId ?? playerLeagues[0]?.id ?? null,
+    leagueName: playerLeagues.find((l) => l.id === playerInfo.leagueId)?.name ?? playerLeagues[0]?.name ?? null,
+    leagueSlug: playerLeagues.find((l) => l.id === playerInfo.leagueId)?.slug ?? playerLeagues[0]?.slug ?? null,
+  } : null);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
   const [selectedLeagueIds, setSelectedLeagueIds] = useState<Set<string>>(new Set());

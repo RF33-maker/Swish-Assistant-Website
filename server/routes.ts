@@ -13,6 +13,7 @@ import { getTeamCompetitions } from "./teamCompetitions";
 import { getLeagueSides } from "./teamSides";
 import { clubLeagueIds, clubSearchCore } from "@shared/clubLeagues";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
+import { registerAskSwishRoutes } from "./askSwishRoutes";
 import { registerPlaybookRoutes } from "./playbookRoutes";
 import { registerScoutRosterRoutes } from "./scoutRoster";
 import { registerBillingRoutes } from "./billing/billingRoutes";
@@ -438,6 +439,7 @@ async function fetchLatestPodcast(): Promise<PodcastResponse> {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   registerScoutAgentRoutes(app);
+  registerAskSwishRoutes(app);
   registerPlaybookRoutes(app);
   registerScoutRosterRoutes(app, { filterLeagueIdsForPublicScope });
   registerBillingRoutes(app);

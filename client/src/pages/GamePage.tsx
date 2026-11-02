@@ -12,7 +12,7 @@ import { normalizeEventPeriods, normalizeShotPeriods, periodBreakLabel, periodLa
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import LeagueChatbot from "@/components/LeagueChatbot";
+import { useAskScope } from "@/components/ask-swish/AskSwishProvider";
 import type { ShotData } from "@/components/ShotChart";
 import TeamSplitShotChart from "@/components/TeamSplitShotChart";
 import PlayByPlay from "@/components/PlayByPlay";
@@ -881,25 +881,14 @@ export default function GamePage() {
     ],
   });
 
-  const gameSuggestions = useMemo(() => {
-    const home = gameData?.hometeam || 'home team';
-    const away = gameData?.awayteam || 'away team';
-
-    const homePlayers = homePlayerStats.slice(0, 2).map(p => p.player_name).filter(Boolean) as string[];
-    const awayPlayers = awayPlayerStats.slice(0, 2).map(p => p.player_name).filter(Boolean) as string[];
-    const featuredPlayers = [...homePlayers.slice(0, 1), ...awayPlayers.slice(0, 1)];
-
-    const base = [
-      `How has ${home} been performing this season?`,
-      `Who are the top scorers for ${away}?`,
-      `Compare ${home} and ${away} rebounding stats`,
-      `What are ${home}'s shooting percentages this season?`,
-      `Which team has the better defence — ${home} or ${away}?`,
-    ];
-
-    const playerQs = featuredPlayers.map(name => `How many points is ${name} averaging this season?`);
-    return [...playerQs, ...base].slice(0, 5);
-  }, [gameData?.hometeam, gameData?.awayteam, homePlayerStats, awayPlayerStats]);
+  // Ask Swish answers about this game by default while the page is open.
+  useAskScope(gameData ? {
+    leagueId: gameData.league_id,
+    leagueName: gameData.competitionname,
+    leagueSlug: leagueSlug ?? null,
+    gameKey: gameData.game_key,
+    gameLabel: gameData.hometeam && gameData.awayteam ? `${gameData.hometeam} v ${gameData.awayteam}` : null,
+  } : null);
 
   // Called before the early returns below so the hook order never changes.
   const colors = useMatchupColors(gameData?.hometeam ?? "", gameData?.awayteam ?? "", gameData?.league_id);
@@ -1436,16 +1425,6 @@ export default function GamePage() {
         </div>
       </div>
 
-      {/* Floating AI assistant — query stats without leaving the game */}
-      {gameData?.league_id && (
-        <LeagueChatbot
-          isFloatingWidget
-          leagueId={gameData.league_id}
-          leagueName={gameData.competitionname || 'League'}
-          leagueSlug={leagueSlug}
-          suggestedQuestions={gameSuggestions}
-        />
-      )}
     </div>
   );
 }

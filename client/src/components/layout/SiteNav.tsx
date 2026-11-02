@@ -1,7 +1,8 @@
 import type { ReactNode } from "react"
 import { Link, useLocation } from "wouter"
-import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2, BadgeCheck, UserCheck, Landmark, CreditCard } from "lucide-react"
+import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2, BadgeCheck, UserCheck, Landmark, CreditCard, Sparkles } from "lucide-react"
 import { SheetClose } from "@/components/ui/sheet"
+import { useAskSwish } from "@/components/ask-swish/AskSwishProvider"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import StatsThreadLogo from "@/assets/statsthread-logo.svg"
 import { useAuth } from "@/hooks/use-auth"
@@ -45,6 +46,7 @@ export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet
   const { data: myClaim } = useMyClaim(user?.id)
   const profileEntry = claimEntry(myClaim)
   const { data: pendingClaims = 0 } = usePendingClaimCount(!!user && isAdmin)
+  const { open: openAskSwish, isOpen: askSwishOpen } = useAskSwish()
   const liveCount = scores?.live.length ?? 0
 
   const itemClass = (active: boolean) =>
@@ -84,6 +86,27 @@ export default function SiteNav({ inSheet = false, layout = "sheet" }: { inSheet
         <Newspaper className="h-4 w-4 shrink-0" aria-hidden="true" />
         News
       </>)}
+      {/* Opens the assistant over the current page; on the /ask page itself
+          the entry is the page, so it just reads as active. */}
+      {(() => {
+        const onAskPage = location.startsWith("/ask")
+        const button = (
+          <button
+            type="button"
+            onClick={() => { if (!onAskPage) openAskSwish() }}
+            aria-current={onAskPage ? "page" : undefined}
+            data-testid="nav-ask-swish"
+            className={`${itemClass(onAskPage || askSwishOpen)} w-full text-left`}
+          >
+            <Sparkles className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
+            Ask Swish
+            <span className="ml-auto whitespace-nowrap rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+              New
+            </span>
+          </button>
+        )
+        return inSheet ? <SheetClose asChild>{button}</SheetClose> : button
+      })()}
       {internalLink("/british-basketball-history", location.startsWith("/british-basketball-history"), <>
         <Landmark className="h-4 w-4 shrink-0" aria-hidden="true" />
         History

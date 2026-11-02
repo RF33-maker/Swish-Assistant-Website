@@ -60,6 +60,9 @@ import PrivacyPolicyPage from "@/pages/privacy";
 import TermsOfServicePage from "@/pages/terms";
 import CookiePolicyPage from "@/pages/cookies";
 import { CookieBanner } from "@/components/CookieBanner";
+import AskSwishPage from "@/pages/AskSwishPage";
+import { AskSwishProvider } from "@/components/ask-swish/AskSwishProvider";
+import AskSwishLauncher from "@/components/ask-swish/AskSwishLauncher";
 
 
 // The old league-leaders pages now live in each league page's Leaders section.
@@ -113,6 +116,7 @@ function Router() {
       <Route path="/coach-access" component={CoachAccessPage} />
       <Route path="/game/:gameKey" component={GamePage} />
       <Route path="/scores" component={ScoresPage} />
+      <Route path="/ask" component={AskSwishPage} />
       <Route path="/widget/:type" component={WidgetPage} />
       <Route path="/embed" component={EmbedGuide} />
       <Route path="/news" component={NewsIndexPage} />
@@ -174,10 +178,13 @@ function App() {
           <QueryClientProvider client={queryClient}>
             <AuthProvider>
               <TooltipProvider>
-                <Toaster />
-                <Router />
-                <ConditionalAnalytics />
-                <CookieBanner />
+                <AskSwishProvider>
+                  <Toaster />
+                  <Router />
+                  <AskSwishLauncher />
+                  <ConditionalAnalytics />
+                  <CookieBanner />
+                </AskSwishProvider>
               </TooltipProvider>
             </AuthProvider>
           </QueryClientProvider>
