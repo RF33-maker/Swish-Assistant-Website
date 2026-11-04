@@ -2,8 +2,9 @@
  * Single-game record card (1080×1350): the record holder's photo fills most of the
  * card, and the number they own sits along the bottom in orange, with the category,
  * the player and the game it came in. Deliberately plainer than the leaders cards:
- * one number. A joint record splits the photo between the holders (up to three), and
- * each gets their own name, team and game under the shared number.
+ * one number. A joint record splits the photo between the holders (up to three), with
+ * their heads lined up as on Team of the Week, the shared number in the middle, and
+ * each holder's name, team and game on their own side.
  */
 
 import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
@@ -14,6 +15,8 @@ import {
   CARD_H,
   CARD_W,
   DEFAULT_FRAMING,
+  DEFAULT_HEAD_LINE,
+  GUESSED_HEAD,
   capHeight,
   drawFooter,
   drawTextTop,
@@ -21,8 +24,10 @@ import {
   fetchImg,
   fitSize,
   initialsOf,
+  placeInFrame,
   setFont,
   DISPLAY,
+  type HeadPoint,
   type PhotoFraming,
   type TextOpts,
 } from "@/lib/generateWeeklyCards";
@@ -46,6 +51,8 @@ export type RecordHolder = {
   games: GameRecord[];
   clubLogoUrl?: string | null;
   framing?: PhotoFraming;
+  /** Where the face sits in their photo (marked in the studio); a guess is used until it is. */
+  head?: HeadPoint;
 };
 
 export type RecordCardOptions = {
@@ -58,7 +65,22 @@ export type RecordCardOptions = {
   brand: WeeklyCardBrand;
   /** Everyone on the record total, shown or not: more than one player makes it a joint record; one player more than once says how often. */
   share?: { players: number; games: number };
+  /** Joint records: put every holder's face on one shared line, as Team of the Week does. On by default. */
+  alignHeads?: boolean;
+  /** That line, as a percentage of the photo's height. */
+  headLine?: number;
 };
+
+export type RecordCardResult = {
+  canvas: HTMLCanvasElement;
+  /** Holders (player ids) whose face couldn't reach the head line without zooming too far. */
+  unaligned: string[];
+};
+
+/** Which holder's photo column is at x on a joint card (the full card for one holder). */
+export function recordColumnAt(x: number, count: number): number {
+  return Math.max(0, Math.min(count - 1, Math.floor(x / (CARD_W / Math.max(1, count)))));
+}
 
 /** "12 Oct 2026" from the game's match time. */
 function fmtDate(iso: string | null): string {
@@ -67,8 +89,9 @@ function fmtDate(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
 }
 
-/** The photo, cover-fitted to its column at the top of the card (the full width for one holder) and faded into the dark below it. */
-function drawPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, focusY: number, framing: PhotoFraming, x0 = 0, w = CARD_W) {
+/** The photo, cover-fitted to the top of the card and faded into the dark below it. */
+function drawPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, focusY: number, framing: PhotoFraming) {
+  const w = CARD_W;
   const h = PHOTO_H;
   const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight) * framing.zoom;
   const dw = img.naturalWidth * scale;
@@ -89,7 +112,37 @@ function drawPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, focusY:
   fade.addColorStop(1, "rgba(0,0,0,0)");
   l.fillStyle = fade;
   l.fillRect(0, 0, w, h);
+  ctx.drawImage(layer, 0, 0);
+}
+
+/**
+ * A joint holder's photo in its column: always filling it edge to edge, and with a head point,
+ * zoomed and shifted so the face sits on the shared line. Faded into the dark below like the solo photo.
+ * Returns whether the face reached the line.
+ */
+function drawColumnPhoto(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x0: number,
+  w: number,
+  o: { framing: PhotoFraming; head: HeadPoint | null; headLine: number; focusY: number },
+): boolean {
+  const h = PHOTO_H;
+  const place = placeInFrame(img, w, h, o);
+  const layer = document.createElement("canvas");
+  layer.width = Math.ceil(w);
+  layer.height = h;
+  const l = layer.getContext("2d")!;
+  l.drawImage(img, place.left, place.top, img.naturalWidth * place.scale, img.naturalHeight * place.scale);
+  l.globalCompositeOperation = "destination-in";
+  const fade = l.createLinearGradient(0, 0, 0, h);
+  fade.addColorStop(0, "rgba(0,0,0,1)");
+  fade.addColorStop(0.58, "rgba(0,0,0,1)");
+  fade.addColorStop(1, "rgba(0,0,0,0)");
+  l.fillStyle = fade;
+  l.fillRect(0, 0, layer.width, h);
   ctx.drawImage(layer, x0, 0);
+  return place.aligned;
 }
 
 /** Shade over the photo: a little at the top for the header, and a deep pool under the stat. */
@@ -171,7 +224,7 @@ function shareTag(share: { players: number; games: number }): string {
  * The number in orange with the unit beside it, and the category (plus any shared-record tag) under it,
  * with the category's foot at `titleBottom`. Returns nothing: everything below is the caller's.
  */
-function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, titleBottom: number, maxValueSize: number) {
+function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, titleBottom: number, maxValueSize: number, centred = false) {
   const { categoryTitle, unit } = o;
   const maxW = CARD_W - SIDE * 2;
   const value = String(o.holders[0].record.value);
@@ -199,6 +252,10 @@ function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, title
   // The number in Swish Assistant orange, light at the top to deep at the foot, with only a soft drop shadow.
   setFont(ctx, valueOpts);
   const valueW = ctx.measureText(value).width;
+  // Centred (joint records), the number and its unit are placed as one group, and so are the category and its tag.
+  const valueX = centred ? (CARD_W - (valueW + 24 + unitW)) / 2 : SIDE - valueSize * 0.03;
+  const titleW = spacedWidth(ctx, title, titleSpacing, titleOpts);
+  const titleX = centred ? (CARD_W - titleW - (tag ? spacedWidth(ctx, tag, titleSpacing, titleOpts) : 0)) / 2 : SIDE;
   const fill = ctx.createLinearGradient(0, valueTop, 0, valueTop + valueCap);
   fill.addColorStop(0, SWISH_LIGHT);
   fill.addColorStop(0.5, ORANGE);
@@ -210,12 +267,12 @@ function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, title
   ctx.font = `700 ${valueSize}px ${DISPLAY}`;
   ctx.fillStyle = fill;
   ctx.textBaseline = "alphabetic";
-  ctx.fillText(value, SIDE - valueSize * 0.03, valueTop + valueCap);
+  ctx.fillText(value, valueX, valueTop + valueCap);
   ctx.restore();
-  drawTextTop(ctx, unit, SIDE + valueW + 24, valueTop + valueCap - capHeight(ctx, unitOpts), unitOpts);
+  drawTextTop(ctx, unit, valueX + valueW + 24, valueTop + valueCap - capHeight(ctx, unitOpts), unitOpts);
 
-  drawSpaced(ctx, title, SIDE, titleTop, titleSpacing, titleOpts);
-  if (tag) drawSpaced(ctx, tag, SIDE + spacedWidth(ctx, title, titleSpacing, titleOpts), titleTop, titleSpacing, { ...titleOpts, color: "#ffffff", alpha: 0.75 });
+  drawSpaced(ctx, title, titleX, titleTop, titleSpacing, titleOpts);
+  if (tag) drawSpaced(ctx, tag, titleX + titleW, titleTop, titleSpacing, { ...titleOpts, color: "#ffffff", alpha: 0.75 });
 }
 
 const STAT_BOTTOM = CARD_H - 176;
@@ -278,11 +335,23 @@ function columns(n: number): { x: number; w: number }[] {
   return Array.from({ length: n }, (_, i) => ({ x: SIDE + i * (w + COL_GAP), w }));
 }
 
-/** Two or three holders: the shared number and category, then a column each with name, team and game(s). */
+type Side = "left" | "center" | "right";
+
+/** Left edge for something `width` wide, anchored at `anchor` from the given side. */
+function leftFor(anchor: number, width: number, side: Side): number {
+  return side === "left" ? anchor : side === "right" ? anchor - width : anchor - width / 2;
+}
+
+/**
+ * Two or three holders: the shared number and category centred, then each holder's name, team and
+ * game(s) on their own side: the first to the left edge, the last to the right, a third in the middle.
+ */
 function drawJointBlock(ctx: CanvasRenderingContext2D, o: RecordCardOptions, clubLogos: (HTMLImageElement | null)[]) {
   const n = o.holders.length;
   const cols = columns(n);
   const colW = cols[0].w;
+  const sides: Side[] = o.holders.map((_, i) => (i === 0 ? "left" : i === n - 1 ? "right" : "center"));
+  const anchors = cols.map((c, i) => (sides[i] === "left" ? c.x : sides[i] === "right" ? c.x + c.w : c.x + c.w / 2));
 
   // One name size for everyone, so no holder reads as the bigger name.
   const nameMax = n === 2 ? 60 : 46;
@@ -298,8 +367,10 @@ function drawJointBlock(ctx: CanvasRenderingContext2D, o: RecordCardOptions, clu
   const nameH = Math.max(...nameLines.map((l) => l.length * nameCap + (l.length - 1) * nameGap));
 
   const crestR = n === 2 ? 20 : 17;
+  const crestGap = 12;
+  const teamSpacing = 1.5;
   const clubs = o.holders.map((h) => cleanTeamLabel(h.record.team_name).toUpperCase());
-  const teamSize = Math.min(...clubs.map((c) => fitSize(ctx, c || " ", colW - crestR * 2 - 12, n === 2 ? 24 : 20, 13, 500)));
+  const teamSize = Math.min(...clubs.map((c) => fitSize(ctx, c || " ", colW - crestR * 2 - crestGap, n === 2 ? 24 : 20, 13, 500)));
   const teamOpts: TextOpts = { size: teamSize, weight: 500, alpha: 0.9 };
 
   // Each game takes two lines in a narrow column: who it was against, then the result and date.
@@ -311,38 +382,53 @@ function drawJointBlock(ctx: CanvasRenderingContext2D, o: RecordCardOptions, clu
   const gameOpts: TextOpts = { size: gameSize, weight: 500, alpha: 0.7 };
   const gameCap = capHeight(ctx, gameOpts);
   const lineGap = 10;
-  const gameH = (h: RecordHolder) => {
-    const lines = gameText[o.holders.indexOf(h)];
-    // An extra gap between one game and the next, for a holder who did it more than once.
-    return lines.length * gameCap + Math.max(0, lines.length - 1) * lineGap + Math.max(0, h.games.length - 1) * 8;
-  };
-  const gamesH = Math.max(...o.holders.map(gameH));
+  const gamesH = Math.max(
+    ...o.holders.map((h, i) => {
+      const lines = gameText[i];
+      // An extra gap between one game and the next, for a holder who did it more than once.
+      return lines.length * gameCap + Math.max(0, lines.length - 1) * lineGap + Math.max(0, h.games.length - 1) * 8;
+    }),
+  );
 
   const blockH = nameH + 20 + crestR * 2 + 16 + gamesH;
   const top = STAT_BOTTOM - blockH;
 
-  drawHeadline(ctx, o, top - 34, 250);
+  drawHeadline(ctx, o, top - 40, 250, true);
 
   const theme = themeFor("swish", ORANGE);
   o.holders.forEach((h, i) => {
-    const { x, w } = cols[i];
+    const side = sides[i];
+    const anchor = anchors[i];
+
+    setFont(ctx, nameOpts);
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.5)";
     ctx.shadowBlur = 18;
-    nameLines[i].forEach((line, j) => drawTextTop(ctx, line, x, top + j * (nameCap + nameGap), nameOpts));
+    nameLines[i].forEach((line, j) => {
+      setFont(ctx, nameOpts);
+      const w = ctx.measureText(line).width;
+      drawTextTop(ctx, line, leftFor(anchor, w, side), top + j * (nameCap + nameGap), nameOpts);
+    });
     ctx.restore();
 
+    // Crest beside the team name, on the outside edge: before it on the left, after it on the right.
     const teamTop = top + nameH + 20;
     if (clubs[i]) {
-      drawCrest(ctx, x + crestR, teamTop + crestR, crestR, clubLogos[i], initialsOf(clubs[i]), theme);
-      drawSpaced(ctx, clubs[i], x + crestR * 2 + 12, teamTop + crestR - capHeight(ctx, teamOpts) / 2, 1.5, teamOpts);
+      const textW = spacedWidth(ctx, clubs[i], teamSpacing, teamOpts);
+      const groupLeft = leftFor(anchor, crestR * 2 + crestGap + textW, side);
+      const crestFirst = side !== "right";
+      const crestX = crestFirst ? groupLeft : groupLeft + textW + crestGap;
+      const textX = crestFirst ? groupLeft + crestR * 2 + crestGap : groupLeft;
+      drawCrest(ctx, crestX + crestR, teamTop + crestR, crestR, clubLogos[i], initialsOf(clubs[i]), theme);
+      drawSpaced(ctx, clubs[i], textX, teamTop + crestR - capHeight(ctx, teamOpts) / 2, teamSpacing, teamOpts);
     }
 
     let y = teamTop + crestR * 2 + 16;
     h.games.forEach((g) => {
       const { vs, rest } = gameParts(g);
       [vs, rest].filter(Boolean).forEach((line) => {
-        drawSpaced(ctx, line, x, y, 1, { ...gameOpts, size: Math.min(gameSize, fitSize(ctx, line, w, gameSize, 12, 500)) });
+        const opts = { ...gameOpts, size: Math.min(gameSize, fitSize(ctx, line, colW, gameSize, 12, 500)) };
+        drawSpaced(ctx, line, leftFor(anchor, spacedWidth(ctx, line, 1, opts), side), y, 1, opts);
         y += gameCap + lineGap;
       });
       y += 8;
@@ -356,15 +442,17 @@ function drawSeams(ctx: CanvasRenderingContext2D, n: number) {
     const x = (CARD_W / n) * i;
     const g = ctx.createLinearGradient(0, 0, 0, PHOTO_H);
     g.addColorStop(0, "rgba(11,11,13,1)");
-    g.addColorStop(0.6, "rgba(11,11,13,1)");
-    g.addColorStop(1, "rgba(11,11,13,0)");
+    // Gone before the centred number, so it doesn't cut through it.
+    g.addColorStop(0.45, "rgba(11,11,13,1)");
+    g.addColorStop(0.62, "rgba(11,11,13,0)");
     ctx.fillStyle = g;
     ctx.fillRect(x - 3, 0, 6, PHOTO_H);
   }
 }
 
-export async function renderRecordCard(o: RecordCardOptions): Promise<HTMLCanvasElement> {
-  const { brand } = o;
+export async function renderRecordCard(o: RecordCardOptions): Promise<RecordCardResult> {
+  const { brand, alignHeads = true, headLine = DEFAULT_HEAD_LINE } = o;
+  const unaligned: string[] = [];
   const holders = o.holders.slice(0, MAX_CARD_HOLDERS);
   if (holders.length === 0) throw new Error("No record holder to draw");
   const opts = { ...o, holders };
@@ -389,8 +477,16 @@ export async function renderRecordCard(o: RecordCardOptions): Promise<HTMLCanvas
   const colW = CARD_W / n;
   holders.forEach((h, i) => {
     const photo = photos[i];
-    if (photo) {
-      drawPhoto(ctx, photo, h.record.photoFocusY ?? 30, h.framing ?? DEFAULT_FRAMING, i * colW, colW);
+    if (photo && n === 1) {
+      drawPhoto(ctx, photo, h.record.photoFocusY ?? 30, h.framing ?? DEFAULT_FRAMING);
+    } else if (photo) {
+      const aligned = drawColumnPhoto(ctx, photo, i * colW, colW, {
+        framing: h.framing ?? DEFAULT_FRAMING,
+        head: alignHeads ? h.head ?? GUESSED_HEAD : null,
+        headLine,
+        focusY: h.record.photoFocusY ?? 30,
+      });
+      if (!aligned) unaligned.push(h.record.id);
     } else {
       const label = initialsOf(cleanTeamLabel(h.record.team_name) || h.record.name);
       drawRingedCrest(ctx, i * colW + colW / 2, 470, n === 1 ? 200 : n === 2 ? 150 : 110, clubLogos[i], label, themeFor("swish", ORANGE));
@@ -403,5 +499,5 @@ export async function renderRecordCard(o: RecordCardOptions): Promise<HTMLCanvas
   if (n === 1) drawSoloBlock(ctx, opts, clubLogos[0]);
   else drawJointBlock(ctx, opts, clubLogos);
   drawFooter(ctx, [logo, "statsthread"], "");
-  return canvas;
+  return { canvas, unaligned };
 }
