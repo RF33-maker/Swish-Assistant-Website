@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, RotateCcw } from "lucide-react";
+import { Check, Loader2, RotateCcw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlayerPhotoControl } from "@/components/social/PlayerPhotoControl";
 import {
@@ -23,10 +23,10 @@ import { supabase } from "@/lib/supabase";
 import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { canvasToBlob, DEFAULT_FRAMING, ensureDisplayFont, type PhotoFraming } from "@/lib/generateWeeklyCards";
-import { renderRecordCard } from "@/lib/generateRecordCard";
+import { MAX_CARD_HOLDERS, renderRecordCard, type RecordHolder } from "@/lib/generateRecordCard";
 import { cleanTeamLabel } from "@/lib/cardStyle";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
-import type { RecordsResponse } from "@/types/records";
+import type { GameRecord, RecordsResponse } from "@/types/records";
 
 const DEFAULT_SLUG = "nbl-division-1-2026-2027";
 const SLUG_KEY = "weekly-awards-slug";
@@ -57,9 +57,11 @@ export default function RecordsStudio() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState("");
-  // Which of the joint record holders the card shows.
-  const [pick, setPick] = useState(0);
-  const [clubLogoUrl, setClubLogoUrl] = useState<string | null>(null);
+  // Which of the record holders (player ids) the card shows; every one of them by default, up to the card's limit.
+  const [shown, setShown] = useState<string[]>([]);
+  // Whose photo and framing the controls under the card are editing, when the card shows more than one player.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [clubLogos, setClubLogos] = useState<Record<string, string | null>>({});
   const [framing, setFraming] = useState<Record<string, PhotoFraming | undefined>>({});
   const [downloading, setDownloading] = useState(false);
   const [shareFile, setShareFile] = useState<File | null>(null);
@@ -89,7 +91,6 @@ export default function RecordsStudio() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setPick(0);
     const params = new URLSearchParams({ category, limit: "5" });
     fetch(`/api/league/${encodeURIComponent(slug)}/records?${params}`)
       .then(async (res) => {
@@ -111,19 +112,54 @@ export default function RecordsStudio() {
   }, [slug, category]);
 
   const holders = useMemo(() => (data?.records || []).filter((r) => r.rank === 1), [data]);
-  const record = holders[Math.min(pick, holders.length - 1)] ?? null;
+  // Each player on the record total once, with every game they hit it in.
+  const groups = useMemo(() => {
+    const byId = new Map<string, { record: GameRecord; games: GameRecord[] }>();
+    for (const r of holders) {
+      const g = byId.get(r.id);
+      if (g) g.games.push(r);
+      else byId.set(r.id, { record: r, games: [r] });
+    }
+    return Array.from(byId.values());
+  }, [holders]);
 
+  // A new category or competition puts every holder back on the card.
+  useEffect(() => {
+    setShown(groups.slice(0, MAX_CARD_HOLDERS).map((g) => g.record.id));
+    setEditing(null);
+  }, [groups]);
+
+  const shownGroups = useMemo(() => {
+    const on = groups.filter((g) => shown.includes(g.record.id));
+    return on.length ? on : groups.slice(0, 1);
+  }, [groups, shown]);
+  const record = shownGroups.find((g) => g.record.id === editing)?.record ?? shownGroups[0]?.record ?? null;
+
+  const logoKey = (r: GameRecord) => `${r.league_id}|${r.team_name}`;
   useEffect(() => {
     let cancelled = false;
-    setClubLogoUrl(null);
-    if (!record?.team_name) return;
-    void getTeamLogoCached({ leagueId: record.league_id, teamName: record.team_name })
-      .catch(() => null)
-      .then((url) => !cancelled && setClubLogoUrl(url ?? null));
+    for (const { record: r } of shownGroups) {
+      const key = logoKey(r);
+      if (!r.team_name || key in clubLogos) continue;
+      void getTeamLogoCached({ leagueId: r.league_id, teamName: r.team_name })
+        .catch(() => null)
+        .then((url) => !cancelled && setClubLogos((prev) => ({ ...prev, [key]: url ?? null })));
+    }
     return () => {
       cancelled = true;
     };
-  }, [record?.league_id, record?.team_name]);
+    // clubLogos is only read to skip teams already looked up.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownGroups]);
+
+  const toggleShown = (id: string) =>
+    setShown((prev) => {
+      if (prev.includes(id)) return prev.length > 1 ? prev.filter((x) => x !== id) : prev;
+      if (prev.length >= MAX_CARD_HOLDERS) return prev;
+      // Keep the card's left-to-right order the same as the list's.
+      const next = new Set([...prev, id]);
+      return groups.map((g) => g.record.id).filter((x) => next.has(x));
+    });
 
   // A photo added here or in another studio: redraw with it.
   usePlayerPhotoChange((change) => {
@@ -155,7 +191,7 @@ export default function RecordsStudio() {
 
   useEffect(() => {
     const token = ++renderToken.current;
-    if (!data || !record) {
+    if (!data || shownGroups.length === 0) {
       cardCanvasRef.current = null;
       canvasHostRef.current?.replaceChildren();
       setHasCard(false);
@@ -164,14 +200,17 @@ export default function RecordsStudio() {
     }
     setRendering(true);
     setShareFile(null);
+    const cardHolders: RecordHolder[] = shownGroups.map((g) => ({
+      ...g,
+      clubLogoUrl: clubLogos[logoKey(g.record)] ?? null,
+      framing: framing[g.record.id] ?? DEFAULT_FRAMING,
+    }));
     void renderRecordCard({
-      record,
+      holders: cardHolders,
       categoryTitle: data.category.title,
       unit: data.category.short,
       brand,
-      clubLogoUrl,
-      framing: recordFraming,
-      holders: { players: new Set(holders.map((h) => h.id)).size, games: holders.length },
+      share: { players: groups.length, games: holders.length },
     })
       .then((canvas) => {
         if (token !== renderToken.current) return;
@@ -188,7 +227,8 @@ export default function RecordsStudio() {
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [data, record, holders, brand, clubLogoUrl, recordFraming, fileName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, shownGroups, groups, holders, brand, clubLogos, framing, fileName]);
 
   const download = async () => {
     const canvas = cardCanvasRef.current;
@@ -252,23 +292,31 @@ export default function RecordsStudio() {
         {data && data.records.length > 0 && (
           <Field
             label="Top performances"
-            hint={holders.length > 1 ? "More than one game is on the record total. Pick which one the card shows." : undefined}
+            hint={
+              groups.length > 1
+                ? `Joint record: everyone on the record total goes on the card${groups.length > MAX_CARD_HOLDERS ? ` (up to ${MAX_CARD_HOLDERS})` : ""}. Tap a player to take them off it.`
+                : undefined
+            }
           >
             <ol className="space-y-1" data-testid="list-records">
               {data.records.map((r) => {
-                const holderIndex = holders.indexOf(r);
-                const selectable = holders.length > 1 && holderIndex >= 0;
-                const on = r === record;
+                const isHolder = r.rank === 1;
+                const selectable = groups.length > 1 && isHolder;
+                const on = isHolder && shownGroups.some((g) => g.record.id === r.id);
+                const full = !on && shown.length >= MAX_CARD_HOLDERS;
                 return (
                   <li key={`${r.id}-${r.game_key}`}>
                     <button
                       type="button"
-                      disabled={!selectable}
-                      onClick={() => setPick(holderIndex)}
+                      disabled={!selectable || full}
+                      onClick={() => toggleShown(r.id)}
                       data-active={on}
-                      className={`ch-tile flex w-full items-center gap-3 px-3 py-2 text-left ${on ? "ring-1 ring-[color:var(--ch-accent)]" : ""} ${selectable ? "cursor-pointer" : "cursor-default"}`}
+                      aria-pressed={selectable ? on : undefined}
+                      className={`ch-tile flex w-full items-center gap-3 px-3 py-2 text-left ${on ? "ring-1 ring-[color:var(--ch-accent)]" : ""} ${selectable && !full ? "cursor-pointer" : "cursor-default"}`}
                     >
-                      <span className="ch-num w-5 flex-none text-[12px] text-[color:var(--ch-muted)]">{r.rank}</span>
+                      <span className="ch-num w-5 flex-none text-[12px] text-[color:var(--ch-muted)]">
+                        {on && groups.length > 1 ? <Check className="h-3.5 w-3.5 text-[color:var(--ch-accent)]" /> : r.rank}
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-medium text-[color:var(--ch-text)]">{r.name}</span>
                         <span className={`block truncate ${HINT}`}>
@@ -302,6 +350,25 @@ export default function RecordsStudio() {
 
         {record && (
           <div className="mx-auto mt-3 max-w-[640px] space-y-3">
+            {shownGroups.length > 1 && (
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Edit photo for">
+                <span className={HINT}>Photo for</span>
+                {shownGroups.map((g) => {
+                  const active = g.record.id === record.id;
+                  return (
+                    <button
+                      key={g.record.id}
+                      type="button"
+                      onClick={() => setEditing(g.record.id)}
+                      aria-pressed={active}
+                      className={`ch-tile px-3 py-1.5 text-[12px] font-medium text-[color:var(--ch-text)] ${active ? "ring-1 ring-[color:var(--ch-accent)]" : ""}`}
+                    >
+                      {g.record.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <PlayerPhotoControl key={record.id} playerId={record.id} playerName={record.name} photoUrl={record.photoUrl} />
 
             {record.photoUrl && (

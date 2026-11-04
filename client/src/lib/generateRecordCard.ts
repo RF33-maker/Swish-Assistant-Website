@@ -1,8 +1,9 @@
 /**
  * Single-game record card (1080×1350): the record holder's photo fills most of the
- * card, and the number they own sits along the bottom in an orange glow, with the
- * category, the player and the game it came in. Deliberately plainer than the
- * leaders cards: one player, one number.
+ * card, and the number they own sits along the bottom in orange, with the category,
+ * the player and the game it came in. Deliberately plainer than the leaders cards:
+ * one number. A joint record splits the photo between the holders (up to three), and
+ * each gets their own name, team and game under the shared number.
  */
 
 import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
@@ -34,17 +35,29 @@ const BACKDROP = "#0b0b0d";
 /** The photo's frame: the full width, down to where the stat block takes over. */
 const PHOTO_H = 1080;
 
-export type RecordCardOptions = {
+/** The most players a joint record card draws side by side. */
+export const MAX_CARD_HOLDERS = 3;
+
+/** One player on the card, with every game in which they hit the record total. */
+export type RecordHolder = {
+  /** The player's first record game: name, team and photo come from here. */
   record: GameRecord;
+  /** Every record game of theirs, `record` first. */
+  games: GameRecord[];
+  clubLogoUrl?: string | null;
+  framing?: PhotoFraming;
+};
+
+export type RecordCardOptions = {
+  /** Who the card shows, left to right (at most MAX_CARD_HOLDERS). */
+  holders: RecordHolder[];
   /** "Most Points in a Game". */
   categoryTitle: string;
   /** "PTS". */
   unit: string;
   brand: WeeklyCardBrand;
-  clubLogoUrl?: string | null;
-  framing?: PhotoFraming;
-  /** Everyone on the record total: more than one player makes it a joint record; one player more than once says how often. */
-  holders?: { players: number; games: number };
+  /** Everyone on the record total, shown or not: more than one player makes it a joint record; one player more than once says how often. */
+  share?: { players: number; games: number };
 };
 
 /** "12 Oct 2026" from the game's match time. */
@@ -54,9 +67,8 @@ function fmtDate(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/London" });
 }
 
-/** The photo, cover-fitted to the top of the card and faded into the dark below it. */
-function drawPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, focusY: number, framing: PhotoFraming) {
-  const w = CARD_W;
+/** The photo, cover-fitted to its column at the top of the card (the full width for one holder) and faded into the dark below it. */
+function drawPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, focusY: number, framing: PhotoFraming, x0 = 0, w = CARD_W) {
   const h = PHOTO_H;
   const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight) * framing.zoom;
   const dw = img.naturalWidth * scale;
@@ -77,11 +89,11 @@ function drawPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, focusY:
   fade.addColorStop(1, "rgba(0,0,0,0)");
   l.fillStyle = fade;
   l.fillRect(0, 0, w, h);
-  ctx.drawImage(layer, 0, 0);
+  ctx.drawImage(layer, x0, 0);
 }
 
 /** Shade over the photo: a little at the top for the header, and a deep pool under the stat. */
-function drawShade(ctx: CanvasRenderingContext2D) {
+function drawShade(ctx: CanvasRenderingContext2D, joint: boolean) {
   const topShade = ctx.createLinearGradient(0, 0, 0, 260);
   topShade.addColorStop(0, "rgba(0,0,0,0.55)");
   topShade.addColorStop(1, "rgba(0,0,0,0)");
@@ -94,6 +106,17 @@ function drawShade(ctx: CanvasRenderingContext2D) {
   low.addColorStop(1, "rgba(11,11,13,0.96)");
   ctx.fillStyle = low;
   ctx.fillRect(0, 640, CARD_W, CARD_H - 640);
+
+  if (joint) {
+    // Every holder's details sit along the bottom, so darken it evenly rather than from one corner.
+    const pool = ctx.createLinearGradient(0, 560, 0, CARD_H);
+    pool.addColorStop(0, "rgba(0,0,0,0)");
+    pool.addColorStop(0.4, "rgba(0,0,0,0.7)");
+    pool.addColorStop(1, "rgba(0,0,0,0.9)");
+    ctx.fillStyle = pool;
+    ctx.fillRect(0, 560, CARD_W, CARD_H - 560);
+    return;
+  }
 
   // Black rising out of the bottom-left corner, where the stat and the name sit.
   ctx.save();
@@ -129,33 +152,35 @@ function drawTopLine(ctx: CanvasRenderingContext2D, leagueName: string, leagueLo
   if (name) drawSpaced(ctx, name, x, top + cap + 12, 2, nameOpts);
 }
 
-/** The number in orange with a glow, the unit beside it, then the category, the player and the game. */
-function drawStatBlock(ctx: CanvasRenderingContext2D, o: RecordCardOptions, clubLogo: HTMLImageElement | null) {
-  const { record, categoryTitle, unit, holders = { players: 1, games: 1 } } = o;
+/** "VS SHEFFIELD HATTERS", the result and the date of one record game, as separate parts. */
+function gameParts(g: GameRecord): { vs: string; rest: string } {
+  return {
+    vs: g.opponent_name ? `VS ${cleanTeamLabel(g.opponent_name).toUpperCase()}` : "",
+    rest: [g.game_result, fmtDate(g.game_date).toUpperCase()].filter(Boolean).join("  ·  "),
+  };
+}
+
+/** "JOINT RECORD", "TWICE", "3 TIMES" or nothing, said after the category. */
+function shareTag(share: { players: number; games: number }): string {
+  if (share.players > 1) return "  ·  JOINT RECORD";
+  if (share.games > 1) return `  ·  ${share.games === 2 ? "TWICE" : `${share.games} TIMES`}`;
+  return "";
+}
+
+/**
+ * The number in orange with the unit beside it, and the category (plus any shared-record tag) under it,
+ * with the category's foot at `titleBottom`. Returns nothing: everything below is the caller's.
+ */
+function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, titleBottom: number, maxValueSize: number) {
+  const { categoryTitle, unit } = o;
   const maxW = CARD_W - SIDE * 2;
-  const value = String(record.value);
-  const bottom = CARD_H - 176;
-
-  // From the bottom up: game line, team line, name, category, number.
-  const club = cleanTeamLabel(record.team_name).toUpperCase();
-  const vs = record.opponent_name ? `VS ${cleanTeamLabel(record.opponent_name).toUpperCase()}` : "";
-  const gameLine = [vs, record.game_result, fmtDate(record.game_date).toUpperCase()].filter(Boolean).join("  ·  ");
-  const gameOpts: TextOpts = { size: fitSize(ctx, gameLine || " ", maxW, 24, 15, 500), weight: 500, alpha: 0.7 };
-  const gameCap = gameLine ? capHeight(ctx, gameOpts) : 0;
-
-  const [given, family] = splitName(record.name);
-  const fullName = given ? `${given} ${family}` : family;
-  const name = fitLines(ctx, fullName, maxW, 88, 40, 700);
-  const nameCap = capHeight(ctx, { size: name.size, weight: 700 });
-  const nameGap = Math.round(name.size * 0.22);
-
-  const crestR = 24;
-  const teamOpts: TextOpts = { size: fitSize(ctx, club || " ", maxW - crestR * 2 - 16, 28, 16, 500), weight: 500, alpha: 0.9 };
+  const value = String(o.holders[0].record.value);
+  const share = o.share ?? { players: o.holders.length, games: o.holders.reduce((n, h) => n + h.games.length, 0) };
 
   const titleOpts: TextOpts = { size: 34, weight: 600, color: ORANGE_LIGHT };
   const title = categoryTitle.toUpperCase();
   // A shared record says so after the category, e.g. "MOST ASSISTS IN A GAME  ·  JOINT RECORD".
-  const tag = holders.players > 1 ? "  ·  JOINT RECORD" : holders.games > 1 ? `  ·  ${holders.games === 2 ? "TWICE" : `${holders.games} TIMES`}` : "";
+  const tag = shareTag(share);
   let titleSpacing = 4;
   while (titleSpacing > 0 && spacedWidth(ctx, title + tag, titleSpacing, titleOpts) > maxW) titleSpacing -= 1;
   if (spacedWidth(ctx, title + tag, titleSpacing, titleOpts) > maxW) titleOpts.size = fitSize(ctx, title + tag, maxW, 34, 20, 600);
@@ -164,20 +189,12 @@ function drawStatBlock(ctx: CanvasRenderingContext2D, o: RecordCardOptions, club
   const unitOpts: TextOpts = { size: 64, weight: 600, color: "#ffffff", alpha: 0.92 };
   setFont(ctx, unitOpts);
   const unitW = ctx.measureText(unit).width;
-  const valueSize = fitSize(ctx, value, maxW - unitW - 28, 300, 140, 700);
+  const valueSize = fitSize(ctx, value, maxW - unitW - 28, maxValueSize, 140, 700);
   const valueOpts: TextOpts = { size: valueSize, weight: 700, color: ORANGE };
   const valueCap = capHeight(ctx, valueOpts);
 
-  let y = bottom;
-  const gameTop = y - gameCap;
-  y = gameTop - (gameLine ? 18 : 0);
-  const teamTop = y - crestR * 2;
-  y = teamTop - 22;
-  const nameTop = y - (name.lines.length * nameCap + (name.lines.length - 1) * nameGap);
-  y = nameTop - 30;
-  const titleTop = y - titleCap;
-  y = titleTop - 30;
-  const valueTop = y - valueCap;
+  const titleTop = titleBottom - titleCap;
+  const valueTop = titleTop - 30 - valueCap;
 
   // The number in Swish Assistant orange, light at the top to deep at the foot, with only a soft drop shadow.
   setFont(ctx, valueOpts);
@@ -199,6 +216,45 @@ function drawStatBlock(ctx: CanvasRenderingContext2D, o: RecordCardOptions, club
 
   drawSpaced(ctx, title, SIDE, titleTop, titleSpacing, titleOpts);
   if (tag) drawSpaced(ctx, tag, SIDE + spacedWidth(ctx, title, titleSpacing, titleOpts), titleTop, titleSpacing, { ...titleOpts, color: "#ffffff", alpha: 0.75 });
+}
+
+const STAT_BOTTOM = CARD_H - 176;
+
+/** One holder: the number, the category, the player, their team and the game (or each game, if they did it more than once). */
+function drawSoloBlock(ctx: CanvasRenderingContext2D, o: RecordCardOptions, clubLogo: HTMLImageElement | null) {
+  const { record, games } = o.holders[0];
+  const maxW = CARD_W - SIDE * 2;
+
+  // From the bottom up: game lines, team line, name, then the headline.
+  const club = cleanTeamLabel(record.team_name).toUpperCase();
+  const gameLines = games
+    .map((g) => {
+      const { vs, rest } = gameParts(g);
+      return [vs, rest].filter(Boolean).join("  ·  ");
+    })
+    .filter(Boolean);
+  const gameSize = Math.min(...gameLines.map((l) => fitSize(ctx, l, maxW, 24, 15, 500)), 24);
+  const gameOpts: TextOpts = { size: gameSize, weight: 500, alpha: 0.7 };
+  const gameCap = gameLines.length ? capHeight(ctx, gameOpts) : 0;
+  const gameGap = 14;
+
+  const [given, family] = splitName(record.name);
+  const fullName = given ? `${given} ${family}` : family;
+  const name = fitLines(ctx, fullName, maxW, 88, 40, 700);
+  const nameCap = capHeight(ctx, { size: name.size, weight: 700 });
+  const nameGap = Math.round(name.size * 0.22);
+
+  const crestR = 24;
+  const teamOpts: TextOpts = { size: fitSize(ctx, club || " ", maxW - crestR * 2 - 16, 28, 16, 500), weight: 500, alpha: 0.9 };
+
+  let y = STAT_BOTTOM;
+  const gamesTop = y - (gameLines.length * gameCap + Math.max(0, gameLines.length - 1) * gameGap);
+  y = gamesTop - (gameLines.length ? 18 : 0);
+  const teamTop = y - crestR * 2;
+  y = teamTop - 22;
+  const nameTop = y - (name.lines.length * nameCap + (name.lines.length - 1) * nameGap);
+
+  drawHeadline(ctx, o, nameTop - 30, 300);
 
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.5)";
@@ -206,24 +262,119 @@ function drawStatBlock(ctx: CanvasRenderingContext2D, o: RecordCardOptions, club
   name.lines.forEach((line, i) => drawTextTop(ctx, line, SIDE, nameTop + i * (nameCap + nameGap), { size: name.size, weight: 700 }));
   ctx.restore();
 
-  const theme = themeFor("swish", ORANGE);
-  let teamX = SIDE;
   if (club) {
-    drawCrest(ctx, SIDE + crestR, teamTop + crestR, crestR, clubLogo, initialsOf(club), theme);
-    teamX += crestR * 2 + 16;
-    drawSpaced(ctx, club, teamX, teamTop + crestR - capHeight(ctx, teamOpts) / 2, 2, teamOpts);
+    drawCrest(ctx, SIDE + crestR, teamTop + crestR, crestR, clubLogo, initialsOf(club), themeFor("swish", ORANGE));
+    drawSpaced(ctx, club, SIDE + crestR * 2 + 16, teamTop + crestR - capHeight(ctx, teamOpts) / 2, 2, teamOpts);
   }
-  if (gameLine) drawSpaced(ctx, gameLine, SIDE, gameTop, 1.5, gameOpts);
+  gameLines.forEach((line, i) => drawSpaced(ctx, line, SIDE, gamesTop + i * (gameCap + gameGap), 1.5, gameOpts));
+}
+
+/** The gap between holders' columns, in the photo strip and in the details under it. */
+const COL_GAP = 40;
+
+/** Each holder's column of details: left edge and width, matching their photo above. */
+function columns(n: number): { x: number; w: number }[] {
+  const w = (CARD_W - SIDE * 2 - COL_GAP * (n - 1)) / n;
+  return Array.from({ length: n }, (_, i) => ({ x: SIDE + i * (w + COL_GAP), w }));
+}
+
+/** Two or three holders: the shared number and category, then a column each with name, team and game(s). */
+function drawJointBlock(ctx: CanvasRenderingContext2D, o: RecordCardOptions, clubLogos: (HTMLImageElement | null)[]) {
+  const n = o.holders.length;
+  const cols = columns(n);
+  const colW = cols[0].w;
+
+  // One name size for everyone, so no holder reads as the bigger name.
+  const nameMax = n === 2 ? 60 : 46;
+  const fits = o.holders.map((h) => {
+    const [given, family] = splitName(h.record.name);
+    return fitLines(ctx, given ? `${given} ${family}` : family, colW, nameMax, 26, 700);
+  });
+  const nameSize = Math.min(...fits.map((f) => f.size));
+  const nameOpts: TextOpts = { size: nameSize, weight: 700 };
+  const nameCap = capHeight(ctx, nameOpts);
+  const nameGap = Math.round(nameSize * 0.22);
+  const nameLines = fits.map((f) => f.lines);
+  const nameH = Math.max(...nameLines.map((l) => l.length * nameCap + (l.length - 1) * nameGap));
+
+  const crestR = n === 2 ? 20 : 17;
+  const clubs = o.holders.map((h) => cleanTeamLabel(h.record.team_name).toUpperCase());
+  const teamSize = Math.min(...clubs.map((c) => fitSize(ctx, c || " ", colW - crestR * 2 - 12, n === 2 ? 24 : 20, 13, 500)));
+  const teamOpts: TextOpts = { size: teamSize, weight: 500, alpha: 0.9 };
+
+  // Each game takes two lines in a narrow column: who it was against, then the result and date.
+  const gameText = o.holders.map((h) => h.games.flatMap((g) => {
+    const { vs, rest } = gameParts(g);
+    return [vs, rest].filter(Boolean);
+  }));
+  const gameSize = Math.min(20, ...gameText.flat().map((l) => fitSize(ctx, l, colW, 20, 12, 500)));
+  const gameOpts: TextOpts = { size: gameSize, weight: 500, alpha: 0.7 };
+  const gameCap = capHeight(ctx, gameOpts);
+  const lineGap = 10;
+  const gameH = (h: RecordHolder) => {
+    const lines = gameText[o.holders.indexOf(h)];
+    // An extra gap between one game and the next, for a holder who did it more than once.
+    return lines.length * gameCap + Math.max(0, lines.length - 1) * lineGap + Math.max(0, h.games.length - 1) * 8;
+  };
+  const gamesH = Math.max(...o.holders.map(gameH));
+
+  const blockH = nameH + 20 + crestR * 2 + 16 + gamesH;
+  const top = STAT_BOTTOM - blockH;
+
+  drawHeadline(ctx, o, top - 34, 250);
+
+  const theme = themeFor("swish", ORANGE);
+  o.holders.forEach((h, i) => {
+    const { x, w } = cols[i];
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = 18;
+    nameLines[i].forEach((line, j) => drawTextTop(ctx, line, x, top + j * (nameCap + nameGap), nameOpts));
+    ctx.restore();
+
+    const teamTop = top + nameH + 20;
+    if (clubs[i]) {
+      drawCrest(ctx, x + crestR, teamTop + crestR, crestR, clubLogos[i], initialsOf(clubs[i]), theme);
+      drawSpaced(ctx, clubs[i], x + crestR * 2 + 12, teamTop + crestR - capHeight(ctx, teamOpts) / 2, 1.5, teamOpts);
+    }
+
+    let y = teamTop + crestR * 2 + 16;
+    h.games.forEach((g) => {
+      const { vs, rest } = gameParts(g);
+      [vs, rest].filter(Boolean).forEach((line) => {
+        drawSpaced(ctx, line, x, y, 1, { ...gameOpts, size: Math.min(gameSize, fitSize(ctx, line, w, gameSize, 12, 500)) });
+        y += gameCap + lineGap;
+      });
+      y += 8;
+    });
+  });
+}
+
+/** Thin dark seams between the holders' photos, fading out where the details take over. */
+function drawSeams(ctx: CanvasRenderingContext2D, n: number) {
+  for (let i = 1; i < n; i += 1) {
+    const x = (CARD_W / n) * i;
+    const g = ctx.createLinearGradient(0, 0, 0, PHOTO_H);
+    g.addColorStop(0, "rgba(11,11,13,1)");
+    g.addColorStop(0.6, "rgba(11,11,13,1)");
+    g.addColorStop(1, "rgba(11,11,13,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 3, 0, 6, PHOTO_H);
+  }
 }
 
 export async function renderRecordCard(o: RecordCardOptions): Promise<HTMLCanvasElement> {
-  const { record, brand, clubLogoUrl, framing = DEFAULT_FRAMING } = o;
+  const { brand } = o;
+  const holders = o.holders.slice(0, MAX_CARD_HOLDERS);
+  if (holders.length === 0) throw new Error("No record holder to draw");
+  const opts = { ...o, holders };
+  const n = holders.length;
   await ensureDisplayFont();
-  const [logo, leagueLogo, photo, clubLogo] = await Promise.all([
+  const [logo, leagueLogo, photos, clubLogos] = await Promise.all([
     fetchImg(swishLogoSrc),
     fetchImg(brand.leagueLogoUrl),
-    fetchImg(record.photoUrl),
-    fetchImg(clubLogoUrl),
+    Promise.all(holders.map((h) => fetchImg(h.record.photoUrl))),
+    Promise.all(holders.map((h) => fetchImg(h.clubLogoUrl))),
   ]);
 
   const canvas = document.createElement("canvas");
@@ -233,17 +384,24 @@ export async function renderRecordCard(o: RecordCardOptions): Promise<HTMLCanvas
   ctx.fillStyle = BACKDROP;
   ctx.fillRect(0, 0, CARD_W, CARD_H);
 
-  // Orange light behind the player: it shows round a cut-out, and warms the photo's fade.
+  // Orange light behind the player(s): it shows round a cut-out, and warms the photo's fade.
   drawGlow(ctx, CARD_W / 2, 560, 620, ORANGE, 0.3);
-  if (photo) {
-    drawPhoto(ctx, photo, record.photoFocusY ?? 30, framing);
-  } else {
-    drawRingedCrest(ctx, CARD_W / 2, 470, 200, clubLogo, initialsOf(cleanTeamLabel(record.team_name) || record.name), themeFor("swish", ORANGE));
-  }
-  drawShade(ctx);
+  const colW = CARD_W / n;
+  holders.forEach((h, i) => {
+    const photo = photos[i];
+    if (photo) {
+      drawPhoto(ctx, photo, h.record.photoFocusY ?? 30, h.framing ?? DEFAULT_FRAMING, i * colW, colW);
+    } else {
+      const label = initialsOf(cleanTeamLabel(h.record.team_name) || h.record.name);
+      drawRingedCrest(ctx, i * colW + colW / 2, 470, n === 1 ? 200 : n === 2 ? 150 : 110, clubLogos[i], label, themeFor("swish", ORANGE));
+    }
+  });
+  if (n > 1) drawSeams(ctx, n);
+  drawShade(ctx, n > 1);
 
   drawTopLine(ctx, brand.leagueName, leagueLogo);
-  drawStatBlock(ctx, o, clubLogo);
+  if (n === 1) drawSoloBlock(ctx, opts, clubLogos[0]);
+  else drawJointBlock(ctx, opts, clubLogos);
   drawFooter(ctx, [logo, "statsthread"], "");
   return canvas;
 }
