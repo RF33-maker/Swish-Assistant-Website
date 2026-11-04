@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, RotateCcw } from "lucide-react";
+import { Check, Loader2, RotateCcw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlayerPhotoControl } from "@/components/social/PlayerPhotoControl";
 import {
@@ -16,20 +16,41 @@ import {
   SaveActions,
   SELECT_MENU,
   Stage,
+  Toggle,
   type CompetitionOption,
 } from "@/components/social/studioUi";
 import { photoChangeLendsTo, usePlayerPhotoChange } from "@/lib/playerPhotos";
 import { supabase } from "@/lib/supabase";
 import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
-import { canvasToBlob, DEFAULT_FRAMING, ensureDisplayFont, type PhotoFraming } from "@/lib/generateWeeklyCards";
-import { renderRecordCard } from "@/lib/generateRecordCard";
+import { canvasToBlob, DEFAULT_FRAMING, DEFAULT_HEAD_LINE, ensureDisplayFont, type HeadPoint, type PhotoFraming } from "@/lib/generateWeeklyCards";
+import { MAX_CARD_HOLDERS, recordColumnAt, renderRecordCard, type RecordHolder } from "@/lib/generateRecordCard";
 import { cleanTeamLabel } from "@/lib/cardStyle";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
-import type { RecordsResponse } from "@/types/records";
+import type { GameRecord, RecordsResponse } from "@/types/records";
 
 const DEFAULT_SLUG = "nbl-division-1-2026-2027";
 const SLUG_KEY = "weekly-awards-slug";
+// Face marks are shared with Team of the Week (saved by photo), so a face marked there is lined up here too.
+const HEADS_KEY = "weekly-awards-heads";
+const ALIGN_KEY = "records-align";
+
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // remembering these is a convenience only
+  }
+}
 
 function stripSeason(name: string): string {
   return name.replace(/\s*\(?\d{4}\s*[-/–]\s*\d{2,4}\)?\s*$/, "").trim();
@@ -57,10 +78,16 @@ export default function RecordsStudio() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [subtitle, setSubtitle] = useState("");
-  // Which of the joint record holders the card shows.
-  const [pick, setPick] = useState(0);
-  const [clubLogoUrl, setClubLogoUrl] = useState<string | null>(null);
+  // Which of the record holders (player ids) the card shows; every one of them by default, up to the card's limit.
+  const [shown, setShown] = useState<string[]>([]);
+  // Whose photo and framing the controls under the card are editing, when the card shows more than one player.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [clubLogos, setClubLogos] = useState<Record<string, string | null>>({});
   const [framing, setFraming] = useState<Record<string, PhotoFraming | undefined>>({});
+  // Joint records: faces on one line across the photos, as on Team of the Week.
+  const [heads, setHeads] = useState<Record<string, HeadPoint>>(() => readJson(HEADS_KEY, {}));
+  const [align, setAlign] = useState<{ on: boolean; line: number }>(() => readJson(ALIGN_KEY, { on: true, line: DEFAULT_HEAD_LINE }));
+  const [unaligned, setUnaligned] = useState<string[]>([]);
   const [downloading, setDownloading] = useState(false);
   const [shareFile, setShareFile] = useState<File | null>(null);
   const [canShareFiles, setCanShareFiles] = useState(false);
@@ -89,7 +116,6 @@ export default function RecordsStudio() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setPick(0);
     const params = new URLSearchParams({ category, limit: "5" });
     fetch(`/api/league/${encodeURIComponent(slug)}/records?${params}`)
       .then(async (res) => {
@@ -111,19 +137,54 @@ export default function RecordsStudio() {
   }, [slug, category]);
 
   const holders = useMemo(() => (data?.records || []).filter((r) => r.rank === 1), [data]);
-  const record = holders[Math.min(pick, holders.length - 1)] ?? null;
+  // Each player on the record total once, with every game they hit it in.
+  const groups = useMemo(() => {
+    const byId = new Map<string, { record: GameRecord; games: GameRecord[] }>();
+    for (const r of holders) {
+      const g = byId.get(r.id);
+      if (g) g.games.push(r);
+      else byId.set(r.id, { record: r, games: [r] });
+    }
+    return Array.from(byId.values());
+  }, [holders]);
 
+  // A new category or competition puts every holder back on the card.
+  useEffect(() => {
+    setShown(groups.slice(0, MAX_CARD_HOLDERS).map((g) => g.record.id));
+    setEditing(null);
+  }, [groups]);
+
+  const shownGroups = useMemo(() => {
+    const on = groups.filter((g) => shown.includes(g.record.id));
+    return on.length ? on : groups.slice(0, 1);
+  }, [groups, shown]);
+  const record = shownGroups.find((g) => g.record.id === editing)?.record ?? shownGroups[0]?.record ?? null;
+
+  const logoKey = (r: GameRecord) => `${r.league_id}|${r.team_name}`;
   useEffect(() => {
     let cancelled = false;
-    setClubLogoUrl(null);
-    if (!record?.team_name) return;
-    void getTeamLogoCached({ leagueId: record.league_id, teamName: record.team_name })
-      .catch(() => null)
-      .then((url) => !cancelled && setClubLogoUrl(url ?? null));
+    for (const { record: r } of shownGroups) {
+      const key = logoKey(r);
+      if (!r.team_name || key in clubLogos) continue;
+      void getTeamLogoCached({ leagueId: r.league_id, teamName: r.team_name })
+        .catch(() => null)
+        .then((url) => !cancelled && setClubLogos((prev) => ({ ...prev, [key]: url ?? null })));
+    }
     return () => {
       cancelled = true;
     };
-  }, [record?.league_id, record?.team_name]);
+    // clubLogos is only read to skip teams already looked up.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownGroups]);
+
+  const toggleShown = (id: string) =>
+    setShown((prev) => {
+      if (prev.includes(id)) return prev.length > 1 ? prev.filter((x) => x !== id) : prev;
+      if (prev.length >= MAX_CARD_HOLDERS) return prev;
+      // Keep the card's left-to-right order the same as the list's.
+      const next = new Set([...prev, id]);
+      return groups.map((g) => g.record.id).filter((x) => next.has(x));
+    });
 
   // A photo added here or in another studio: redraw with it.
   usePlayerPhotoChange((change) => {
@@ -141,6 +202,46 @@ export default function RecordsStudio() {
     setFraming((prev) => ({ ...prev, [record.id]: { ...recordFraming, ...patch } }));
   };
 
+  const joint = shownGroups.length > 1;
+  const updateAlign = (patch: Partial<{ on: boolean; line: number }>) => {
+    const next = { ...align, ...patch };
+    setAlign(next);
+    writeJson(ALIGN_KEY, next);
+  };
+  const markHead = (e: React.MouseEvent<HTMLImageElement>) => {
+    const photo = record?.photoUrl;
+    if (!photo) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const point = {
+      x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+      y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
+    };
+    const next = { ...heads, [photo]: point };
+    setHeads(next);
+    writeJson(HEADS_KEY, next);
+  };
+  const clearHead = () => {
+    const photo = record?.photoUrl;
+    if (!photo) return;
+    const next = { ...heads };
+    delete next[photo];
+    setHeads(next);
+    writeJson(HEADS_KEY, next);
+  };
+  const firstName = (name: string) => name.split(" ")[0];
+  const needMarks = joint && align.on ? shownGroups.filter((g) => g.record.photoUrl && !heads[g.record.photoUrl]) : [];
+  const couldNotAlign = joint && align.on ? shownGroups.filter((g) => g.record.photoUrl && heads[g.record.photoUrl] && unaligned.includes(g.record.id)) : [];
+  const recordHead = record?.photoUrl ? heads[record.photoUrl] : undefined;
+
+  // Tap a holder's photo on a joint card to adjust it.
+  const selectColumnAt = (e: React.MouseEvent<HTMLDivElement>) => {
+    const canvas = cardCanvasRef.current;
+    if (!joint || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const i = recordColumnAt(((e.clientX - rect.left) / rect.width) * canvas.width, shownGroups.length);
+    setEditing(shownGroups[i].record.id);
+  };
+
   const brand = useMemo(
     () => ({ leagueName: subtitle || data?.league.name || "", leagueLogoUrl, primaryHex }),
     [subtitle, data, leagueLogoUrl, primaryHex],
@@ -155,7 +256,7 @@ export default function RecordsStudio() {
 
   useEffect(() => {
     const token = ++renderToken.current;
-    if (!data || !record) {
+    if (!data || shownGroups.length === 0) {
       cardCanvasRef.current = null;
       canvasHostRef.current?.replaceChildren();
       setHasCard(false);
@@ -164,17 +265,23 @@ export default function RecordsStudio() {
     }
     setRendering(true);
     setShareFile(null);
+    const cardHolders: RecordHolder[] = shownGroups.map((g) => ({
+      ...g,
+      clubLogoUrl: clubLogos[logoKey(g.record)] ?? null,
+      framing: framing[g.record.id] ?? DEFAULT_FRAMING,
+      head: g.record.photoUrl ? heads[g.record.photoUrl] : undefined,
+    }));
     void renderRecordCard({
-      record,
+      holders: cardHolders,
       categoryTitle: data.category.title,
-      unit: data.category.short,
       brand,
-      clubLogoUrl,
-      framing: recordFraming,
-      holders: { players: new Set(holders.map((h) => h.id)).size, games: holders.length },
+      share: { players: groups.length, games: holders.length },
+      alignHeads: align.on,
+      headLine: align.line,
     })
-      .then((canvas) => {
+      .then(({ canvas, unaligned: missed }) => {
         if (token !== renderToken.current) return;
+        setUnaligned(missed);
         canvas.style.cssText = "display:block;width:100%;height:auto;";
         cardCanvasRef.current = canvas;
         canvasHostRef.current?.replaceChildren(canvas);
@@ -188,7 +295,8 @@ export default function RecordsStudio() {
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [data, record, holders, brand, clubLogoUrl, recordFraming, fileName]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, shownGroups, groups, holders, brand, clubLogos, framing, heads, align, fileName]);
 
   const download = async () => {
     const canvas = cardCanvasRef.current;
@@ -252,23 +360,31 @@ export default function RecordsStudio() {
         {data && data.records.length > 0 && (
           <Field
             label="Top performances"
-            hint={holders.length > 1 ? "More than one game is on the record total. Pick which one the card shows." : undefined}
+            hint={
+              groups.length > 1
+                ? `Joint record: everyone on the record total goes on the card${groups.length > MAX_CARD_HOLDERS ? ` (up to ${MAX_CARD_HOLDERS})` : ""}. Tap a player to take them off it.`
+                : undefined
+            }
           >
             <ol className="space-y-1" data-testid="list-records">
               {data.records.map((r) => {
-                const holderIndex = holders.indexOf(r);
-                const selectable = holders.length > 1 && holderIndex >= 0;
-                const on = r === record;
+                const isHolder = r.rank === 1;
+                const selectable = groups.length > 1 && isHolder;
+                const on = isHolder && shownGroups.some((g) => g.record.id === r.id);
+                const full = !on && shown.length >= MAX_CARD_HOLDERS;
                 return (
                   <li key={`${r.id}-${r.game_key}`}>
                     <button
                       type="button"
-                      disabled={!selectable}
-                      onClick={() => setPick(holderIndex)}
+                      disabled={!selectable || full}
+                      onClick={() => toggleShown(r.id)}
                       data-active={on}
-                      className={`ch-tile flex w-full items-center gap-3 px-3 py-2 text-left ${on ? "ring-1 ring-[color:var(--ch-accent)]" : ""} ${selectable ? "cursor-pointer" : "cursor-default"}`}
+                      aria-pressed={selectable ? on : undefined}
+                      className={`ch-tile flex w-full items-center gap-3 px-3 py-2 text-left ${on ? "ring-1 ring-[color:var(--ch-accent)]" : ""} ${selectable && !full ? "cursor-pointer" : "cursor-default"}`}
                     >
-                      <span className="ch-num w-5 flex-none text-[12px] text-[color:var(--ch-muted)]">{r.rank}</span>
+                      <span className="ch-num w-5 flex-none text-[12px] text-[color:var(--ch-muted)]">
+                        {on && groups.length > 1 ? <Check className="h-3.5 w-3.5 text-[color:var(--ch-accent)]" /> : r.rank}
+                      </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-medium text-[color:var(--ch-text)]">{r.name}</span>
                         <span className={`block truncate ${HINT}`}>
@@ -296,7 +412,7 @@ export default function RecordsStudio() {
           </div>
         ) : (
           <Stage busy={rendering && !hasCard} empty={!hasCard && !rendering ? "No games recorded in this category yet." : undefined}>
-            <div ref={canvasHostRef} className="w-full" />
+            <div ref={canvasHostRef} onClick={selectColumnAt} className={`w-full ${joint ? "cursor-pointer" : ""}`} />
           </Stage>
         )}
 
@@ -304,12 +420,12 @@ export default function RecordsStudio() {
           <div className="mx-auto mt-3 max-w-[640px] space-y-3">
             <PlayerPhotoControl key={record.id} playerId={record.id} playerName={record.name} photoUrl={record.photoUrl} />
 
-            {record.photoUrl && (
+            {(record.photoUrl || joint) && (
               <div className="ch-tile space-y-3 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-[color:var(--ch-text)]">Photo framing</p>
-                    <p className={HINT}>Adjusts the card only. The photo fades into the stat at the bottom.</p>
+                    <p className={HINT}>Adjusts the card only. Your original photo stays unchanged.</p>
                   </div>
                   <button
                     type="button"
@@ -321,35 +437,126 @@ export default function RecordsStudio() {
                     Reset
                   </button>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <RangeField
-                    label="Zoom"
-                    display={`${Math.round(recordFraming.zoom * 100)}%`}
-                    min={0.6}
-                    max={3}
-                    step={0.05}
-                    value={recordFraming.zoom}
-                    onChange={(v) => adjust({ zoom: v })}
-                  />
-                  <RangeField
-                    label="Left ↔ Right"
-                    display={fmtShift(recordFraming.x)}
-                    min={-50}
-                    max={50}
-                    step={1}
-                    value={recordFraming.x}
-                    onChange={(v) => adjust({ x: v })}
-                  />
-                  <RangeField
-                    label="Up ↔ Down"
-                    display={fmtShift(recordFraming.y)}
-                    min={-50}
-                    max={50}
-                    step={1}
-                    value={recordFraming.y}
-                    onChange={(v) => adjust({ y: v })}
-                  />
-                </div>
+
+                {joint && (
+                  <>
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Choose the player to adjust">
+                      {shownGroups.map((g) => {
+                        const on = g.record.id === record.id;
+                        return (
+                          <button
+                            key={g.record.id}
+                            type="button"
+                            onClick={() => setEditing(g.record.id)}
+                            aria-pressed={on}
+                            data-active={on}
+                            className="ch-chip px-3 py-1 text-xs"
+                          >
+                            {g.record.name}
+                            {framing[g.record.id] ? " •" : ""}
+                            {!g.record.photoUrl ? " (no photo)" : align.on && !heads[g.record.photoUrl] ? " ?" : ""}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className={HINT}>Tip: tap a photo in the preview to adjust it.</p>
+
+                    <div className="space-y-2 rounded-lg border border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] p-2.5">
+                      <Toggle bare checked={align.on} onChange={(on) => updateAlign({ on })} label="Line up heads across the photos" />
+                      {align.on && (
+                        <>
+                          <RangeField
+                            label="Head height"
+                            display={`${align.line}%`}
+                            min={10}
+                            max={50}
+                            step={1}
+                            value={align.line}
+                            onChange={(v) => updateAlign({ line: v })}
+                          />
+                          <p className={HINT}>Each photo is zoomed and shifted just enough to put the marked face on this line.</p>
+                          {needMarks.length > 0 && (
+                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                              Mark the face for {needMarks.map((g) => g.record.name).join(", ")} (chips with ?). Until then a guess is used.
+                            </p>
+                          )}
+                          {couldNotAlign.length > 0 && (
+                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                              {couldNotAlign.map((g) => g.record.name).join(", ")}: face is too close to the edge of the photo to reach the
+                              line without zooming in too far, so it sits as near as it can.
+                            </p>
+                          )}
+                          {record.photoUrl && (
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-medium text-[color:var(--ch-text)]">Tap the middle of {firstName(record.name)}'s face</p>
+                                {recordHead && (
+                                  <button type="button" onClick={clearHead} className="text-xs font-medium text-[color:var(--ch-accent)] hover:underline">
+                                    Clear
+                                  </button>
+                                )}
+                              </div>
+                              <div className="relative mx-auto w-fit">
+                                <img
+                                  src={record.photoUrl}
+                                  alt={record.name}
+                                  draggable={false}
+                                  onClick={markHead}
+                                  className="block max-h-64 max-w-full cursor-crosshair rounded-md"
+                                  data-testid="img-mark-head"
+                                />
+                                {recordHead && (
+                                  <span
+                                    className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[color:var(--ch-accent)] bg-white/30 shadow"
+                                    style={{ left: `${recordHead.x * 100}%`, top: `${recordHead.y * 100}%` }}
+                                  />
+                                )}
+                              </div>
+                              <p className={HINT}>Saved for this photo (and shared with Team of the Week), so you only do it once.</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {!record.photoUrl ? (
+                  <p className={HINT}>Add a photo for {record.name} above and the framing controls appear here.</p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <RangeField
+                      label="Zoom"
+                      display={`${Math.round(recordFraming.zoom * 100)}%`}
+                      min={joint ? 1 : 0.6}
+                      max={3}
+                      step={0.05}
+                      value={recordFraming.zoom}
+                      onChange={(v) => adjust({ zoom: v })}
+                    />
+                    <RangeField
+                      label="Left ↔ Right"
+                      display={fmtShift(recordFraming.x)}
+                      min={-50}
+                      max={50}
+                      step={1}
+                      value={recordFraming.x}
+                      onChange={(v) => adjust({ x: v })}
+                    />
+                    <RangeField
+                      label="Up ↔ Down"
+                      display={fmtShift(recordFraming.y)}
+                      min={-50}
+                      max={50}
+                      step={1}
+                      value={recordFraming.y}
+                      onChange={(v) => adjust({ y: v })}
+                    />
+                  </div>
+                )}
+                {joint && record.photoUrl && (
+                  <p className={HINT}>Fine-tune just this photo: extra zoom, or nudge the head from the shared line.</p>
+                )}
               </div>
             )}
           </div>
