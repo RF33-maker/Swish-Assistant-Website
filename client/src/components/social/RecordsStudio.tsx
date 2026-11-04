@@ -274,7 +274,6 @@ export default function RecordsStudio() {
     void renderRecordCard({
       holders: cardHolders,
       categoryTitle: data.category.title,
-      unit: data.category.short,
       brand,
       share: { players: groups.length, games: holders.length },
       alignHeads: align.on,

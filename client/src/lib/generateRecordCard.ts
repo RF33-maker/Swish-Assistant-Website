@@ -60,8 +60,6 @@ export type RecordCardOptions = {
   holders: RecordHolder[];
   /** "Most Points in a Game". */
   categoryTitle: string;
-  /** "PTS". */
-  unit: string;
   brand: WeeklyCardBrand;
   /** Everyone on the record total, shown or not: more than one player makes it a joint record; one player more than once says how often. */
   share?: { players: number; games: number };
@@ -221,11 +219,11 @@ function shareTag(share: { players: number; games: number }): string {
 }
 
 /**
- * The number in orange with the unit beside it, and the category (plus any shared-record tag) under it,
+ * The number in orange on its own (the category under it names the stat), and the category (plus any shared-record tag) under it,
  * with the category's foot at `titleBottom`. Returns nothing: everything below is the caller's.
  */
 function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, titleBottom: number, maxValueSize: number, centred = false) {
-  const { categoryTitle, unit } = o;
+  const { categoryTitle } = o;
   const maxW = CARD_W - SIDE * 2;
   const value = String(o.holders[0].record.value);
   const share = o.share ?? { players: o.holders.length, games: o.holders.reduce((n, h) => n + h.games.length, 0) };
@@ -239,11 +237,7 @@ function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, title
   if (spacedWidth(ctx, title + tag, titleSpacing, titleOpts) > maxW) titleOpts.size = fitSize(ctx, title + tag, maxW, 34, 20, 600);
   const titleCap = capHeight(ctx, titleOpts);
 
-  const unitOpts: TextOpts = { size: 64, weight: 600, color: "#ffffff", alpha: 0.92 };
-  setFont(ctx, unitOpts);
-  // Centred (joint records), the number stands alone: the category under it already says what it counts.
-  const unitW = centred ? 0 : ctx.measureText(unit).width;
-  const valueSize = fitSize(ctx, value, maxW - (centred ? 0 : unitW + 28), maxValueSize, 140, 700);
+  const valueSize = fitSize(ctx, value, maxW, maxValueSize, 140, 700);
   const valueOpts: TextOpts = { size: valueSize, weight: 700, color: ORANGE };
   const valueCap = capHeight(ctx, valueOpts);
 
@@ -270,7 +264,6 @@ function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, title
   ctx.textBaseline = "alphabetic";
   ctx.fillText(value, valueX, valueTop + valueCap);
   ctx.restore();
-  if (!centred) drawTextTop(ctx, unit, valueX + valueW + 24, valueTop + valueCap - capHeight(ctx, unitOpts), unitOpts);
 
   drawSpaced(ctx, title, titleX, titleTop, titleSpacing, titleOpts);
   if (tag) drawSpaced(ctx, tag, titleX + titleW, titleTop, titleSpacing, { ...titleOpts, color: "#ffffff", alpha: 0.75 });
