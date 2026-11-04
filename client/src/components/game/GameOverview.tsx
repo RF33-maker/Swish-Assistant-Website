@@ -27,6 +27,12 @@ export interface GameTeamTotals {
   tot_ssteals: number;
   tot_sblocks: number;
   tot_sturnovers: number;
+  /** Points by type. Null when the feed didn't record it, so the row is hidden rather than shown as 0. */
+  tot_spointsinthepaint?: number | null;
+  tot_spointssecondchance?: number | null;
+  tot_spointsfastbreak?: number | null;
+  tot_spointsfromturnovers?: number | null;
+  tot_sbenchpoints?: number | null;
 }
 
 export interface GameLeaderPlayer {
@@ -196,6 +202,31 @@ function ShootingRows({ home, away, colors }: { home: GameTeamTotals; away: Game
   );
 }
 
+const SCORING_TYPES = [
+  { key: "tot_spointsinthepaint", label: "Points in the paint" },
+  { key: "tot_spointssecondchance", label: "Second chance points" },
+  { key: "tot_spointsfastbreak", label: "Fast break points" },
+  { key: "tot_spointsfromturnovers", label: "Points off turnovers" },
+  { key: "tot_sbenchpoints", label: "Bench points" },
+] as const;
+
+/**
+ * The points-by-type rows that both teams have a value for. One side missing
+ * (PDF uploads only read the home team's paint points) would read as a 0, so
+ * that row is left out instead.
+ */
+function scoringLines(home: GameTeamTotals, away: GameTeamTotals) {
+  return SCORING_TYPES.flatMap(({ key, label }) => {
+    const h = home[key];
+    const a = away[key];
+    return h != null && a != null ? [{ key, label, home: h, away: a }] : [];
+  });
+}
+
+function ScoringRow({ line, colors }: { line: ReturnType<typeof scoringLines>[number]; colors: Colors }) {
+  return <StatCompareRow label={line.label} home={line.home} away={line.away} colors={colors} />;
+}
+
 function CountingRows({ home, away, colors, withShooting = false }: { home: GameTeamTotals; away: GameTeamTotals; colors: Colors; withShooting?: boolean }) {
   return (
     <div className="grid gap-x-8 gap-y-3.5 md:grid-cols-2">
@@ -208,6 +239,7 @@ function CountingRows({ home, away, colors, withShooting = false }: { home: Game
       {withShooting && shootingLines(home, away).map((line) => (
         <ShootingRow key={line.key} line={line} label={line.label} colors={colors} />
       ))}
+      {withShooting && scoringLines(home, away).map((line) => <ScoringRow key={line.key} line={line} colors={colors} />)}
     </div>
   );
 }
@@ -317,6 +349,14 @@ export function GameOverviewSections({
       {hasTeamStats && (
         <GameSection title="Team comparison">
           <CountingRows home={home!} away={away!} colors={colors} />
+        </GameSection>
+      )}
+
+      {hasTeamStats && scoringLines(home!, away!).length > 0 && (
+        <GameSection title="Points breakdown">
+          <div className="grid gap-x-8 gap-y-3.5 md:grid-cols-2">
+            {scoringLines(home!, away!).map((line) => <ScoringRow key={line.key} line={line} colors={colors} />)}
+          </div>
         </GameSection>
       )}
 

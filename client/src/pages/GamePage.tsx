@@ -77,7 +77,6 @@ interface TeamStat {
   source_type?: string | null;
   name: string;
   side: string;
-  source_type?: string | null;
   score: number;
   tot_spoints: number;
   tot_sreboundstotal: number;
@@ -95,6 +94,11 @@ interface TeamStat {
   p2_score: number | null;
   p3_score: number | null;
   p4_score: number | null;
+  tot_spointsinthepaint?: number | null;
+  tot_spointssecondchance?: number | null;
+  tot_spointsfastbreak?: number | null;
+  tot_spointsfromturnovers?: number | null;
+  tot_sbenchpoints?: number | null;
 }
 
 interface GameResult {
