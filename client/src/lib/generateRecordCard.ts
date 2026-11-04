@@ -241,8 +241,9 @@ function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, title
 
   const unitOpts: TextOpts = { size: 64, weight: 600, color: "#ffffff", alpha: 0.92 };
   setFont(ctx, unitOpts);
-  const unitW = ctx.measureText(unit).width;
-  const valueSize = fitSize(ctx, value, maxW - unitW - 28, maxValueSize, 140, 700);
+  // Centred (joint records), the number stands alone: the category under it already says what it counts.
+  const unitW = centred ? 0 : ctx.measureText(unit).width;
+  const valueSize = fitSize(ctx, value, maxW - (centred ? 0 : unitW + 28), maxValueSize, 140, 700);
   const valueOpts: TextOpts = { size: valueSize, weight: 700, color: ORANGE };
   const valueCap = capHeight(ctx, valueOpts);
 
@@ -252,8 +253,8 @@ function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, title
   // The number in Swish Assistant orange, light at the top to deep at the foot, with only a soft drop shadow.
   setFont(ctx, valueOpts);
   const valueW = ctx.measureText(value).width;
-  // Centred (joint records), the number and its unit are placed as one group, and so are the category and its tag.
-  const valueX = centred ? (CARD_W - (valueW + 24 + unitW)) / 2 : SIDE - valueSize * 0.03;
+  // Centred, the category and its tag are placed as one group.
+  const valueX = centred ? (CARD_W - valueW) / 2 : SIDE - valueSize * 0.03;
   const titleW = spacedWidth(ctx, title, titleSpacing, titleOpts);
   const titleX = centred ? (CARD_W - titleW - (tag ? spacedWidth(ctx, tag, titleSpacing, titleOpts) : 0)) / 2 : SIDE;
   const fill = ctx.createLinearGradient(0, valueTop, 0, valueTop + valueCap);
@@ -269,7 +270,7 @@ function drawHeadline(ctx: CanvasRenderingContext2D, o: RecordCardOptions, title
   ctx.textBaseline = "alphabetic";
   ctx.fillText(value, valueX, valueTop + valueCap);
   ctx.restore();
-  drawTextTop(ctx, unit, valueX + valueW + 24, valueTop + valueCap - capHeight(ctx, unitOpts), unitOpts);
+  if (!centred) drawTextTop(ctx, unit, valueX + valueW + 24, valueTop + valueCap - capHeight(ctx, unitOpts), unitOpts);
 
   drawSpaced(ctx, title, titleX, titleTop, titleSpacing, titleOpts);
   if (tag) drawSpaced(ctx, tag, titleX + titleW, titleTop, titleSpacing, { ...titleOpts, color: "#ffffff", alpha: 0.75 });
