@@ -14,6 +14,8 @@ import UpcomingGamePreview, { type PreviewGame } from "./UpcomingGamePreview";
 import GameScoreHero, { useMatchupColors } from "./game/GameScoreHero";
 import { ScorersTableBadge, ScorersTableNote, useCapturedWithScorersTable } from "./game/ScorersTableCredit";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "./game/GameOverview";
+import GameOnOff from "./game/GameOnOff";
+import type { OnOffStint } from "@/lib/gameOnOff";
 import { playerPath, teamPath } from "@shared/seo";
 import { gameRecap } from "@shared/recaps";
 import { normalizeEventPeriods, normalizeShotPeriods, periodBreakLabel, periodLabel } from "@/lib/periodLabel";
@@ -182,6 +184,8 @@ export function InlineGameDetail({
   const [eventsLoading, setEventsLoading] = useState(false);
   const [shotData, setShotData] = useState<ShotData[]>([]);
   const [shotLoading, setShotLoading] = useState(false);
+  // Lineup stints for the On/Off tab's net ratings, fetched when the tab opens.
+  const [stints, setStints] = useState<OnOffStint[] | null>(null);
   const [activeTab, setActiveTab] = useState("game");
   // Bumped to quietly reload the box score while the game is on.
   const [refreshTick, setRefreshTick] = useState(0);
@@ -203,6 +207,7 @@ export function InlineGameDetail({
       setLiveEvents([]);
       setLiveClock(null);
       setShotData([]);
+      setStints(null);
       setGameInfo(null);
       setLeagueId(null);
       setCompetitionName(null);
@@ -527,6 +532,17 @@ export function InlineGameDetail({
   }, [activeTab, eventsLoaded, fetchEventsAndShots]);
 
   useEffect(() => {
+    if (activeTab !== "onoff" || stints !== null || !gameKey) return;
+    let active = true;
+    supabase
+      .from("lineup_stints")
+      .select("team_id, lineup_player_ids, seconds_played, points_for, points_against, possessions_for, possessions_against")
+      .eq("game_key", gameKey)
+      .then(({ data }) => { if (active) setStints((data || []) as OnOffStint[]); });
+    return () => { active = false; };
+  }, [activeTab, stints, gameKey]);
+
+  useEffect(() => {
     const status = (gameInfo?.status || "").toLowerCase();
     const gameIsLive = status === "live" || status === "in_progress" || status.includes("live");
     if (!gameIsLive) {
@@ -724,13 +740,16 @@ export function InlineGameDetail({
     />
   );
 
-  const TABS = [
+  // Per-game on/off reads the box +/-, so it waits for the game to finish.
+  const showOnOff = !isLive && !forfeit && [...homePlayerStats, ...awayPlayerStats].some((p) => p.splusminuspoints != null);
+  const TABS: Array<readonly [string, string]> = [
     ["game", "Game"],
     ["boxscore", "Box Score"],
+    ...(showOnOff ? [["onoff", "On/Off"] as const] : []),
     ["teamstats", "Team Stats"],
     ["shots", "Shots"],
     ["feed", "Play by Play"],
-  ] as const;
+  ];
 
   return (
     <div className="space-y-0 animate-fade-in-up">
@@ -798,7 +817,7 @@ export function InlineGameDetail({
           )}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             {/* Scrolls on a phone, where five labels don't fit; a fixed grid from md up. */}
-            <TabsList className={GAME_TAB_LIST_CLASS}>
+            <TabsList className={showOnOff ? GAME_TAB_LIST_CLASS.replace("md:grid-cols-5", "md:grid-cols-6") : GAME_TAB_LIST_CLASS}>
               {TABS.map(([v, label]) => (
                 <TabsTrigger key={v} value={v} className={GAME_TAB_TRIGGER_CLASS}>
                   {label}
@@ -829,6 +848,21 @@ export function InlineGameDetail({
               <BoxScoreTable players={awayPlayerStats} teamName={awayteam} score={awayScore} color={colors.awayFill} totals={awayTeamStats} />
               {capturedWithScorersTable && <ScorersTableNote />}
             </TabsContent>
+
+            {/* ON/OFF TAB */}
+            {showOnOff && (
+              <TabsContent value="onoff" className="mt-0">
+                <GameOnOff
+                  homeTeam={hometeam}
+                  awayTeam={awayteam}
+                  leagueId={leagueId}
+                  homePlayers={homePlayerStats.map((p) => ({ ...linked(p), name: fullName(p) }))}
+                  awayPlayers={awayPlayerStats.map((p) => ({ ...linked(p), name: fullName(p) }))}
+                  stints={stints}
+                  colors={colors}
+                />
+              </TabsContent>
+            )}
 
             {/* TEAM STATS TAB */}
             <TabsContent value="teamstats" className="mt-0">

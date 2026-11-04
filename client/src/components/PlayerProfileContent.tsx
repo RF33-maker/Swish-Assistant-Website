@@ -44,6 +44,7 @@ import { AccoladeChips, AccoladeCollection } from "@/components/cards/AccoladeCo
 import type { AccoladeCardPlayer } from "@/components/cards/AccoladeCard";
 import { fetchPlayerRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
 import { stopLabel } from "@/lib/leagueChildren";
+import { useGameLogOnOff } from "@/hooks/useGameLogOnOff";
 
 const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
 
@@ -113,6 +114,13 @@ interface PlayerStat {
     league_id?: string;
   };
 }
+
+/** "+7", "−3", "0" for the game log's on/off columns. */
+const signedNumber = (v: number) => (v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : '0');
+const onOffTone = (v: number | undefined) =>
+  v == null || v === 0
+    ? 'text-[color:var(--ch-text-2)]'
+    : v > 0 ? 'text-[color:var(--ch-win)]' : 'text-[color:var(--ch-loss)]';
 
 interface SeasonAverages {
   games_played: number;
@@ -1681,6 +1689,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     return stats.filter(stat => playedInGame(stat));
   }, [playerStats, expandedCompIds]);
 
+  // On/off for each game in the log, from the whole game's box +/-.
+  const gameLogOnOff = useGameLogOnOff(filteredStats, activeTab === 'games');
+  const showOnOffColumns = gameLogOnOff.size > 0;
+
   // Once the log mixes competitions (e.g. SLB and ENBL for the same club), each
   // game needs a tag saying which one it came from.
   const showCompetitionColumn = useMemo(
@@ -3044,11 +3056,19 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                     <th className="px-2 py-2 text-center">BLK</th>
                     <th className="px-2 py-2 text-center">TO</th>
                     <th className="px-2 py-2 text-center">PTS</th>
+                    {showOnOffColumns && (
+                      <>
+                        <th className="px-2 py-2 text-center" title="Points scored minus conceded with the player on court (box score +/-)">ON</th>
+                        <th className="px-2 py-2 text-center" title="Points scored minus conceded while the player sat">OFF</th>
+                        <th className="px-2 py-2 text-center" title="On minus off">SWING</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredStats.map((game) => {
                     const opponentName = (game.opponent && game.opponent.trim()) || 'TBD';
+                    const onOff = gameLogOnOff.get(game.id);
                     return (
                       <tr
                         key={game.id}
@@ -3097,11 +3117,23 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                         <td className="px-2 py-2 text-xs text-center">{game.sblocks || 0}</td>
                         <td className="px-2 py-2 text-xs text-center">{game.sturnovers || game.turnovers || 0}</td>
                         <td className="px-2 py-2 text-xs text-center font-bold">{game.spoints || game.points || 0}</td>
+                        {showOnOffColumns && (
+                          <>
+                            <td className={`px-2 py-2 text-xs text-center ${onOffTone(onOff?.on)}`}>{onOff ? signedNumber(onOff.on) : '—'}</td>
+                            <td className={`px-2 py-2 text-xs text-center ${onOffTone(onOff?.off)}`}>{onOff ? signedNumber(onOff.off) : '—'}</td>
+                            <td className={`px-2 py-2 text-xs text-center font-semibold ${onOffTone(onOff?.swing)}`}>{onOff ? signedNumber(onOff.swing) : '—'}</td>
+                          </>
+                        )}
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+              {showOnOffColumns && (
+                <p className="mt-2 text-[11px] text-[color:var(--ch-muted)]">
+                  On is the score with the player on court (the box score +/-), off is the score while they sat, and swing is the difference.
+                </p>
+              )}
             </div>
           )}
         </div>}
