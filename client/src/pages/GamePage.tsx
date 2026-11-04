@@ -19,6 +19,8 @@ import PlayByPlay from "@/components/PlayByPlay";
 import UpcomingGamePreview from "@/components/UpcomingGamePreview";
 import { LiveFeedPanel, LiveFeedStrip } from "@/components/game/LiveFeed";
 import OnCourt, { type OnCourtBoxPlayer } from "@/components/game/OnCourt";
+import GameOnOff, { type GameOnOffBoxPlayer } from "@/components/game/GameOnOff";
+import type { OnOffStint } from "@/lib/gameOnOff";
 import { useLiveCommentary } from "@/hooks/useLiveCommentary";
 import GameScoreHero, { useMatchupColors, type GameHeroState } from "@/components/game/GameScoreHero";
 import { GameOverviewSections, TeamStatsComparison, GAME_TAB_LIST_CLASS, GAME_TAB_TRIGGER_CLASS, type GameLeaderPlayer } from "@/components/game/GameOverview";
@@ -64,6 +66,9 @@ interface PlayerStat {
   sfreethrowsmade: number;
   sfreethrowsattempted: number;
   sminutes: string;
+  /** Official +/-: points scored minus conceded while on court. */
+  splusminuspoints?: number | null;
+  team_id?: string | null;
   player_id?: string | null;
   players?: { slug?: string | null } | null;
 }
@@ -235,6 +240,16 @@ const toOnCourt = (p: PlayerStat): OnCourtBoxPlayer => ({
   href: playerHref(p),
 });
 
+const toOnOff = (p: PlayerStat): GameOnOffBoxPlayer => ({
+  name: leaderName(p),
+  href: playerHref(p),
+  playerId: p.player_id ?? null,
+  teamId: p.team_id ?? null,
+  sminutes: p.sminutes,
+  spoints: p.spoints,
+  splusminuspoints: p.splusminuspoints,
+});
+
 const toLeader = (p: PlayerStat): GameLeaderPlayer => ({
   href: playerHref(p),
   name: leaderName(p),
@@ -297,7 +312,7 @@ export default function GamePage() {
   // Coaches Hub "last game" box score link) — anything else, including no
   // param, falls back to the normal default.
   const requestedTab = searchParams.get("tab");
-  const initialTab = ["game", "boxscore", "teamstats", "shotchart", "feed"].includes(requestedTab || "") ? requestedTab! : "game";
+  const initialTab = ["game", "boxscore", "onoff", "teamstats", "shotchart", "feed"].includes(requestedTab || "") ? requestedTab! : "game";
   
   const db = isTestMode ? supabase.schema("test") : supabase;
 
@@ -446,6 +461,20 @@ export default function GamePage() {
     // Shots keep arriving while the game is on, like the play-by-play.
     refetchInterval: isLiveGameStatus(normalizeGameStatus(gameData?.status)) ? 15000 : false,
     refetchIntervalInBackground: false,
+  });
+
+  // Lineup stints, for the On/Off tab's net ratings. They're built once the game is over.
+  const { data: gameStints } = useQuery({
+    queryKey: ['game-lineup-stints', gameKey, isTestMode],
+    queryFn: async () => {
+      const { data, error } = await db
+        .from('lineup_stints')
+        .select('team_id, lineup_player_ids, seconds_played, points_for, points_against, possessions_for, possessions_against')
+        .eq('game_key', gameKey);
+      if (error) { console.error('[GamePage] lineup_stints error:', error); return []; }
+      return (data || []) as OnOffStint[];
+    },
+    enabled: !!gameKey && !!gameData && !isLiveGameStatus(normalizeGameStatus(gameData?.status)),
   });
 
   // Overtime shots are stored as period 1, like the plays; the plays know better.
@@ -993,6 +1022,9 @@ export default function GamePage() {
   const awayScore = awayTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[1] : null);
   const isForfeit = teamStats?.some(t => t.source_type === 'forfeit') ?? false;
 
+  // Per-game on/off reads the box +/-, so it waits for the game to finish.
+  const showOnOff = !isLive && isGamePlayed && !isForfeit && !!playerStats?.some(p => p.splusminuspoints != null);
+
   // Scored in Scorers Table rather than taken from a LiveStats feed.
   const capturedWithScorersTable =
     !!playerStats?.some(p => p.source_type === 'swish_stats') || !!teamStats?.some(t => t.source_type === 'swish_stats');
@@ -1294,9 +1326,10 @@ export default function GamePage() {
                 />
               )}
               <Tabs defaultValue={initialTab} className="w-full">
-                <TabsList className={GAME_TAB_LIST_CLASS}>
+                <TabsList className={showOnOff ? GAME_TAB_LIST_CLASS.replace("md:grid-cols-5", "md:grid-cols-6") : GAME_TAB_LIST_CLASS}>
                   <TabsTrigger value="game" className={GAME_TAB_TRIGGER_CLASS}>Game</TabsTrigger>
                   <TabsTrigger value="boxscore" className={GAME_TAB_TRIGGER_CLASS}>Box Score</TabsTrigger>
+                  {showOnOff && <TabsTrigger value="onoff" className={GAME_TAB_TRIGGER_CLASS}>On/Off</TabsTrigger>}
                   <TabsTrigger value="teamstats" className={GAME_TAB_TRIGGER_CLASS}>Team Stats</TabsTrigger>
                   <TabsTrigger value="shotchart" className={GAME_TAB_TRIGGER_CLASS}>Shots</TabsTrigger>
                   <TabsTrigger value="feed" className={GAME_TAB_TRIGGER_CLASS}>Play by Play</TabsTrigger>
@@ -1363,6 +1396,20 @@ export default function GamePage() {
                     </>
                   )}
                 </TabsContent>
+
+                {showOnOff && (
+                  <TabsContent value="onoff" className="mt-0">
+                    <GameOnOff
+                      homeTeam={gameData.hometeam}
+                      awayTeam={gameData.awayteam}
+                      leagueId={gameData.league_id}
+                      homePlayers={homePlayerStats.map(toOnOff)}
+                      awayPlayers={awayPlayerStats.map(toOnOff)}
+                      stints={gameStints}
+                      colors={colors}
+                    />
+                  </TabsContent>
+                )}
 
                 <TabsContent value="teamstats" className="mt-0">
                   <TeamStatsComparison
