@@ -5,6 +5,7 @@ import { isNativeShell, plusHref, usePlusAccess } from "@/lib/plus";
 
 /**
  * Shows a Swish+ feature to members and a locked note to everyone else.
+ * Before launch it renders nothing for anyone but admins (see usePlusAccess).
  *
  * The locked note never renders the real numbers (they'd still be in the
  * page), only a blurred stand-in, so the gate can't be read around. In the iOS
@@ -26,7 +27,8 @@ function GetPlus({ small = false }: { small?: boolean }) {
 
 /** A whole section behind Swish+. */
 export function PlusGate({ what, detail, children, height = 260 }: { what: string; detail?: string; children: ReactNode; height?: number }) {
-  const { locked, pending } = usePlusAccess();
+  const { visible, locked, pending } = usePlusAccess();
+  if (!visible) return null;
   if (pending) return <div className="rounded-2xl bg-[color:var(--ch-surface-2)] animate-pulse" style={{ height }} aria-hidden="true" />;
   if (!locked) return <>{children}</>;
   return (

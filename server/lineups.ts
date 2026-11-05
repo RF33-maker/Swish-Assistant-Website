@@ -48,17 +48,28 @@ export type LineupMetric = "net" | "plusminus" | "minutes";
 // One key per person however the feed spelled them; shared with the Coaches Hub (see the module).
 export { playerNameKey };
 
-/** Groups stint rows into units per team. Stints that don't have exactly five people are skipped. */
-export function buildUnits(rows: StintRow[]): { units: Unit[]; stintsUsed: number; stintsSkipped: number } {
-  type Stint = { team_id: string; game_key: string; secs: number; pf: number; pa: number; posf: number; posa: number; members: Map<string, UnitMember> };
-  const stints = new Map<string, Stint>();
+/** One stint (a spell with the same five on the floor), with its people keyed by name. */
+export type StintGroup = {
+  id: string;
+  team_id: string;
+  game_key: string;
+  secs: number;
+  pf: number;
+  pa: number;
+  posf: number;
+  posa: number;
+  members: Map<string, UnitMember>;
+};
 
+/** Folds the five rows each stint has into one stint, keyed by stint id. */
+export function groupStints(rows: StintRow[]): Map<string, StintGroup> {
+  const stints = new Map<string, StintGroup>();
   for (const r of rows) {
     const key = playerNameKey(r.player_name);
     if (!key || !r.stint_id || !r.team_id) continue;
     let s = stints.get(r.stint_id);
     if (!s) {
-      s = { team_id: r.team_id, game_key: r.game_key, secs: 0, pf: 0, pa: 0, posf: 0, posa: 0, members: new Map() };
+      s = { id: r.stint_id, team_id: r.team_id, game_key: r.game_key, secs: 0, pf: 0, pa: 0, posf: 0, posa: 0, members: new Map() };
       stints.set(r.stint_id, s);
     }
     // The stint's numbers repeat on each of its five rows.
@@ -72,6 +83,12 @@ export function buildUnits(rows: StintRow[]): { units: Unit[]; stintsUsed: numbe
     m.ids.set(r.player_id, (m.ids.get(r.player_id) || 0) + 1);
     if (r.player_name) m.names.set(r.player_name, (m.names.get(r.player_name) || 0) + 1);
   }
+  return stints;
+}
+
+/** Groups stint rows into units per team. Stints that don't have exactly five people are skipped. */
+export function buildUnits(rows: StintRow[]): { units: Unit[]; stintsUsed: number; stintsSkipped: number } {
+  const stints = groupStints(rows);
 
   const units = new Map<string, Unit>();
   let used = 0;
