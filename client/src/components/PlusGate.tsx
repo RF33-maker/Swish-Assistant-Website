@@ -31,6 +31,20 @@ export function PlusGate({ what, detail, children, height = 260 }: { what: strin
   if (!visible) return null;
   if (pending) return <div className="rounded-2xl bg-[color:var(--ch-surface-2)] animate-pulse" style={{ height }} aria-hidden="true" />;
   if (!locked) return <>{children}</>;
+  return <PlusLocked what={what} detail={detail} height={height} />;
+}
+
+/**
+ * The locked view on its own: also shown when the page thought someone had Swish+ but the server
+ * says they don't (signed out, or a lapsed plan), so they see why instead of a load error.
+ */
+export class PlusRequiredError extends Error {
+  constructor() {
+    super("Swish+ required");
+  }
+}
+
+export function PlusLocked({ what, detail, height = 260 }: { what: string; detail?: string; height?: number }) {
   return (
     <section className="relative overflow-hidden" style={{ minHeight: height }} aria-label={`${what}, part of Swish+`} data-testid="plus-gate">
       {/* A stand-in for the real thing: bars and a chart shape, blurred. */}

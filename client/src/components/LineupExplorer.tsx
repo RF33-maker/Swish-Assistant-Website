@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusGate } from "@/components/PlusGate";
+import { PlusGate, PlusLocked, PlusRequiredError } from "@/components/PlusGate";
 import { authHeaders } from "@/lib/billingApi";
 import { usePlusAccess } from "@/lib/plus";
 import type { ComboSize, LineupCombo, LineupExploreResponse, LineupOffCourt, LineupPlayer } from "@/types/lineups";
@@ -96,7 +96,7 @@ function ExplorerBody({ slug, teamName, accentColor }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "net", desc: true });
   const [showAll, setShowAll] = useState(false);
 
-  const { data, isLoading, isError } = useQuery<LineupExploreResponse | null>({
+  const { data, isLoading, isError, error } = useQuery<LineupExploreResponse | null>({
     queryKey: ["lineup-explore", slug, teamName, size, minMinutes],
     enabled: !!slug && !!teamName,
     staleTime: 5 * 60 * 1000,
@@ -105,6 +105,7 @@ function ExplorerBody({ slug, teamName, accentColor }: Props) {
       const params = new URLSearchParams({ team_name: teamName, size: String(size), minMinutes: String(minMinutes) });
       const res = await fetch(`/api/league/${encodeURIComponent(slug)}/lineups/explore?${params}`, { headers: await authHeaders() });
       if (res.status === 404) return null;
+      if (res.status === 401 || res.status === 402) throw new PlusRequiredError();
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       return (await res.json()) as LineupExploreResponse;
     },
@@ -156,6 +157,10 @@ function ExplorerBody({ slug, teamName, accentColor }: Props) {
       ))}
     </div>
   );
+
+  if (error instanceof PlusRequiredError) {
+    return <PlusLocked what="Every lineup, three-man group and pair" detail="Sort every combination this team has used by net rating, minutes or the four factors, for and against, and see each player's on/off four factors." height={340} />;
+  }
 
   const rosterOptions: LineupPlayer[] = data?.players ?? [];
   const shown = showAll ? rows : rows.slice(0, PAGE);

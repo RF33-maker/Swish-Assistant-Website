@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { PlusGate } from "@/components/PlusGate";
+import { PlusGate, PlusLocked, PlusRequiredError } from "@/components/PlusGate";
 import { authHeaders } from "@/lib/billingApi";
 
 /**
@@ -82,7 +82,7 @@ export function TeamClutchPanel(props: Props) {
 }
 
 function ClutchBody({ slug, teamName, accentColor }: Props) {
-  const { data, isLoading, isError } = useQuery<ClutchResponse | null>({
+  const { data, isLoading, isError, error } = useQuery<ClutchResponse | null>({
     queryKey: ["team-clutch", slug, teamName],
     enabled: !!slug && !!teamName,
     staleTime: 5 * 60 * 1000,
@@ -91,6 +91,7 @@ function ClutchBody({ slug, teamName, accentColor }: Props) {
       const params = new URLSearchParams({ team_name: teamName });
       const res = await fetch(`/api/league/${encodeURIComponent(slug)}/clutch?${params}`, { headers: await authHeaders() });
       if (res.status === 404) return null;
+      if (res.status === 401 || res.status === 402) throw new PlusRequiredError();
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       return (await res.json()) as ClutchResponse;
     },
@@ -103,6 +104,9 @@ function ClutchBody({ slug, teamName, accentColor }: Props) {
         Reading every close finish…
       </div>
     );
+  }
+  if (error instanceof PlusRequiredError) {
+    return <PlusLocked what="Clutch numbers" detail="Record in close games, net rating in the last five minutes, and every player's clutch line." height={340} />;
   }
   if (isError || !data) {
     return <p className="py-8 text-center text-sm text-[color:var(--ch-text-2)]">{isError ? "Couldn't load clutch numbers right now." : "Clutch numbers aren't available for this competition."}</p>;

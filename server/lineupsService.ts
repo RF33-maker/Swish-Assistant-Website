@@ -99,13 +99,19 @@ export async function readByGames<T>(table: string, cols: string, leagueIds: str
   return out;
 }
 
+/** The competition's games that have a box score: the only ones lineups can check. */
+async function boxScoreGames(leagueIds: string[]): Promise<{ points: TeamPointsRow[]; games: string[] }> {
+  const points = await readAll<TeamPointsRow>("team_stats", "game_key,team_id,tot_spoints", leagueIds, 20000);
+  return { points, games: Array.from(new Set(points.map((p) => p.game_key))) };
+}
+
 async function loadUnits(leagueIds: string[], onlyReliable: boolean): Promise<Loaded> {
-  const rows = await readAll<StintRow>("player_on_court_stints", STINT_COLS, leagueIds, 120000);
+  // Read by game (game_key is indexed): reading these tables whole by competition took up to 30s
+  // on a full season, close to the hosting time limit.
+  const { points, games } = await boxScoreGames(leagueIds);
+  const rows = await readByGames<StintRow>("player_on_court_stints", STINT_COLS, leagueIds, games);
   // Games are only trusted when the lineup tracking adds up against the feed's own box score.
-  const [box, points] = await Promise.all([
-    readAll<BoxRow>("player_stats", "game_key,team_id,sminutes", leagueIds, 60000),
-    readAll<TeamPointsRow>("team_stats", "game_key,team_id,tot_spoints", leagueIds, 20000),
-  ]);
+  const box = await readByGames<BoxRow>("player_stats", "game_key,team_id,sminutes", leagueIds, games);
   const check = reliableTeamGames(rows, box, points);
   const usable = onlyReliable ? rows.filter((r) => check.reliable.has(`${r.game_key}|${r.team_id}`)) : rows;
   const { units, stintsUsed, stintsSkipped } = buildUnits(usable);
@@ -272,9 +278,9 @@ function cachedStintBox(leagueIds: string[]): Promise<Map<string, StintBox>> {
   const now = Date.now();
   const hit = boxCache.get(key);
   if (hit && now - hit.at < CACHE_TTL_MS) return hit.value;
-  const value = readAll<StintBox>("lineup_stints", STINT_BOX_COLS, leagueIds, 40000).then(
-    (rows) => new Map(rows.map((r) => [String(r.id), r])),
-  );
+  const value = boxScoreGames(leagueIds)
+    .then(({ games }) => readByGames<StintBox>("lineup_stints", STINT_BOX_COLS, leagueIds, games))
+    .then((rows) => new Map(rows.map((r) => [String(r.id), r])));
   boxCache.set(key, { at: now, value });
   value.catch(() => boxCache.delete(key));
   if (boxCache.size > CACHE_MAX) {
