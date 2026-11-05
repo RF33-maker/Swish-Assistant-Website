@@ -79,9 +79,9 @@ export async function fetchMyPlan(): Promise<MyPlan | null> {
   return res.json();
 }
 
-export function useMyPlan() {
+export function useMyPlan(enabled = true) {
   const { user } = useAuth();
-  return useQuery({ queryKey: ["my-plan", user?.id ?? null], queryFn: fetchMyPlan, staleTime: 60_000 });
+  return useQuery({ queryKey: ["my-plan", user?.id ?? null], queryFn: fetchMyPlan, staleTime: 60_000, enabled });
 }
 
 export function useRefreshPlan() {
@@ -104,7 +104,8 @@ export function usePlusAccess(): { visible: boolean; hasPlus: boolean; locked: b
   const { user, isAdmin, isCoach } = useAuth();
   const live = import.meta.env.VITE_SWISH_PLUS_LIVE === "true";
   const preview = previewMode();
-  const plan = useMyPlan();
+  // Only a signed-in person who isn't an admin or coach needs their plan read, and only after launch.
+  const plan = useMyPlan(live && !preview && !!user && !isAdmin && !isCoach);
   if (preview === "locked") return { visible: true, hasPlus: false, locked: true, pending: false };
   if (preview === "member") return { visible: true, hasPlus: true, locked: false, pending: false };
   if (!live) return isAdmin ? { visible: true, hasPlus: true, locked: false, pending: false } : { visible: false, hasPlus: false, locked: false, pending: false };
