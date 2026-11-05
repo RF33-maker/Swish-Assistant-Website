@@ -87,6 +87,11 @@ interface TeamStatRow {
   tot_ssteals: number;
   tot_sblocks: number;
   tot_sturnovers: number;
+  tot_spointsinthepaint: number | null;
+  tot_spointssecondchance: number | null;
+  tot_spointsfastbreak: number | null;
+  tot_spointsfromturnovers: number | null;
+  tot_sbenchpoints: number | null;
 }
 
 interface LiveEvent {
@@ -331,6 +336,11 @@ export function InlineGameDetail({
           tot_ssteals: d[`${prefix}_stl`] ?? 0,
           tot_sblocks: d[`${prefix}_blk`] ?? 0,
           tot_sturnovers: d[`${prefix}_tov`] ?? 0,
+          tot_spointsinthepaint: d[`${prefix}_pitp`] ?? null,
+          tot_spointssecondchance: d[`${prefix}_second_chance_pts`] ?? null,
+          tot_spointsfastbreak: d[`${prefix}_fastbreak_pts`] ?? null,
+          tot_spointsfromturnovers: d[`${prefix}_pts_off_tov`] ?? null,
+          tot_sbenchpoints: d[`${prefix}_bench_pts`] ?? null,
         });
 
         if (homeName) setHomeTeamStats(makeTeamRow("home", homeName));
