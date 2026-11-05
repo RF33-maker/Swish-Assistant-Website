@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AskCard, AskEvent, AskNavButton, AskScope, AskSurface } from "@shared/askSwish";
 import { gamePath, playerPath, teamPath } from "@shared/seo";
+import { shotZone, type ShotZoneKey } from "@shared/shotZones";
 import * as d from "./data";
 
 /**
@@ -802,7 +803,218 @@ export const suggestFollowUps: ToolDef = {
   },
 };
 
-export const ALL_TOOLS: ToolDef[] = [searchEntities, getStandings, getLeaders, getPlayer, getTeam, compare, getScores, getGame, getOnOff, getGameRecords, getPlayByPlay, getLineups, suggestFollowUps];
+// ---------- shot zones ----------
+
+type ShotArea = "rim" | "paint" | "mid" | "corner3" | "above_break3" | "three";
+const SHOT_AREAS: Array<{ key: ShotArea; label: string; zones: ShotZoneKey[]; pts: number; minPerGame: number }> = [
+  { key: "rim", label: "At the rim", zones: ["ra"], pts: 2, minPerGame: 1.5 },
+  { key: "paint", label: "Paint (outside the restricted area)", zones: ["paint"], pts: 2, minPerGame: 1 },
+  { key: "mid", label: "Mid-range", zones: ["mid"], pts: 2, minPerGame: 1 },
+  { key: "corner3", label: "Corner three", zones: ["lc3", "rc3"], pts: 3, minPerGame: 0.5 },
+  { key: "above_break3", label: "Above-the-break three", zones: ["lw3", "rw3"], pts: 3, minPerGame: 1.5 },
+  { key: "three", label: "All threes", zones: ["lc3", "rc3", "lw3", "rw3"], pts: 3, minPerGame: 2 },
+];
+const AREA_KEYS = SHOT_AREAS.map((a) => a.key);
+const areaDef = (k: ShotArea) => SHOT_AREAS.find((a) => a.key === k)!;
+
+interface ShotTally { made: number; att: number; games: Set<string> }
+const newTally = (): ShotTally => ({ made: 0, att: 0, games: new Set() });
+
+/** Makes and attempts per court zone, plus the games the shots came from. */
+function tallyZones(rows: d.ShotRow[]) {
+  const by = new Map<ShotZoneKey, { made: number; att: number }>();
+  const games = new Set<string>();
+  for (const r of rows) {
+    const z = shotZone(r);
+    const t = by.get(z) ?? { made: 0, att: 0 };
+    t.att++; if (r.success) t.made++;
+    by.set(z, t); games.add(r.game_key);
+  }
+  const area = (k: ShotArea) => areaDef(k).zones.reduce((acc, z) => {
+    const t = by.get(z); if (t) { acc.made += t.made; acc.att += t.att; } return acc;
+  }, { made: 0, att: 0 });
+  return { area, total: rows.length, games: games.size };
+}
+
+const pctOf = (m: number, a: number) => (a > 0 ? (m / a) * 100 : null);
+const pctTxt = (v: number | null) => (v == null ? "–" : `${v.toFixed(1)}%`);
+
+/** Which side of each game a team was: team_no 1 is the home side in shot_chart. */
+function teamOfShot(results: d.ResultRow[]) {
+  const sides = new Map(results.map((g) => [g.game_key, g] as const));
+  return (r: d.ShotRow, opponent = false): string | null => {
+    const g = sides.get(r.game_key);
+    if (!g || r.team_no == null) return null;
+    const home = r.team_no === 1;
+    return (home !== opponent) ? g.home_team : g.away_team;
+  };
+}
+
+/** One player's or team's shooting by area, beside the competition's average. */
+function zoneBreakdown(ctx: ToolContext, title: string, subtitle: string, mine: d.ShotRow[], league: d.ShotRow[]): string {
+  const me = tallyZones(mine);
+  const lg = tallyZones(league);
+  const areas = SHOT_AREAS;
+  card(ctx, {
+    kind: "table", title, subtitle,
+    columns: ["Area", "FG", "FG%", "Share", "League FG%"],
+    rows: areas.map((a) => {
+      const t = me.area(a.key), l = lg.area(a.key);
+      return [a.label, `${t.made}/${t.att}`, pctTxt(pctOf(t.made, t.att)), pctTxt(pctOf(t.att, me.total)), pctTxt(pctOf(l.made, l.att))];
+    }),
+    highlightCol: 2,
+  });
+  return `${title} (${subtitle}). ${me.total} field-goal attempts with a court location over ${me.games} games; free throws are not included.\n` +
+    areas.map((a) => {
+      const t = me.area(a.key), l = lg.area(a.key);
+      return `${a.label}: ${t.made}/${t.att} (${pctTxt(pctOf(t.made, t.att))}), ${pctTxt(pctOf(t.att, me.total))} of their shots, ${d.fmt1(t.att / Math.max(1, me.games))} att/g, ${t.att ? (t.made * a.pts / t.att).toFixed(2) : "–"} points per shot; league ${pctTxt(pctOf(l.made, l.att))}`;
+    }).join("\n");
+}
+
+export const getShotZones: ToolDef = {
+  name: "get_shot_zones",
+  description: "Shooting by court area from shot locations: at the rim (restricted area), paint outside it, mid-range, corner three, above-the-break three, all threes. Gives makes, attempts, FG%, share of shots and points per shot, against the league average. With player or team: that player's or team's breakdown. Without: a leaderboard for one area (rank_by pct, attempts per game, share of their shots, or makes per game) among players or teams, with an attempts qualifier. side=defence ranks teams by what opponents shoot against them. Use for 'at rim %', 'finishing', 'who shoots best from the corner', 'shot profile', 'where does X score'. Free throws are not included.",
+  input_schema: {
+    type: "object",
+    properties: {
+      player: { type: "string" }, team: { type: "string" }, league: { type: "string" },
+      area: { type: "string", enum: AREA_KEYS }, scope: { type: "string", enum: ["players", "teams"] },
+      rank_by: { type: "string", enum: ["pct", "attempts", "share", "made"] }, side: { type: "string", enum: ["offence", "defence"] },
+      min_attempts_per_game: { type: "number" }, limit: { type: "integer" },
+    },
+  },
+  schema: z.object({
+    player: z.string().min(2).optional(), team: z.string().min(2).optional(), league: z.string().optional(),
+    area: z.enum(AREA_KEYS as [ShotArea, ...ShotArea[]]).optional(), scope: z.enum(["players", "teams"]).optional(),
+    rank_by: z.enum(["pct", "attempts", "share", "made"]).optional(), side: z.enum(["offence", "defence"]).optional(),
+    min_attempts_per_game: z.number().min(0).optional(), limit: z.number().int().min(1).max(25).optional(),
+  }),
+  async run(input, ctx) {
+    // A named player outside the scoped competition: find where they play.
+    let comp: d.Competition | null = null;
+    try { comp = await resolveLeague(ctx, input.league); } catch (e) { if (!input.player) throw e; }
+    let found: d.PlayerRow[] = [];
+    if (input.player) {
+      if (comp) found = await d.findPlayers(input.player, await d.leagueFamily(comp.league_id));
+      if (!found.length) {
+        const comps = await d.visibleCompetitions();
+        found = await d.findPlayers(input.player, comps.map((c) => c.league_id));
+        // Same name in several competitions: take the one they last shot in.
+        const q = input.player.toLowerCase();
+        const name = (found.find((p) => p.full_name.toLowerCase() === q) ?? found[0])?.full_name.toLowerCase();
+        const same = found.filter((p) => p.full_name.toLowerCase() === name);
+        const latest = await d.latestShotLeague(same.map((p) => p.id), comps.map((c) => c.league_id));
+        const pick = same.find((p) => p.league_id === latest) ?? same[0];
+        if (pick) found = [pick, ...same.filter((p) => p !== pick)];
+        const c = pick ? comps.find((x) => x.league_id === pick.league_id) : null;
+        if (!c) return `No player named "${input.player}" found. Call search_entities to check the spelling.`;
+        comp = c;
+      }
+    }
+    const ids = await d.leagueFamily(comp!.league_id);
+    status(ctx, `Reading shot locations in ${comp!.name}…`);
+    const all = await d.shots(ids);
+    if (!all.length) return `${comp!.name} has no shot locations recorded (its games come from box scores without a shot chart).`;
+
+    if (input.player) {
+      const q = input.player.toLowerCase();
+      const best = found.find((p) => p.full_name.toLowerCase() === q) ?? found[0];
+      const same = found.filter((p) => p.full_name.toLowerCase() === best.full_name.toLowerCase());
+      const pids = new Set(same.map((p) => p.id));
+      const mine = all.filter((r) => r.player_id && pids.has(r.player_id));
+      if (!mine.length) return `${best.full_name} has no located shots in ${comp!.name}.`;
+      addNav(ctx, { label: best.full_name, href: playerPath({ full_name: best.full_name, id: best.id }) ?? "", kind: "player" });
+      return zoneBreakdown(ctx, `${best.full_name} — shot zones`, `${best.team_name ?? ""}${best.team_name ? " · " : ""}${comp!.name}`, mine, all);
+    }
+
+    const results = await d.finalResults(ids);
+    const teamOf = teamOfShot(results);
+    const defence = input.side === "defence";
+
+    if (input.team && !input.area) {
+      const mine = all.filter((r) => { const t = teamOf(r, defence); return !!t && (d.isSameTeam(t, input.team!) || t.toLowerCase().includes(input.team!.toLowerCase())); });
+      if (!mine.length) return `No located shots for "${input.team}" in ${comp!.name}.`;
+      const name = teamOf(mine[0], defence)!;
+      addNav(ctx, { label: name, href: teamPath(name, comp!.slug) ?? "", kind: "team" });
+      return zoneBreakdown(ctx, `${name} — ${defence ? "opponents' shots" : "shot zones"}`, comp!.name, mine, all);
+    }
+
+    // Leaderboard for one area.
+    const area = areaDef(input.area ?? "rim");
+    const rankBy = input.rank_by ?? "pct";
+    const scope = input.scope ?? (input.team || defence ? "teams" : "players");
+    const limit = input.limit ?? 10;
+    const groups = new Map<string, { name: string; team: string; id: string | null; all: number; a: ShotTally }>();
+    const nameById = new Map<string, { name: string; team: string }>();
+    if (scope === "players") {
+      for (const g of await d.playerGames(ids, { team: input.team })) {
+        if (g.player_id && !nameById.has(g.player_id)) nameById.set(g.player_id, { name: g.player_name, team: g.team_name });
+      }
+    }
+    for (const r of all) {
+      let key: string | null, name: string, team: string;
+      if (scope === "players") {
+        if (!r.player_id) continue;
+        const who = nameById.get(r.player_id);
+        if (!who) continue; // outside the team filter, or no box score
+        key = r.player_id; name = who.name; team = who.team;
+      } else {
+        const t = teamOf(r, defence);
+        if (!t) continue;
+        if (input.team && !(d.isSameTeam(t, input.team) || t.toLowerCase().includes(input.team.toLowerCase()))) continue;
+        key = t; name = t; team = "";
+      }
+      const e = groups.get(key) ?? { name, team, id: scope === "players" ? key : null, all: 0, a: newTally() };
+      e.all++; e.a.games.add(r.game_key);
+      if (area.zones.includes(shotZone(r))) { e.a.att++; if (r.success) e.a.made++; }
+      groups.set(key, e);
+    }
+    const list = Array.from(groups.values());
+    const maxGames = Math.max(0, ...list.map((e) => e.a.games.size));
+    const minGames = scope === "teams" ? 1 : minGamesDefault(maxGames);
+    const minPerGame = input.min_attempts_per_game ?? (rankBy === "pct" ? area.minPerGame : 0);
+    // A percentage on a dozen shots is noise: when ranking FG%, a shooter also
+    // needs a quarter of the busiest shooter's attempts here (and at least 6).
+    const maxAtt = Math.max(0, ...list.map((e) => e.a.att));
+    const minAtt = rankBy === "pct" && input.min_attempts_per_game == null ? Math.max(6, Math.ceil(maxAtt * 0.25)) : 1;
+    const value = (e: typeof list[number]) => {
+      const g = Math.max(1, e.a.games.size);
+      if (rankBy === "attempts") return e.a.att / g;
+      if (rankBy === "made") return e.a.made / g;
+      if (rankBy === "share") return pctOf(e.a.att, e.all);
+      return pctOf(e.a.made, e.a.att);
+    };
+    const ranked = list
+      .filter((e) => e.a.games.size >= minGames && e.a.att / Math.max(1, e.a.games.size) >= minPerGame && e.a.att >= minAtt)
+      .map((e) => ({ e, v: value(e) }))
+      .filter((x) => x.v != null)
+      .sort((a, b) => (defence && rankBy === "pct" ? a.v! - b.v! : b.v! - a.v!))
+      .slice(0, limit);
+    const lg = tallyZones(all).area(area.key);
+    const qual = `min ${minGames} games${minPerGame ? `, ${minPerGame} ${area.label.toLowerCase()} attempts/g` : ""}${minAtt > 1 ? `, ${minAtt} attempts in all` : ""}`;
+    if (!ranked.length) return `No qualifying ${scope} for ${area.label} (${qual}).`;
+    const RANK_LABEL: Record<string, string> = { pct: "FG%", attempts: "attempts per game", made: "makes per game", share: "share of shots" };
+    const what = RANK_LABEL[rankBy as string];
+    const fmtV = (v: number) => (rankBy === "pct" || rankBy === "share" ? `${v.toFixed(1)}%` : d.fmt1(v));
+    card(ctx, {
+      kind: "leaderboard",
+      title: `${area.label} ${what}${defence ? " allowed" : ""} — ${input.team && scope === "players" ? input.team : comp!.name}`,
+      unit: rankBy === "pct" || rankBy === "share" ? "%" : "per game",
+      rows: ranked.map((x, i) => ({
+        rank: i + 1, name: x.e.name,
+        sub: `${x.e.team ? `${x.e.team} · ` : ""}${x.e.a.made}/${x.e.a.att} · ${x.e.a.games.size} GP`,
+        value: fmtV(x.v!),
+      })),
+    });
+    const top = ranked[0].e;
+    if (scope === "players" && top.id) addNav(ctx, { label: top.name, href: playerPath({ full_name: top.name, id: top.id }) ?? "", kind: "player" });
+    addNav(ctx, leagueNav(comp!));
+    return `${area.label} ${what}${defence ? " allowed (lowest first)" : ""}, ${scope}, ${comp!.name}, ${qual}. League average ${area.label.toLowerCase()} FG% ${pctTxt(pctOf(lg.made, lg.att))} (${lg.made}/${lg.att}). From shot locations; free throws not included.\n` +
+      ranked.map((x, i) => `${i + 1}. ${x.e.name}${x.e.team ? ` (${x.e.team})` : ""} ${fmtV(x.v!)} — ${x.e.a.made}/${x.e.a.att} in ${x.e.a.games.size} games, ${pctTxt(pctOf(x.e.a.att, x.e.all))} of ${defence ? "opponents'" : "their"} shots`).join("\n");
+  },
+};
+
+export const ALL_TOOLS: ToolDef[] = [searchEntities, getStandings, getLeaders, getPlayer, getTeam, compare, getScores, getGame, getOnOff, getShotZones, getGameRecords, getPlayByPlay, getLineups, suggestFollowUps];
 
 export function toolsFor(surface: AskSurface): ToolDef[] {
   return ALL_TOOLS.filter((t) => !t.surfaces || t.surfaces.includes(surface));
