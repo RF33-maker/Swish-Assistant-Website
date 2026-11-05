@@ -131,7 +131,7 @@ function ExplorerBody({ slug, teamName, accentColor }: Props) {
     setMinMinutes(SIZES.find((x) => x.key === s)!.defaultMin);
     setShowAll(false);
     if (s === 1) setSort({ key: "swing", desc: true });
-    else if (s !== 1 && (sort.key === "offNet" || sort.key === "swing")) setSort({ key: "net", desc: true });
+    else if (sort.key === "offNet" || sort.key === "swing") setSort({ key: "net", desc: true });
   };
   const chooseSort = (c: { key: SortKey; lowerIsBetter?: (side: Side) => boolean }) => {
     const betterLow = c.lowerIsBetter?.(side) ?? false;
