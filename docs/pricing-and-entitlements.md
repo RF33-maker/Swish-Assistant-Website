@@ -1,6 +1,6 @@
 # Swish plans: what comes in each
 
-Fills in section 2 of `swish-pricing-spec.md` (the pricing and entitlements spec) for the site and the iOS app as they stand on 2026-11-05. **Proposal.** Nothing is gated.
+Fills in section 2 of `swish-pricing-spec.md` (the pricing and entitlements spec) for the site and the iOS app as they stand on 2026-11-05. **Proposal.** Nothing free today is gated; the new Swish+ features show to admins only until `VITE_SWISH_PLUS_LIVE=true`.
 
 ## The rule behind the split
 
@@ -20,10 +20,11 @@ Each Swish+ feature is new work. Gates go on as each one is built, and Swish+ go
 | League leaders, team pages, team stats, comparisons, landscape | ✅ | ✅ | ✅ | ✅ | — |
 | Player profiles: every season, career, splits, on/off, shot zones, rank badges | ✅ | ✅ | ✅ | ✅ | — |
 | News, follows, For You home, Feed tab, shareable cards | ✅ | ✅ | ✅ | ✅ | — |
-| **Only on Swish+ (to build)** | | | | | |
-| Lineups for every team: season five-man units, two-man pairs, minutes, net rating | ❌ preview | ✅ | ✅ | ❌ | `plus` |
-| Clutch and competitive minutes (garbage time out, close-game splits) | ❌ preview | ✅ | ✅ | ❌ | `plus` |
-| Deeper metrics: on-court four factors, opponent shooting with a player on, shot profile against league average | ❌ preview | ✅ | ✅ | ❌ | `plus` |
+| **Only on Swish+** | | | | | |
+| Every lineup (built): every five-man unit, three-man group and pair, sortable, with the four factors for and against | ❌ preview | ✅ | ✅ | ❌ | `plus` |
+| Clutch (built): close-game record, clutch net rating and four factors, players' clutch lines, the competition's clutch table | ❌ preview | ✅ | ✅ | ❌ | `plus` |
+| On/off four factors (built): each player's on and off net rating, swing, and eFG% / TOV% / OREB% / FT/FGA on vs off, for and against | ❌ preview | ✅ | ✅ | ❌ | `plus` |
+| Still to build: shot profile against league average, competitive minutes (garbage time out) | ❌ preview | ✅ | ✅ | ❌ | `plus` |
 | Alerts on followed players and teams: tip-off, live big lines, close finishes, milestones | Final scores | ✅ | ✅ | Final scores | `plus` |
 | Ask Swish | 80 a month | 300 a month | 5,000 a month | 80 a month | `plus` / `coach` |
 | **Coaching (web only)** | | | | | |
@@ -35,8 +36,8 @@ Coach includes Swish+ automatically (`plus` row with `source = 'coach_bundle'`).
 
 ### What the Swish+ features build on
 
-- **Lineups:** `lineup_stints` already holds 54,000 stints from 1,142 games in 23 competitions, with points, possessions and full box numbers for both sides. Today the site shows them only one game at a time (game On/Off) and to coaches for their own team (Advanced Insights). Season lineups for any team are new.
-- **Clutch:** `lineup_stints_context_v1` already flags garbage time, competitive stints and the score margin at each stint's start.
+- **Lineups:** `lineup_stints` holds 54,000 stints from 1,142 games in 23 competitions, with points, possessions and full box numbers for both sides. The free "Best lineups" panel on team pages already shows each team's top three five-man units by net rating, plus/minus or minutes, and stays free. Swish+ adds everything beyond it: every unit, threes and pairs, the four factors for and against, and players on/off.
+- **Clutch:** built from `live_events` (the play-by-play) and the lineup stints, not from `lineup_stints_context_v1`.
 - **Deeper metrics:** the `opp_*` columns on `lineup_stints` give opponent shooting, rebounding and turnovers with each player on the floor.
 - **Alerts:** nothing exists yet. App push waits for the paid Apple Developer account, and web push or email could come first. `user_follows` already says who follows what.
 
@@ -74,14 +75,19 @@ Coach includes Swish+ automatically (`plus` row with `source = 'coach_bundle'`).
 - **Founding price:** `SWISH_PLUS_LAUNCH_AT` (an ISO date) is the cut-off. While it is unset, every account counts as made before launch, so set it on launch day.
 - **Ask limits:** free stays at 80 a month (5 an hour, 30 a week), as in the code before Swish+; Swish+ 300 a month (30 an hour), Coach 5,000. Coach also gets the stronger model. Until `ask_swish_questions` exists only the hourly limit applies, so in practice nobody hits a monthly cap today.
 - **Pages:** `/plus` (prices, checkout, status), a "Your plan" line in the account centre, and Coach access listing Swish+ as included.
-- **Gates:** `PlusGate` (blurred preview, lock and a Get Swish+ link) and `usePlusAccess()` are ready for the new features. Nothing on the site today is gated. The first version gated profiles, game On/Off, comparison and the landscape, and that was removed on 2026-11-05.
-- **Switching on:** gates stay off until `VITE_SWISH_PLUS_LIVE=true`. Add `?plus=locked` to any page to see the locked view, and `?plus=off` to stop.
-- **Tests:** `npx tsx --test scripts/billing.test.ts scripts/plus-billing.test.ts`.
+- **Gates:** `PlusGate` (blurred preview, lock and a Get Swish+ link) and `usePlusAccess()` wrap the new features only. Nothing on the site today is gated. The first version gated profiles, game On/Off, comparison and the landscape, and that was removed on 2026-11-05. The server checks too: Swish+ routes answer 404 before launch (admins excepted), 402 to non-members after, and `Cache-Control: private, no-store`.
+- **Every lineup + On/off:** `GET /api/league/:slug/lineups/explore?team_name&size=1|2|3|5&minMinutes` (`server/lineupCombos.ts`, `server/lineupsService.ts`), shown as "Every lineup" under the free panel on the team page's Lineups tab (`LineupExplorer.tsx`). Same trusted games as the free panel (lineup tracking matches the box score). A pair or three is every minute they shared, whoever else was on. On/off: off is the team in the same games while the player sat, shown with 4+ minutes and 12+ possessions off.
+- **Clutch:** `GET /api/league/:slug/clutch?team_name` (`server/clutch.ts`, `server/clutchService.ts`), a Clutch tab on both team views (`TeamClutchPanel.tsx`). Clutch = the last 5:00 of the fourth quarter and any overtime with the score within 5 before the play. Only games whose play-by-play adds up to the final score for both teams count, so a player's clutch line always sits inside their team's. On-floor minutes and +/- also need the game's lineups trusted; a player's own points and shooting need every basket credited to the same player as in the box score. Free throws belong to the lineup on the floor at the foul. Overtime is found from the period starts, since some feeds restart overtime at period 1 with no type.
+- **Shared names:** two teammates with the same initial and surname (Laditan-Adebiyi sisters at Myerscough, Banjoko and Hawes at CoLA Southwark Pride) are kept apart by full name wherever the feed gives both full names in one stint. Where it gives only "S. Laditan-Adebiyi" they can't be told apart: clutch leaves those team-games out of the lineup or player numbers (31 and 39 of 446 in NBL D1 2025-26), and lineups leave that stint out. In 2025-26 these pairs still show as one player in lineups, as on the free panel before.
+- **Checks against live data (read only):** `scripts/check-lineup-combos.ts [slug]`, `scripts/check-clutch.ts [slug]` and `scripts/check-clutch-naive.ts [slug]` (an independent re-count of clutch points; 761 of 762 team-games agree and the one difference is the simple count's). All pass on NBL D1 2026-27, NBL D1 2025-26 and Super League 2025-26.
+- **Speed:** a cold clutch request for a full Super League season takes about 4s (reads by game, a few games at a time), then about 0.2s from a 10-minute cache. The explorer takes about 4s cold.
+- **Switching on:** Swish+ features stay admin-only until `VITE_SWISH_PLUS_LIVE=true` (the server also reads `SWISH_PLUS_LIVE`). Add `?plus=locked` to any page to see the locked view, `?plus=member` on a dev server for the member layout (the server still checks, so its data needs a member or admin), and `?plus=off` to stop.
+- **Tests:** `npx tsx --test scripts/billing.test.ts scripts/plus-billing.test.ts scripts/lineup-combos.test.ts scripts/clutch.test.ts`.
 
 ## Open decisions
 
 - [x] The rule: nothing free today gets gated (2026-11-05)
-- [ ] Which Swish+ feature to build first
+- [x] Which Swish+ feature to build first: lineups, then clutch, then on/off four factors (built 2026-11-05)
 - [ ] Free alert level (final scores only?)
 - [x] Swish+ price: £4.99 / £39.99, with 20% off for accounts made before launch
 - [ ] Whether Coach stays £10 / £75
