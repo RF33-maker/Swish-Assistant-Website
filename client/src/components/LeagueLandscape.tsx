@@ -1,4 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { PlusGate } from "@/components/PlusGate";
+import { usePlusAccess } from "@/lib/plus";
 import { Link } from "wouter";
 import { ArrowRight, ChevronRight, Loader2, Lock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -35,6 +37,8 @@ type View = "teams" | "players";
 
 /** The league landscape: teams by default, or every regular player as a dot in their team's colour. */
 export function LeagueLandscape({ onPlayerSelect, ...props }: Props) {
+  // The players view is Swish+; the switcher stays above the lock so Teams is one tap away.
+  const { locked: playersLocked } = usePlusAccess();
   const [view, setView] = useState<View>(() =>
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("landscape") === "players" ? "players" : "teams",
   );
@@ -65,7 +69,12 @@ export function LeagueLandscape({ onPlayerSelect, ...props }: Props) {
     </div>
   );
   return view === "players" ? (
-    <PlayerLandscape slug={props.slug} brandColor={props.brandColor} scopedLeagueIds={props.scopedLeagueIds} onPlayerSelect={onPlayerSelect} switcher={switcher} />
+    <>
+    {playersLocked && <div className="mb-3 flex justify-end">{switcher}</div>}
+    <PlusGate what="The player landscape and comparisons" detail="Plot every player in the league by any two numbers and see who stands out." height={360}>
+      <PlayerLandscape slug={props.slug} brandColor={props.brandColor} scopedLeagueIds={props.scopedLeagueIds} onPlayerSelect={onPlayerSelect} switcher={switcher} />
+    </PlusGate>
+    </>
   ) : (
     <TeamLandscape {...props} switcher={switcher} />
   );

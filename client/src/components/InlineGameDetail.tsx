@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { PlusGate } from "@/components/PlusGate";
 import { ArrowLeft, Calendar, Clock, Trophy, Link as LinkIcon, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { LiveFeedPanel, LiveFeedStrip } from "@/components/game/LiveFeed";
@@ -852,6 +853,7 @@ export function InlineGameDetail({
             {/* ON/OFF TAB */}
             {showOnOff && (
               <TabsContent value="onoff" className="mt-0">
+                <PlusGate what="Game on/off numbers" detail={"See who swung the game: every player's on and off numbers, and each lineup stint."} height={320}>
                 <GameOnOff
                   homeTeam={hometeam}
                   awayTeam={awayteam}
@@ -861,6 +863,7 @@ export function InlineGameDetail({
                   stints={stints}
                   colors={colors}
                 />
+                </PlusGate>
               </TabsContent>
             )}
 

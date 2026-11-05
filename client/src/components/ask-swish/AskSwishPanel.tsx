@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { isNativeShell, plusHref } from "@/lib/plus";
 import { Link } from "wouter";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -207,8 +208,8 @@ function Turn({ turn, big, onPick, chip, busy }: { turn: AskTurn; big: boolean; 
           {turn.error && turn.error.code === "rate_limited" ? (
             <div className="rounded-xl border border-orange-200 dark:border-orange-900/60 bg-orange-50 dark:bg-orange-950/30 px-3.5 py-3 text-sm">
               <p className="text-slate-800 dark:text-neutral-100">{turn.error.message}</p>
-              {quota?.tier === "free" && (
-                <a href="/coach-access" className="mt-2 inline-block rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600">See coach plans</a>
+              {quota?.tier === "free" && !isNativeShell() && (
+                <a href={plusHref("/ask")} className="mt-2 inline-block rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-600">Get Swish+</a>
               )}
             </div>
           ) : turn.error && (

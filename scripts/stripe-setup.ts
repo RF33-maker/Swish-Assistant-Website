@@ -1,5 +1,5 @@
 /**
- * One-off Stripe setup for coach billing. Safe to run again: it only creates
+ * One-off Stripe setup for coach billing and Swish+. Safe to run again: it only creates
  * what is missing. Reads STRIPE_SECRET_KEY from .env, so run it with a TEST key
  * (sk_test_...) first, and again with the live key when you go live.
  *
@@ -10,10 +10,15 @@
  *   - the product "Swish Assistant coach access"
  *   - a monthly price   (lookup key coach_monthly)  default GBP 10.00 a month
  *   - a season price    (lookup key coach_season)   default GBP 75.00 once
+ *   - the product "Swish+"
+ *   - Swish+ monthly    (lookup key plus_monthly)   default GBP 4.99 a month
+ *   - Swish+ annual     (lookup key plus_annual)    default GBP 39.99 a year
+ *   - the founding coupon swish_plus_founding_20: 20% off for as long as the
+ *     subscription lasts, applied at checkout to accounts made before launch
  *   - a Customer portal configuration (change card, see invoices, cancel at period end)
  *   - with --webhook-url, the webhook endpoint (its signing secret is shown once)
  *
- * Change the amounts with MONTHLY_PENCE and SEASON_PENCE, e.g. MONTHLY_PENCE=1200.
+ * Change the amounts with MONTHLY_PENCE, SEASON_PENCE, PLUS_MONTHLY_PENCE and PLUS_ANNUAL_PENCE, e.g. MONTHLY_PENCE=1200.
  * Prices can also be changed later in the Stripe dashboard: the site finds them by lookup key.
  */
 import "dotenv/config";
@@ -37,6 +42,8 @@ const live = key.startsWith("sk_live_") || key.startsWith("rk_live_");
 const stripe = new Stripe(key);
 const monthly = Number(process.env.MONTHLY_PENCE || 1000);
 const season = Number(process.env.SEASON_PENCE || 7500);
+const plusMonthly = Number(process.env.PLUS_MONTHLY_PENCE || 499);
+const plusAnnual = Number(process.env.PLUS_ANNUAL_PENCE || 3999);
 const hook = process.argv.includes("--webhook-url") ? process.argv[process.argv.indexOf("--webhook-url") + 1] : null;
 
 async function main() {
@@ -73,11 +80,36 @@ async function main() {
   await ensure("coach_monthly", monthly, true);
   await ensure("coach_season", season, false);
 
+  // Swish+
+  const foundPlus = await stripe.products.search({ query: "metadata['swish']:'plus' AND active:'true'" });
+  const plusProduct = foundPlus.data[0] ?? await stripe.products.create({
+    name: "Swish+",
+    description: "Every season and career total, advanced splits and on/off, shot zones, comparisons, and more Ask Swish questions.",
+    metadata: { swish: "plus" },
+  });
+  console.log(`product ${plusProduct.id}${foundPlus.data[0] ? " (existing)" : " (created)"} Swish+`);
+  const plusPrices = await stripe.prices.list({ lookup_keys: ["plus_monthly", "plus_annual"], active: true, limit: 10 });
+  for (const [lookup, amount, interval, nickname] of [["plus_monthly", plusMonthly, "month", "Swish+, monthly"], ["plus_annual", plusAnnual, "year", "Swish+, annual"]] as const) {
+    const have = plusPrices.data.find((p) => p.lookup_key === lookup);
+    if (have) {
+      console.log(`price ${lookup}: ${have.id} (existing, ${(have.unit_amount ?? 0) / 100} ${have.currency.toUpperCase()})${have.unit_amount !== amount ? `  note: differs from ${amount / 100}; change it in the dashboard` : ""}`);
+      continue;
+    }
+    const price = await stripe.prices.create({ product: plusProduct.id, currency: "gbp", unit_amount: amount, lookup_key: lookup, nickname, recurring: { interval } });
+    console.log(`price ${lookup}: ${price.id} (created, ${amount / 100} GBP a ${interval})`);
+  }
+  const coupon = await stripe.coupons.retrieve("swish_plus_founding_20").catch(() => null);
+  if (coupon) console.log(`coupon swish_plus_founding_20 (existing, ${coupon.percent_off}% off, ${coupon.duration})`);
+  else {
+    await stripe.coupons.create({ id: "swish_plus_founding_20", name: "Founding member", percent_off: 20, duration: "forever", applies_to: { products: [plusProduct.id] } });
+    console.log("coupon swish_plus_founding_20 (created, 20% off Swish+ for as long as the subscription lasts)");
+  }
+
   // Customer portal
   const portals = await stripe.billingPortal.configurations.list({ is_default: true, limit: 1 });
   if (portals.data.length === 0 || !portals.data[0].features?.subscription_cancel?.enabled) {
     const cfg = await stripe.billingPortal.configurations.create({
-      business_profile: { headline: "Manage your Swish Assistant coach access" },
+      business_profile: { headline: "Manage your Swish Assistant plan" },
       features: {
         invoice_history: { enabled: true },
         payment_method_update: { enabled: true },
@@ -97,7 +129,7 @@ async function main() {
     if (have) {
       console.log(`webhook ${have.id} already points at ${hook}. Its signing secret was shown only when it was created: copy it from the dashboard if you need it.`);
     } else {
-      const ep = await stripe.webhookEndpoints.create({ url: hook, enabled_events: EVENTS, description: "Swish Assistant coach billing" });
+      const ep = await stripe.webhookEndpoints.create({ url: hook, enabled_events: EVENTS, description: "Swish Assistant billing (coach + Swish+)" });
       console.log(`webhook ${ep.id} created for ${hook}`);
       console.log(`  STRIPE_WEBHOOK_SECRET=${ep.secret}   <- add this to .env / Vercel now, it is not shown again`);
     }

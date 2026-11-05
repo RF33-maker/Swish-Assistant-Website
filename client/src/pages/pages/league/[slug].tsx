@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { PlusGate } from "@/components/PlusGate";
 import { useLocation, useParams } from "wouter";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { fetchLeagueChildren, stopLabel } from "@/lib/leagueChildren";
@@ -5672,14 +5673,16 @@ export default function LeaguePage() {
                     onPlayerSelect={(playerSlug) => handleSelectPlayer(playerSlug, activeSection)}
                   />
                 ) : comparisonMode === 'player' ? (
-                  <PlayerComparison 
-                    leagueId={league?.league_id || ""} 
-                    allPlayers={allPlayerAverages}
-                    brandColor={brandColorHex}
-                    preselectSlug={comparePreselect.playerSlug}
-                    leagueName={league?.name}
-                    leagueLogoUrl={cardLogoUrl}
-                  />
+                  <PlusGate what="Player comparisons and the player landscape" detail="Put any two players side by side, stat for stat." height={360}>
+                    <PlayerComparison 
+                      leagueId={league?.league_id || ""} 
+                      allPlayers={allPlayerAverages}
+                      brandColor={brandColorHex}
+                      preselectSlug={comparePreselect.playerSlug}
+                      leagueName={league?.name}
+                      leagueLogoUrl={cardLogoUrl}
+                    />
+                  </PlusGate>
                 ) : (
                   <TeamComparison 
                     leagueId={league?.league_id || ""} 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
-import { BadgeCheck, CalendarRange, Check, FileText, Lock, Search, ShieldCheck, Sparkles, Users, X } from "lucide-react";
+import { BadgeCheck, CalendarRange, Check, FileText, Lock, Plus, Search, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,6 +21,7 @@ const WHAT_YOU_GET = [
   { icon: Users, text: "Your team's Coaches Hub: standings, lineups, trends and every game" },
   { icon: Sparkles, text: "An AI scouting report on every opponent, with the game plan and who to stop" },
   { icon: FileText, text: "Printable reports in your club's colours, with your own notes added" },
+  { icon: Plus, text: "Swish+ included at no extra cost: every season, advanced splits, comparisons and more Ask Swish questions" },
 ];
 
 function useTeamSearch(query: string) {
