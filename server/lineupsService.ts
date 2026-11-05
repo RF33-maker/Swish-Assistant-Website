@@ -41,19 +41,61 @@ export const CACHE_TTL_MS = 10 * 60 * 1000;
 const CACHE_MAX = 24;
 const loadedCache = new Map<string, { at: number; value: Promise<Loaded> }>();
 
+/**
+ * Every row of a competition, a page at a time. Pages follow on from the last id read (not an
+ * offset), so a late page costs the same as the first: offsets made big tables like live_events
+ * slow down with every page.
+ */
 export async function readAll<T>(table: string, cols: string, leagueIds: string[], cap: number): Promise<T[]> {
   const out: T[] = [];
-  for (let from = 0; from < cap; from += 1000) {
-    const { data, error } = await supabaseAdmin
-      .from(table)
-      .select(cols)
-      .in("league_id", leagueIds)
-      .order("id")
-      .range(from, from + 999);
+  const select = cols.split(",").map((c) => c.trim()).includes("id") ? cols : `id,${cols}`;
+  let last: string | number | null = null;
+  while (out.length < cap) {
+    let q = supabaseAdmin.from(table).select(select).in("league_id", leagueIds).order("id").limit(1000);
+    if (last != null) q = q.gt("id", last);
+    const { data, error } = await q;
     if (error) throw new Error(error.message);
-    out.push(...((data || []) as unknown as T[]));
-    if ((data?.length || 0) < 1000) break;
+    const page = (data || []) as unknown as (T & { id: string | number })[];
+    out.push(...page);
+    if (page.length < 1000) break;
+    last = page[page.length - 1].id;
   }
+  return out.slice(0, cap);
+}
+
+/**
+ * The rows of the given games, read a few games at a time with several requests in flight. Much
+ * faster than readAll on the big tables: their ids are random, so a competition's rows are spread
+ * over the whole table, while game_key is indexed.
+ */
+export async function readByGames<T>(table: string, cols: string, leagueIds: string[], gameKeys: string[], o: { gamesPerRead?: number; parallel?: number } = {}): Promise<T[]> {
+  const per = o.gamesPerRead ?? 8;
+  const chunks: string[][] = [];
+  for (let i = 0; i < gameKeys.length; i += per) chunks.push(gameKeys.slice(i, i + per));
+  const select = cols.split(",").map((c) => c.trim()).includes("id") ? cols : `id,${cols}`;
+  const readChunk = async (keys: string[]) => {
+    const rows: T[] = [];
+    let last: string | number | null = null;
+    for (;;) {
+      let q = supabaseAdmin.from(table).select(select).in("league_id", leagueIds).in("game_key", keys).order("id").limit(1000);
+      if (last != null) q = q.gt("id", last);
+      const { data, error } = await q;
+      if (error) throw new Error(`${table}: ${error.message}`);
+      const page = (data || []) as unknown as (T & { id: string | number })[];
+      rows.push(...page);
+      if (page.length < 1000) return rows;
+      last = page[page.length - 1].id;
+    }
+  };
+  const out: T[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < chunks.length) {
+      const mine = chunks[next++];
+      out.push(...(await readChunk(mine)));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(o.parallel ?? 6, chunks.length) }, worker));
   return out;
 }
 

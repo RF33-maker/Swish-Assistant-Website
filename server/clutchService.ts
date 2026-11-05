@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { playerNameKey, reliableTeamGames, type BoxRow, type StintRow, type TeamPointsRow } from "./lineups";
-import { bySurname, CACHE_TTL_MS, findClub, memberDescriber, readAll, round1 } from "./lineupsService";
+import { bySurname, CACHE_TTL_MS, findClub, memberDescriber, readAll, readByGames, round1 } from "./lineupsService";
 import {
   computeClutchStats,
   playByPlayPoints,
@@ -35,13 +35,15 @@ type Loaded = {
 const cache = new Map<string, { at: number; value: Promise<Loaded> }>();
 
 async function load(leagueIds: string[]): Promise<Loaded> {
-  // One read at a time: these are the biggest tables, and reading them together can hit the
-  // database's statement timeout.
-  const events = await readAll<ClutchEvent>("live_events", EVENT_COLS, leagueIds, 400000);
-  const stints = await readAll<ClutchStint & { points_for: number | null }>("lineup_stints", "id,game_key,team_id,start_action,end_action,points_for", leagueIds, 60000);
-  const members = await readAll<ClutchMember & StintRow>("player_on_court_stints", MEMBER_COLS, leagueIds, 300000);
-  const box = await readAll<BoxRow & { full_name: string | null; spoints: number | null }>("player_stats", "id,game_key,team_id,sminutes,full_name,spoints", leagueIds, 80000);
+  // Games with a box score are the only ones clutch can check, so read those games' rows, a few
+  // games at a time (game_key is indexed; reading whole tables by competition is slow). One table
+  // at a time, so as not to crowd the database.
   const points = await readAll<TeamPointsRow>("team_stats", "id,game_key,team_id,tot_spoints", leagueIds, 20000);
+  const games = Array.from(new Set(points.map((p) => p.game_key)));
+  const events = await readByGames<ClutchEvent>("live_events", EVENT_COLS, leagueIds, games);
+  const stints = await readByGames<ClutchStint & { points_for: number | null }>("lineup_stints", "id,game_key,team_id,start_action,end_action,points_for", leagueIds, games);
+  const members = await readByGames<ClutchMember & StintRow>("player_on_court_stints", MEMBER_COLS, leagueIds, games);
+  const box = await readByGames<BoxRow & { full_name: string | null; spoints: number | null }>("player_stats", "id,game_key,team_id,sminutes,full_name,spoints", leagueIds, games);
 
   // Lineups: the same rule as the lineup panels.
   const lineups = reliableTeamGames(members, box, points).reliable;
