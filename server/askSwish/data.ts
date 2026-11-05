@@ -327,6 +327,31 @@ export async function findPlayers(name: string, leagueIds: string[] | null): Pro
   return (data || []) as PlayerRow[];
 }
 
+// ---------- shot locations ----------
+
+export interface ShotRow {
+  game_key: string; league_id: string; player_id: string | null; player_name: string | null;
+  team_no: number | null; x: number; y: number; success: boolean; shot_type: string | null;
+}
+
+/** Field-goal attempts with a court position (free throws are not in shot_chart). */
+export async function shots(leagueIds: string[], opts: { playerIds?: string[]; gameKeys?: string[] } = {}): Promise<ShotRow[]> {
+  return allRows<ShotRow>("shots", (from, to) => {
+    let q = db.from("shot_chart").select("game_key, league_id, player_id, player_name, team_no, x, y, success, shot_type").in("league_id", leagueIds);
+    if (opts.playerIds?.length) q = q.in("player_id", opts.playerIds);
+    if (opts.gameKeys?.length) q = q.in("game_key", opts.gameKeys);
+    return q.order("id", { ascending: true }).range(from, to);
+  }, 60000);
+}
+
+/** The competition a player's most recently recorded shot came from. */
+export async function latestShotLeague(playerIds: string[], leagueIds: string[]): Promise<string | null> {
+  if (!playerIds.length) return null;
+  const { data, error } = await db.from("shot_chart").select("league_id").in("player_id", playerIds).in("league_id", leagueIds).order("id", { ascending: false }).limit(1);
+  if (error) throw new Error(`shots: ${error.message}`);
+  return (data?.[0]?.league_id as string | undefined) ?? null;
+}
+
 export interface OnOffRow {
   league_id: string; player_id: string; player_name: string; team_id: string | null; games: number;
   on_minutes: number | null; off_minutes: number | null; on_nrtg: number | null; off_nrtg: number | null;

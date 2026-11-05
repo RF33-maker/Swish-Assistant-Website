@@ -43,30 +43,13 @@ interface ShotChartProps {
   flat?: boolean;
 }
 
-export const CW = 500;
-export const CH = 470;
+import {
+  CW, CH, CENTER_X, BASKET_CY, RIM_R, BB_HALF, BB_Y, RA_R, PAINT_W, PAINT_TOP, PAINT_BOT, PAINT_L,
+  FT_RADIUS, TP_R, CORNER_LINE_X_L, CORNER_LINE_X_R, CORNER_END_Y, projectShot, shotZone,
+} from "@shared/shotZones";
+export { CW, CH, projectShot, shotZone };
 
-// Court geometry. The half-court SVG is 500x470 and shots come in as fx,fy
-// in 0-100 (folded so fx<=50 = our half). BASKET_CY/TP_R/CORNER_LINE_X_L
-// must keep the basket inside the arc and 3-point shots outside it; tweak
-// here if shots stop landing in the right zone.
-const CENTER_X = CW / 2;
-const BASKET_CY = 60;
-const RIM_R = 7.5;
-const BB_HALF = 30;
-const BB_Y = BASKET_CY - RIM_R - 4;
-const RA_R = 42;
-const PAINT_W = 163;
-const PAINT_TOP = 0;
-const PAINT_BOT = 195;
-const PAINT_L = CENTER_X - PAINT_W / 2;
-const FT_RADIUS = 60;
-const TP_R = 222;
-const CORNER_LINE_X_L = 30;
-const CORNER_LINE_X_R = CW - CORNER_LINE_X_L;
-const CORNER_END_Y =
-  BASKET_CY +
-  Math.sqrt(Math.max(0, TP_R * TP_R - (CENTER_X - CORNER_LINE_X_L) ** 2));
+// Court geometry lives in shared/shotZones.ts, so Ask Swish zones shots the same way.
 
 /** The half court's measurements in viewBox units, for anything that draws the same court off the page (the download card). */
 export const COURT_GEOMETRY = {
@@ -245,52 +228,6 @@ const SUB_TYPE_LABELS: Record<string, string> = {
   alleyoop: "Alley-Oop",
   eurostep: "Euro Step",
 };
-
-/**
- * Fold a shot from the legacy full-court coordinate space (0-100 horizontal,
- * 0-100 vertical, two baskets at x≈5 and x≈95) into a vertical half-court
- * view (basket at top center). Returns x/y in viewBox units plus zone key.
- */
-export function projectShot(shot: ShotData): { sx: number; sy: number; zone: string } {
-  let fx = shot.x;
-  if (fx > 50) fx = 100 - fx;
-
-  const sx = (shot.y / 100) * CW;
-  const sy = (fx / 50) * CH;
-
-  const dx = sx - CENTER_X;
-  const dy = sy - BASKET_CY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-
-  const paintHalfW = PAINT_W / 2;
-
-  // Three-point shot?
-  const isThree =
-    shot.shot_type === "3pt" ||
-    sx < CORNER_LINE_X_L ||
-    sx > CORNER_LINE_X_R ||
-    dist > TP_R;
-
-  let zone = "mid";
-  if (isThree) {
-    if (sy <= CORNER_END_Y && sx < CORNER_LINE_X_L + 5) zone = "lc3";
-    else if (sy <= CORNER_END_Y && sx > CORNER_LINE_X_R - 5) zone = "rc3";
-    else zone = sx < CENTER_X ? "lw3" : "rw3";
-  } else if (dist <= RA_R) {
-    zone = "ra";
-  } else if (Math.abs(dx) <= paintHalfW && sy <= PAINT_BOT) {
-    zone = "paint";
-  } else {
-    zone = "mid";
-  }
-
-  return { sx, sy, zone };
-}
-
-/** Court zone a shot falls in, using the same geometry the chart draws. */
-export function shotZone(shot: ShotData): string {
-  return projectShot(shot).zone;
-}
 
 export { ZONES as SHOT_ZONES, ZONE_POINTS as SHOT_ZONE_POINTS };
 
