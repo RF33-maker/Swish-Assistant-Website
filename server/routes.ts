@@ -8,6 +8,7 @@ import { detectDuplicates } from "./playerMergeUtils";
 import { generateReportNarrative, narrativeAvailable } from "./matchNarrative";
 import { computeLineupCombos, computeLineups } from "./lineupsService";
 import { plusAccessFor } from "./billing/plusAccess";
+import { computeTeamClutch } from "./clutchService";
 import type { LineupMetric } from "./lineups";
 import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "./teamIdentityService";
 import { getTeamCompetitions } from "./teamCompetitions";
@@ -5163,6 +5164,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json(result);
     } catch (err: any) {
       console.error("[Lineups explorer] error", err?.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Swish+: a team's clutch numbers (last five minutes of the final quarter and overtime, within
+  // five points), its players in clutch time, and the competition's clutch table.
+  app.get("/api/league/:slug/clutch", async (req: Request, res: Response) => {
+    try {
+      const access = await plusAccessFor(req);
+      if (access === "hidden") return res.status(404).json({ error: "Not found" });
+      if (access === "locked") return res.status(402).json({ error: "Clutch numbers come with Swish+", locked: true });
+
+      const family = await resolvePublicLeagueFamily(req.params.slug, "Clutch", req);
+      if (!family) return res.status(404).json({ error: "League not found or not accessible" });
+      const teamName = typeof req.query.team_name === "string" ? req.query.team_name.slice(0, 120) : "";
+      if (!teamName) return res.status(400).json({ error: "team_name is required" });
+
+      const result = await computeTeamClutch({
+        leagueIds: family.leagueIds,
+        leagueName: family.name || req.params.slug,
+        rootLeagueId: family.league_id,
+        teamName,
+        formatName: formatCanonicalPlayerName,
+      });
+      res.setHeader("Cache-Control", "private, no-store");
+      return res.json(result);
+    } catch (err: any) {
+      console.error("[Clutch] error", err?.message);
       return res.status(500).json({ error: "Internal server error" });
     }
   });

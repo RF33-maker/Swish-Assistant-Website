@@ -37,11 +37,11 @@ type Loaded = {
 
 // Reading every stint takes a few seconds, and each team page asks for the same competition, so the
 // grouped units are kept briefly. Access to private competitions is checked by the route before this.
-const CACHE_TTL_MS = 10 * 60 * 1000;
+export const CACHE_TTL_MS = 10 * 60 * 1000;
 const CACHE_MAX = 24;
 const loadedCache = new Map<string, { at: number; value: Promise<Loaded> }>();
 
-async function readAll<T>(table: string, cols: string, leagueIds: string[], cap: number): Promise<T[]> {
+export async function readAll<T>(table: string, cols: string, leagueIds: string[], cap: number): Promise<T[]> {
   const out: T[] = [];
   for (let from = 0; from < cap; from += 1000) {
     const { data, error } = await supabaseAdmin
@@ -87,8 +87,8 @@ function cachedUnits(leagueIds: string[], onlyReliable: boolean): Promise<Loaded
 
 const photoUrl = (path: string | null | undefined) =>
   path ? supabaseAdmin.storage.from("player-photos").getPublicUrl(path).data.publicUrl : null;
-const round1 = (v: number | null) => (v == null ? null : Math.round(v * 10) / 10);
-const bySurname = (a: { name: string }, b: { name: string }) => a.name.split(" ").slice(-1)[0].localeCompare(b.name.split(" ").slice(-1)[0]);
+export const round1 = (v: number | null) => (v == null ? null : Math.round(v * 10) / 10);
+export const bySurname = (a: { name: string }, b: { name: string }) => a.name.split(" ").slice(-1)[0].localeCompare(b.name.split(" ").slice(-1)[0]);
 
 export type DescribedPlayer = { key: string; id: string; name: string; photoUrl: string | null; photoFocusY: number };
 
@@ -97,7 +97,7 @@ export type DescribedPlayer = { key: string; id: string; name: string; photoUrl:
  * ("C. Samuels"), so each person comes from the team's full-name record, borrowing another
  * record's photo of the same name if needed.
  */
-async function memberDescriber(teamId: string, formatName: (name: string) => string): Promise<(mem: UnitMember) => DescribedPlayer> {
+export async function memberDescriber(teamId: string, formatName: (name: string) => string): Promise<(mem: UnitMember) => DescribedPlayer> {
   type PlayerRow = { id: string; full_name: string; photo_path: string | null; photo_focus_y: number | null };
   const keyRow = new Map<string, PlayerRow>();
   const borrowed = new Map<string, { photo_path: string; photo_focus_y: number | null }>();
@@ -143,7 +143,7 @@ async function memberDescriber(teamId: string, formatName: (name: string) => str
  * The team ids a club name stands for in a competition. Team rows carry the latest season's
  * league_id, so an older season's teams are found through the ids its stints use as well.
  */
-async function findClub(leagueIds: string[], stintTeamIds: string[], teamName: string): Promise<{ team_id: string; name: string }[]> {
+export async function findClub(leagueIds: string[], stintTeamIds: string[], teamName: string): Promise<{ team_id: string; name: string }[]> {
   const want = normalizeClubName(teamName);
   const [byLeague, byId] = await Promise.all([
     supabaseAdmin.from("teams").select("team_id, name").in("league_id", leagueIds),
