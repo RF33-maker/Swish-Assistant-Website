@@ -7,10 +7,11 @@
  * 2. Five-man units add up to the team's stints.
  * 3. Stint box numbers match each trusted game's box score (FGA, 3PM, FTA, turnovers, points).
  * 4. The explorer's five-man rows match the free "Best lineups" panel for the same units.
+ * 5. Players on/off: each player's on numbers are the units they were in, and on + off = the team.
  */
 import { supabaseAdmin } from "../server/supabaseServiceClient";
 import { groupStints, reliableTeamGames, type BoxRow, type StintRow, type TeamPointsRow } from "../server/lineups";
-import { buildCombos, comboMetrics, STINT_BOX_COLS, type Combo, type StintBox } from "../server/lineupCombos";
+import { buildCombos, comboMetrics, gameTotals, offCombo, STINT_BOX_COLS, totalsForGames, type Combo, type StintBox } from "../server/lineupCombos";
 import { computeLineupCombos, computeLineups } from "../server/lineupsService";
 
 const slug = process.argv[2] || "national-basketball-league-d1-mens-20252026";
@@ -142,6 +143,39 @@ for (const t of teamRows || []) {
   }
 }
 console.log(`4. ${compared} free-panel units found in the explorer with the same numbers`);
+
+// 5: players on and off.
+let singlesChecked = 0;
+for (const teamId of teamIds) {
+  const mine = Array.from(stints.values()).filter((s) => s.team_id === teamId);
+  const fives = buildCombos(mine, box, 5);
+  const perGame = gameTotals(mine, box);
+  for (const c of buildCombos(mine, box, 1)) {
+    const total = totalsForGames(perGame, c);
+    // The player's games' totals = every stint of those games.
+    const inGames = mine.filter((s) => c.games.has(s.game_key) && s.members.size === 5 && s.secs > 0);
+    check(inGames.reduce((a, s) => a + s.secs, 0) === total.secs && inGames.reduce((a, s) => a + s.pf, 0) === total.pf, `team ${teamId}: player ${c.keys[0]} game totals don't equal their games' stints`);
+    const inside = fives.filter((u) => u.keys.includes(c.keys[0]));
+    const add = (pick: (x: Combo) => number) => inside.reduce((a, u) => a + pick(u), 0);
+    check(add((u) => u.pf) === c.pf && add((u) => u.secs) === c.secs && add((u) => u.opp.fga) === c.opp.fga, `team ${teamId}: player ${c.keys[0]} on-court numbers don't equal their units`);
+    const off = offCombo(total, c);
+    check(
+      off.secs + c.secs === total.secs && off.pf + c.pf === total.pf && off.posa + c.posa === total.posa && off.own.tov + c.own.tov === total.own.tov && off.secs >= 0 && off.own.fga >= 0,
+      `team ${teamId}: player ${c.keys[0]} on + off doesn't equal the team`,
+    );
+    singlesChecked += 1;
+  }
+}
+const firstTeam = (teamRows || [])[0];
+if (firstTeam) {
+  const players = await computeLineupCombos({ leagueIds: [comp.league_id], leagueName: comp.name, rootLeagueId: comp.league_id, teamName: firstTeam.name, size: 1, minMinutes: 20, formatName: (n) => n });
+  for (const u of players.units.slice(0, 4)) {
+    const name = players.players.find((p) => p.key === u.keys[0])?.name;
+    const o = (u as { off?: { minutes: number | null; net: number | null; efg: number | null; oppEfg: number | null } | null }).off;
+    console.log(`   ${firstTeam.name}: ${name} on ${u.minutes} min net ${u.net} eFG ${u.efg} opp ${u.oppEfg} | off ${o?.minutes} min net ${o?.net} eFG ${o?.efg} opp ${o?.oppEfg}`);
+  }
+}
+console.log(`5. ${singlesChecked} players: on numbers equal their units, on + off equals the team in their games`);
 
 // Range sense check on the four factors across every qualifying five-man unit.
 const all = teamIds.flatMap((id) => buildCombos(Array.from(stints.values()).filter((s) => s.team_id === id), box, 5)).map(comboMetrics).filter((m) => m.minutes >= 8);

@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { buildUnits, groupStints, normalizeClubName, playerNameKey, rankUnits, reliableTeamGames, type BoxRow, type LineupMetric, type StintGroup, type StintRow, type TeamPointsRow, type Unit, type UnitMember } from "./lineups";
-import { buildCombos, rankCombos, STINT_BOX_COLS, type ComboSize, type StintBox } from "./lineupCombos";
+import { buildCombos, comboMetrics, gameTotals, offCombo, offEnough, rankCombos, STINT_BOX_COLS, totalsForGames, type ComboMetrics, type ComboSize, type StintBox } from "./lineupCombos";
 
 type Options = {
   leagueIds: string[];
@@ -272,15 +272,33 @@ export async function computeLineupCombos(o: ComboOptions) {
   // A club can have more than one team id in a competition family; use all of them.
   const mine = Array.from(stints.values()).filter((s) => clubIds.has(s.team_id));
   const ranked = rankCombos(buildCombos(mine, box, o.size), o.minMinutes).slice(0, COMBO_LIMIT);
+  // Players: the same numbers with them off the floor, in the games they played.
+  const perGame = o.size === 1 ? gameTotals(mine, box) : null;
 
   const teamId = mine[0]?.team_id ?? clubRows[0]?.team_id ?? null;
   const describe = teamId ? await memberDescriber(teamId, o.formatName) : null;
   const players = new Map<string, DescribedPlayer>();
   const pct = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 10);
 
+  const factors = (m: ComboMetrics) => ({
+    ortg: round1(m.ortg),
+    drtg: round1(m.drtg),
+    net: round1(m.net),
+    efg: pct(m.efg),
+    tovPct: pct(m.tovPct),
+    orebPct: pct(m.orebPct),
+    ftRate: pct(m.ftRate),
+    oppEfg: pct(m.oppEfg),
+    oppTovPct: pct(m.oppTovPct),
+    oppOrebPct: pct(m.oppOrebPct),
+    oppFtRate: pct(m.oppFtRate),
+  });
   const units = ranked.map(({ combo, m }) => {
     for (const mem of combo.members) if (!players.has(mem.key) && describe) players.set(mem.key, describe(mem));
+    const off = perGame ? offCombo(totalsForGames(perGame, combo), combo) : null;
+    const offM = off && offEnough(off) ? comboMetrics(off) : null;
     return {
+      ...(perGame ? { off: offM ? { minutes: round1(offM.minutes), pf: offM.pf, pa: offM.pa, ...factors(offM) } : null } : {}),
       keys: combo.keys,
       minutes: round1(m.minutes),
       games: m.games,

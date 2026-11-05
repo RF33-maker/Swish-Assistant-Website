@@ -35,7 +35,8 @@ export type LineupsResponse = {
 };
 
 /** Swish+ lineup explorer: /api/league/:slug/lineups/explore */
-export type ComboSize = 2 | 3 | 5;
+/** 1 = each player, with the same numbers while they were off the floor. */
+export type ComboSize = 1 | 2 | 3 | 5;
 
 export type LineupCombo = {
   /** Name keys of the people in it; look them up in `players`. */
@@ -49,6 +50,25 @@ export type LineupCombo = {
   drtg: number | null;
   net: number | null;
   /** Four factors as percentages (eFG%, TOV%, OREB%, FT/FGA), for and against. */
+  efg: number | null;
+  tovPct: number | null;
+  orebPct: number | null;
+  ftRate: number | null;
+  oppEfg: number | null;
+  oppTovPct: number | null;
+  oppOrebPct: number | null;
+  oppFtRate: number | null;
+  /** Players only: the team's numbers in the same games while this player sat (null if too few). */
+  off?: LineupOffCourt | null;
+};
+
+export type LineupOffCourt = {
+  minutes: number | null;
+  pf: number;
+  pa: number;
+  ortg: number | null;
+  drtg: number | null;
+  net: number | null;
   efg: number | null;
   tovPct: number | null;
   orebPct: number | null;

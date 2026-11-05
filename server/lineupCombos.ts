@@ -7,7 +7,8 @@
 
 import type { StintGroup, UnitMember } from "./lineups";
 
-export type ComboSize = 2 | 3 | 5;
+/** 1 = each player on the floor (with the rest of the team's time as "off"). */
+export type ComboSize = 1 | 2 | 3 | 5;
 
 /** The box numbers of one stint from lineup_stints. Opponent columns are missing on a few old rows. */
 export type StintBox = {
@@ -99,7 +100,7 @@ export function subsets<T>(items: T[], k: number): T[][] {
  * exactly five people count, as for the free panel. A pair's numbers are everything that happened
  * while both were on, whoever the other three were.
  */
-export function buildCombos(stints: Iterable<StintGroup>, box: Map<string, StintBox>, size: ComboSize): Combo[] {
+export function buildCombos(stints: Iterable<StintGroup>, box: Map<string, StintBox>, size: ComboSize | 0): Combo[] {
   const combos = new Map<string, Combo>();
   for (const s of Array.from(stints)) {
     if (s.members.size !== 5 || s.secs <= 0) continue;
@@ -152,6 +153,75 @@ export function buildCombos(stints: Iterable<StintGroup>, box: Map<string, Stint
     }
   }
   return Array.from(combos.values());
+}
+
+/** Each team's totals over the same stints (size 0: the empty group, one per team id). */
+export function teamTotals(stints: Iterable<StintGroup>, box: Map<string, StintBox>): Map<string, Combo> {
+  return new Map(buildCombos(stints, box, 0).map((c) => [c.team_id, c]));
+}
+
+/** Each team's totals per game ("teamId|gameKey"), so a player's off numbers use only their games. */
+export function gameTotals(stints: Iterable<StintGroup>, box: Map<string, StintBox>): Map<string, Combo> {
+  const byGame = new Map<string, StintGroup[]>();
+  for (const s of Array.from(stints)) {
+    const k = `${s.team_id}|${s.game_key}`;
+    byGame.set(k, [...(byGame.get(k) ?? []), s]);
+  }
+  const out = new Map<string, Combo>();
+  byGame.forEach((list, k) => {
+    const c = buildCombos(list, box, 0)[0];
+    if (c) out.set(k, c);
+  });
+  return out;
+}
+
+/** The team's totals over just the games this group played in. */
+export function totalsForGames(perGame: Map<string, Combo>, on: Combo): Combo {
+  const sum = (a: Side, b: Side): Side => ({
+    fgm: a.fgm + b.fgm, fga: a.fga + b.fga, fg3m: a.fg3m + b.fg3m, ftm: a.ftm + b.ftm,
+    fta: a.fta + b.fta, oreb: a.oreb + b.oreb, dreb: a.dreb + b.dreb, tov: a.tov + b.tov,
+  });
+  const total: Combo = { team_id: on.team_id, keys: [], secs: 0, pf: 0, pa: 0, posf: 0, posa: 0, games: new Set(), own: emptySide(), opp: emptySide(), members: [] };
+  on.games.forEach((g) => {
+    const c = perGame.get(`${on.team_id}|${g}`);
+    if (!c) return;
+    total.secs += c.secs;
+    total.pf += c.pf;
+    total.pa += c.pa;
+    total.posf += c.posf;
+    total.posa += c.posa;
+    total.games.add(g);
+    total.own = sum(total.own, c.own);
+    total.opp = sum(total.opp, c.opp);
+  });
+  return total;
+}
+
+/** What happened while the group was off the floor: the team's totals minus the group's. */
+export function offCombo(total: Combo, on: Combo): Combo {
+  const side = (a: Side, b: Side): Side => ({
+    fgm: a.fgm - b.fgm, fga: a.fga - b.fga, fg3m: a.fg3m - b.fg3m, ftm: a.ftm - b.ftm,
+    fta: a.fta - b.fta, oreb: a.oreb - b.oreb, dreb: a.dreb - b.dreb, tov: a.tov - b.tov,
+  });
+  return {
+    team_id: on.team_id,
+    keys: on.keys,
+    secs: total.secs - on.secs,
+    pf: total.pf - on.pf,
+    pa: total.pa - on.pa,
+    posf: total.posf - on.posf,
+    posa: total.posa - on.posa,
+    games: new Set(total.games), // not used for off numbers
+    own: side(total.own, on.own),
+    opp: side(total.opp, on.opp),
+    members: [],
+  };
+}
+
+/** Off-floor numbers only mean something with enough of them (same bar as a ranked group). */
+export function offEnough(off: Combo): boolean {
+  const possessions = off.posf + off.posa;
+  return off.secs >= 60 * 4 && possessions >= 12;
 }
 
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null);

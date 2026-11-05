@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildUnits, groupStints, type StintRow } from "../server/lineups";
-import { buildCombos, comboMetrics, rankCombos, subsets, type StintBox } from "../server/lineupCombos";
+import { buildCombos, comboMetrics, gameTotals, offCombo, offEnough, rankCombos, subsets, teamTotals, totalsForGames, type StintBox } from "../server/lineupCombos";
 import { decidePlusAccess } from "../server/billing/plusRules";
 
 const ROSTER = ["Ann Able", "Bea Bell", "Cat Cole", "Dee Dunn", "Eve Ely", "Fay Fox"];
@@ -135,4 +135,50 @@ test("Swish+ access: admins only before launch, members after", () => {
   assert.equal(decidePlusAccess(true, fan, true), "full");
   assert.equal(decidePlusAccess(true, fan, false), "locked");
   assert.equal(decidePlusAccess(true, null, false), "locked");
+});
+
+test("a player's on and off numbers add up to the team's", () => {
+  const rows = [
+    ...stint("s1", ROSTER.slice(0, 5), { pf: 10, pa: 8, secs: 300 }), // Able..Ely
+    ...stint("s2", ROSTER.slice(1, 6), { pf: 4, pa: 6, secs: 240 }), // Bell..Fox (Able sits)
+    ...stint("s3", ROSTER.slice(1, 6), { pf: 6, pa: 2, secs: 180, game: "G2" }), // Able sits again
+  ];
+  const stints = Array.from(groupStints(rows).values());
+  const b = new Map([["s1", box("s1")], ["s2", box("s2", { fg3_made: 0, turnovers: 3 })], ["s3", box("s3", { oreb: 5 })]]);
+  const singles = buildCombos(stints, b, 1);
+  const total = teamTotals(stints, b).get("T")!;
+  assert.equal(total.secs, 720);
+  assert.equal(total.pf, 20);
+  const able = singles.find((c) => c.keys[0].endsWith("able"))!;
+  const off = offCombo(total, able);
+  assert.equal(able.secs, 300);
+  assert.equal(off.secs, 420);
+  assert.equal(off.pf, 10);
+  assert.equal(off.pa, 8);
+  // Off numbers are exactly s2 + s3.
+  assert.equal(off.own.tov, 3 + 1);
+  assert.equal(off.own.oreb, 2 + 5);
+  assert.equal(off.own.fg3m, 0 + 1);
+  assert.ok(offEnough(off));
+  // Bell played every stint: no off time at all, so no off numbers.
+  const bell = singles.find((c) => c.keys[0].endsWith("bell"))!;
+  assert.equal(offCombo(total, bell).secs, 0);
+  assert.equal(offEnough(offCombo(total, bell)), false);
+  // On ratings still come from comboMetrics as before.
+  assert.equal(comboMetrics(able).pf, 10);
+});
+
+test("off numbers only use the games the player played in", () => {
+  const rows = [
+    ...stint("s1", ROSTER.slice(0, 5), { pf: 10, pa: 8, secs: 300 }), // G1: Able on
+    ...stint("s2", ROSTER.slice(1, 6), { pf: 4, pa: 6, secs: 240 }), // G1: Able off
+    ...stint("s3", ROSTER.slice(1, 6), { pf: 6, pa: 2, secs: 180, game: "G2" }), // G2: Able didn't play
+  ];
+  const stints = Array.from(groupStints(rows).values());
+  const b = new Map([["s1", box("s1")], ["s2", box("s2")], ["s3", box("s3")]]);
+  const able = buildCombos(stints, b, 1).find((c) => c.keys[0].endsWith("able"))!;
+  const off = offCombo(totalsForGames(gameTotals(stints, b), able), able);
+  assert.equal(off.secs, 240);
+  assert.equal(off.pf, 4);
+  assert.equal(off.pa, 6);
 });

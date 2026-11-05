@@ -5148,7 +5148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!family) return res.status(404).json({ error: "League not found or not accessible" });
       const teamName = typeof req.query.team_name === "string" ? req.query.team_name.slice(0, 120) : "";
       if (!teamName) return res.status(400).json({ error: "team_name is required" });
-      const size = req.query.size === "2" ? 2 : req.query.size === "3" ? 3 : 5;
+      const size = req.query.size === "1" ? 1 : req.query.size === "2" ? 2 : req.query.size === "3" ? 3 : 5;
       const minMinutes = Math.max(1, Math.min(200, Number(req.query.minMinutes) || 8));
 
       const result = await computeLineupCombos({
