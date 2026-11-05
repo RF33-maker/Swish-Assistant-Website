@@ -36,7 +36,7 @@ const ROWS: Array<{ group: string; rows: Row[] }> = [
       { label: "Clutch and competitive minutes, with garbage time taken out", free: false, plus: true },
       { label: "Deeper numbers: on-court four factors, shot profile against league average", free: false, plus: true },
       { label: "Alerts on your players and teams: tip-off, big lines, close finishes", free: "Final scores", plus: "Live" },
-      { label: "Ask Swish questions", free: "20 a month", plus: "300 a month" },
+      { label: "Ask Swish questions", free: "80 a month", plus: "300 a month" },
     ],
   },
 ];

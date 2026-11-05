@@ -23,7 +23,8 @@ function parseLimits(raw: string | undefined, fallback: Limits): Limits {
 }
 
 export const LIMITS: Record<Tier, Limits> = {
-  free: parseLimits(process.env.ASK_SWISH_LIMITS_FREE, { hour: 5, week: 20, month: 20 }),
+  // Free stays at what it was before Swish+ (never take away what is free today).
+  free: parseLimits(process.env.ASK_SWISH_LIMITS_FREE, { hour: 5, week: 30, month: 80 }),
   plus: parseLimits(process.env.ASK_SWISH_LIMITS_PLUS, { hour: 30, week: 150, month: 300 }),
   pro: parseLimits(process.env.ASK_SWISH_LIMITS_PRO, { hour: 150, week: 1500, month: 5000 }),
 };

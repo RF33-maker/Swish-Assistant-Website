@@ -25,7 +25,7 @@ Each Swish+ feature is new work. Gates go on as each one is built, and Swish+ go
 | Clutch and competitive minutes (garbage time out, close-game splits) | ❌ preview | ✅ | ✅ | ❌ | `plus` |
 | Deeper metrics: on-court four factors, opponent shooting with a player on, shot profile against league average | ❌ preview | ✅ | ✅ | ❌ | `plus` |
 | Alerts on followed players and teams: tip-off, live big lines, close finishes, milestones | Final scores | ✅ | ✅ | Final scores | `plus` |
-| Ask Swish | 20 a month | 300 a month | 5,000 a month | 20 a month | `plus` / `coach` |
+| Ask Swish | 80 a month | 300 a month | 5,000 a month | 80 a month | `plus` / `coach` |
 | **Coaching (web only)** | | | | | |
 | Coaches Hub, advanced insights (own team, last 3/5 games), scouting, reports, playbook | ❌ | ❌ | ✅ | ❌ | `coach` |
 | **League (web only, organiser pays)** | | | | | |
@@ -72,7 +72,7 @@ Coach includes Swish+ automatically (`plus` row with `source = 'coach_bundle'`).
 - **Coach includes Swish+:** every write to `coach_access` also writes a `coach` row and a `plus` row (source `coach_bundle`) with the same end date. They end together. Admins and hand-set coaches count as having both.
 - **Stripe:** `/api/billing/plan` (what you have, with your prices), `/api/billing/plus/checkout`, and the billing portal for Swish+ customers. The webhook handles Swish+ events first, then coach events. The daily cron also re-checks Swish+ renewals that look missed. `scripts/stripe-setup.ts` creates the Swish+ product, the `plus_monthly` / `plus_annual` prices and the `swish_plus_founding_20` coupon. They exist in test mode as of 2026-11-05.
 - **Founding price:** `SWISH_PLUS_LAUNCH_AT` (an ISO date) is the cut-off. While it is unset, every account counts as made before launch, so set it on launch day.
-- **Ask limits:** free 20 a month (5 an hour), Swish+ 300 a month (30 an hour), Coach 5,000. Coach also gets the stronger model.
+- **Ask limits:** free stays at 80 a month (5 an hour, 30 a week), as in the code before Swish+; Swish+ 300 a month (30 an hour), Coach 5,000. Coach also gets the stronger model. Until `ask_swish_questions` exists only the hourly limit applies, so in practice nobody hits a monthly cap today.
 - **Pages:** `/plus` (prices, checkout, status), a "Your plan" line in the account centre, and Coach access listing Swish+ as included.
 - **Gates:** `PlusGate` (blurred preview, lock and a Get Swish+ link) and `usePlusAccess()` are ready for the new features. Nothing on the site today is gated. The first version gated profiles, game On/Off, comparison and the landscape, and that was removed on 2026-11-05.
 - **Switching on:** gates stay off until `VITE_SWISH_PLUS_LIVE=true`. Add `?plus=locked` to any page to see the locked view, and `?plus=off` to stop.
