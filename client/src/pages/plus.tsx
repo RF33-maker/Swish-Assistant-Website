@@ -20,31 +20,23 @@ type Row = { label: string; free: string | boolean; plus: string | boolean };
 
 const ROWS: Array<{ group: string; rows: Row[] }> = [
   {
-    group: "Games and leagues",
+    group: "Free, as it is today",
     rows: [
-      { label: "Live scores, results, standings and brackets", free: true, plus: true },
-      { label: "Box scores, play-by-play, game flow and shot charts", free: true, plus: true },
-      { label: "League leaders, team pages and team stats", free: true, plus: true },
-      { label: "On/Off for every game: who swung it, stint by stint", free: false, plus: true },
+      { label: "Live scores, box scores, play-by-play, game flow and shot charts", free: true, plus: true },
+      { label: "Standings, leaders, team pages and game On/Off", free: true, plus: true },
+      { label: "Player profiles: every season, splits, shot zones, rankings", free: true, plus: true },
+      { label: "Player comparison and the league landscape", free: true, plus: true },
+      { label: "Follow teams and players, your For You feed, shareable cards", free: true, plus: true },
     ],
   },
   {
-    group: "Players",
+    group: "Only on Swish+",
     rows: [
-      { label: "This season: averages, shooting and game log", free: true, plus: true },
-      { label: "Past seasons and career totals", free: "Last season", plus: "Every season" },
-      { label: "Advanced splits: ratings, usage, assist and rebound rates", free: false, plus: true },
-      { label: "On/Off impact", free: false, plus: true },
-      { label: "Season shot chart and shot zones", free: false, plus: true },
-      { label: "League rankings, player comparison and the player landscape", free: false, plus: true },
-    ],
-  },
-  {
-    group: "Ask Swish and more",
-    rows: [
+      { label: "Lineups for every team: best five-man units and pairs, season long", free: false, plus: true },
+      { label: "Clutch and competitive minutes, with garbage time taken out", free: false, plus: true },
+      { label: "Deeper numbers: on-court four factors, shot profile against league average", free: false, plus: true },
+      { label: "Alerts on your players and teams: tip-off, big lines, close finishes", free: "Final scores", plus: "Live" },
       { label: "Ask Swish questions", free: "20 a month", plus: "300 a month" },
-      { label: "Follow teams and players, your For You feed", free: true, plus: true },
-      { label: "Shareable cards", free: true, plus: true },
     ],
   },
 ];
@@ -133,8 +125,8 @@ export default function PlusPage() {
       <main className="max-w-3xl mx-auto px-4 md:px-6 pt-8 md:pt-14 pb-20">
         <div className="ch-rise text-center">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Swish+</div>
-          <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.4rem] md:text-[3.4rem] text-[color:var(--ch-text)]">Go deeper on every player</h1>
-          <p className="mt-3 text-[15px] text-[color:var(--ch-text-2)] max-w-xl mx-auto">Scores and box scores stay free. Swish+ adds the history, the advanced numbers and the tools to compare, across every league we cover.</p>
+          <h1 className="mt-1.5 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.4rem] md:text-[3.4rem] text-[color:var(--ch-text)]">Go deeper than the box score</h1>
+          <p className="mt-3 text-[15px] text-[color:var(--ch-text-2)] max-w-xl mx-auto">Everything on Swish today stays free. Swish+ adds what you can't get anywhere else: lineups, clutch numbers, deeper advanced stats and alerts on the players you follow.</p>
         </div>
 
         {welcome && (
@@ -200,12 +192,12 @@ export default function PlusPage() {
                 </>
               ) : (
                 <button type="button" onClick={checkout} disabled={!chosen || busy} className="ch-btn ch-btn-primary w-full h-12 justify-center text-[15px] disabled:opacity-50" data-testid="plus-checkout">
-                  {busy ? "Taking you to Stripe…" : "Get Swish+"}
+                  {busy ? "Taking you to checkout…" : "Get Swish+"}
                 </button>
               )}
               {error && <p className="text-sm text-center text-[color:var(--ch-loss)]" role="alert">{error}</p>}
               {params.get("plus_cancelled") && <p className="text-sm text-center text-[color:var(--ch-text-2)]">Payment cancelled. Nothing was charged.</p>}
-              <p className="flex items-center justify-center gap-1.5 text-xs text-[color:var(--ch-muted)]"><ShieldCheck className="h-3.5 w-3.5" /> Cancel any time. Card details are taken by Stripe.</p>
+              <p className="flex items-center justify-center gap-1.5 text-xs text-[color:var(--ch-muted)]"><ShieldCheck className="h-3.5 w-3.5" /> Cancel any time. Card details go straight to our payment provider.</p>
             </div>
           </section>
         )}

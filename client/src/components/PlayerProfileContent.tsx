@@ -1,6 +1,4 @@
 import { useState, useEffect, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
-import { PlusGate, PlusLockLine } from "@/components/PlusGate";
-import { usePlusAccess } from "@/lib/plus";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
@@ -1691,13 +1689,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     return stats.filter(stat => playedInGame(stat));
   }, [playerStats, expandedCompIds]);
 
-  // Swish+: rankings, advanced splits, on/off, shot zones, and seasons before last.
-  const plusAccess = usePlusAccess();
-  const rankings = plusAccess.locked ? null : playerRankings;
-
   // On/off for each game in the log, from the whole game's box +/-.
-  const gameLogOnOff = useGameLogOnOff(filteredStats, activeTab === 'games' && !plusAccess.locked);
-  const showOnOffColumns = gameLogOnOff.size > 0 && !plusAccess.locked;
+  const gameLogOnOff = useGameLogOnOff(filteredStats, activeTab === 'games');
+  const showOnOffColumns = gameLogOnOff.size > 0;
 
   // Once the log mixes competitions (e.g. SLB and ENBL for the same club), each
   // game needs a tag saying which one it came from.
@@ -2132,22 +2126,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     const games = playedCareerGames.filter(g => idSet.has(g.league_id));
     return computeHighs(games);
   }, [playedCareerGames, allTimeLeagueIds]);
-
-  // Free shows this season and last; Swish+ shows every season and the career line.
-  const seasonYear = (label: string): number | null => {
-    const m = /(20\d{2})\s*[-/–]\s*(\d{2,4})/.exec(label) ?? /(20\d{2})/.exec(label);
-    if (m) return Number(m[1]);
-    const short = /\b(\d{2})\s*[-/–]\s*(\d{2})\b/.exec(label); // "26-27"
-    return short ? 2000 + Number(short[1]) : null;
-  };
-  const visibleCareer = useMemo(() => {
-    if (!plusAccess.locked) return careerStats;
-    const years = Array.from(new Set(careerStats.map((r) => seasonYear(String(r.season))).filter((y): y is number => y != null))).sort((a, b) => b - a);
-    const keep = new Set(years.slice(0, 2));
-    return careerStats.filter((r) => { const y = seasonYear(String(r.season)); return y == null || keep.has(y); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [careerStats, plusAccess.locked]);
-  const hiddenCareerRows = careerStats.length - visibleCareer.length;
 
   const playerAccolades = useMemo(() => computePlayerAccolades(
     seasonHighs,
@@ -2620,11 +2598,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         {filteredSeasonAverages && (() => {
           type StatTile = { value: number; label: string; rank?: number };
           const seasonStats: StatTile[] = [
-            { value: filteredSeasonAverages.avg_points, label: "PTS", rank: rankings?.points },
-            { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: rankings?.rebounds },
-            { value: filteredSeasonAverages.avg_assists, label: "AST", rank: rankings?.assists },
-            { value: filteredSeasonAverages.avg_steals, label: "STL", rank: rankings?.steals },
-            { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: rankings?.blocks },
+            { value: filteredSeasonAverages.avg_points, label: "PTS", rank: playerRankings?.points },
+            { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: playerRankings?.rebounds },
+            { value: filteredSeasonAverages.avg_assists, label: "AST", rank: playerRankings?.assists },
+            { value: filteredSeasonAverages.avg_steals, label: "STL", rank: playerRankings?.steals },
+            { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
             { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
           ];
           const filterLabel = selectedLeagueIds.size === 1
@@ -2680,9 +2658,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         {filteredSeasonAverages && (() => {
           type ShootingTile = { value: number; label: string; rank?: number };
           const shootingStats: ShootingTile[] = [
-            { value: filteredSeasonAverages.fg_percentage, label: "FG%", rank: rankings?.fg_percentage },
-            { value: filteredSeasonAverages.three_point_percentage, label: "3PT%", rank: rankings?.three_point_percentage },
-            { value: filteredSeasonAverages.ft_percentage, label: "FT%", rank: rankings?.ft_percentage },
+            { value: filteredSeasonAverages.fg_percentage, label: "FG%", rank: playerRankings?.fg_percentage },
+            { value: filteredSeasonAverages.three_point_percentage, label: "3PT%", rank: playerRankings?.three_point_percentage },
+            { value: filteredSeasonAverages.ft_percentage, label: "FT%", rank: playerRankings?.ft_percentage },
           ];
           const generateCardBlob = () =>
             generateStatTilesCardBlob({
@@ -2765,15 +2743,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         </div>
         </>}
 
-        {activeTab === 'splits' && playerInfo?.playerId && (plusAccess.locked || plusAccess.pending) && (
-          <PlusGate
-            what="Advanced splits, on/off and shot zones"
-            detail={`See ${playerInfo.name ? playerInfo.name.split(" ")[0] + "'s" : "this player's"} ratings, usage, impact on the floor and where every shot comes from.`}
-            height={300}
-          >{null}</PlusGate>
-        )}
-
-        {activeTab === 'splits' && playerInfo?.playerId && !plusAccess.locked && !plusAccess.pending && (
+        {activeTab === 'splits' && playerInfo?.playerId && (
           selectedLeagueIds.size > 1 ? (
             <div className="py-5 text-sm text-[color:var(--ch-text-2)]">
               Select a single league to see on/off impact.
@@ -2839,7 +2809,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <h3 className="ch-section-title">Career stats</h3>
               <div className="ch-seg self-start" role="tablist" aria-label="Career stats view">
-                {(plusAccess.locked ? ["averages", "totals"] : ["averages", "totals", "advanced"]).map(tab => (
+                {["averages", "totals", "advanced"].map(tab => (
                   <button
                     key={tab}
                     type="button"
@@ -2909,7 +2879,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleCareer.map((row, idx) => (
+                  {careerStats.map((row, idx) => (
                     <tr key={idx} className="border-b border-[color:var(--ch-border)] text-[color:var(--ch-text)] tabular-nums">
                       <td className="px-2 py-2 text-xs font-medium text-[color:var(--ch-text-2)] whitespace-nowrap max-w-[100px] truncate">{row.season}</td>
                       <td className="px-2 py-2 text-xs whitespace-nowrap">
@@ -2938,7 +2908,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                       {renderCareerRow(row)}
                     </tr>
                   ))}
-                  {careerTotals && careerStats.length > 1 && !plusAccess.locked && (
+                  {careerTotals && careerStats.length > 1 && (
                     <tr className="font-bold text-[color:var(--ch-text)] border-t-2 tabular-nums" style={{ borderColor: readablePrimary.accent }}>
                       <td className="px-2 py-2 text-xs uppercase" style={{ color: readablePrimary.body }}>Career</td>
                       <td className="px-2 py-2 text-xs"></td>
@@ -2948,9 +2918,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 </tbody>
               </table>
             </div>
-            <PlusLockLine what={hiddenCareerRows > 0
-              ? `${hiddenCareerRows} earlier ${hiddenCareerRows === 1 ? "season" : "seasons"}, career totals and advanced numbers`
-              : careerStats.length > 1 ? "Career totals and advanced numbers" : "Advanced numbers"} />
           </div>
         )}
 
@@ -2988,7 +2955,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         )}
         </>}
 
-        {activeTab === 'splits' && !plusAccess.locked && !plusAccess.pending && <ShareableCard
+        {activeTab === 'splits' && <ShareableCard
           flat
           title="Shot Chart"
           fileSlug="shot-chart"

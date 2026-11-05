@@ -1,49 +1,44 @@
 # Swish plans: what comes in each
 
-Fills in section 2 of `swish-pricing-spec.md` (the pricing and entitlements spec) for the site and the iOS app as they stand on 2026-11-05. **Proposal.** Nothing is gated yet.
+Fills in section 2 of `swish-pricing-spec.md` (the pricing and entitlements spec) for the site and the iOS app as they stand on 2026-11-05. **Proposal.** Nothing is gated.
 
 ## The rule behind the split
 
-Everything that is public today stays free. That covers scores, box scores, play-by-play, game flow, shot charts, standings, leaders and the current season on a profile. It is what search engines index and what fans share, and game data must never sit behind a login.
+*Changed 2026-11-05 at the user's request.*
 
-Swish+ is **depth and tools**: history, advanced numbers, comparisons, more Ask. Free users can see that the depth exists through a short preview or a locked row, never a blank page.
+**Nothing that is free on Swish today goes behind Swish+.** Swish+ sells only depth that isn't freely available anywhere: lineups, clutch and context numbers, advanced metrics beyond the ones already on the site, and in-depth alerts. That covers every page on the site today, including profiles with every season, splits, shot zones, rank badges, game On/Off, player comparison and the landscape.
+
+Each Swish+ feature is new work. Gates go on as each one is built, and Swish+ goes on sale once there is enough behind it.
 
 ## Feature split
 
 | Feature | Free | Swish+ | Coach | League member | Key |
 |---|---|---|---|---|---|
-| **Games and leagues** | | | | | |
+| **Free, as it is today** | | | | | |
 | Live scores, schedules, results, standings, brackets | ✅ | ✅ | ✅ | ✅ | — |
-| Box scores, play-by-play, game flow, game shot chart | ✅ | ✅ | ✅ | ✅ | — |
-| Game page points breakdown (paint, 2nd chance, bench…) | ✅ | ✅ | ✅ | ✅ | — |
-| Game page On/Off tab (per-game on/off, stint ratings) | ❌ preview | ✅ | ✅ | ❌ | `plus` |
-| League leaders, team pages, team stats, league compare | ✅ | ✅ | ✅ | ✅ | — |
-| News articles | ✅ | ✅ | ✅ | ✅ | — |
-| **Player profiles** | | | | | |
-| Current season averages, shooting splits, game log, accolades | ✅ | ✅ | ✅ | ✅ | — |
-| Past seasons and career totals | Last season only | ✅ all | ✅ | ❌ | `plus` |
-| Advanced splits (ORTG/DRTG, usage, AST%, REB%…) | ❌ preview | ✅ | ✅ | ❌ | `plus` |
-| On/Off impact panel | ❌ preview | ✅ | ✅ | ❌ | `plus` |
-| Season shot chart and shot zones (rim, paint, mid, three) | ❌ preview | ✅ | ✅ | ❌ | `plus` |
-| League rankings and percentiles | ❌ | ✅ | ✅ | ❌ | `plus` |
-| Player comparison and player landscape | ❌ | ✅ | ✅ | ❌ | `plus` |
-| **App and account** | | | | | |
-| Follow teams and players, For You home, Feed tab | ✅ account | ✅ | ✅ | ✅ | — |
-| Shareable cards, save to Photos | ✅ account | ✅ | ✅ | ✅ | — |
-| Ask Swish | 20 a month | 300 a month | Coach limits (5,000 a month) | Free limits | `plus` / `coach` |
-| Live game alerts (push), once push ships | Final scores | Live: tip-off, close games, big lines | ✅ | Final scores | `plus` |
+| Box scores, play-by-play, game flow, shot chart, points breakdown, game On/Off | ✅ | ✅ | ✅ | ✅ | — |
+| League leaders, team pages, team stats, comparisons, landscape | ✅ | ✅ | ✅ | ✅ | — |
+| Player profiles: every season, career, splits, on/off, shot zones, rank badges | ✅ | ✅ | ✅ | ✅ | — |
+| News, follows, For You home, Feed tab, shareable cards | ✅ | ✅ | ✅ | ✅ | — |
+| **Only on Swish+ (to build)** | | | | | |
+| Lineups for every team: season five-man units, two-man pairs, minutes, net rating | ❌ preview | ✅ | ✅ | ❌ | `plus` |
+| Clutch and competitive minutes (garbage time out, close-game splits) | ❌ preview | ✅ | ✅ | ❌ | `plus` |
+| Deeper metrics: on-court four factors, opponent shooting with a player on, shot profile against league average | ❌ preview | ✅ | ✅ | ❌ | `plus` |
+| Alerts on followed players and teams: tip-off, live big lines, close finishes, milestones | Final scores | ✅ | ✅ | Final scores | `plus` |
+| Ask Swish | 20 a month | 300 a month | 5,000 a month | 20 a month | `plus` / `coach` |
 | **Coaching (web only)** | | | | | |
-| Coaches Hub, team dashboard, advanced insights | ❌ | ❌ | ✅ | ❌ | `coach` |
-| Scouting reports (AI scout), coach notes, PDF export | ❌ | ❌ | ✅ | ❌ | `coach` |
-| Post-game and weekly reports, share links | ❌ | ❌ | ✅ | ❌ | `coach` |
-| Playbook (draw, share with staff) | ❌ | ❌ | ✅ | ❌ | `coach` |
+| Coaches Hub, advanced insights (own team, last 3/5 games), scouting, reports, playbook | ❌ | ❌ | ✅ | ❌ | `coach` |
 | **League (web only, organiser pays)** | | | | | |
-| League hosted on Swish: pages, branding, team logos | — | — | — | Organiser | league paid |
-| Upload box scores and PDFs, manage teams | — | — | — | Organiser / team manager | league role |
-| Scorer's table, live publishing to the site | — | — | — | Scorer | league role |
-| Join a league with an invite code (in the app, no prices) | — | — | — | ✅ | league role |
+| League hosted on Swish, uploads, scorer's table, live publishing, invite codes | — | — | — | ✅ by role | league paid |
 
 Coach includes Swish+ automatically (`plus` row with `source = 'coach_bundle'`). Admins get everything, as today.
+
+### What the Swish+ features build on
+
+- **Lineups:** `lineup_stints` already holds 54,000 stints from 1,142 games in 23 competitions, with points, possessions and full box numbers for both sides. Today the site shows them only one game at a time (game On/Off) and to coaches for their own team (Advanced Insights). Season lineups for any team are new.
+- **Clutch:** `lineup_stints_context_v1` already flags garbage time, competitive stints and the score margin at each stint's start.
+- **Deeper metrics:** the `opp_*` columns on `lineup_stints` give opponent shooting, rebounding and turnovers with each player on the floor.
+- **Alerts:** nothing exists yet. App push waits for the paid Apple Developer account, and web push or email could come first. `user_follows` already says who follows what.
 
 ## How this fits what is already built
 
@@ -79,13 +74,15 @@ Coach includes Swish+ automatically (`plus` row with `source = 'coach_bundle'`).
 - **Founding price:** `SWISH_PLUS_LAUNCH_AT` (an ISO date) is the cut-off. While it is unset, every account counts as made before launch, so set it on launch day.
 - **Ask limits:** free 20 a month (5 an hour), Swish+ 300 a month (30 an hour), Coach 5,000. Coach also gets the stronger model.
 - **Pages:** `/plus` (prices, checkout, status), a "Your plan" line in the account centre, and Coach access listing Swish+ as included.
-- **Gates:** profile rank badges; Splits tab (advanced splits, on/off, season shot chart); career table (seasons before last, career totals, Advanced view); game-log ON/OFF/SWING columns; game On/Off tab; league player comparison; player landscape.
+- **Gates:** `PlusGate` (blurred preview, lock and a Get Swish+ link) and `usePlusAccess()` are ready for the new features. Nothing on the site today is gated. The first version gated profiles, game On/Off, comparison and the landscape, and that was removed on 2026-11-05.
 - **Switching on:** gates stay off until `VITE_SWISH_PLUS_LIVE=true`. Add `?plus=locked` to any page to see the locked view, and `?plus=off` to stop.
 - **Tests:** `npx tsx --test scripts/billing.test.ts scripts/plus-billing.test.ts`.
 
 ## Open decisions
 
-- [ ] This split
+- [x] The rule: nothing free today gets gated (2026-11-05)
+- [ ] Which Swish+ feature to build first
+- [ ] Free alert level (final scores only?)
 - [x] Swish+ price: £4.99 / £39.99, with 20% off for accounts made before launch
 - [ ] Whether Coach stays £10 / £75
 - [ ] RevenueCat or DIY for Apple

@@ -1,5 +1,4 @@
 import { useParams, useLocation } from "wouter";
-import { PlusGate } from "@/components/PlusGate";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
@@ -1400,7 +1399,6 @@ export default function GamePage() {
 
                 {showOnOff && (
                   <TabsContent value="onoff" className="mt-0">
-                    <PlusGate what="Game on/off numbers" detail={"See who swung the game: every player's on and off numbers, and each lineup stint."} height={320}>
                     <GameOnOff
                       homeTeam={gameData.hometeam}
                       awayTeam={gameData.awayteam}
@@ -1410,7 +1408,6 @@ export default function GamePage() {
                       stints={gameStints}
                       colors={colors}
                     />
-                    </PlusGate>
                   </TabsContent>
                 )}
 
