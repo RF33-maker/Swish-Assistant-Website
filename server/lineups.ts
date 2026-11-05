@@ -61,11 +61,39 @@ export type StintGroup = {
   members: Map<string, UnitMember>;
 };
 
-/** Folds the five rows each stint has into one stint, keyed by stint id. */
-export function groupStints(rows: StintRow[]): Map<string, StintGroup> {
-  const stints = new Map<string, StintGroup>();
+/**
+ * Teammates who share an initial and surname (two sisters, both "S. Laditan-Adebiyi") share a name
+ * key. Where both are ever on the floor together under their full names, that team keys them by
+ * full name instead. A row giving only the initial can't be placed, so it gets no key (its stint
+ * then has four people and is left out, as any stint without five is).
+ * ("A. Gayle" and "Andre Gayle" in one stint is one player entered twice, not two.)
+ */
+export function sharedNameKeys(rows: Pick<StintRow, "stint_id" | "team_id" | "player_name">[]): (r: Pick<StintRow, "team_id" | "player_name">) => string {
+  const isInitial = (n: string) => (n.trim().split(/\s+/)[0] || "").replace(".", "").length <= 1;
+  const full = (n: string) => n.trim().replace(/\s+/g, " ").toLowerCase();
+  const perStint = new Map<string, Map<string, Set<string>>>();
   for (const r of rows) {
     const key = playerNameKey(r.player_name);
+    if (!key || !r.player_name || isInitial(r.player_name) || !r.stint_id) continue;
+    const m = perStint.get(r.stint_id) ?? new Map<string, Set<string>>();
+    m.set(`${r.team_id}|${key}`, (m.get(`${r.team_id}|${key}`) ?? new Set()).add(full(r.player_name)));
+    perStint.set(r.stint_id, m);
+  }
+  const shared = new Set<string>();
+  perStint.forEach((m) => m.forEach((names, k) => { if (names.size > 1) shared.add(k); }));
+  return (r) => {
+    const key = playerNameKey(r.player_name);
+    if (!key || !shared.has(`${r.team_id}|${key}`)) return key;
+    return r.player_name && !isInitial(r.player_name) ? `${key}#${full(r.player_name)}` : "";
+  };
+}
+
+/** Folds the five rows each stint has into one stint, keyed by stint id. */
+export function groupStints(rows: StintRow[]): Map<string, StintGroup> {
+  const keyOf = sharedNameKeys(rows);
+  const stints = new Map<string, StintGroup>();
+  for (const r of rows) {
+    const key = keyOf(r);
     if (!key || !r.stint_id || !r.team_id) continue;
     let s = stints.get(r.stint_id);
     if (!s) {

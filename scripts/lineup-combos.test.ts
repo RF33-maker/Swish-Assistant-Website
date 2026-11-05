@@ -182,3 +182,22 @@ test("off numbers only use the games the player played in", () => {
   assert.equal(off.pf, 4);
   assert.equal(off.pa, 6);
 });
+
+test("teammates sharing an initial and surname stay two people in lineups", () => {
+  const five = ["Sayomi Same", "Solomi Same", "Cat Cole", "Dee Dunn", "Eve Ely"];
+  const rows = [
+    ...stint("s1", five, { pf: 10, pa: 8 }),
+    ...stint("s2", ["Sayomi Same", "Bea Bell", "Cat Cole", "Dee Dunn", "Eve Ely"], { pf: 4, pa: 6 }),
+    ...stint("s3", ["S. Same", "Bea Bell", "Cat Cole", "Dee Dunn", "Eve Ely"], { pf: 2, pa: 2 }),
+  ];
+  const g = groupStints(rows);
+  assert.equal(g.get("s1")!.members.size, 5);
+  assert.ok(g.get("s2")!.members.has("s same#sayomi same"));
+  // An initial alone can't say which sister it was, so that stint is left out.
+  assert.equal(g.get("s3")!.members.size, 4);
+  const { units } = buildUnits(rows);
+  assert.equal(units.length, 2);
+  // One player entered twice is still one player.
+  const dup = groupStints([...stint("d1", ["Andre Gayle", "Bea Bell", "Cat Cole", "Dee Dunn", "Eve Ely"]), ...stint("d1", ["A. Gayle"])]);
+  assert.equal(dup.get("d1")!.members.size, 5);
+});
