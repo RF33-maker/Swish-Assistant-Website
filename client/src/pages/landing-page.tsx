@@ -8,18 +8,15 @@ import SLB from "@/assets/Super-League-Basketball-Logo.png"
 import NBLBE from "@/assets/NBLBE.jpg"
 import { Button } from "@/components/ui/button"
 import { X, UserPlus, Mail, Check } from "lucide-react"
-import LatestScoresSection from "@/components/home/LatestScoresSection"
 import LatestNewsSection from "@/components/home/LatestNewsSection"
 import ScoresBlock from "@/components/home/ScoresBlock"
 import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSection"
 import PodcastSection from "@/components/home/PodcastSection"
 import TopPlayersSection from "@/components/home/TopPlayersSection"
 import HomeTodayBar from "@/components/home/HomeTodayBar"
-import PlatformStatsStrip from "@/components/home/PlatformStatsStrip"
 import ScrollStory from "@/components/home/story/ScrollStory"
 import ExploreSection from "@/components/home/ExploreSection"
 import HistoryComingSoon from "@/components/home/HistoryComingSoon"
-import AudienceSection from "@/components/home/AudienceSection"
 import HomeFooter from "@/components/home/HomeFooter"
 import SectionHeader from "@/components/home/SectionHeader"
 import { InstagramFeedSection } from "@/components/InstagramFeedSection"
@@ -182,9 +179,6 @@ export default function LandingPage() {
           logo instead; other pages keep the header search. */}
       <SiteHeader hideSearch />
 
-      {/* Live scores ticker */}
-      <LatestScoresSection />
-
       {/* Content first (Bleacher Report / StatMuse): today's bar with
           search and league shortcuts, then the games and the week's top
           performances. */}
@@ -232,10 +226,9 @@ export default function LandingPage() {
       {/* Below the content: who Swish is and what it offers */}
       <div data-story="brand">
         <HostedLeaguesBand />
-        <div className="max-w-7xl mx-auto px-5 md:px-8 pt-12 md:pt-16">
-          <PlatformStatsStrip />
-        </div>
-        <AudienceSection />
+        {/* The platform numbers (PlatformStatsStrip) and "Why Swish"
+            (AudienceSection) are off the homepage for now; both components
+            are kept so they can come back here. */}
       </div>
 
       {/* Newsletter Signup Section */}
