@@ -11,6 +11,7 @@ import { withoutSeason } from "@/lib/leagueKeys";
 import { useAskSwish } from "./AskSwishProvider";
 import AskCardView from "./AskCards";
 import AskBar from "./AskBar";
+import MetaballField from "./MetaballField";
 
 /**
  * The conversation itself: used inside the side drawer and mobile sheet, on
@@ -83,14 +84,18 @@ export default function AskSwishPanel({ onClose, size = "panel", onAnswer, autoF
 
   return (
     <div className="ask-swish relative flex h-full min-h-0 flex-col overflow-hidden bg-slate-50 dark:bg-[#0a0a0f] text-slate-900 dark:text-white">
-      {/* The glow sits behind everything and dims once a conversation is under way. */}
-      <div
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-x-0 flex justify-center transition-all duration-700 ${started ? "opacity-30 top-[55%]" : "top-[12%]"}`}
-      >
-        {/* The pulse scales this inner disc, so the centring stays on the wrapper. */}
-        <div className="ask-glow w-[150%] max-w-[900px] shrink-0 aspect-square rounded-full bg-[radial-gradient(closest-side,rgba(249,115,22,0.20),rgba(249,115,22,0.07)_55%,transparent)] dark:bg-[radial-gradient(closest-side,rgba(249,115,22,0.30),rgba(249,115,22,0.09)_55%,transparent)]" />
-      </div>
+      {/* The page, drawer and phone sheet get the living metaball; embeds (the scouting editor) keep the plain glow. Both dim once a conversation is under way. */}
+      {big || onClose ? (
+        <MetaballField busy={busy} dim={started} />
+      ) : (
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-x-0 flex justify-center transition-all duration-700 ${started ? "opacity-30 top-[55%]" : "top-[12%]"}`}
+        >
+          {/* The pulse scales this inner disc, so the centring stays on the wrapper. */}
+          <div className="ask-glow w-[150%] max-w-[900px] shrink-0 aspect-square rounded-full bg-[radial-gradient(closest-side,rgba(249,115,22,0.20),rgba(249,115,22,0.07)_55%,transparent)] dark:bg-[radial-gradient(closest-side,rgba(249,115,22,0.30),rgba(249,115,22,0.09)_55%,transparent)]" />
+        </div>
+      )}
 
       {/* A header only where the panel needs one: the drawer's close, and a new conversation once there is one. */}
       {(onClose || started) && (
