@@ -3,6 +3,7 @@ import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { useIsDarkMode } from "@/hooks/useReadableColor";
 import { prefersReducedMotion } from "@/components/home/motion";
 import { drawBall, makeShadowSprite, makeSphereSprite, qAxisAngle, qMul, qRandom, type Quat } from "@/components/home/story/ballKit";
+import { SITE_RAIL_COLLAPSED_PX } from "@/components/layout/SiteHeader";
 
 /**
  * The homepage's scroll story — a fixed layer behind the page, the hoop on a
@@ -579,7 +580,11 @@ export default function ScrollStory() {
       const vh = layer.clientHeight || window.innerHeight;
       const wide = window.innerWidth >= 1024;
       const small = window.innerWidth < 640;
-      const contentLeft = wide ? 240 : 0; // SITE_RAIL_OFFSET (lg:pl-60)
+      // The page's live left padding (SITE_RAIL_OFFSET), which grows while
+      // the site rail is open and animates as it opens and closes.
+      const pageRoot = document.querySelector<HTMLElement>(".ch-story-page");
+      const railPad = pageRoot ? parseFloat(getComputedStyle(pageRoot).paddingLeft) : NaN;
+      const contentLeft = wide ? (Number.isFinite(railPad) ? railPad : SITE_RAIL_COLLAPSED_PX) : 0;
       const contentW = vw - contentLeft;
       const maxScroll = Math.max(1, document.documentElement.scrollHeight - vh);
 
@@ -725,6 +730,10 @@ export default function ScrollStory() {
     };
     const ro = new ResizeObserver(() => measure());
     ro.observe(document.body);
+    // Its content box narrows every frame while the site rail pushes it over,
+    // which body's size alone wouldn't report.
+    const storyPage = document.querySelector<HTMLElement>(".ch-story-page");
+    if (storyPage) ro.observe(storyPage);
     window.addEventListener("scroll", kick, { passive: true });
     window.addEventListener("resize", scheduleMeasure);
     document.addEventListener("focusin", kick);

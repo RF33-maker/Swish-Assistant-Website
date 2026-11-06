@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useLocation } from "wouter"
 import SwishLogo from "@/assets/Swish Assistant Logo.png"
 import { Search, Trophy, Menu } from "lucide-react"
@@ -11,40 +12,92 @@ import { compactLogoUrl } from "@/lib/compactLogo"
 /**
  * The public site header and navigation.
  *
- * Desktop (lg and up): a fixed left rail holding the logo and SiteNav, in the
- * style of StatMuse, with the search across the top of the content. Mobile:
- * the same SiteNav lives in the slide-out menu behind the hamburger.
+ * Desktop (lg and up): a fixed left rail holding the logo and SiteNav, with
+ * the search across the top of the content. The rail rests as a 64px column
+ * of icons and widens to 240px while the pointer is on it or keyboard focus
+ * is inside it, pushing the page over as it goes. Mobile: the same SiteNav
+ * lives in the slide-out menu behind the hamburger.
  *
  * Layout contract — the rail is position: fixed, so any page rendering this
- * header must offset its own content by the rail's width with
- * SITE_RAIL_OFFSET on its root element, or the rail will cover it.
+ * header must offset its own content with SITE_RAIL_OFFSET on its root
+ * element, or the rail will cover it. That offset reads --site-rail-w, which
+ * this header keeps equal to the rail's current width, and animates with the
+ * same timing as the rail so the page edge and the rail edge move together.
  *
  * `hideSearch` swaps the header search for the Swish logo, centred. The
  * homepage uses it because it has its own, bigger search further down; every
  * other page keeps the search here for navigation.
  */
-export const SITE_RAIL_OFFSET = "lg:pl-60"
+export const SITE_RAIL_OFFSET =
+  "lg:pl-[var(--site-rail-w,64px)] lg:transition-[padding-left] lg:duration-[220ms] lg:ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
+/** The collapsed rail's width in px, for code that lays out against it. */
+export const SITE_RAIL_COLLAPSED_PX = 64
+const SITE_RAIL_EXPANDED_PX = 240
+// A short pause before opening, so sweeping the pointer past the left edge
+// on the way to something else doesn't flash the rail open.
+const RAIL_OPEN_DELAY_MS = 90
 
 export default function SiteHeader({ hideSearch = false }: { hideSearch?: boolean } = {}) {
   const [, setLocation] = useLocation()
   const { query, setQuery, suggestions, handleSelect, handleSubmit } = useGlobalSearch()
 
+  const [railOpen, setRailOpen] = useState(false)
+  const openTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(openTimer.current), [])
+
+  // Publish the rail's width for SITE_RAIL_OFFSET. A layout effect, so the
+  // page's padding starts moving in the same frame as the rail. Cleared on
+  // unmount, which drops pages back to the collapsed default.
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty("--site-rail-w", `${railOpen ? SITE_RAIL_EXPANDED_PX : SITE_RAIL_COLLAPSED_PX}px`)
+    return () => { root.style.removeProperty("--site-rail-w") }
+  }, [railOpen])
+
+  const openRail = (delay: number) => {
+    window.clearTimeout(openTimer.current)
+    if (delay === 0) setRailOpen(true)
+    else openTimer.current = window.setTimeout(() => setRailOpen(true), delay)
+  }
+  const closeRail = () => {
+    window.clearTimeout(openTimer.current)
+    setRailOpen(false)
+  }
+
   return (
     <>
       <aside
         aria-label="Site navigation"
-        className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-60 flex-col bg-white dark:bg-[#0a0a0f] border-r border-slate-200 dark:border-neutral-800 overflow-y-auto"
+        style={{ width: railOpen ? SITE_RAIL_EXPANDED_PX : SITE_RAIL_COLLAPSED_PX }}
+        onMouseEnter={() => openRail(RAIL_OPEN_DELAY_MS)}
+        onMouseLeave={closeRail}
+        // Tabbing into the rail opens it; tabbing out (focus moving somewhere
+        // outside the aside) closes it again.
+        onFocus={() => openRail(0)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) closeRail()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") closeRail()
+        }}
+        data-expanded={railOpen}
+        // Same duration and curve as SITE_RAIL_OFFSET's padding transition.
+        className="hidden lg:flex fixed inset-y-0 left-0 z-40 flex-col bg-white dark:bg-[#0a0a0f] border-r border-slate-200 dark:border-neutral-800 overflow-y-auto overflow-x-hidden transition-[width] duration-[220ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none"
       >
         <button
           type="button"
           aria-label="Go to home"
           onClick={() => setLocation('/')}
-          className="flex h-[65px] shrink-0 items-center gap-2 px-6 border-b border-slate-200 dark:border-neutral-800 hover:opacity-90 transition-opacity"
+          className="flex h-[65px] shrink-0 items-center gap-3 px-4 border-b border-slate-200 dark:border-neutral-800 hover:opacity-90 transition-opacity overflow-hidden whitespace-nowrap"
         >
-          <img src={SwishLogo} alt="" className="h-8" />
-          <span className="font-semibold text-slate-900 dark:text-white">Swish Assistant</span>
+          <img src={SwishLogo} alt="" className="h-8 w-8 shrink-0" />
+          <span
+            className={`font-semibold text-slate-900 dark:text-white transition-opacity duration-200 ${railOpen ? "opacity-100" : "opacity-0"}`}
+          >
+            Swish Assistant
+          </span>
         </button>
-        <SiteNav layout="rail" />
+        <SiteNav layout="rail" expanded={railOpen} />
       </aside>
 
       {/* Brand line across the very top. On desktop it's fixed and full-width
