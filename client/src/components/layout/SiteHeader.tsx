@@ -16,7 +16,11 @@ import { compactLogoUrl } from "@/lib/compactLogo"
  * the search across the top of the content. The rail rests as a 64px column
  * of icons and widens to 240px while the pointer is on it or keyboard focus
  * is inside it, pushing the page over as it goes. Mobile: the same SiteNav
- * lives in the slide-out menu behind the hamburger.
+ * lives in the slide-out menu behind a round glass button that stays fixed
+ * at the top right as the page scrolls.
+ *
+ * There is no header bar: the logo and search sit straight on the page's own
+ * background, with no fill or border of their own.
  *
  * Layout contract — the rail is position: fixed, so any page rendering this
  * header must offset its own content with SITE_RAIL_OFFSET on its root
@@ -88,7 +92,7 @@ export default function SiteHeader({ hideSearch = false }: { hideSearch?: boolea
           type="button"
           aria-label="Go to home"
           onClick={() => setLocation('/')}
-          className="flex h-[65px] shrink-0 items-center gap-3 px-4 border-b border-slate-200 dark:border-neutral-800 hover:opacity-90 transition-opacity overflow-hidden whitespace-nowrap"
+          className="flex h-16 shrink-0 items-center gap-3 px-4 hover:opacity-90 transition-opacity overflow-hidden whitespace-nowrap"
         >
           <img src={SwishLogo} alt="" className="h-8 w-8 shrink-0" />
           <span
@@ -100,20 +104,12 @@ export default function SiteHeader({ hideSearch = false }: { hideSearch?: boolea
         <SiteNav layout="rail" expanded={railOpen} />
       </aside>
 
-      {/* Brand line across the very top. On desktop it's fixed and full-width
-          so it runs over the rail as well as the content; in-flow on mobile. */}
-      <div className="lg:hidden h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
-      <div className="hidden lg:block fixed top-0 inset-x-0 z-50 h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
-
-      <header className="bg-white dark:bg-[#0a0a0f] border-b border-slate-200 dark:border-neutral-800">
-        {/* Fixed height on desktop so this bottom border meets the rail's logo
-            row border in one continuous line. The rail row is 65px because its
-            border is inside its box, while this one sits outside the 64px row. */}
+      <header>
         <div className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 lg:py-0 lg:h-16">
           {hideSearch ? (
             <>
               {/* Mobile: balances the menu button so the logo sits dead centre. */}
-              <span className="lg:hidden h-10 w-10 flex-shrink-0" aria-hidden="true" />
+              <span className="lg:hidden h-11 w-11 flex-shrink-0" aria-hidden="true" />
               <div className="flex-1 flex justify-center">
                 <button
                   type="button"
@@ -141,7 +137,7 @@ export default function SiteHeader({ hideSearch = false }: { hideSearch?: boolea
 
           <div className="flex-1 flex justify-center relative">
             <div className="w-full max-w-xl md:max-w-2xl relative">
-            <div className="search-bar-animated-border dark:!bg-[#0a0a0f]">
+            <div className="search-bar-animated-border !bg-transparent">
               <form
                 onSubmit={handleSubmit}
                 className="flex items-center bg-slate-100 dark:bg-neutral-900 rounded-full overflow-hidden relative z-10"
@@ -220,15 +216,21 @@ export default function SiteHeader({ hideSearch = false }: { hideSearch?: boolea
           </>
           )}
 
+          {/* Holds the menu button's place in the row; the button itself is
+              fixed so it stays on screen while the page scrolls. */}
+          <span className="lg:hidden h-11 w-11 flex-shrink-0" aria-hidden="true" />
           <Sheet>
             <SheetTrigger asChild>
+              {/* Starts exactly where the row's placeholder is, so at the top
+                  of the page it reads as part of the row. z-50 matches the
+                  sheet's overlay, which is portalled later and so sits above. */}
               <button
                 type="button"
                 aria-label="Open menu"
                 data-testid="sidebar-trigger"
-                className="inline-flex lg:hidden items-center justify-center h-10 w-10 flex-shrink-0 rounded-md text-slate-700 hover:bg-slate-100 dark:text-white dark:hover:bg-neutral-800 transition-colors"
+                className="lg:hidden fixed z-50 top-[max(0.75rem,env(safe-area-inset-top))] right-4 inline-flex items-center justify-center h-11 w-11 rounded-full text-slate-800 dark:text-white bg-white/55 dark:bg-neutral-900/45 backdrop-blur-xl backdrop-saturate-150 border border-white/70 dark:border-white/10 shadow-lg shadow-black/10 dark:shadow-black/40 ring-1 ring-black/5 dark:ring-white/5 active:scale-95 transition-transform"
               >
-                <Menu className="h-6 w-6" />
+                <Menu className="h-5 w-5" />
               </button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72 bg-white text-slate-900 border-l border-slate-200 dark:bg-neutral-950 dark:text-white dark:border-neutral-800 p-0 overflow-y-auto">
