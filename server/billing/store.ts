@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "../supabaseServiceClient";
+import { syncCoachBundle } from "./entitlements";
 
 /** One row of public.coach_access: a coach's paid access to one team. */
 export interface AccessRow {
@@ -61,6 +62,8 @@ export const supabaseBillingStore: BillingStore = {
       .select("*")
       .single();
     if (error) throw new Error(error.message);
+    // Coach includes Swish+: keep both entitlements in step with this row.
+    await syncCoachBundle(data as AccessRow);
     return data as AccessRow;
   },
   async update(userId, patch) {
@@ -71,6 +74,7 @@ export const supabaseBillingStore: BillingStore = {
       .select("*")
       .maybeSingle();
     if (error) throw new Error(error.message);
+    if (data) await syncCoachBundle(data as AccessRow);
     return (data as AccessRow | null) ?? null;
   },
   async listOpen() {

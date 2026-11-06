@@ -53,6 +53,7 @@ import EditMyProfilePage from "@/pages/edit-my-profile";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
 import CoachAccessPage from "@/pages/coach-access";
+import PlusPage from "@/pages/plus";
 import CoachAccessSuccessPage from "@/pages/coach-access-success";
 import CoachAccessAdminPage from "@/pages/admin/coach-access";
 import GameTimesAdminPage from "@/pages/admin/game-times";
@@ -114,6 +115,7 @@ function Router() {
       <Route path="/cookies" component={CookiePolicyPage} />
       <Route path="/contact-sales" component={ContactSalesPage} />
       <Route path="/coach-access" component={CoachAccessPage} />
+      <Route path="/plus" component={PlusPage} />
       <Route path="/game/:gameKey" component={GamePage} />
       <Route path="/scores" component={ScoresPage} />
       <Route path="/ask" component={AskSwishPage} />

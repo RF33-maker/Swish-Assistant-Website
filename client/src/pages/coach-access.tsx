@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
-import { BadgeCheck, CalendarRange, Check, FileText, Lock, Search, ShieldCheck, Sparkles, Users, X } from "lucide-react";
+import { BadgeCheck, CalendarRange, Check, FileText, Lock, Plus, Search, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,6 +21,7 @@ const WHAT_YOU_GET = [
   { icon: Users, text: "Your team's Coaches Hub: standings, lineups, trends and every game" },
   { icon: Sparkles, text: "An AI scouting report on every opponent, with the game plan and who to stop" },
   { icon: FileText, text: "Printable reports in your club's colours, with your own notes added" },
+  { icon: Plus, text: "Swish+ included at no extra cost: lineups for every team, clutch numbers, live alerts and more Ask Swish questions" },
 ];
 
 function useTeamSearch(query: string) {
@@ -235,10 +236,10 @@ export default function CoachAccessPage() {
                     className="ch-btn ch-btn-primary w-full h-12 justify-center text-[15px] disabled:opacity-50"
                   >
                     <Lock className="h-4 w-4" />
-                    {busy ? "Taking you to Stripe…" : !team ? "Choose your team to continue" : `Continue to payment: ${selected ? formatMoney(selected.amount, selected.currency) : ""}${plan === "monthly" ? " a month" : ""}`}
+                    {busy ? "Taking you to checkout…" : !team ? "Choose your team to continue" : `Continue to payment: ${selected ? formatMoney(selected.amount, selected.currency) : ""}${plan === "monthly" ? " a month" : ""}`}
                   </button>
                   {error && <p className="text-sm text-[color:var(--ch-loss)]" role="alert" data-testid="checkout-error">{error}</p>}
-                  <p className="flex items-center justify-center gap-1.5 text-xs text-[color:var(--ch-muted)]"><ShieldCheck className="h-3.5 w-3.5" /> Card details are taken by Stripe. We never see or store them.</p>
+                  <p className="flex items-center justify-center gap-1.5 text-xs text-[color:var(--ch-muted)]"><ShieldCheck className="h-3.5 w-3.5" /> Card details go straight to our payment provider. We never see or store them.</p>
                 </div>
               )}
               {params.get("cancelled") && <p className="mt-3 text-sm text-[color:var(--ch-text-2)]">Payment cancelled. Nothing was charged. You can pick up where you left off.</p>}

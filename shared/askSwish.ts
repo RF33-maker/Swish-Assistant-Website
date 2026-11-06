@@ -131,12 +131,15 @@ export type AskEvent =
   | { type: "text"; delta: string }
   | { type: "nav"; buttons: AskNavButton[] }
   | { type: "followups"; questions: string[] }
-  | { type: "done"; model: string; tier: "free" | "pro"; usage?: AskUsage; quota?: AskQuota }
+  | { type: "done"; model: string; tier: AskTier; usage?: AskUsage; quota?: AskQuota }
   | { type: "error"; message: string; code?: "unauthenticated" | "rate_limited" | "unavailable" | "failed"; quota?: AskQuota };
 
 /** How much of an account's allowance is used, and which window ran out. */
+/** free: any signed-in account. plus: Swish+. pro: Coach (and admins). */
+export type AskTier = "free" | "plus" | "pro";
+
 export interface AskQuota {
-  tier: "free" | "pro";
+  tier: AskTier;
   hour: { used: number; max: number };
   week: { used: number; max: number };
   month: { used: number; max: number };

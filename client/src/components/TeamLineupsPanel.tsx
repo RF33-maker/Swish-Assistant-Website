@@ -11,6 +11,7 @@ import { renderLineupSimpleCard } from "@/lib/generateLineupSimpleCard";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import type { LineupMetric, LineupUnit, LineupsResponse } from "@/types/lineups";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
+import { LineupExplorer } from "@/components/LineupExplorer";
 
 const HEADS_KEY = "weekly-awards-heads";
 
@@ -354,6 +355,7 @@ export function TeamLineupsPanel({ slug, teamName, accentColor, teamRgb }: Props
           Net rating is points scored minus allowed per 100 possessions. Units with only a few minutes together can swing a lot, so check the minutes.
         </p>
       )}
+      <LineupExplorer slug={slug} teamName={teamName} accentColor={accentColor} />
     </div>
   );
 }

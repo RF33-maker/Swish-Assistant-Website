@@ -5,7 +5,7 @@
 create table if not exists public.ask_swish_questions (
   id bigint generated always as identity primary key,
   user_id uuid not null,
-  tier text not null check (tier in ('free', 'pro')),
+  tier text not null check (tier in ('free', 'plus', 'pro')),
   model text not null,
   surface text not null default 'site',
   asked_at timestamptz not null default now(),

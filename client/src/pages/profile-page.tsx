@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PlanSummaryRow } from "@/components/PlanSummaryRow";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
@@ -419,6 +420,10 @@ export default function AccountCentre() {
                 </p>
               )}
             </div>
+
+            <Separator className="bg-[color:var(--ch-border)]" />
+
+            <PlanSummaryRow />
 
             <Separator className="bg-[color:var(--ch-border)]" />
 

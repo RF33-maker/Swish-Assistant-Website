@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { normalizeTeamName } from "@/lib/teamUtils";
-import { ArrowLeft, Loader2, LayoutDashboard, BarChart3, Crosshair, Users } from "lucide-react";
+import { ArrowLeft, Loader2, LayoutDashboard, BarChart3, Crosshair, Users, Timer } from "lucide-react";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { Link, useLocation } from "wouter";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
@@ -21,6 +21,8 @@ import { computeClubAccolades, computeTeamAccolades, topAccolades } from "@/lib/
 import { useTeamCompetitions } from "@/hooks/useTeamCompetitions";
 import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
 import { TeamLineupsPanel } from "@/components/TeamLineupsPanel";
+import { TeamClutchPanel } from "@/components/TeamClutchPanel";
+import { usePlusAccess } from "@/lib/plus";
 import {
   Select,
   SelectContent,
@@ -135,7 +137,8 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
     enabled: !!teamName && !!leagueId,
   });
   const readableBrand = useReadableTeamColor(teamColors?.primary || brandColor);
-  const [activeTab, setActiveTab] = useState<'overview' | 'playerStats' | 'shotChart' | 'lineups'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'playerStats' | 'shotChart' | 'lineups' | 'clutch'>('overview');
+  const plus = usePlusAccess();
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring'>('Traditional');
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game');
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS');
@@ -666,11 +669,11 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
 
       <div className="border-b border-[color:var(--ch-border)]">
         <nav className="flex items-stretch gap-1 overflow-x-auto scrollbar-hide -mx-1" aria-label="Team sections">
-          {(["overview", "playerStats", "shotChart", "lineups"] as const)
-            .filter(tab => (isPreSeason ? tab === 'overview' : true) && (tab !== 'lineups' || !!lineupsSlug))
+          {(["overview", "playerStats", "shotChart", "lineups", "clutch"] as const)
+            .filter(tab => (isPreSeason ? tab === 'overview' : true) && (tab !== 'lineups' || !!lineupsSlug) && (tab !== 'clutch' || (!!lineupsSlug && plus.visible)))
             .map(tab => {
               const active = activeTab === tab;
-              const Icon = tab === 'playerStats' ? BarChart3 : tab === 'shotChart' ? Crosshair : tab === 'lineups' ? Users : LayoutDashboard;
+              const Icon = tab === 'playerStats' ? BarChart3 : tab === 'shotChart' ? Crosshair : tab === 'lineups' ? Users : tab === 'clutch' ? Timer : LayoutDashboard;
               return (
                 <button
                   key={tab}
@@ -682,7 +685,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                   }`}
                 >
                   <Icon className="w-4 h-4" style={active ? { color: readableBrand.body } : undefined} />
-                  {tab === 'playerStats' ? 'Player Stats' : tab === 'shotChart' ? 'Shot Chart' : tab === 'lineups' ? 'Lineups' : 'Overview'}
+                  {tab === 'playerStats' ? 'Player Stats' : tab === 'shotChart' ? 'Shot Chart' : tab === 'lineups' ? 'Lineups' : tab === 'clutch' ? 'Clutch' : 'Overview'}
                   <span
                     className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full transition-opacity"
                     style={{ backgroundColor: readableBrand.accent, opacity: active ? 1 : 0 }}
@@ -985,6 +988,10 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
 
       {activeTab === 'lineups' && lineupsSlug && (
         <TeamLineupsPanel slug={lineupsSlug} teamName={teamData.name || teamName} accentColor={readableBrand.body} teamRgb={brandRgb} />
+      )}
+
+      {activeTab === 'clutch' && lineupsSlug && (
+        <TeamClutchPanel slug={lineupsSlug} teamName={teamData.name || teamName} accentColor={readableBrand.body} />
       )}
 
       {activeTab === 'shotChart' && (

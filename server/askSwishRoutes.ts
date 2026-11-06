@@ -6,6 +6,7 @@ import { runAskSwish } from "./askSwish/agent";
 import { anthropicClientOptions } from "./askSwish/anthropicClient";
 import { quotaFor, recordQuestion, recordUsage, LIMITS, type Tier } from "./askSwish/quota";
 import * as d from "./askSwish/data";
+import { planFor } from "./billing/entitlements";
 
 /**
  * Ask Swish — the HTTP side.
@@ -14,8 +15,9 @@ import * as d from "./askSwish/data";
  *   GET  /api/ask/suggestions chips for an empty panel, from live data, cached
  *
  * Who pays for what: every signed-in account can ask, on the everyday model
- * within a free allowance (see askSwish/quota.ts); coach and admin accounts
- * (the paid tier) get the stronger model and a much larger allowance. Both
+ * within a free allowance (see askSwish/quota.ts); Swish+ members get a
+ * bigger allowance on the same model; coach and admin accounts get the
+ * stronger model and the largest allowance. Both
  * models are env-overridable so the split can move without a deploy of code.
  */
 
@@ -29,7 +31,10 @@ async function identify(req: Request): Promise<{ userId: string; tier: Tier } | 
   const { data, error } = await supabaseAdmin.auth.getUser(header.slice(7));
   if (error || !data.user) return null;
   const role = data.user.app_metadata?.role;
-  return { userId: data.user.id, tier: role === "admin" || role === "coach" ? "pro" : "free" };
+  if (role === "admin" || role === "coach") return { userId: data.user.id, tier: "pro" };
+  // A paid coach row also counts as pro, even before the coach role has caught up.
+  const plan = await planFor(data.user.id, role ?? null).catch(() => null);
+  return { userId: data.user.id, tier: plan?.coach ? "pro" : plan?.plus ? "plus" : "free" };
 }
 
 const WINDOW_LABEL = { hour: "this hour", week: "this week", month: "this month" } as const;
@@ -38,7 +43,7 @@ function limitMessage(tier: Tier, window: "hour" | "week" | "month", resetAt: st
   const max = LIMITS[tier][window];
   const when = resetAt ? new Date(resetAt).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "2-digit", minute: "2-digit" }) : "later";
   return tier === "free"
-    ? `You've used your ${max} free questions ${WINDOW_LABEL[window]}. The next one opens ${when} — or a coach plan lifts the limit.`
+    ? `You've used your ${max} free questions ${WINDOW_LABEL[window]}. The next one opens ${when}, or Swish+ gives you ${LIMITS.plus.month} a month.`
     : `You've reached ${max} questions ${WINDOW_LABEL[window]}. The next one opens ${when}.`;
 }
 

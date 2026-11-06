@@ -48,17 +48,56 @@ export type LineupMetric = "net" | "plusminus" | "minutes";
 // One key per person however the feed spelled them; shared with the Coaches Hub (see the module).
 export { playerNameKey };
 
-/** Groups stint rows into units per team. Stints that don't have exactly five people are skipped. */
-export function buildUnits(rows: StintRow[]): { units: Unit[]; stintsUsed: number; stintsSkipped: number } {
-  type Stint = { team_id: string; game_key: string; secs: number; pf: number; pa: number; posf: number; posa: number; members: Map<string, UnitMember> };
-  const stints = new Map<string, Stint>();
+/** One stint (a spell with the same five on the floor), with its people keyed by name. */
+export type StintGroup = {
+  id: string;
+  team_id: string;
+  game_key: string;
+  secs: number;
+  pf: number;
+  pa: number;
+  posf: number;
+  posa: number;
+  members: Map<string, UnitMember>;
+};
 
+/**
+ * Teammates who share an initial and surname (two sisters, both "S. Laditan-Adebiyi") share a name
+ * key. Where both are ever on the floor together under their full names, that team keys them by
+ * full name instead. A row giving only the initial can't be placed, so it gets no key (its stint
+ * then has four people and is left out, as any stint without five is).
+ * ("A. Gayle" and "Andre Gayle" in one stint is one player entered twice, not two.)
+ */
+export function sharedNameKeys(rows: Pick<StintRow, "stint_id" | "team_id" | "player_name">[]): (r: Pick<StintRow, "team_id" | "player_name">) => string {
+  const isInitial = (n: string) => (n.trim().split(/\s+/)[0] || "").replace(".", "").length <= 1;
+  const full = (n: string) => n.trim().replace(/\s+/g, " ").toLowerCase();
+  const perStint = new Map<string, Map<string, Set<string>>>();
   for (const r of rows) {
     const key = playerNameKey(r.player_name);
+    if (!key || !r.player_name || isInitial(r.player_name) || !r.stint_id) continue;
+    const m = perStint.get(r.stint_id) ?? new Map<string, Set<string>>();
+    m.set(`${r.team_id}|${key}`, (m.get(`${r.team_id}|${key}`) ?? new Set()).add(full(r.player_name)));
+    perStint.set(r.stint_id, m);
+  }
+  const shared = new Set<string>();
+  perStint.forEach((m) => m.forEach((names, k) => { if (names.size > 1) shared.add(k); }));
+  return (r) => {
+    const key = playerNameKey(r.player_name);
+    if (!key || !shared.has(`${r.team_id}|${key}`)) return key;
+    return r.player_name && !isInitial(r.player_name) ? `${key}#${full(r.player_name)}` : "";
+  };
+}
+
+/** Folds the five rows each stint has into one stint, keyed by stint id. */
+export function groupStints(rows: StintRow[]): Map<string, StintGroup> {
+  const keyOf = sharedNameKeys(rows);
+  const stints = new Map<string, StintGroup>();
+  for (const r of rows) {
+    const key = keyOf(r);
     if (!key || !r.stint_id || !r.team_id) continue;
     let s = stints.get(r.stint_id);
     if (!s) {
-      s = { team_id: r.team_id, game_key: r.game_key, secs: 0, pf: 0, pa: 0, posf: 0, posa: 0, members: new Map() };
+      s = { id: r.stint_id, team_id: r.team_id, game_key: r.game_key, secs: 0, pf: 0, pa: 0, posf: 0, posa: 0, members: new Map() };
       stints.set(r.stint_id, s);
     }
     // The stint's numbers repeat on each of its five rows.
@@ -72,6 +111,12 @@ export function buildUnits(rows: StintRow[]): { units: Unit[]; stintsUsed: numbe
     m.ids.set(r.player_id, (m.ids.get(r.player_id) || 0) + 1);
     if (r.player_name) m.names.set(r.player_name, (m.names.get(r.player_name) || 0) + 1);
   }
+  return stints;
+}
+
+/** Groups stint rows into units per team. Stints that don't have exactly five people are skipped. */
+export function buildUnits(rows: StintRow[]): { units: Unit[]; stintsUsed: number; stintsSkipped: number } {
+  const stints = groupStints(rows);
 
   const units = new Map<string, Unit>();
   let used = 0;

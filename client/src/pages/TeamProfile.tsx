@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
-import { Instagram, ArrowLeft, LayoutDashboard, BarChart3, Shield, Crosshair, Users, Award } from "lucide-react";
+import { Instagram, ArrowLeft, LayoutDashboard, BarChart3, Shield, Crosshair, Users, Award, Timer } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { AccoladeBadges } from "@/components/AccoladeBadges";
 import { ProfileChip } from "@/components/ProfileChip";
@@ -45,6 +45,8 @@ import { computeClubAccolades, computeTeamAccolades, topAccolades } from "@/lib/
 import { useTeamCompetitions } from "@/hooks/useTeamCompetitions";
 import { AdminCoachViewLink } from "@/components/coaches-hub/AdminTeamPicker";
 import { TeamLineupsPanel } from "@/components/TeamLineupsPanel";
+import { TeamClutchPanel } from "@/components/TeamClutchPanel";
+import { usePlusAccess } from "@/lib/plus";
 import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 import { FlatStat, StatBar } from "@/components/FlatStat";
@@ -454,7 +456,7 @@ export default function TeamProfile() {
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [isGameModalOpen, setIsGameModalOpen] = useState(false);
   const [currentLeagueId, setCurrentLeagueId] = useState<string | null>(null);
-  const [activeStatsTab, setActiveStatsTab] = useState<'overview' | 'playerStats' | 'teamStats' | 'shotChart' | 'lineups' | 'accolades'>('overview');
+  const [activeStatsTab, setActiveStatsTab] = useState<'overview' | 'playerStats' | 'teamStats' | 'shotChart' | 'lineups' | 'clutch' | 'accolades'>('overview');
   const [shotChartRange, setShotChartRange] = useState<string>("season");
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional');
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game');
@@ -473,6 +475,7 @@ export default function TeamProfile() {
     ? pageCompetition.leagueIds
     : currentCompetition ? [currentCompetition.league_id] : [];
   const lineupsSlug = leagueSlug || "";
+  const plus = usePlusAccess();
   // Every competition this club has played in (league, cup, trophy, past
   // seasons) — drives the competition switcher and the club-wide accolades.
   const decodedTeamName = teamName ? safeDecode(teamName) : "";
@@ -1542,6 +1545,7 @@ export default function TeamProfile() {
               { key: 'teamStats', label: 'Team Stats', icon: Shield },
               { key: 'shotChart', label: 'Shot Chart', icon: Crosshair },
               ...(lineupsSlug ? [{ key: 'lineups', label: 'Lineups', icon: Users }] : []),
+              ...(lineupsSlug && plus.visible ? [{ key: 'clutch', label: 'Clutch', icon: Timer }] : []),
               { key: 'accolades', label: 'Accolades', icon: Award },
             ] as { key: typeof activeStatsTab; label: string; icon: typeof LayoutDashboard }[]).map((tab) => {
               const active = activeStatsTab === tab.key;
@@ -2053,6 +2057,10 @@ export default function TeamProfile() {
             accentColor={readablePrimary.body}
             teamRgb={teamBranding?.primaryRgb}
           />
+        )}
+
+        {activeStatsTab === 'clutch' && lineupsSlug && (
+          <TeamClutchPanel slug={lineupsSlug} teamName={team.name} accentColor={readablePrimary.body} />
         )}
 
         {activeStatsTab === 'teamStats' && (

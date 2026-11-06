@@ -1,18 +1,19 @@
 import { supabaseAdmin as db } from "../supabaseServiceClient";
-import type { AskQuota, AskUsage } from "@shared/askSwish";
+import type { AskQuota, AskTier, AskUsage } from "@shared/askSwish";
 
 /**
  * Ask Swish quotas: how many questions an account may ask per hour, week
- * and month. Free members get a taste; coach and admin accounts (the paid
- * tier) get enough for a working week of prep. Counts come from
+ * and month. Free members get a taste, Swish+ members get plenty for a fan
+ * or player, and coach and admin accounts ("pro") get enough for a working
+ * week of prep. Swish+ comes with Coach, so a coach is never on "plus". Counts come from
  * ask_swish_questions, so they survive deploys and are shared across server
  * instances; until that table exists the hourly limit is kept in memory so
  * the feature still works, just without the longer windows.
  *
- * Override with ASK_SWISH_LIMITS_FREE / ASK_SWISH_LIMITS_PRO as "hour,week,month".
+ * Override with ASK_SWISH_LIMITS_FREE / _PLUS / _PRO as "hour,week,month".
  */
 
-export type Tier = "free" | "pro";
+export type Tier = AskTier;
 export interface Limits { hour: number; week: number; month: number }
 
 function parseLimits(raw: string | undefined, fallback: Limits): Limits {
@@ -22,7 +23,9 @@ function parseLimits(raw: string | undefined, fallback: Limits): Limits {
 }
 
 export const LIMITS: Record<Tier, Limits> = {
+  // Free stays at what it was before Swish+ (never take away what is free today).
   free: parseLimits(process.env.ASK_SWISH_LIMITS_FREE, { hour: 5, week: 30, month: 80 }),
+  plus: parseLimits(process.env.ASK_SWISH_LIMITS_PLUS, { hour: 30, week: 150, month: 300 }),
   pro: parseLimits(process.env.ASK_SWISH_LIMITS_PRO, { hour: 150, week: 1500, month: 5000 }),
 };
 
