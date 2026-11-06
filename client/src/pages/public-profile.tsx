@@ -1,21 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
 import { Helmet } from "react-helmet-async";
-import { BadgeCheck, BarChart3, Instagram, Loader2, Pencil, PlayCircle, UserRound } from "lucide-react";
+import { BadgeCheck, BarChart3, ChevronRight, Instagram, Loader2, Pencil, PlayCircle, Plus, UserRound } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { useAuth } from "@/hooks/use-auth";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { normalizeInstagramHandle } from "@/lib/instagram";
 import {
-  type ProfileStatLine,
   type PublicProfile,
   formatDob,
   formatHeight,
   getMyClaim,
   getPublicProfile,
-  getPublicProfileStats,
 } from "@/lib/playerClaims";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
+import { TeamLogo } from "@/components/TeamLogo";
+import { clubDisplayName } from "@shared/teamIdentity";
+import { followHref, useFollows, type Follow, type FollowKind } from "@/lib/follows";
 
 // /p/:slug — a claimed player's shareable profile. Data comes from
 // get_public_profile, which applies the age tiers server-side: under-18 and
@@ -186,168 +187,133 @@ function ProfileCard({ profile, isOwner }: { profile: PublicProfile; isOwner: bo
         </section>
       )}
 
-      <ProfileStats slug={profile.profile_slug} statsSlug={profile.stats_slug} />
+      {isOwner && <ProfilePreferences />}
     </article>
   );
 }
 
-const fmt = (n: number | null | undefined, digits = 1) => (n === null || n === undefined ? "—" : Number(n).toFixed(digits));
+const PREF_GROUPS: { kind: FollowKind; title: string; anchor: string; empty: string }[] = [
+  { kind: "league", title: "My Leagues", anchor: "leagues", empty: "Add a league" },
+  { kind: "team", title: "My Teams", anchor: "teams", empty: "Add a team" },
+  { kind: "player", title: "My Players", anchor: "players", empty: "Add a player" },
+];
 
-/** Games-weighted averages across competitions. Shooting % can't be rebuilt from averages, so it's left out. */
-function careerLine(lines: ProfileStatLine[]) {
-  const games = lines.reduce((n, l) => n + l.games, 0);
-  const avg = (key: keyof ProfileStatLine) => {
-    const withValue = lines.filter((l) => l[key] !== null);
-    const g = withValue.reduce((n, l) => n + l.games, 0);
-    return g ? withValue.reduce((n, l) => n + Number(l[key]) * l.games, 0) / g : null;
-  };
-  return {
-    games,
-    minutes_pg: avg("minutes_pg"),
-    points_pg: avg("points_pg"),
-    rebounds_pg: avg("rebounds_pg"),
-    assists_pg: avg("assists_pg"),
-  };
-}
+const ACCOUNT_LINKS = [
+  { label: "Edit my profile", href: "/my-profile/edit" },
+  { label: "Following preferences", href: "/preferences" },
+  { label: "Account and privacy", href: "/profile" },
+];
 
-/**
- * Stats across every competition the profile covers (one claim can cover
- * several players rows — one per competition). "All" lists each competition;
- * picking one shows its averages.
- */
-function ProfileStats({ slug, statsSlug }: { slug: string; statsSlug: string | null }) {
-  const [lines, setLines] = useState<ProfileStatLine[] | null>(null);
-  const [selected, setSelected] = useState<string>("all");
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
 
-  useEffect(() => {
-    let cancelled = false;
-    getPublicProfileStats(slug)
-      .then((l) => !cancelled && setLines(l))
-      .catch(() => !cancelled && setLines([]));
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
-
-  if (!lines || lines.length === 0) return null;
-
-  const current = selected === "all" ? null : lines.find((l) => l.league_id === selected) ?? null;
-  const career = careerLine(lines);
-  const label = (l: ProfileStatLine) => l.competition_name || l.team_name || "Competition";
-
-  return (
-    <section className="ch-rise space-y-4" style={{ animationDelay: "120ms" }}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="ch-section-title">Stats</h2>
-        {statsSlug && (
-          <Link href={`/player/${statsSlug}`} className="text-[13px] font-medium text-[color:var(--ch-accent)] hover:underline underline-offset-2">
-            Full game log →
-          </Link>
+/** The round badge: a player's photo, or a team or league logo on a plain disc. */
+function FollowBadge({ f }: { f: Follow }) {
+  const disc = "h-[72px] w-[72px] rounded-full overflow-hidden flex items-center justify-center border border-[color:var(--ch-border)]";
+  if (f.kind === "player") {
+    return (
+      <span className={disc}>
+        {f.image_url ? (
+          <img src={f.image_url} alt="" className="h-full w-full object-cover object-top" loading="lazy" />
+        ) : (
+          <span className="ch-display text-xl font-bold text-[color:var(--ch-text-2)]">{initials(f.label)}</span>
         )}
-      </div>
-
-      {lines.length > 1 && (
-        <nav className="flex flex-wrap gap-2" aria-label="Filter by competition">
-          <button
-            type="button"
-            data-active={selected === "all"}
-            onClick={() => setSelected("all")}
-            className="ch-chip inline-flex items-center h-8 px-3 text-[13px]"
-          >
-            All competitions
-          </button>
-          {lines.map((l) => (
-            <button
-              key={l.league_id}
-              type="button"
-              data-active={selected === l.league_id}
-              onClick={() => setSelected(l.league_id)}
-              className="ch-chip inline-flex items-center h-8 px-3 text-[13px] max-w-full"
-            >
-              <span className="truncate">{label(l)}</span>
-            </button>
-          ))}
-        </nav>
-      )}
-
-      {current || lines.length === 1 ? (
-        <CompetitionTiles line={current ?? lines[0]} />
+      </span>
+    );
+  }
+  if (f.kind === "team" && f.league_id) {
+    return (
+      <span className={disc}>
+        <TeamLogo teamName={f.label} leagueId={f.league_id} size={46} />
+      </span>
+    );
+  }
+  return (
+    <span className={disc}>
+      {f.image_url ? (
+        <img src={f.image_url} alt="" className="h-[46px] w-[46px] object-contain" loading="lazy" />
       ) : (
-        <div className="overflow-x-auto -mx-1">
-          <table className="w-full min-w-[560px] text-[13px]">
-            <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-[color:var(--ch-muted)]">
-                <th className="px-1 py-2 font-medium">Competition</th>
-                <th className="px-1 py-2 font-medium text-right">GP</th>
-                <th className="px-1 py-2 font-medium text-right">MIN</th>
-                <th className="px-1 py-2 font-medium text-right">PTS</th>
-                <th className="px-1 py-2 font-medium text-right">REB</th>
-                <th className="px-1 py-2 font-medium text-right">AST</th>
-                <th className="px-1 py-2 font-medium text-right">FG%</th>
-                <th className="px-1 py-2 font-medium text-right">3P%</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[color:var(--ch-border)]">
-              {lines.map((l) => (
-                <tr key={l.league_id} className="cursor-pointer hover:bg-[color:var(--ch-surface-3)]" onClick={() => setSelected(l.league_id)}>
-                  <td className="px-1 py-2.5">
-                    <span className="font-medium text-[color:var(--ch-text)]">{label(l)}</span>
-                    {l.team_name && <span className="block text-[12px] text-[color:var(--ch-text-2)]">{l.team_name}</span>}
-                  </td>
-                  <td className="px-1 py-2.5 text-right tabular-nums">{l.games}</td>
-                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.minutes_pg)}</td>
-                  <td className="px-1 py-2.5 text-right tabular-nums font-semibold">{fmt(l.points_pg)}</td>
-                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.rebounds_pg)}</td>
-                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.assists_pg)}</td>
-                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.fg_pct)}</td>
-                  <td className="px-1 py-2.5 text-right tabular-nums">{fmt(l.three_pct)}</td>
-                </tr>
-              ))}
-              <tr className="font-semibold text-[color:var(--ch-text)]">
-                <td className="px-1 py-2.5">Career</td>
-                <td className="px-1 py-2.5 text-right tabular-nums">{career.games}</td>
-                <td className="px-1 py-2.5 text-right tabular-nums">{fmt(career.minutes_pg)}</td>
-                <td className="px-1 py-2.5 text-right tabular-nums">{fmt(career.points_pg)}</td>
-                <td className="px-1 py-2.5 text-right tabular-nums">{fmt(career.rebounds_pg)}</td>
-                <td className="px-1 py-2.5 text-right tabular-nums">{fmt(career.assists_pg)}</td>
-                <td className="px-1 py-2.5 text-right">—</td>
-                <td className="px-1 py-2.5 text-right">—</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <span className="ch-display text-xl font-bold text-[color:var(--ch-text-2)]">{initials(f.label)}</span>
       )}
-    </section>
+    </span>
   );
 }
 
-function CompetitionTiles({ line }: { line: ProfileStatLine }) {
-  const tiles: { label: string; value: string }[] = [
-    { label: "Points", value: fmt(line.points_pg) },
-    { label: "Rebounds", value: fmt(line.rebounds_pg) },
-    { label: "Assists", value: fmt(line.assists_pg) },
-    { label: "Steals", value: fmt(line.steals_pg) },
-    { label: "Blocks", value: fmt(line.blocks_pg) },
-    { label: "Minutes", value: fmt(line.minutes_pg) },
-  ];
+/**
+ * Only the owner sees this: the leagues, teams and players they follow,
+ * which lead their Home and Feed. "Edit" opens that part of /preferences.
+ */
+function ProfilePreferences() {
+  const { data: follows, isLoading } = useFollows();
+
   return (
-    <div className="space-y-3">
-      <p className="text-[13px] text-[color:var(--ch-text-2)]">
-        {[line.team_name, line.season].filter(Boolean).join(" · ")}
-        {line.team_name || line.season ? " · " : ""}
-        {line.games} {line.games === 1 ? "game" : "games"} · per game
-      </p>
-      <dl className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-        {tiles.map((t) => (
-          <div key={t.label} className="rounded-xl bg-[color:var(--ch-surface-3)] px-3 py-2.5">
-            <dt className="text-[11px] uppercase tracking-wide text-[color:var(--ch-muted)]">{t.label}</dt>
-            <dd className="mt-0.5 text-lg font-semibold tabular-nums text-[color:var(--ch-text)]">{t.value}</dd>
+    <section className="ch-rise space-y-7" style={{ animationDelay: "120ms" }}>
+      {PREF_GROUPS.map((g) => {
+        const items = (follows ?? []).filter((f) => f.kind === g.kind);
+        return (
+          <div key={g.kind}>
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="ch-display uppercase font-bold tracking-tight text-[1.5rem] leading-none text-[color:var(--ch-text)]">
+                {g.title}
+              </h2>
+              <Link
+                href={`/preferences#${g.anchor}`}
+                className="text-[15px] text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
+              >
+                Edit
+              </Link>
+            </div>
+
+            {isLoading ? (
+              <Loader2 className="mt-4 h-5 w-5 animate-spin text-[color:var(--ch-muted)]" />
+            ) : (
+              <ul className="mt-4 -mx-4 px-4 flex gap-4 overflow-x-auto snap-x pb-1 [scrollbar-width:none]">
+                {items.map((f) => (
+                  <li key={f.id} className="snap-start shrink-0 w-[84px]">
+                    <Link href={followHref(f)} className="flex flex-col items-center gap-2 text-center">
+                      <FollowBadge f={f} />
+                      <span className="text-[13px] leading-tight text-[color:var(--ch-text)] break-words w-full">
+                        {f.kind === "team" ? clubDisplayName(f.label) : f.label}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+                {items.length === 0 && (
+                  <li className="snap-start shrink-0 w-[84px]">
+                    <Link href={`/preferences#${g.anchor}`} className="flex flex-col items-center gap-2 text-center">
+                      <span className="h-[72px] w-[72px] rounded-full border border-dashed border-[color:var(--ch-border)] flex items-center justify-center text-[color:var(--ch-text-2)]">
+                        <Plus className="h-6 w-6" />
+                      </span>
+                      <span className="text-[13px] leading-tight text-[color:var(--ch-text-2)]">{g.empty}</span>
+                    </Link>
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
-        ))}
-      </dl>
-      <p className="text-[13px] text-[color:var(--ch-text-2)] tabular-nums">
-        FG {fmt(line.fg_pct)}% · 3P {fmt(line.three_pct)}% · FT {fmt(line.ft_pct)}%
-      </p>
-    </div>
+        );
+      })}
+
+      <div>
+        <h2 className="ch-display uppercase font-bold tracking-tight text-[1.5rem] leading-none text-[color:var(--ch-text)]">My Account</h2>
+        <nav className="mt-4 divide-y divide-[color:var(--ch-border)] border-y border-[color:var(--ch-border)]">
+          {ACCOUNT_LINKS.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="flex items-center justify-between gap-3 py-4 text-[16px] text-[color:var(--ch-text)] hover:text-[color:var(--ch-accent)]"
+            >
+              {l.label}
+              <ChevronRight className="h-5 w-5 shrink-0 text-[color:var(--ch-text-2)]" />
+            </Link>
+          ))}
+        </nav>
+      </div>
+    </section>
   );
 }
