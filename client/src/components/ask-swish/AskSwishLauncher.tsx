@@ -40,9 +40,12 @@ export default function AskSwishLauncher() {
           onClick={() => open()}
           aria-label="Ask Swish"
           data-testid="ask-swish-launcher"
-          className="fixed z-[9000] bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 lg:left-auto lg:translate-x-0 lg:right-6 lg:bottom-6 inline-flex items-center gap-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-neutral-900 pl-3.5 pr-4 py-2.5 text-sm font-semibold shadow-lg shadow-black/20 hover:shadow-xl hover:-translate-y-px transition-all"
+          className="group fixed z-[9000] bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 lg:left-auto lg:translate-x-0 lg:right-6 lg:bottom-6 inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-white/[0.12] bg-white dark:bg-[#0a0a0f] text-slate-900 dark:text-white pl-1.5 pr-4 py-1.5 text-sm font-semibold shadow-[0_10px_30px_-14px_rgba(15,23,42,0.45)] dark:shadow-[0_0_0_1px_rgba(249,115,22,0.08),0_18px_40px_-18px_rgba(249,115,22,0.55)] hover:border-orange-400 dark:hover:border-orange-500/70 hover:-translate-y-px active:scale-[0.98] transition-all"
         >
-          <Sparkles className="w-4 h-4 text-orange-400 dark:text-orange-500" aria-hidden="true" />
+          {/* The same orange disc as the send button inside, so the pill reads as the bar it opens. */}
+          <span className="h-8 w-8 shrink-0 rounded-full grid place-items-center bg-orange-500 text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,0.8)]" aria-hidden="true">
+            <Sparkles className="w-4 h-4" />
+          </span>
           Ask Swish
         </button>
       )}
@@ -50,7 +53,7 @@ export default function AskSwishLauncher() {
         <div
           role="dialog"
           aria-label="Ask Swish"
-          className="fixed z-[9000] inset-0 lg:inset-auto lg:top-0 lg:right-0 lg:bottom-0 lg:w-[420px] xl:w-[460px] bg-white dark:bg-[#0a0a0f] lg:border-l lg:border-slate-200 lg:dark:border-neutral-800 lg:shadow-2xl animate-in slide-in-from-bottom lg:slide-in-from-right duration-200"
+          className="fixed z-[9000] inset-0 lg:inset-auto lg:top-0 lg:right-0 lg:bottom-0 lg:w-[420px] xl:w-[460px] bg-slate-50 dark:bg-[#0a0a0f] lg:border-l lg:border-slate-200 lg:dark:border-white/10 lg:shadow-2xl animate-in slide-in-from-bottom lg:slide-in-from-right duration-200"
         >
           <AskSwishPanel onClose={close} />
         </div>

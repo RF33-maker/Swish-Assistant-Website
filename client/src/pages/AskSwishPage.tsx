@@ -23,13 +23,14 @@ export default function AskSwishPage() {
   }, [search]);
 
   return (
-    <div className={`min-h-screen bg-slate-50 dark:bg-[#0a0a0f] ${SITE_RAIL_OFFSET}`}>
+    <div className={`flex h-[100dvh] flex-col bg-slate-50 dark:bg-[#0a0a0f] ${SITE_RAIL_OFFSET}`}>
       <Helmet>
         <title>Ask Swish — British basketball stats, answered</title>
         <meta name="description" content="Ask about standings, scores, tip-off times, player and team stats, advanced ratings and on/off impact across British basketball." />
       </Helmet>
       <SiteHeader />
-      <main className="h-[calc(100vh-65px)] lg:h-[calc(100vh-65px)]">
+      {/* The panel fills whatever the header leaves, so the bar sits at the foot of the screen. */}
+      <main className="ask-page-main flex-1 min-h-0">
         <AskSwishPanel size="page" />
       </main>
     </div>

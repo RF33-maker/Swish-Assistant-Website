@@ -22,6 +22,8 @@ interface AskSwishContextValue {
   toggle: () => void;
   scope: AskScope | null;
   setScope: (scope: AskScope | null) => void;
+  /** Ask about everything rather than the page you came from (until a page sets a scope again). */
+  clearScope: () => void;
   surface: AskSurface;
   setSurface: (surface: AskSurface) => void;
   turns: AskTurn[];
@@ -79,6 +81,8 @@ export function AskSwishProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const clearScope = useCallback(() => setScopeState(null), []);
+
   const stop = useCallback(() => { abortRef.current?.abort(); abortRef.current = null; setBusy(false); }, []);
 
   const ask = useCallback((question: string) => {
@@ -126,7 +130,7 @@ export function AskSwishProvider({ children }: { children: ReactNode }) {
   const toggle = useCallback(() => setIsOpen((v) => !v), []);
   const reset = useCallback(() => { stop(); setTurns([]); }, [stop]);
 
-  const value = useMemo<AskSwishContextValue>(() => ({ isOpen, open, close, toggle, scope, setScope, surface, setSurface, turns, busy, ask, stop, reset, quota, refreshQuota, onAnswer }), [isOpen, open, close, toggle, scope, setScope, surface, turns, busy, ask, stop, reset, quota, refreshQuota]);
+  const value = useMemo<AskSwishContextValue>(() => ({ isOpen, open, close, toggle, scope, setScope, clearScope, surface, setSurface, turns, busy, ask, stop, reset, quota, refreshQuota, onAnswer }), [isOpen, open, close, toggle, scope, setScope, clearScope, surface, turns, busy, ask, stop, reset, quota, refreshQuota]);
   return <AskSwishContext.Provider value={value}>{children}</AskSwishContext.Provider>;
 }
 
