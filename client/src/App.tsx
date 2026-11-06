@@ -49,6 +49,7 @@ import UnconfirmedAccountsPage from "@/pages/admin/unconfirmed-accounts";
 import PlayerClaimsAdminPage from "@/pages/admin/player-claims";
 import ClaimProfilePage from "@/pages/claim-profile";
 import PublicProfilePage from "@/pages/public-profile";
+import PreferencesPage from "@/pages/PreferencesPage";
 import EditMyProfilePage from "@/pages/edit-my-profile";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
@@ -126,6 +127,7 @@ function Router() {
       <Route path="/swish-score" component={SwishScorePage} />
       <Route path="/news/:slug" component={NewsArticlePage} />
       <Route path="/p/:slug" component={PublicProfilePage} />
+      <Route path="/preferences" component={PreferencesPage} />
       {/* Handles signed-out and unconfirmed visitors itself, so it can send them back here after sign-in. */}
       <Route path="/claim" component={ClaimProfilePage} />
 
