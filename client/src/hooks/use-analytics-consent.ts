@@ -36,3 +36,34 @@ export function useAnalyticsConsent(): boolean {
 
   return hasConsent;
 }
+
+function readChoiceMade(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * True once the visitor has answered the cookie banner either way, so the
+ * banner has gone. Things pinned to the foot of the screen (the Ask Swish
+ * pill) wait for this so they never sit on top of the banner's buttons.
+ */
+export function useCookieChoiceMade(): boolean {
+  const [made, setMade] = useState<boolean>(readChoiceMade);
+
+  useEffect(() => {
+    // The banner closes on the click even if storage fails, so trust the event.
+    const onChoice = () => setMade(true);
+    const onStorage = () => setMade(readChoiceMade());
+    window.addEventListener("cookieConsentChanged", onChoice);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("cookieConsentChanged", onChoice);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  return made;
+}

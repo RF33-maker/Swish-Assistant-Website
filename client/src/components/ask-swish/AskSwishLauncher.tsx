@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Sparkles } from "lucide-react";
 import { useAskSwish } from "./AskSwishProvider";
 import AskSwishPanel from "./AskSwishPanel";
+import { useCookieChoiceMade } from "@/hooks/use-analytics-consent";
 
 /**
  * The one entry point mounted for the whole site: a pill (bottom-right on
@@ -18,6 +19,9 @@ export default function AskSwishLauncher() {
   const [location] = useLocation();
   const { isOpen, open, close } = useAskSwish();
   const hidden = HIDDEN_ON.some((p) => location === p || location.startsWith(p));
+  // On phones the pill lands on the cookie banner's buttons, so a tap meant
+  // for "Accept all" opened Ask instead. Hold it back until the banner's gone.
+  const cookieChoiceMade = useCookieChoiceMade();
 
   useEffect(() => {
     if (!isOpen) return;
@@ -34,7 +38,7 @@ export default function AskSwishLauncher() {
 
   return (
     <>
-      {!isOpen && (
+      {!isOpen && cookieChoiceMade && (
         <button
           type="button"
           onClick={() => open()}

@@ -34,11 +34,12 @@ function getStoredChoice(): ConsentChoice {
 function storeChoice(choice: "all" | "essential"): void {
   try {
     localStorage.setItem(STORAGE_KEY, choice);
-    // Notify same-tab listeners (e.g. useAnalyticsConsent hook).
-    window.dispatchEvent(new CustomEvent("cookieConsentChanged"));
   } catch {
     // localStorage unavailable — banner will reappear on next load.
   }
+  // Notify same-tab listeners (useAnalyticsConsent, and the Ask Swish pill
+  // waiting for the banner to go) even if storage failed.
+  window.dispatchEvent(new CustomEvent("cookieConsentChanged"));
 }
 
 /**
@@ -68,8 +69,9 @@ export function CookieBanner() {
   };
 
   return (
+    // Above the Ask Swish layer (z-9000) so nothing floating can cover the buttons.
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg px-4 py-4 md:px-8 md:py-5"
+      className="fixed bottom-0 left-0 right-0 z-[9500] bg-white border-t border-gray-200 shadow-lg px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-8 md:py-5"
       role="dialog"
       aria-label="Cookie consent"
       aria-modal="false"
@@ -91,7 +93,7 @@ export function CookieBanner() {
             variant="outline"
             size="sm"
             onClick={() => accept("essential")}
-            className="border-gray-300 text-gray-600 hover:bg-gray-50"
+            className="border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-700"
             data-testid="cookie-essential-only"
           >
             Essential only
