@@ -11,6 +11,7 @@ import { useScores } from "@/lib/scores"
 import { useNavLeagues } from "@/lib/navLeagues"
 import { claimEntry, useMyClaim, usePendingClaimCount } from "@/lib/playerClaims"
 import { compactLogoUrl } from "@/lib/compactLogo"
+import { LiveDot } from "@/components/ui/live-dot"
 
 /**
  * The site's navigation list, rendered in two places from one source:
@@ -31,7 +32,7 @@ import { compactLogoUrl } from "@/lib/compactLogo"
 function LiveCount({ count }: { count: number }) {
   return (
     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 dark:text-red-400">
-      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+      <LiveDot />
       {count} live
     </span>
   )
@@ -91,16 +92,20 @@ export default function SiteNav({
   // One row's contents: the icon in a fixed slot (so collapsed icons line up
   // in one column), the label, and anything trailing such as a badge. `dot`
   // marks the icon while the rail is collapsed and the trailing badge that
-  // normally carries the news (live games, pending claims) is hidden.
-  const row = (icon: ReactNode, label: ReactNode, opts: { extra?: ReactNode; dot?: string } = {}) => (
+  // normally carries the news (live games, pending claims) is hidden. The
+  // dot sits inside a wrapper that does the fading, so an animated dot (the
+  // live one) can't override the fade and keep blinking with the rail open.
+  const row = (icon: ReactNode, label: ReactNode, opts: { extra?: ReactNode; dot?: ReactNode } = {}) => (
     <>
       <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
         {icon}
         {rail && opts.dot && (
           <span
             aria-hidden="true"
-            className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ring-2 ring-white dark:ring-[#0a0a0f] transition-opacity duration-200 ${opts.dot} ${expanded ? "opacity-0" : "opacity-100"}`}
-          />
+            className={`absolute -right-0.5 -top-0.5 flex h-2 w-2 rounded-full ring-2 ring-white dark:ring-[#0a0a0f] transition-opacity duration-200 ${expanded ? "opacity-0" : "opacity-100"}`}
+          >
+            {opts.dot}
+          </span>
         )}
       </span>
       <span className={`truncate ${fade} ${rail ? "transition-[opacity,transform] group-hover/item:translate-x-0.5" : ""}`}>{label}</span>
@@ -131,7 +136,7 @@ export default function SiteNav({
       {internalLink("/scores", location.startsWith("/scores"), row(
         <Radio className="h-4 w-4" aria-hidden="true" />,
         "Scores",
-        liveCount > 0 ? { extra: <LiveCount count={liveCount} />, dot: "bg-red-500 animate-pulse" } : {},
+        liveCount > 0 ? { extra: <LiveCount count={liveCount} />, dot: <LiveDot className="h-full w-full" /> } : {},
       ))}
       {internalLink("/news", location.startsWith("/news"), row(<Newspaper className="h-4 w-4" aria-hidden="true" />, "News"))}
       {/* Opens the assistant over the current page; on the /ask page itself
@@ -216,7 +221,7 @@ export default function SiteNav({
                       {pendingClaims}
                     </span>
                   ),
-                  dot: "bg-orange-500",
+                  dot: <span className="h-full w-full rounded-full bg-orange-500" />,
                 }
               : {},
           ), "player-claims")}

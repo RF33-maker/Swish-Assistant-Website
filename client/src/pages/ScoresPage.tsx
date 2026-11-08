@@ -5,6 +5,7 @@ import { CalendarClock } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import ScoreGameCard from "@/components/scores/ScoreGameCard";
 import { dayLabel, useScores, type ScoreGame } from "@/lib/scores";
+import { LiveDot } from "@/components/ui/live-dot";
 
 /**
  * /scores — every live game, what's coming up next, and results from the
@@ -40,7 +41,7 @@ function Section({ title, meta, live = false, children }: { title: string; meta?
     <section className="flex flex-col gap-3" aria-label={title}>
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="flex items-center gap-2 ch-display uppercase font-bold tracking-tight leading-none text-[1.5rem] md:text-[1.75rem] text-[color:var(--ch-text)]">
-          {live && <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />}
+          {live && <LiveDot className="h-2 w-2" />}
           {title}
         </h2>
         {meta && <span className="text-xs font-medium text-[color:var(--ch-muted)]">{meta}</span>}
@@ -100,7 +101,7 @@ export default function ScoresPage() {
             <span>{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</span>
             {live.length > 0 && (
               <span className="inline-flex items-center gap-1.5 normal-case tracking-normal text-[12px] font-semibold text-red-600 dark:text-red-400">
-                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+                <LiveDot className="h-2 w-2" />
                 {live.length} live now
               </span>
             )}

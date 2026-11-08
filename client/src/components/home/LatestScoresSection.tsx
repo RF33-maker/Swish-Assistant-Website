@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { TeamLogo } from "@/components/TeamLogo";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useScores } from "@/lib/scores";
+import { LiveDot } from "@/components/ui/live-dot";
 
 interface LeagueRow {
   league_id: string;
@@ -460,7 +461,7 @@ export default function LatestScoresSection() {
                                 {formatDate(g.match_time)}
                               </span>
                               <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded">
-                                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                <LiveDot />
                                 LIVE
                               </span>
                             </div>

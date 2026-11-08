@@ -10,6 +10,7 @@ import { KEY_MOMENT_IMPORTANCE, keyMoments, type CommentaryItem } from "@/lib/li
 import type { CommentaryPlayer } from "@/hooks/useLiveCommentary";
 import { flowTint, usePacedReveal } from "@/hooks/usePacedReveal";
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
+import { LiveDot } from "@/components/ui/live-dot";
 
 interface ChartShot {
   x: number;
@@ -224,10 +225,7 @@ export function LiveFeedPanel({ items, players, shots, homeTeam, awayTeam, homeC
       <div className={`flex items-center justify-between gap-2 border-b border-[color:var(--ch-border)] py-3 pl-4 ${inSheet ? "pr-12" : "pr-4"}`}>
         <h3 className="ch-eyebrow flex items-center gap-2">
           {isLive && (
-            <span className="relative flex h-2 w-2" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75 motion-reduce:animate-none" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-            </span>
+            <LiveDot className="h-2 w-2" />
           )}
           {isLive ? "Live feed" : "Game feed"}
         </h3>
@@ -335,7 +333,7 @@ export function LiveFeedStrip(props: FeedProps) {
       >
         <span className="flex items-center justify-between px-4 pt-3 pb-1">
           <span className="ch-eyebrow flex items-center gap-2">
-            {props.isLive && <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse motion-reduce:animate-none" aria-hidden="true" />}
+            {props.isLive && <LiveDot className="h-2 w-2" />}
             {props.isLive ? "Live feed" : "Game feed"}
           </span>
           <span className="flex items-center text-xs font-semibold text-orange-500">See all <ChevronRight className="h-3.5 w-3.5" /></span>

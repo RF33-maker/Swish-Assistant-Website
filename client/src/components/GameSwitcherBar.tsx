@@ -5,6 +5,7 @@ import EntityLink from "./EntityLink";
 import { generateGameSlug } from "@/lib/gameSlug";
 import { periodBreakLabel, periodLabel } from "@/lib/periodLabel";
 import { CheckCircle2, Clock, Radio } from "lucide-react";
+import { LiveDot } from "@/components/ui/live-dot";
 
 interface Game {
   game_key: string;
@@ -231,7 +232,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
               : "border-transparent text-slate-500 hover:text-slate-800 dark:text-white/60 dark:hover:text-white/80"
           }`}
         >
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${liveCount > 0 ? 'bg-red-500 animate-pulse' : 'bg-slate-300 dark:bg-white/30'}`}></span>
+          {liveCount > 0 ? <LiveDot className="h-2 w-2" /> : <span className="w-2 h-2 rounded-full flex-shrink-0 bg-slate-300 dark:bg-white/30"></span>}
           <span>Live</span>
           {tabCounts.live > 0 && (
             <span className="text-[10px] bg-red-500/15 text-red-600 dark:bg-red-500/20 dark:text-red-400 rounded-full px-1.5 py-0.5 min-w-[18px] text-center font-bold">{tabCounts.live}</span>
@@ -308,7 +309,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
 
                   {category === 'live' && (
                     <span className="text-[9px] sm:text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                      <LiveDot />
                       {game.current_break
                         ? game.current_break
                         : periodLabel(game.current_period, game.current_period_type)

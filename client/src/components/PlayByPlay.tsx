@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flowTint, usePacedReveal } from "@/hooks/usePacedReveal";
 import { clockSeconds } from "@/lib/playPacing";
+import { LiveDot } from "@/components/ui/live-dot";
 
 export interface PlayByPlayEvent {
   id: number | string;
@@ -235,10 +236,7 @@ export default function PlayByPlay<T extends PlayByPlayEvent>({
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--ch-border-strong)] pb-3">
         <h3 className="ch-section-title flex items-center gap-2">
           {isLive && (
-            <span className="relative flex h-2 w-2" aria-hidden="true">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75 motion-reduce:animate-none" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-            </span>
+            <LiveDot className="h-2 w-2" />
           )}
           Play by play
         </h3>

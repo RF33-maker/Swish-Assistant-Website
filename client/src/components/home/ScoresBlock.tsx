@@ -4,6 +4,7 @@ import { ArrowRight, CalendarClock, ChevronRight } from "lucide-react";
 import ScoreGameCard from "@/components/scores/ScoreGameCard";
 import { dayLabel, pickAcrossLeagues, useScores, type ScoreDay, type ScoreGame } from "@/lib/scores";
 import { Reveal } from "@/components/home/motion";
+import { LiveDot } from "@/components/ui/live-dot";
 
 /**
  * Homepage scores panel — the first real content on the page. Live, upcoming
@@ -82,7 +83,7 @@ export default function ScoresBlock() {
               onClick={() => { setTab(t.id); setChosen(true); }}
               className="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-semibold"
             >
-              {t.id === "live" && t.count > 0 && <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />}
+              {t.id === "live" && t.count > 0 && <LiveDot />}
               {t.label}
               {!isLoading && <span className="tabular-nums text-[color:var(--ch-muted)]">{t.count}</span>}
             </button>
