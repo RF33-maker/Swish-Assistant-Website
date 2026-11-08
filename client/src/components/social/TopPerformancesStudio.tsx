@@ -2,7 +2,7 @@ import { Trophy, Loader2, Filter, Search, ChevronDown, RefreshCw, AlertTriangle,
 import { PostQueueSection } from "@/components/social/PostQueueSection";
 import { PlayerPhotoControl } from "@/components/social/PlayerPhotoControl";
 import { BTN_GHOST, ERROR, FIELD, HINT, Panel, RangeField, SaveActions, SELECT_MENU } from "@/components/social/studioUi";
-import type { PlayerPerformanceV1Data } from "@/types/socialCards";
+import type { PerformanceRank, PlayerPerformanceV1Data } from "@/types/socialCards";
 import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { normalizeTeamName } from "@/lib/teamUtils";
@@ -12,6 +12,7 @@ import { photoChangeReaches, playerPhotoUrl, usePlayerPhotoChange } from "@/lib/
 import { HALLOWEEN_SUFFIX, renderSocialCardToBlob } from "@/lib/socialCardCapture";
 import { isHalloweenSeason } from "@/lib/cardStyle";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
+import { DEFAULT_ACCENT, PERFORMANCE_STYLES, isPerformanceStyle } from "@/lib/generatePerformanceStyles";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { useStoredState } from "@/hooks/useStoredState";
 import {
@@ -222,6 +223,48 @@ const defaultData: PlayerPerformanceV1Data = {
   photo_url: "",
 };
 
+/** Where this game's points sit among the competition's games this season, with the five best (the Ranked style). */
+async function fetchPointsRank(leagueId: string, perf: TopPerformance): Promise<PerformanceRank | undefined> {
+  const points = perf.spoints || 0;
+  if (!leagueId || points <= 0) return undefined;
+  const [{ data: best, error: bestError }, { count, error: countError }] = await Promise.all([
+    supabase
+      .from("player_stats")
+      .select("id, full_name, spoints")
+      .eq("league_id", leagueId)
+      .order("spoints", { ascending: false })
+      .limit(5),
+    supabase
+      .from("player_stats")
+      .select("id", { count: "exact", head: true })
+      .eq("league_id", leagueId)
+      .gt("spoints", points),
+  ]);
+  if (bestError || countError) return undefined;
+  const top = (best || []).map((row: any, i: number) => ({
+    rank: i + 1,
+    name: String(row.full_name || ""),
+    points: Number(row.spoints) || 0,
+    self: row.id === perf.id,
+  }));
+  const mine = top.find((entry) => entry.self);
+  // The count of better games places it; inside the top five the list's own order wins, so the two agree.
+  const ordinal = mine ? mine.rank : (count ?? 0) + 1;
+  if (!mine) {
+    // Below the top five: four of them, then this game in its place.
+    top.splice(4, top.length - 4, { rank: ordinal, name: perf.player_name, points, self: true });
+  }
+  return { ordinal, top };
+}
+
+/** The date the game was played, from its schedule row. */
+async function fetchGameDate(gameKey: string | undefined): Promise<string | undefined> {
+  if (!gameKey) return undefined;
+  const { data, error } = await supabase.from("game_schedule").select("matchtime").eq("game_key", gameKey).maybeSingle();
+  if (error || !data?.matchtime) return undefined;
+  return String(data.matchtime);
+}
+
 async function buildPlayerPerformanceCardData(
   perf: TopPerformance,
   competition?: CompetitionOption,
@@ -246,9 +289,11 @@ async function buildPlayerPerformanceCardData(
   const leagueId = perf.league_id || '';
   const displayCompetitionId = perf.display_competition_id || leagueId;
   const extraLeagueIds = displayCompetitionId !== leagueId ? [displayCompetitionId] : undefined;
-  const [playerTeamLogo, opponentLogo] = await Promise.all([
+  const [playerTeamLogo, opponentLogo, pointsRank, gameDate] = await Promise.all([
     getTeamLogoCached({ leagueId, teamName: perf.team, extraLeagueIds }),
     getTeamLogoCached({ leagueId, teamName: perf.opponent, extraLeagueIds }),
+    fetchPointsRank(leagueId, perf).catch(() => undefined),
+    fetchGameDate(perf.game_key).catch(() => undefined),
   ]);
 
   let leagueName = competition?.name || "";
@@ -288,15 +333,17 @@ async function buildPlayerPerformanceCardData(
     }
   }
 
+  let cutoutUrl = "";
   if (perf.player_id) {
     const { data: playerData } = await supabase
       .from("players")
-      .select("photo_focus_y")
+      .select("photo_focus_y, photo_path_bg_removed")
       .eq("id", perf.player_id)
       .single();
     if (playerData?.photo_focus_y !== undefined && playerData?.photo_focus_y !== null) {
       photoFocusY = playerData.photo_focus_y;
     }
+    if (playerData?.photo_path_bg_removed) cutoutUrl = playerPhotoUrl(playerData.photo_path_bg_removed);
   }
 
   let maskedPhotoUrl = photoUrl;
@@ -331,18 +378,22 @@ async function buildPlayerPerformanceCardData(
     away_logo_url: opponentLogo || "",
     photo_url: maskedPhotoUrl,
     background_photo_url: photoUrl,
+    cutout_photo_url: cutoutUrl,
     photo_focus_y: photoFocusY,
     photo_zoom: 1,
     photo_position_x: 50,
     photo_position_y: photoFocusY,
     league_name: leagueName,
     league_logo_url: leagueLogoUrl,
+    game_date: gameDate,
+    points_rank: pointsRank,
   };
 }
 
 const TEMPLATES = [
   { value: "default", label: "Swish Default" },
   { value: "reba-sl", label: "REBA SL" },
+  ...PERFORMANCE_STYLES.map((style) => ({ value: style.id, label: style.label })),
   { value: "photo-overlay", label: "Photo Overlay" },
   { value: "photo-overlay-reel", label: "Photo Overlay · Reel Cover" },
 ];
@@ -373,6 +424,8 @@ export default function TopPerformancesStudio() {
   const [performanceSearch, setPerformanceSearch] = useStoredState<string>(`${STORE}:search`, "", "session");
   const timeFilter = TIME_FILTERS.some((t) => t.value === storedTimeFilter) ? storedTimeFilter : "all-time";
   const selectedTemplate = TEMPLATES.some((t) => t.value === storedTemplate) ? storedTemplate : "default";
+  // The accent colour of the canvas styles, kept across visits.
+  const [accentHex, setAccentHex] = useStoredState<string>(`${STORE}:accent`, DEFAULT_ACCENT);
   // Seasonal: a light Halloween layer (cobweb, bats, a spider) over whichever template is picked.
   const halloweenSeason = isHalloweenSeason();
   const [halloweenTouch, setHalloweenTouch] = useStoredState<boolean>(`${STORE}:halloween`, true);
@@ -971,6 +1024,24 @@ export default function TopPerformancesStudio() {
     }
   }, []);
 
+  /** A new accent colour for every card in the queue, and a redraw of the one on show. */
+  const changeAccent = useCallback((hex: string) => {
+    const next = /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : DEFAULT_ACCENT;
+    setAccentHex(next);
+    setQueueCardCache((previous) =>
+      Object.fromEntries(Object.entries(previous).map(([id, card]) => [id, { ...card, accent_hex: next }])),
+    );
+    if (!selectedId || selectedData === defaultData) return;
+    const nextData = { ...selectedData, accent_hex: next };
+    setSelectedData(nextData);
+    setQueueCardCache((previous) => ({ ...previous, [selectedId]: nextData }));
+    if (framingPreviewTimerRef.current !== null) window.clearTimeout(framingPreviewTimerRef.current);
+    framingPreviewTimerRef.current = window.setTimeout(() => {
+      generatePreview(nextData, cardTemplate);
+      framingPreviewTimerRef.current = null;
+    }, 160);
+  }, [cardTemplate, generatePreview, selectedData, selectedId, setAccentHex]);
+
   const resetPhotoFraming = () => {
     applyPhotoFraming({
       photo_zoom: 1,
@@ -992,6 +1063,7 @@ export default function TopPerformancesStudio() {
     const brand = competition ? leagueBrandById.get(competition.brand_id) : undefined;
     const cardData = await buildPlayerPerformanceCardData(perf, competition, brand);
     cardData.sponsor_logo_urls = sponsorLogos.map((logo) => logo.url);
+    cardData.accent_hex = accentHex;
     return cardData;
   };
 
@@ -1096,6 +1168,7 @@ export default function TopPerformancesStudio() {
   };
 
   const overlayTemplate = selectedTemplate === "photo-overlay" || selectedTemplate === "photo-overlay-reel";
+  const styleTemplate = isPerformanceStyle(selectedTemplate);
   const drawing = building || previewGenerating;
   // While a newly picked card is still being gathered, selectedData belongs to the previous one.
   const cardPhotoUrl = !selectedPerf
@@ -1377,7 +1450,7 @@ export default function TopPerformancesStudio() {
               notice={shareNotice && <p className={`text-center ${ERROR}`}>{shareNotice}</p>}
             />
 
-            {overlayTemplate && (
+            {(overlayTemplate || styleTemplate) && (
               <div className="ch-tile space-y-4 p-3">
                 <div>
                   <div className="mb-3 flex items-center justify-between gap-3">
@@ -1433,6 +1506,47 @@ export default function TopPerformancesStudio() {
                     />
                   </div>
                 </div>
+
+                {styleTemplate && (
+                  <div className="border-t border-[color:var(--ch-border)] pt-3">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                      <label className="flex items-center gap-2 text-[13px] text-[color:var(--ch-text)]">
+                        <span className="font-semibold">Accent</span>
+                        <input
+                          type="color"
+                          value={accentHex}
+                          onChange={(e) => changeAccent(e.target.value)}
+                          className="h-8 w-12 cursor-pointer rounded border border-[color:var(--ch-border)] bg-transparent"
+                          data-testid="input-style-accent"
+                        />
+                        {accentHex !== DEFAULT_ACCENT && (
+                          <button type="button" onClick={() => changeAccent(DEFAULT_ACCENT)} className="text-xs text-[color:var(--ch-accent)] underline">
+                            Swish orange
+                          </button>
+                        )}
+                      </label>
+                      {selectedData.cutout_photo_url && (
+                        <label className="flex cursor-pointer items-center gap-2 text-[13px] text-[color:var(--ch-text)]" data-testid="toggle-cutout">
+                          <input
+                            type="checkbox"
+                            checked={(selectedData.photo_mode ?? "auto") !== "photo"}
+                            onChange={(e) => applyPhotoFraming({ photo_mode: e.target.checked ? "auto" : "photo" })}
+                            className="h-4 w-4 accent-[#f97316]"
+                          />
+                          Use the cut-out photo
+                        </label>
+                      )}
+                    </div>
+                    <p className={`mt-2 ${HINT}`}>
+                      {PERFORMANCE_STYLES.find((s) => s.id === selectedTemplate)?.hint}.{" "}
+                      {selectedId
+                        ? selectedData.cutout_photo_url
+                          ? "This player has a cut-out, so the type sits behind them."
+                          : "No cut-out for this player, so the game photo is used full frame."
+                        : ""}
+                    </p>
+                  </div>
+                )}
 
                 <div className="border-t border-[color:var(--ch-border)] pt-3">
                   <div className="flex items-center justify-between gap-3">

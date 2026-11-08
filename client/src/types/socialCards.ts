@@ -32,7 +32,20 @@ export type PlayerPerformanceV1Data = {
   league_name?: string;
   league_logo_url?: string;
   sponsor_logo_urls?: string[];
+  /** Background-removed photo, when the player has one; the canvas styles stand it in front of the type. */
+  cutout_photo_url?: string;
+  /** "photo" uses the game photo even when a cut-out exists. */
+  photo_mode?: "auto" | "photo";
+  /** Accent colour of the canvas styles (#rrggbb); Swish orange when unset. */
+  accent_hex?: string;
+  game_date?: string;
+  /** Where this game's points rank among the competition's games this season, for the Ranked style. */
+  points_rank?: PerformanceRank;
 };
+
+/** One of the competition's best scoring games this season. */
+export type PerformanceRankEntry = { rank: number; name: string; points: number; self: boolean };
+export type PerformanceRank = { ordinal: number; top: PerformanceRankEntry[] };
 
 export type SocialCardBase<T = unknown> = {
   id: string;

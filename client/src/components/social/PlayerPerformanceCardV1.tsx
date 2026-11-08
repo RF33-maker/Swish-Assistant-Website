@@ -2,6 +2,8 @@ import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import { PhotoOverlayPlayerPerformanceCardV1 } from "./PhotoOverlayPlayerPerformanceCardV1";
 import { HalloweenCardOverlay } from "./HalloweenCardOverlay";
 import { parseCardTemplate } from "@/lib/socialCardCapture";
+import { isPerformanceStyle } from "@/lib/generatePerformanceStyles";
+import { PerformanceStyleCard } from "./PerformanceStyleCard";
 
 type Props = { data: PlayerPerformanceV1Data; template?: string };
 
@@ -22,6 +24,7 @@ const TEMPLATES: Record<string, string> = {
 
 export function PlayerPerformanceCardV1({ data, template: templateKey = "default" }: Props) {
   const { base: template, halloween } = parseCardTemplate(templateKey);
+  if (isPerformanceStyle(template)) return <PerformanceStyleCard data={data} style={template} />;
   if (template === "photo-overlay" || template === "photo-overlay-reel") {
     const reel = template === "photo-overlay-reel";
     const card = <PhotoOverlayPlayerPerformanceCardV1 data={data} reel={reel} halloween={halloween} />;
