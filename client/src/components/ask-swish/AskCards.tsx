@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import type { AskCard, CompareCard, GameCard, ScoresCard, TableCard } from "@shared/askSwish";
 import { gamePath } from "@shared/seo";
+import { LiveDot } from "@/components/ui/live-dot";
 import LeaderboardTable from "@/components/league-chatbot/LeaderboardTable";
 import StandingsTable from "@/components/league-chatbot/StandingsTable";
 import PlayerStatCard from "@/components/league-chatbot/PlayerStatCard";
@@ -105,7 +106,7 @@ function Scores({ data }: { data: ScoresCard }) {
                   )}
                 </div>
                 <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-400 dark:text-neutral-500">
-                  {g.state === "live" && <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold"><span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />Live</span>}
+                  {g.state === "live" && <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold"><LiveDot />Live</span>}
                   {g.state === "final" && <span>Final</span>}
                   {g.leagueName && <span className="truncate">{g.leagueName}</span>}
                 </div>

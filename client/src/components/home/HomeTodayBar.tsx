@@ -3,6 +3,7 @@ import { ArrowRight, Trophy } from "lucide-react";
 import { useScores } from "@/lib/scores";
 import { useNavLeagues } from "@/lib/navLeagues";
 import HomeSearch from "@/components/home/HomeSearch";
+import { LiveDot } from "@/components/ui/live-dot";
 
 /**
  * The top of the homepage: a compact "today" bar rather than a marketing
@@ -23,10 +24,7 @@ export default function HomeTodayBar() {
         <span>{today}</span>
         {liveCount > 0 && (
           <Link href="/scores" className="inline-flex items-center gap-1.5 normal-case tracking-normal text-[12px] font-semibold text-red-600 dark:text-red-400 hover:underline underline-offset-2">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75 animate-ping" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-            </span>
+            <LiveDot className="h-2 w-2" />
             {liveCount} live now
           </Link>
         )}

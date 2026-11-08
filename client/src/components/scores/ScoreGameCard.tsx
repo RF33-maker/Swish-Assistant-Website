@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { TeamLogo } from "@/components/TeamLogo";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { formatTipOff, liveLabel, type ScoreGame } from "@/lib/scores";
+import { LiveDot } from "@/components/ui/live-dot";
 
 function TeamRow({
   name, leagueId, score, muted,
@@ -32,7 +33,7 @@ export default function ScoreGameCard({ game, kind }: { game: ScoreGame; kind: "
         <span className="truncate text-slate-500 dark:text-neutral-400">{game.league_name}</span>
         {kind === "live" ? (
           <span className="flex items-center gap-1.5 shrink-0 font-semibold text-red-600 dark:text-red-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+            <LiveDot />
             {liveLabel(game.status)}
           </span>
         ) : kind === "upcoming" ? (

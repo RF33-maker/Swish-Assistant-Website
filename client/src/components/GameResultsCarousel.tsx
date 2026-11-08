@@ -5,6 +5,7 @@ import EntityLink from "./EntityLink";
 import { gamePath } from "@shared/seo";
 import { periodBreakLabel, periodLabel } from "@/lib/periodLabel";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { LiveDot } from "@/components/ui/live-dot";
 
 interface GameItem {
   game_key: string;
@@ -499,7 +500,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                         {game.status === 'LIVE' ? (
                           <div className="flex flex-col items-center">
                             <span className="text-[9px] font-bold text-red-500 dark:text-red-400 uppercase leading-tight flex items-center gap-0.5">
-                              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                              <LiveDot />
                               LIVE
                             </span>
                             {(game.current_break || periodLabel(game.current_period, game.current_period_type)) && (
