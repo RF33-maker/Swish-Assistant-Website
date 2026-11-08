@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart3, Circle, ClipboardList, Flame, Ghost, ImagePlus, Layers, Medal, ScatterChart, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
+import { Award, BarChart3, CalendarClock, Circle, ClipboardList, Flag, Flame, Ghost, ImagePlus, Layers, Medal, ScatterChart, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
 import AdminPageShell from "@/components/layout/AdminPageShell";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TopPerformancesStudio from "@/components/social/TopPerformancesStudio";
@@ -11,13 +11,14 @@ import LandscapeStudio from "@/components/social/LandscapeStudio";
 import VennStudio from "@/components/social/VennStudio";
 import RankedBarsStudio from "@/components/social/RankedBarsStudio";
 import ScoresStudio from "@/components/social/ScoresStudio";
+import { FinalScoreStudio, MilestoneStudio, PreGameStudio } from "@/components/social/SituationStudios";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 import { FIELD, SELECT_MENU } from "@/components/social/studioUi";
 import { setSharedCardStyle, useCardStyle } from "@/components/social/CardStylePicker";
 import { isHalloweenSeason } from "@/lib/cardStyle";
 
-type SectionId = "performances" | "d2-results" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "team-venn" | "ranked-bars" | "game-records" | "best-lineup" | "photos";
+type SectionId = "performances" | "final-score" | "pre-game" | "milestone" | "d2-results" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "team-venn" | "ranked-bars" | "game-records" | "best-lineup" | "photos";
 
 type Group = "Game cards" | "Weekly awards" | "League leaders" | "Lineups" | "Tools";
 
@@ -33,6 +34,9 @@ const GROUPS: Group[] = ["Game cards", "Weekly awards", "League leaders", "Lineu
 
 const SECTIONS: Section[] = [
   { id: "performances", group: "Game cards", label: "Top performances", icon: Trophy },
+  { id: "final-score", group: "Game cards", label: "Final score", icon: Flag },
+  { id: "pre-game", group: "Game cards", label: "Pre-game", icon: CalendarClock },
+  { id: "milestone", group: "Game cards", label: "Milestone", icon: Award },
   { id: "d2-results", group: "Game cards", label: "Division Two results", icon: ClipboardList },
   { id: "team-of-the-week", group: "Weekly awards", label: "Team of the Week", icon: Users },
   { id: "player-of-the-week", group: "Weekly awards", label: "Player of the Week", icon: Star },
@@ -184,6 +188,21 @@ export default function SocialToolsPage() {
         {visited.has("performances") && (
           <div className={show("performances")}>
             <TopPerformancesStudio />
+          </div>
+        )}
+        {visited.has("final-score") && (
+          <div className={show("final-score")}>
+            <FinalScoreStudio />
+          </div>
+        )}
+        {visited.has("pre-game") && (
+          <div className={show("pre-game")}>
+            <PreGameStudio />
+          </div>
+        )}
+        {visited.has("milestone") && (
+          <div className={show("milestone")}>
+            <MilestoneStudio />
           </div>
         )}
         {visited.has("d2-results") && (
