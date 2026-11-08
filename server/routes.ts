@@ -4251,6 +4251,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
+    // Lines from a game still in progress carry a live marker, so the card
+    // doesn't read as a finished game (same check as the homepage cards).
+    if (gameKeys.length > 0) {
+      const { data: scheduleRows } = await supabaseAdmin
+        .from("game_schedule")
+        .select("game_key,status,matchtime")
+        .in("game_key", gameKeys);
+      const liveKeys = new Set<string>();
+      for (const s of (scheduleRows || []) as { game_key: string | null; status: string | null; matchtime: string | null }[]) {
+        if (s.game_key && isHomeCurrentLive(s.status, s.matchtime)) liveKeys.add(s.game_key);
+      }
+      for (const perf of perfs) {
+        if (perf.game_key && liveKeys.has(perf.game_key)) perf.game_live = true;
+      }
+    }
+
     console.log(`[LeagueTrendingPerf] ${slug}: ${perfs.length} rows`);
     return { perfs, leagueNames, playerMeta };
   }

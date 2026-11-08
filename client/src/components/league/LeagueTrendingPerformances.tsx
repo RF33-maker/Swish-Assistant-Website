@@ -31,6 +31,8 @@ interface PerfRow {
   game_score: number | null;
   opponent_name?: string | null;
   game_result?: string | null;
+  /** The game is still being played: the line and score so far aren't final. */
+  game_live?: boolean;
 }
 
 interface TrendingData {
@@ -46,6 +48,27 @@ function formatDate(s: string | null) {
   } catch {
     return "";
   }
+}
+
+/** Red pulsing tag for a stat line from a game still in progress. */
+function LiveTag() {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded bg-red-600 px-1.5 py-[1px] text-[10px] font-bold uppercase tracking-wider text-white"
+      data-testid="league-trending-perf-live"
+    >
+      <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75 motion-reduce:animate-none" />
+        <span className="relative inline-flex h-full w-full rounded-full bg-white" />
+      </span>
+      Live
+    </span>
+  );
+}
+
+/** "W 85-80" -> "85-80", for a running score that isn't a result yet. */
+function scoreOnly(result: string | null | undefined) {
+  return (result || "").replace(/^[WLT]\s+/, "");
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {
@@ -122,7 +145,8 @@ function PerfCard({
     teamName: perf.team_name,
     gameDate: perf.game_date,
     opponentName: perf.opponent_name,
-    gameResult: perf.game_result,
+    // A live game has no result yet; don't stamp a W or L on the shared image.
+    gameResult: perf.game_live ? null : perf.game_result,
     tsPct,
     gmSc: perf.game_score,
     pts: perf.pts,
@@ -178,7 +202,10 @@ function PerfCard({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-sm text-slate-900 dark:text-white truncate leading-tight">{perf.full_name}</div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-semibold text-sm text-slate-900 dark:text-white truncate leading-tight">{perf.full_name}</span>
+              {perf.game_live && <LiveTag />}
+            </div>
             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
               {perf.team_name && (
                 <>
@@ -189,7 +216,15 @@ function PerfCard({
                 <>
                   <span className="shrink-0">vs</span>
                   <span className="truncate">{perf.opponent_name}</span>
-                  {perf.game_result && (
+                  {perf.game_result && perf.game_live && (
+                    <>
+                      <span aria-hidden="true" className="shrink-0">·</span>
+                      <span className="font-semibold shrink-0 tabular-nums text-red-600 dark:text-red-400">
+                        {scoreOnly(perf.game_result)} so far
+                      </span>
+                    </>
+                  )}
+                  {perf.game_result && !perf.game_live && (
                     <>
                       <span aria-hidden="true" className="shrink-0">·</span>
                       <span className={`font-semibold shrink-0 ${perf.game_result.startsWith("W") ? "text-green-600 dark:text-green-400" : perf.game_result.startsWith("L") ? "text-red-500 dark:text-red-400" : ""}`}>
@@ -232,6 +267,9 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
   const { data, isLoading } = useQuery<TrendingData>({
     queryKey: ["league", leagueSlug, "trending-performances"],
     staleTime: 5 * 60 * 1000,
+    // While a line on the board is from a game still in play, keep it current
+    // and drop the tag once the game ends.
+    refetchInterval: (query) => (query.state.data?.perfs.some((p) => p.game_live) ? 60 * 1000 : false),
     queryFn: async () => {
       const empty: TrendingData = { perfs: [], leagueNames: {}, playerMeta: {} };
       try {
