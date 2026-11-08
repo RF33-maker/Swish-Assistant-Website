@@ -82,6 +82,7 @@
     "framer-motion": "^11.13.1",
     "google-auth-library": "^10.2.0",
     "html2canvas": "^1.4.1",
+    "html2canvas-pro": "2.5.2",
     "input-otp": "^1.4.2",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.453.0",
