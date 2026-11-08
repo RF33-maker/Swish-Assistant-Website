@@ -17,6 +17,7 @@ import { clubLeagueIds, clubSearchCore } from "@shared/clubLeagues";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerAskSwishRoutes } from "./askSwishRoutes";
 import { registerPlaybookRoutes } from "./playbookRoutes";
+import { registerFeedCommentRoutes } from "./feedComments";
 import { registerScoutRosterRoutes } from "./scoutRoster";
 import { registerBillingRoutes } from "./billing/billingRoutes";
 import { registerMemberAccountRoutes } from "./memberAccounts";
@@ -443,6 +444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerScoutAgentRoutes(app);
   registerAskSwishRoutes(app);
   registerPlaybookRoutes(app);
+  registerFeedCommentRoutes(app);
   registerScoutRosterRoutes(app, { filterLeagueIdsForPublicScope });
   registerBillingRoutes(app);
   registerMemberAccountRoutes(app);
