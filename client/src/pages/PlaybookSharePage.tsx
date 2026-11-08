@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRoute } from 'wouter';
 import { createPlaybook, type PlaybookData, type PlaybookHandle } from '@/lib/playbook/engine';
-import { printPlaybook, type PrintablePlaybookMeta } from '@/lib/printPlaybook';
+import { playbookPdf, type PrintablePlaybookMeta } from '@/lib/printPlaybook';
+import { usePdfDownload } from '@/hooks/usePdfDownload';
 import '@/lib/playbook/playbook.css';
 
 /**
@@ -40,7 +41,7 @@ export default function PlaybookSharePage() {
   const code = params?.code ?? '';
   const host = useRef<HTMLDivElement>(null);
   const shared = useRef<PlaybookData | null>(null);
-  const [blocked, setBlocked] = useState(false);
+  const pdf = usePdfDownload();
   const [state, setState] = useState<State>({ kind: 'loading' });
 
   useEffect(() => {
@@ -89,12 +90,14 @@ export default function PlaybookSharePage() {
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <button
               type="button"
-              className="ch-btn ch-btn-primary h-9 px-4"
-              onClick={() => shared.current && setBlocked(!printPlaybook(shared.current, SHARED[code]?.club))}
+              className="ch-btn ch-btn-primary h-9 px-4 disabled:opacity-70"
+              disabled={pdf.busy}
+              aria-live="polite"
+              onClick={() => { const data = shared.current; if (data) pdf.start((onProgress) => playbookPdf(data, SHARED[code]?.club, onProgress)); }}
             >
-              Download PDF
+              {pdf.label}
             </button>
-            {blocked && <p className="text-[13px] text-[color:var(--ch-loss)]">Your browser blocked the PDF window. Allow pop-ups for this site and try again.</p>}
+            {pdf.message && <p className={`text-[13px] ${pdf.state === 'error' ? 'text-[color:var(--ch-loss)]' : 'text-[color:var(--ch-text-2)]'}`} role="status">{pdf.message}</p>}
           </div>
         )}
         <div ref={host} hidden={state.kind !== 'ready'} />

@@ -73,3 +73,32 @@ export function printPlaybook(data: PlaybookData, meta: PrintablePlaybookMeta = 
   Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 6000))]).then(() => setTimeout(() => win.print(), 200));
   return true;
 }
+
+/** The playbook as a PDF file to download, laid out exactly as it prints. */
+export async function playbookPdf(
+  data: PlaybookData,
+  meta: PrintablePlaybookMeta = {},
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ blob: Blob; fileName: string }> {
+  const { htmlToPdf } = await import("./htmlToPdf");
+  const origin = meta.siteOrigin ?? window.location.origin;
+  const title = data.title || "Playbook";
+  const html = buildPlaybookHtml(renderPlaybookBody(data), title, playbookCss, {
+    contents: playbookContents(data),
+    printedAt: new Date().toISOString(),
+    ...meta,
+    siteOrigin: origin,
+  });
+  const club = (meta.teamName ?? "").trim();
+  const season = (meta.season ?? "").trim();
+  const blob = await htmlToPdf(html, {
+    // Matches the @page rule in playbookPrintHtml.ts.
+    margin: { top: 15, side: 13, bottom: 16 },
+    header: { left: club || title, right: season ? `Playbook  ·  ${season}` : "Playbook" },
+    footer: { left: "Swish Assistant", center: [club, title, season].filter(Boolean).join("  ·  "), logoUrl: `${origin}/icon-512.png` },
+    title: [club, title].filter(Boolean).join(" "),
+    onProgress,
+  });
+  const slug = [club, title].filter(Boolean).join(" ").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+  return { blob, fileName: `${slug || "playbook"}.pdf` };
+}

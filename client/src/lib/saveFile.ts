@@ -8,7 +8,18 @@
  * when that is unavailable.
  */
 
-export type SaveResult = "shared" | "downloaded" | "cancelled";
+export type SaveResult = "shared" | "downloaded" | "cancelled" | "needs-tap";
+
+export interface SaveOptions {
+  /**
+   * The share sheet only opens straight after a tap, and a slow file can take
+   * longer than the browser allows. With this set, a phone that refuses for
+   * that reason returns "needs-tap" so the caller can offer a button that
+   * shares the finished file, instead of falling back to a plain download
+   * (which in-app browsers often drop without a word).
+   */
+  retryOnTap?: boolean;
+}
 
 function isTouchDevice(): boolean {
   if (typeof window === "undefined") return false;
@@ -18,7 +29,7 @@ function isTouchDevice(): boolean {
   return coarse || ipad || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 }
 
-export async function saveFile(blob: Blob, fileName: string): Promise<SaveResult> {
+export async function saveFile(blob: Blob, fileName: string, opts: SaveOptions = {}): Promise<SaveResult> {
   if (isTouchDevice() && typeof navigator.canShare === "function" && typeof navigator.share === "function") {
     const file = new File([blob], fileName, { type: blob.type });
     if (navigator.canShare({ files: [file] })) {
@@ -27,6 +38,7 @@ export async function saveFile(blob: Blob, fileName: string): Promise<SaveResult
         return "shared";
       } catch (err) {
         if ((err as Error)?.name === "AbortError") return "cancelled";
+        if ((err as Error)?.name === "NotAllowedError" && opts.retryOnTap) return "needs-tap";
         // NotAllowedError (the user gesture expired during a slow render) and
         // the like: fall through to a normal download.
       }

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Lock, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { shiftSeason } from '@shared/season';
-import { printPlaybook } from '@/lib/printPlaybook';
+import { playbookPdf } from '@/lib/printPlaybook';
+import { usePdfDownload } from '@/hooks/usePdfDownload';
 import { getTeamLogoCached } from '@/utils/teamLogoCache';
 import { createPlaybook, pbBlankPlaybook, type PlaybookHandle, type PlaybookSaveError } from '@/lib/playbook/engine';
 import '@/lib/playbook/playbook.css';
@@ -55,7 +56,7 @@ export default function Playbook({ teamName, leagueId = null, brandColor = null,
   const [info, setInfo] = useState<SeasonInfo | null>(null);
   const [copyFrom, setCopyFrom] = useState('');
   const [copyState, setCopyState] = useState<{ busy: boolean; error?: string }>({ busy: false });
-  const [pdfError, setPdfError] = useState<string | null>(null);
+  const pdf = usePdfDownload();
   // The club's crest as the hub shows it (the team logos table, then storage), fetched ahead so the PDF button can use it without waiting.
   const [crestUrl, setCrestUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -133,19 +134,19 @@ export default function Playbook({ teamName, leagueId = null, brandColor = null,
     return () => window.removeEventListener('beforeunload', warn);
   }, []);
 
-  // Print the playbook as it is on screen (unsaved edits included) as a PDF.
+  // The playbook as it is on screen (unsaved edits included), as a PDF file.
   function downloadPdf() {
     const state = engine.current?.getState();
     if (!state) return;
     const accent = host.current ? getComputedStyle(host.current).getPropertyValue('--ch-accent').trim() : '';
-    const opened = printPlaybook(state, {
+    pdf.start(async (onProgress) => playbookPdf(state, {
       teamName,
       season: info?.season ?? null,
       brandColor: brandColor || accent,
       secondaryColor,
-      crestUrl,
-    });
-    setPdfError(opened ? null : 'Your browser blocked the PDF window. Allow pop-ups for this site and try again.');
+      // Tapped before the crest arrived: fetch it now rather than print without it.
+      crestUrl: crestUrl ?? (leagueId && teamName ? await getTeamLogoCached({ leagueId, teamName }).catch(() => null) : null),
+    }, onProgress));
   }
 
   function switchSeason(next: string) {
@@ -225,9 +226,9 @@ export default function Playbook({ teamName, leagueId = null, brandColor = null,
               </button>
             </div>
           )}
-          <button type="button" className="ch-btn h-9 px-4 ml-auto" onClick={downloadPdf}>Download PDF</button>
+          <button type="button" className={`ch-btn h-9 px-4 ml-auto disabled:opacity-70 ${pdf.state === 'ready' ? 'ch-btn-primary' : ''}`} onClick={downloadPdf} disabled={pdf.busy} aria-live="polite">{pdf.label}</button>
           {copyState.error && <p className="w-full text-[13px] text-[color:var(--ch-loss)]">{copyState.error}</p>}
-          {pdfError && <p className="w-full text-[13px] text-[color:var(--ch-loss)]">{pdfError}</p>}
+          {pdf.message && <p className={`w-full text-[13px] ${pdf.state === 'error' ? 'text-[color:var(--ch-loss)]' : 'text-[color:var(--ch-text-2)]'}`} role="status">{pdf.message}</p>}
         </div>
       )}
       <div ref={host} hidden={load.kind !== 'ready'} />

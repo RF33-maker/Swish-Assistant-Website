@@ -446,3 +446,30 @@ export function printScoutPlan(plan: PrintablePlan, meta: PrintableMeta): boolea
   Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 6000))]).then(() => setTimeout(() => win.print(), 200));
   return true;
 }
+
+/** "Hemel Storm v Leicester Riders" as a file name: hemel-storm-v-leicester-riders-scouting-report.pdf. */
+export function scoutPlanFileName(meta: Pick<PrintableMeta, "opponentName" | "forTeamName">): string {
+  const base = meta.forTeamName ? `${meta.forTeamName} v ${meta.opponentName}` : meta.opponentName;
+  const slug = base.normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+  return `${slug || "scout"}-scouting-report.pdf`;
+}
+
+/** The same report as a PDF file to download, laid out exactly as it prints. */
+export async function scoutPlanPdf(
+  plan: PrintablePlan,
+  meta: PrintableMeta,
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ blob: Blob; fileName: string }> {
+  const { htmlToPdf } = await import("./htmlToPdf");
+  const origin = meta.siteOrigin ?? window.location.origin;
+  const title = meta.forTeamName ? `${meta.forTeamName} v ${meta.opponentName}` : `Scouting report: ${meta.opponentName}`;
+  const competition = meta.competitionName || meta.roster?.leagueName || "";
+  const blob = await htmlToPdf(buildPlanHtml(plan, { ...meta, siteOrigin: origin }), {
+    // Matches the @page rule in buildPlanHtml.
+    margin: { top: 14, side: 13, bottom: 18 },
+    footer: { left: "Swish Assistant", center: competition ? `${title}  ·  ${competition}` : title, logoUrl: `${origin}/icon-512.png` },
+    title,
+    onProgress,
+  });
+  return { blob, fileName: scoutPlanFileName(meta) };
+}

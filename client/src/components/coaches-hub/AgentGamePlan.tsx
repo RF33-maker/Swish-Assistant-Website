@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'wouter';
-import { Lock, RefreshCw, Sparkles, Shield, Swords, Target, Users, Timer, AlertTriangle, Download, ChevronRight, Crosshair } from 'lucide-react';
+import { Lock, RefreshCw, Sparkles, Shield, Swords, Target, Users, Timer, AlertTriangle, Check, Download, ChevronRight, Crosshair } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
-import { printScoutPlan } from '@/lib/printScoutPlan';
+import { scoutPlanPdf } from '@/lib/printScoutPlan';
+import { usePdfDownload } from '@/hooks/usePdfDownload';
 import type { ScoutRosterResponse } from '@/hooks/useScoutRoster';
 import { DEFAULT_SCOPE, scopeKey, type ScoutScope } from '@shared/scoutScope';
 import { applyEdits, windowLabel, type CoachNote, type PlanEdits, type ScoutWindow } from '@shared/coachNotes';
@@ -229,8 +230,9 @@ export default function AgentGamePlan({
   const [requestError, setRequestError] = useState<string | null>(null);
   const polls = useRef(0);
   const scopeId = scopeKey(scope);
-  // Admin-only while the report is tested: a printable copy to save as a PDF.
+  // Admin-only while the report is tested: the branded report as a PDF file.
   const { isRealAdmin } = useAuth();
+  const pdf = usePdfDownload();
   // The crests the banner shows (the team logos table, then storage), fetched ahead so the PDF button can use them without waiting.
   const [crests, setCrests] = useState<{ opponent: string | null; forTeam: string | null }>({ opponent: null, forTeam: null });
   useEffect(() => {
@@ -241,6 +243,16 @@ export default function AgentGamePlan({
     ]).then(([opponent, forTeam]) => { if (!cancelled) setCrests({ opponent, forTeam }); });
     return () => { cancelled = true; };
   }, [leagueId, opponentName, myTeamName]);
+
+  // The crests for the PDF: the ones already fetched, or (tapped before they arrived) fetched now.
+  const crestsNow = async () => {
+    if (crests.opponent && (crests.forTeam || !myTeamName)) return crests;
+    const [opponent, forTeam] = await Promise.all([
+      crests.opponent ?? getTeamLogoCached({ leagueId, teamName: opponentName }).catch(() => null),
+      crests.forTeam ?? (myTeamName ? getTeamLogoCached({ leagueId, teamName: myTeamName }).catch(() => null) : Promise.resolve(null)),
+    ]);
+    return { opponent, forTeam };
+  };
 
   const load = useCallback(async () => {
     try {
@@ -361,9 +373,9 @@ export default function AgentGamePlan({
           </span>
         )}
         {isRealAdmin && full && plan && (
-          <button
-            onClick={() => {
-              const ok = printScoutPlan(plan, {
+          <span className="flex flex-col items-end">
+            <button
+              onClick={() => pdf.start(async (onProgress) => scoutPlanPdf(plan, {
                 opponentName,
                 forTeamName: myTeamName || null,
                 gamesAnalysed: report?.gamesAnalysed ?? null,
@@ -373,18 +385,20 @@ export default function AgentGamePlan({
                 secondaryColor,
                 competitionName: roster?.leagueName ?? null,
                 roster: roster ?? null,
-                crests,
+                crests: await crestsNow(),
                 teaser: report?.teaser ?? null,
                 windowLabel: scoutWindow === 'season' ? null : windowLabel(scoutWindow),
                 coachNotes: notes ?? null,
-              });
-              if (!ok) setRequestError('Allow pop-ups for this site to download the report.');
-            }}
-            className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px]"
-            title="Admin only: opens a printable copy. Choose Save as PDF in the print dialog."
-          >
-            <Download className="w-3.5 h-3.5" /> Download PDF
-          </button>
+              }, onProgress))}
+              disabled={pdf.busy}
+              aria-live="polite"
+              className={`ch-btn h-8 px-2.5 text-[12.5px] disabled:opacity-70 ${pdf.state === 'ready' ? '' : 'ch-btn-ghost'}`}
+              title="Admin only while the report is tested."
+            >
+              {pdf.busy ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : pdf.state === 'saved' ? <Check className="w-3.5 h-3.5" /> : <Download className="w-3.5 h-3.5" />} {pdf.label}
+            </button>
+            {pdf.message && <span className="text-[11.5px] mt-1 max-w-[220px] text-right" role="status">{pdf.message}</span>}
+          </span>
         )}
         {full && data.canBuild && report?.status === 'ready' && !building && (
           <button onClick={rebuild} className="flex items-center gap-1 font-medium hover:text-slate-900 dark:hover:text-white">
