@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import html2canvas from "html2canvas";
 import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCardV1";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
+import { isPerformanceStyle, renderPerformanceStyleBlob } from "@/lib/generatePerformanceStyles";
 
 /** Seasonal layers ride along on the template key ("photo-overlay+halloween"), so every
  *  caller that already passes a template carries them through untouched. */
@@ -79,7 +80,10 @@ export async function renderSocialCardToBlob(
   data: PlayerPerformanceV1Data,
   template: string,
 ): Promise<Blob | null> {
-  const height = parseCardTemplate(template).base === "photo-overlay-reel" ? REEL_CARD_HEIGHT : CARD_HEIGHT;
+  const { base } = parseCardTemplate(template);
+  // The canvas styles draw their own pixels; nothing to capture.
+  if (isPerformanceStyle(base)) return renderPerformanceStyleBlob(data, base);
+  const height = base === "photo-overlay-reel" ? REEL_CARD_HEIGHT : CARD_HEIGHT;
   const hiddenContainer = document.createElement("div");
   hiddenContainer.setAttribute("aria-hidden", "true");
   hiddenContainer.style.cssText = [
