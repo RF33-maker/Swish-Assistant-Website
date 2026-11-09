@@ -101,7 +101,7 @@ function fitTracked(ctx: CanvasRenderingContext2D, text: string, maxWidth: numbe
 
 type TextOptsLike = ReturnType<typeof body>;
 
-function competitionShort(name: string): string {
+export function competitionShort(name: string): string {
   return name
     .replace(/\s*\(?\d{4}\s*[-/–]\s*\d{2,4}\)?\s*$/, "")
     .replace(/\s+\d{2}[-/–]\d{2}$/, "")
@@ -269,8 +269,36 @@ function drawPhotoFallback(ctx: CanvasRenderingContext2D, img: HTMLImageElement,
   ctx.drawImage(sheet, 0, 0);
 }
 
+/**
+ * The stacked look's ground: near-black warmed by a trace of the accent, a soft white haze
+ * and an accent haze around (cx, cy), and a darkening towards the foot of the card.
+ */
+export function drawStackedGround(ctx: CanvasRenderingContext2D, accent: string, cx: number, cy: number) {
+  const [ar, ag, ab] = hexToRgb(accent);
+  ctx.fillStyle = `rgb(${Math.round(14 + (ar - 14) * 0.04)},${Math.round(12 + (ag - 12) * 0.04)},${Math.round(17 + (ab - 17) * 0.04)})`;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  const haze = (x: number, y: number, rx: number, ry: number, colour: string, edge: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1, ry / rx);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    g.addColorStop(0, colour);
+    g.addColorStop(edge, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
+    ctx.restore();
+  };
+  haze(cx, cy, CARD_W * 0.46, CARD_H * 0.42, "rgba(255,255,255,0.14)", 0.7);
+  haze(cx + CARD_W * 0.04, cy + CARD_H * 0.08, CARD_W * 0.6, CARD_H * 0.52, withAlpha(accent, 0.16), 0.72);
+  const foot = ctx.createLinearGradient(0, CARD_H * 0.6, 0, CARD_H);
+  foot.addColorStop(0, "rgba(0,0,0,0)");
+  foot.addColorStop(1, "rgba(0,0,0,0.35)");
+  ctx.fillStyle = foot;
+  ctx.fillRect(0, 0, CARD_W, CARD_H);
+}
+
 /** A slow, cloudy mottle: the grain tile drawn big and soft under the fine grain. */
-function drawMottle(ctx: CanvasRenderingContext2D) {
+export function drawMottle(ctx: CanvasRenderingContext2D) {
   const [sheet, s] = layer();
   drawGrain(s, 1, "source-over");
   ctx.save();
@@ -315,27 +343,7 @@ export async function renderPotwStack(
   ctx.imageSmoothingQuality = "high";
 
   // ── ground ──
-  const [ar, ag, ab] = hexToRgb(accent);
-  ctx.fillStyle = `rgb(${Math.round(14 + (ar - 14) * 0.04)},${Math.round(12 + (ag - 12) * 0.04)},${Math.round(17 + (ab - 17) * 0.04)})`;
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
-  const haze = (cx: number, cy: number, rx: number, ry: number, colour: string, edge: number) => {
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(1, ry / rx);
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
-    g.addColorStop(0, colour);
-    g.addColorStop(edge, "rgba(0,0,0,0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
-    ctx.restore();
-  };
-  haze(CARD_W * 0.66, CARD_H * 0.4, CARD_W * 0.46, CARD_H * 0.42, "rgba(255,255,255,0.14)", 0.7);
-  haze(CARD_W * 0.7, CARD_H * 0.48, CARD_W * 0.6, CARD_H * 0.52, withAlpha(accent, 0.16), 0.72);
-  const foot = ctx.createLinearGradient(0, CARD_H * 0.6, 0, CARD_H);
-  foot.addColorStop(0, "rgba(0,0,0,0)");
-  foot.addColorStop(1, "rgba(0,0,0,0.35)");
-  ctx.fillStyle = foot;
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  drawStackedGround(ctx, accent, CARD_W * 0.66, CARD_H * 0.4);
 
   // ── the player ──
   const fr = framingOf(options.framing);

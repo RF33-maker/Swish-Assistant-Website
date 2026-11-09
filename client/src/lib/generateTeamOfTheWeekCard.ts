@@ -17,6 +17,7 @@ import {
   drawSpaced,
   drawVignette,
   meltPhoto,
+  spacedWidth,
   splitName,
   themeFor,
   type CardStyle,
@@ -29,7 +30,9 @@ import {
   DEFAULT_HEAD_LINE,
   GUESSED_HEAD,
   capHeight,
+  drawContain,
   drawFooter,
+  drawStatsThreadMark,
   drawTextTop,
   ensureDisplayFont,
   fetchImg,
@@ -43,10 +46,16 @@ import {
   type HeadMap,
   type TextOpts,
 } from "@/lib/generateWeeklyCards";
+import { DEFAULT_ACCENT, body, drawGrain, ensureFonts, poster } from "@/lib/generatePerformanceStyles";
+import { competitionShort, drawMottle, drawStackedGround } from "@/lib/generatePotwStackCard";
 
 export type TeamCardOptions = {
   /** Which of the three looks to draw; defaults to `league`. */
   style?: CardStyle;
+  /** `stacked` draws the five in the stacked look's ground, type and grain (the Player of the Week's). */
+  template?: "photo" | "stacked";
+  /** The stacked look's accent colour. */
+  accent?: string;
   framing?: FramingMap;
   showGameScore?: boolean;
   /** Marked face positions by player_id; unmarked players use a guess. */
@@ -134,6 +143,8 @@ export async function renderTeamOfTheWeek(
 ): Promise<{ canvas: HTMLCanvasElement; unaligned: string[] }> {
   const {
     style = "league",
+    template = "photo",
+    accent = DEFAULT_ACCENT,
     framing = {},
     showGameScore = true,
     heads = {},
@@ -142,8 +153,9 @@ export async function renderTeamOfTheWeek(
     weekLabel = "",
     teamLogoUrls = {},
   } = options;
+  const stacked = template === "stacked";
   const unaligned: string[] = [];
-  await ensureDisplayFont();
+  await (stacked ? ensureFonts() : ensureDisplayFont());
   const [logo, leagueLogo, ...images] = await Promise.all([
     fetchImg(swishLogoSrc),
     fetchImg(brand.leagueLogoUrl),
@@ -157,7 +169,11 @@ export async function renderTeamOfTheWeek(
   canvas.width = CARD_W;
   canvas.height = CARD_H;
   const ctx = canvas.getContext("2d")!;
-  const theme = themeFor(style, brand.primaryHex);
+  ctx.imageSmoothingQuality = "high";
+  // In the stacked look the photos are left as shot and their outskirts burn to the stacked ground.
+  const theme: Theme = stacked
+    ? { ...themeFor("swish", accent), accent, rank: accent, shadow: "#0e0c11", photoTint: 0, glow: 0.3 }
+    : themeFor(style, brand.primaryHex);
 
   const count = Math.max(1, awards.length);
   const cw = CARD_W / count;
@@ -165,8 +181,12 @@ export async function renderTeamOfTheWeek(
   const frameBottom = showGameScore ? 886 : 990;
   const frameH = frameBottom - FRAME_TOP;
 
-  drawBackdrop(ctx, theme, leagueLogo, { x: CARD_W / 2, y: FRAME_TOP + 18 });
-  drawGlow(ctx, CARD_W / 2, FRAME_TOP + frameH * 0.42, 760, theme.accent, theme.glow * 0.8, 0.62);
+  if (stacked) {
+    drawStackedGround(ctx, accent, CARD_W / 2, FRAME_TOP + frameH * 0.45);
+  } else {
+    drawBackdrop(ctx, theme, leagueLogo, { x: CARD_W / 2, y: FRAME_TOP + 18 });
+    drawGlow(ctx, CARD_W / 2, FRAME_TOP + frameH * 0.42, 760, theme.accent, theme.glow * 0.8, 0.62);
+  }
 
   // ── the players: a photo each, else their club's crest ──
   awards.forEach((a, i) => {
@@ -187,6 +207,12 @@ export async function renderTeamOfTheWeek(
       drawRingedCrest(ctx, i * cw + cw / 2, FRAME_TOP + frameH * 0.42, Math.min(96, cw * 0.34), crests[i], initialsOf(a.full_name), theme);
     }
   });
+  if (stacked) {
+    drawStackedTeamType(ctx, awards, crests, { cw, frameBottom, showGameScore, accent, weekLabel, leagueName: brand.leagueName, logo, leagueLogo });
+    drawMottle(ctx);
+    drawGrain(ctx, 0.3);
+    return { canvas, unaligned };
+  }
   drawVignette(ctx, theme);
 
   drawHeader(ctx, "TEAM OF THE WEEK", weekLabel, brand.leagueName, theme);
@@ -260,4 +286,121 @@ export async function renderTeamOfTheWeek(
 
   drawFooter(ctx, [logo, "statsthread", leagueLogo], brand.leagueName);
   return { canvas, unaligned };
+}
+
+type StackedTeamLayout = {
+  cw: number;
+  frameBottom: number;
+  showGameScore: boolean;
+  accent: string;
+  weekLabel: string;
+  leagueName: string;
+  logo: HTMLImageElement | null;
+  leagueLogo: HTMLImageElement | null;
+};
+
+/**
+ * The stacked look's words and numbers over the band of photos: the marks in the top corners,
+ * a centred header in the poster face with the accent rule, and under each player their given
+ * name small and tracked, their surname in the poster face, the headline stats as poster
+ * numerals with tracked labels, and the Swish Score in the accent.
+ */
+function drawStackedTeamType(ctx: CanvasRenderingContext2D, awards: WeeklyAward[], crests: (HTMLImageElement | null)[], l: StackedTeamLayout) {
+  const { cw, frameBottom, showGameScore, accent } = l;
+  const count = Math.max(1, awards.length);
+  const white = "#ffffff";
+  const muted = "rgba(255,255,255,0.62)";
+
+  // Swish top left, the Statsthread network mark top right; the competition's logo sits in the footer.
+  if (l.logo) drawContain(ctx, l.logo, 60, 56, 64, 64);
+  drawStatsThreadMark(ctx, CARD_W - 60 - 64, 56, 64);
+
+  // ── header ──
+  const kicker = [competitionShort(l.leagueName), l.weekLabel.toUpperCase()].filter(Boolean).join(" · ");
+  const kickerOpts = body(12, 700, { color: "rgba(255,255,255,0.55)", align: "center" });
+  drawSpaced(ctx, kicker, CARD_W / 2, 96, 12 * 0.3, kickerOpts);
+  const title = poster(58, { color: white, align: "center" });
+  drawSpaced(ctx, "TEAM OF THE WEEK", CARD_W / 2, 96 + capHeight(ctx, kickerOpts) + 14, 58 * 0.02, title);
+  ctx.fillStyle = accent;
+  ctx.fillRect(CARD_W / 2 - 28, 96 + capHeight(ctx, kickerOpts) + 14 + capHeight(ctx, title) + 18, 56, 3);
+
+  // ── under each photo ──
+  const maxW = cw - 26;
+  const names = awards.map((a) => splitName(a.full_name));
+  const fitPoster = (text: string, max: number, min: number) => {
+    for (let size = max; size > min; size -= 2) {
+      if (spacedWidth(ctx, text, size * 0.02, poster(size)) - size * 0.02 <= maxW) return size;
+    }
+    return min;
+  };
+  const familyFits = names.map(([, family]) => fitPoster(family.toUpperCase(), 44, 22));
+  const familySize = Math.max(28, Math.min(...familyFits));
+  const givenOpts = body(12, 600, { color: muted, align: "center" });
+  const givenCap = capHeight(ctx, givenOpts);
+  const familyCap = capHeight(ctx, poster(familySize));
+  const numOpts = poster(44, { color: white, align: "center" });
+  const numCap = capHeight(ctx, numOpts);
+  const lblOpts = body(11, 600, { color: muted, align: "center" });
+  const lblCap = capHeight(ctx, lblOpts);
+  const gsLblOpts = body(11, 600, { color: "rgba(255,255,255,0.55)", align: "center" });
+  const gsLblCap = capHeight(ctx, gsLblOpts);
+  const gsOpts = poster(56, { color: accent, align: "center" });
+
+  const givenTop = frameBottom + 44;
+  const familyTop = givenTop + givenCap + 12;
+  const numTop = familyTop + familyCap + 30;
+  const lblTop = numTop + numCap + 10;
+  const gsLblTop = lblTop + lblCap + 30;
+  const gsTop = gsLblTop + gsLblCap + 12;
+  const blockBottom = showGameScore ? gsTop + capHeight(ctx, gsOpts) : lblTop + lblCap;
+
+  for (let i = 1; i < count; i += 1) {
+    const line = ctx.createLinearGradient(0, frameBottom + 30, 0, blockBottom + 6);
+    line.addColorStop(0, "rgba(255,255,255,0)");
+    line.addColorStop(0.18, "rgba(255,255,255,0.14)");
+    line.addColorStop(0.82, "rgba(255,255,255,0.14)");
+    line.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = line;
+    ctx.fillRect(i * cw - 0.5, frameBottom + 30, 1, blockBottom + 6 - (frameBottom + 30));
+  }
+
+  const crestTheme = themeFor("swish", accent);
+  awards.forEach((a, i) => {
+    const cx = i * cw + cw / 2;
+    const [given, family] = names[i];
+    drawCrest(ctx, cx, frameBottom - 2, 24, crests[i], initialsOf(cleanTeamLabel(a.team_name)), crestTheme);
+
+    if (given) {
+      let text = given.toUpperCase();
+      while (text.length > 3 && spacedWidth(ctx, text, 12 * 0.18, givenOpts) > maxW) text = `${text.slice(0, -2)}…`;
+      drawSpaced(ctx, text, cx, givenTop, 12 * 0.18, givenOpts);
+    }
+    const size = Math.min(familySize, familyFits[i]);
+    const familyOpts = poster(size, { color: white, align: "center" });
+    drawSpaced(ctx, family.toUpperCase(), cx, familyTop + (familyCap - capHeight(ctx, familyOpts)) / 2, size * 0.02, familyOpts);
+
+    const stats = headlineStats(a);
+    const cell = Math.min(78, Math.floor((cw - 12) / 3));
+    const startX = cx - (cell * stats.length) / 2;
+    stats.forEach((s, idx) => {
+      const sx = startX + idx * cell + cell / 2;
+      drawTextTop(ctx, String(s.value), sx, numTop, numOpts);
+      drawSpaced(ctx, s.label, sx, lblTop, 11 * 0.18, lblOpts);
+    });
+
+    if (showGameScore) {
+      drawSpaced(ctx, "SWISH SCORE", cx, gsLblTop, 11 * 0.22, gsLblOpts);
+      drawTextTop(ctx, fmtGameScore(a.game_score), cx, gsTop, gsOpts);
+    }
+  });
+
+  // ── footer: the competition's logo over its name ──
+  const footOpts = body(12, 600, { color: "rgba(255,255,255,0.42)", align: "center" });
+  const footTop = CARD_H - 40 - capHeight(ctx, footOpts);
+  if (l.leagueLogo) {
+    const h = 56;
+    const w = Math.min(130, (l.leagueLogo.naturalWidth / Math.max(1, l.leagueLogo.naturalHeight)) * h);
+    drawContain(ctx, l.leagueLogo, CARD_W / 2 - w / 2, footTop - 18 - h, w, h);
+  }
+  drawSpaced(ctx, [competitionShort(l.leagueName), "SWISHASSISTANT.COM"].filter(Boolean).join(" · "), CARD_W / 2, footTop, 12 * 0.22, footOpts);
 }

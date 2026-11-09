@@ -257,7 +257,7 @@ export function withAlpha(hex: string, alpha: number): string {
 type FooterLogo = HTMLImageElement | "statsthread";
 
 /** The StatsThread network mark, drawn from the same paths as the photo overlay card. */
-function drawStatsThreadMark(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+export function drawStatsThreadMark(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(size / 100, size / 100);
