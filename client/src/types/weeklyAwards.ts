@@ -25,8 +25,25 @@ export type WeeklyAward = {
   game_score: number | null;
   photoUrl: string | null;
   photoFocusY: number | null;
+  /** A background-removed photo, when the player (or a same-name record) has one. */
+  cutoutUrl: string | null;
+  shirt: string | null;
   opponent_name: string | null;
   game_result: string | null;
+  /** The player's season in this competition, for the stacked card's ladders. */
+  season: WeeklySeasonLine | null;
+};
+
+export type WeeklySeasonLine = {
+  games: number;
+  ppg: number;
+  rpg: number;
+  apg: number;
+  spg: number;
+  bpg: number;
+  total_pts: number;
+  /** Where this game's Swish Score ranks among the player's games this season (1 = best). */
+  score_rank: number;
 };
 
 export type WeeklyAwardsResponse = {

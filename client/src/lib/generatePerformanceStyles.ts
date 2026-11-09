@@ -48,7 +48,7 @@ const INK = "#111111";
 let fontsReady: Promise<void> | null = null;
 
 /** Loads the card's typefaces on demand; falls back to the system stacks if they never arrive. */
-function ensureFonts(): Promise<void> {
+export function ensureFonts(): Promise<void> {
   if (fontsReady) return fontsReady;
   fontsReady = (async () => {
     if (typeof document === "undefined") return;
@@ -82,9 +82,9 @@ function ensureFonts(): Promise<void> {
 
 // ── small helpers ────────────────────────────────────────────────────────────
 
-const display = (size: number, weight: number, extra: Partial<TextOpts> = {}): TextOpts => ({ size, weight, family: DISPLAY, ...extra });
-const body = (size: number, weight: number, extra: Partial<TextOpts> = {}): TextOpts => ({ size, weight, family: BODY, ...extra });
-const poster = (size: number, extra: Partial<TextOpts> = {}): TextOpts => ({ size, weight: 400, family: POSTER, ...extra });
+export const display = (size: number, weight: number, extra: Partial<TextOpts> = {}): TextOpts => ({ size, weight, family: DISPLAY, ...extra });
+export const body = (size: number, weight: number, extra: Partial<TextOpts> = {}): TextOpts => ({ size, weight, family: BODY, ...extra });
+export const poster = (size: number, extra: Partial<TextOpts> = {}): TextOpts => ({ size, weight: 400, family: POSTER, ...extra });
 
 function textWidth(ctx: CanvasRenderingContext2D, text: string, o: TextOpts): number {
   setFont(ctx, o);
@@ -108,14 +108,14 @@ function fitPoster(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
 }
 
 /** Italic faces: the canvas font string wants the style before the weight, which TextOpts has no slot for. */
-type ItalicOpts = { size: number; weight: number; family: string; color?: string; align?: CanvasTextAlign; alpha?: number };
+export type ItalicOpts = { size: number; weight: number; family: string; color?: string; align?: CanvasTextAlign; alpha?: number };
 type SpacedCtx = CanvasRenderingContext2D & { letterSpacing?: string };
 
 function setItalic(ctx: CanvasRenderingContext2D, o: ItalicOpts) {
   ctx.font = `italic ${o.weight} ${o.size}px ${o.family}`;
 }
 
-function italicWidth(ctx: CanvasRenderingContext2D, text: string, o: ItalicOpts, spacing = 0): number {
+export function italicWidth(ctx: CanvasRenderingContext2D, text: string, o: ItalicOpts, spacing = 0): number {
   const c = ctx as SpacedCtx;
   ctx.save();
   if (typeof c.letterSpacing === "string") c.letterSpacing = `${spacing}px`;
@@ -126,7 +126,7 @@ function italicWidth(ctx: CanvasRenderingContext2D, text: string, o: ItalicOpts,
 }
 
 /** Draws italic text with its cap top at `topY`; returns its width. */
-function drawItalic(ctx: CanvasRenderingContext2D, text: string, x: number, topY: number, o: ItalicOpts, spacing = 0): number {
+export function drawItalic(ctx: CanvasRenderingContext2D, text: string, x: number, topY: number, o: ItalicOpts, spacing = 0): number {
   const c = ctx as SpacedCtx;
   ctx.save();
   if (typeof c.letterSpacing === "string") c.letterSpacing = `${spacing}px`;
@@ -174,7 +174,7 @@ function ordinalSuffix(n: number): string {
 }
 
 /** Draws text with its cap top at `topY` and returns its width; the plain version of drawSpaced. */
-function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, topY: number, o: TextOpts): number {
+export function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, topY: number, o: TextOpts): number {
   setFont(ctx, o);
   const cap = ctx.measureText("H").actualBoundingBoxAscent;
   ctx.save();
@@ -202,7 +202,7 @@ function strokeTextTop(ctx: CanvasRenderingContext2D, text: string, x: number, t
   ctx.restore();
 }
 
-function hexToRgb(hex: string): [number, number, number] {
+export function hexToRgb(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   const n = m ? parseInt(m[1], 16) : 0xf97316;
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -221,12 +221,12 @@ function mixHex(from: string, to: string, t: number): string {
   return `rgb(${at(0)},${at(1)},${at(2)})`;
 }
 
-function withAlpha(hex: string, alpha: number): string {
+export function withAlpha(hex: string, alpha: number): string {
   const [r, g, b] = hexToRgb(hex);
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function layer(): [HTMLCanvasElement, CanvasRenderingContext2D] {
+export function layer(): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement("canvas");
   c.width = CARD_W;
   c.height = CARD_H;
@@ -234,7 +234,7 @@ function layer(): [HTMLCanvasElement, CanvasRenderingContext2D] {
 }
 
 /** A soft ellipse of colour out of (cx, cy), optionally blended on. */
-function ellipseGlow(
+export function ellipseGlow(
   ctx: CanvasRenderingContext2D,
   cx: number, cy: number, rx: number, ry: number,
   stops: [number, string][],
@@ -262,7 +262,7 @@ function vertical(ctx: CanvasRenderingContext2D, y0: number, y1: number, stops: 
 let grainTile: HTMLCanvasElement | null = null;
 
 /** Film grain: a tile of mid-grey noise blended over the whole card. */
-function drawGrain(ctx: CanvasRenderingContext2D, alpha: number, op: GlobalCompositeOperation = "overlay") {
+export function drawGrain(ctx: CanvasRenderingContext2D, alpha: number, op: GlobalCompositeOperation = "overlay") {
   if (!grainTile) {
     const size = 256;
     grainTile = document.createElement("canvas");
@@ -290,11 +290,11 @@ function drawGrain(ctx: CanvasRenderingContext2D, alpha: number, op: GlobalCompo
 
 // ── photos ───────────────────────────────────────────────────────────────────
 
-type Box = { x: number; y: number; w: number; h: number };
+export type Box = { x: number; y: number; w: number; h: number };
 /** Where an image lands on the card; `fig` is the part that is the player, for a cut-out. */
-type Placement = { left: number; top: number; dw: number; dh: number; fig?: Box };
-type Framing = { zoom: number; x: number; y: number; focusY: number };
-type Tone = "natural" | "graded" | "mono" | "duotone";
+export type Placement = { left: number; top: number; dw: number; dh: number; fig?: Box };
+export type Framing = { zoom: number; x: number; y: number; focusY: number };
+export type Tone = "natural" | "graded" | "mono" | "duotone";
 
 type Photo = { img: HTMLImageElement; cutout: boolean };
 
@@ -321,7 +321,7 @@ async function loadPhoto(data: PlayerPerformanceV1Data): Promise<Photo | null> {
 const boundsCache = new WeakMap<HTMLImageElement, Box>();
 
 /** The box around a cut-out's opaque pixels, as fractions of the image: most cut-outs carry blank space above the head. */
-function opaqueBounds(img: HTMLImageElement): Box {
+export function opaqueBounds(img: HTMLImageElement): Box {
   const cached = boundsCache.get(img);
   if (cached) return cached;
   const w = 128;
@@ -357,7 +357,7 @@ function opaqueBounds(img: HTMLImageElement): Box {
 }
 
 /** A cut-out's figure (its opaque pixels, not the whole image) sits bottom-centre in its box; zoom grows it, the sliders nudge it. */
-function placeCutout(img: HTMLImageElement, box: Box, fr: Framing): Placement {
+export function placeCutout(img: HTMLImageElement, box: Box, fr: Framing): Placement {
   const b = opaqueBounds(img);
   const figW = img.naturalWidth * b.w;
   const figH = img.naturalHeight * b.h;
@@ -374,7 +374,7 @@ function placeCutout(img: HTMLImageElement, box: Box, fr: Framing): Placement {
 }
 
 /** A full photo fills its box edge to edge; the sliders pick which part shows. */
-function placeCover(img: HTMLImageElement, box: Box, fr: Framing): Placement {
+export function placeCover(img: HTMLImageElement, box: Box, fr: Framing): Placement {
   const scale = Math.max(box.w / img.naturalWidth, box.h / img.naturalHeight) * Math.max(1, fr.zoom);
   const dw = img.naturalWidth * scale;
   const dh = img.naturalHeight * scale;
@@ -387,7 +387,7 @@ function placeCover(img: HTMLImageElement, box: Box, fr: Framing): Placement {
 }
 
 /** Grades the pixels of a layer in place: a cinematic wash, black and white, or a two-tone in the accent. */
-function tonePixels(c: CanvasRenderingContext2D, tone: Tone, accent: string, box: Box) {
+export function tonePixels(c: CanvasRenderingContext2D, tone: Tone, accent: string, box: Box) {
   if (tone === "natural") return;
   const x = Math.max(0, Math.floor(box.x));
   const y = Math.max(0, Math.floor(box.y));
@@ -427,7 +427,7 @@ function tonePixels(c: CanvasRenderingContext2D, tone: Tone, accent: string, box
 }
 
 /** Multiplies a layer's alpha by a vertical ramp: solid above `from`, clear at `to`. */
-function fadeLayer(c: CanvasRenderingContext2D, from: number, to: number) {
+export function fadeLayer(c: CanvasRenderingContext2D, from: number, to: number) {
   const g = c.createLinearGradient(0, from, 0, to);
   g.addColorStop(0, "rgba(0,0,0,1)");
   g.addColorStop(1, "rgba(0,0,0,0)");

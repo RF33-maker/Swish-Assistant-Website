@@ -37,6 +37,8 @@ import {
   type PhotoFraming,
 } from "@/lib/generateWeeklyCards";
 import { renderPlayerOfTheWeek } from "@/lib/generatePlayerOfTheWeekCard";
+import { renderPotwStack, STACK_READINGS, type StackReading } from "@/lib/generatePotwStackCard";
+import { DEFAULT_ACCENT } from "@/lib/generatePerformanceStyles";
 import { renderTeamOfTheWeek, teamPanelIndexAt } from "@/lib/generateTeamOfTheWeekCard";
 import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
 import { usesLeagueColour } from "@/lib/cardStyle";
@@ -70,6 +72,11 @@ function toHex(rgb?: { r: number; g: number; b: number } | null): string {
 const SLUG_KEY = "weekly-awards-slug";
 const HEADS_KEY = "weekly-awards-heads";
 const ALIGN_KEY = "weekly-awards-align";
+const TEMPLATE_KEY = "weekly-awards-player-template";
+const READING_KEY = "weekly-awards-stack-reading";
+const ACCENT_KEY = "weekly-awards-stack-accent";
+
+type PlayerTemplate = "photo" | "stacked";
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -122,6 +129,14 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   // The look shared with the leaders cards, and (Team of the Week) each player's club crest.
   const [style, setStyle] = useCardStyle();
   const [clubLogos, setClubLogos] = useState<Record<string, string | null>>({});
+  // Player of the Week only: the full-photo card, or the stacked look (the figure, a ladder, a ring).
+  const [template, setTemplate] = useState<PlayerTemplate>(() => (readJson<string>(TEMPLATE_KEY, "photo") === "stacked" ? "stacked" : "photo"));
+  const [reading, setReading] = useState<StackReading>(() => {
+    const stored = readJson<string>(READING_KEY, "box");
+    return STACK_READINGS.some((r) => r.id === stored) ? (stored as StackReading) : "box";
+  });
+  const [accent, setAccent] = useState<string>(() => readJson<string>(ACCENT_KEY, DEFAULT_ACCENT));
+  const stacked = kind === "player" && template === "stacked";
 
   const [leagueLogoUrl, setLeagueLogoUrl] = useState<string | null>(null);
   const [logoColorHex, setLogoColorHex] = useState<string | null>(null);
@@ -314,7 +329,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   const [rendering, setRendering] = useState(false);
   const [hasCard, setHasCard] = useState(false);
   const cardCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const styleSuffix = style !== "league" ? `-${style}` : "";
+  const styleSuffix = stacked ? `-stacked-${reading}` : style !== "league" ? `-${style}` : "";
   const cardFileName = `${kind === "team" ? "team" : "player"}-of-the-week-${slug}-${weekStart || "latest"}${styleSuffix}.png`;
   const renderToken = useRef(0);
 
@@ -344,14 +359,23 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
             if (token === renderToken.current) setUnaligned(result.unaligned);
             return result.canvas;
           })
-        : renderPlayerOfTheWeek(potw!, brand, {
-            style,
-            weekLabel: weekStart ? fmtWeek(weekStart) : "",
-            teamLogoUrl,
-            framing: framing[potw!.player_id],
-            tint,
-            showGameScore,
-          });
+        : stacked
+          ? renderPotwStack(data?.awards || [], brand, {
+              reading,
+              accent,
+              weekLabel: weekStart ? fmtWeek(weekStart) : "",
+              teamLogoUrl,
+              framing: framing[potw!.player_id],
+              showGameScore,
+            })
+          : renderPlayerOfTheWeek(potw!, brand, {
+              style,
+              weekLabel: weekStart ? fmtWeek(weekStart) : "",
+              teamLogoUrl,
+              framing: framing[potw!.player_id],
+              tint,
+              showGameScore,
+            });
     void draw
       .then((canvas) => {
         if (token !== renderToken.current) return;
@@ -368,7 +392,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, chosen, potw, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName, style, clubLogos, weekStart]);
+  }, [kind, chosen, potw, data, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName, style, clubLogos, weekStart, stacked, reading, accent]);
 
   const toggle = (id: string) =>
     setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 5 ? cur : [...cur, id]));
@@ -449,15 +473,89 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
           <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className={FIELD} />
         </Field>
 
-        <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
+        {kind === "player" && (
+          <Field
+            label="Template"
+            hint={
+              template === "stacked"
+                ? "The player's cut-out right of centre, a ladder of numbers down the left, the winning row ringed."
+                : "The full photo across the card, the stat line over its lower half."
+            }
+          >
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Template">
+              {(
+                [
+                  ["photo", "Photo"],
+                  ["stacked", "Stacked"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={template === id}
+                  data-active={template === id}
+                  onClick={() => {
+                    setTemplate(id);
+                    writeJson(TEMPLATE_KEY, id);
+                  }}
+                  className="ch-chip px-3 py-2 text-sm"
+                  data-testid={`template-${id}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
 
-        {usesLeagueColour(style) && (
+        {stacked && (
+          <Field label="Ladder" hint={`${STACK_READINGS.find((r) => r.id === reading)?.hint}.`}>
+            <Select
+              value={reading}
+              onValueChange={(v) => {
+                setReading(v as StackReading);
+                writeJson(READING_KEY, v);
+              }}
+            >
+              <SelectTrigger className={FIELD} data-testid="select-stack-reading">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className={SELECT_MENU}>
+                {STACK_READINGS.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+
+        {stacked ? (
           <ColourField
-            value={primaryHex}
-            custom={!!colorOverride}
-            onChange={updateColour}
-            onReset={() => { setColorOverride(null); try { localStorage.removeItem(`weekly-awards-colour:${slug}`); } catch { /* ignore */ } }}
+            value={accent}
+            custom={accent.toLowerCase() !== DEFAULT_ACCENT}
+            onChange={(hex) => {
+              setAccent(hex);
+              writeJson(ACCENT_KEY, hex);
+            }}
+            onReset={() => {
+              setAccent(DEFAULT_ACCENT);
+              writeJson(ACCENT_KEY, DEFAULT_ACCENT);
+            }}
           />
+        ) : (
+          <>
+            <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
+
+            {usesLeagueColour(style) && (
+              <ColourField
+                value={primaryHex}
+                custom={!!colorOverride}
+                onChange={updateColour}
+                onReset={() => { setColorOverride(null); try { localStorage.removeItem(`weekly-awards-colour:${slug}`); } catch { /* ignore */ } }}
+              />
+            )}
+          </>
         )}
 
         <Toggle
@@ -631,7 +729,15 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                 </div>
               )}
 
-              {!target.photoUrl ? (
+              {stacked && (
+                <p className={HINT}>
+                  {target.cutoutUrl
+                    ? "The stacked card uses the player's cut-out photo."
+                    : "No cut-out for this player, so the game photo stands in. Add a background-removed photo above to get the figure."}
+                </p>
+              )}
+
+              {!(target.photoUrl || (stacked && target.cutoutUrl)) ? (
                 <p className={HINT}>Add a photo for {target.full_name} above and the framing controls appear here.</p>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -668,7 +774,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                 </div>
               )}
 
-              {kind === "player" && target.photoUrl && (
+              {kind === "player" && !stacked && target.photoUrl && (
                 <RangeField
                   label="Colour tint"
                   display={`${tint}%`}
