@@ -4354,12 +4354,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const [playersResp, statsResp, gamesResp] = await Promise.all([
         playerIds.length
-          ? supabaseAdmin.from("players").select("id, full_name, slug, photo_path, photo_focus_y").in("id", playerIds)
+          ? supabaseAdmin.from("players").select("id, full_name, slug, photo_path, photo_path_bg_removed, photo_focus_y").in("id", playerIds)
           : Promise.resolve({ data: [] as any[] }),
         playerIds.length
           ? supabaseAdmin
               .from("player_stats")
-              .select("game_key,player_id,sminutes,sfieldgoalsmade,sfieldgoalsattempted,sthreepointersmade,sthreepointersattempted,sfreethrowsmade,sfreethrowsattempted,splusminuspoints")
+              .select("game_key,player_id,shirtnumber,sminutes,sfieldgoalsmade,sfieldgoalsattempted,sthreepointersmade,sthreepointersattempted,sfreethrowsmade,sfreethrowsattempted,splusminuspoints")
               .in("game_key", gameKeys)
               .in("player_id", playerIds)
           : Promise.resolve({ data: [] as any[] }),
@@ -4373,20 +4373,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const playerById = new Map<string, any>((playersResp.data || []).map((p: any) => [p.id, p]));
 
-      // Players without their own photo borrow one from another record with the same name.
-      const needPhoto = top.filter((p) => !playerById.get(p.player_id)?.photo_path).map((p) => playerById.get(p.player_id)?.full_name || p.full_name);
+      // Players without their own photo (or cut-out) borrow one from another record with the same name.
+      const needPhoto = top
+        .filter((p) => !playerById.get(p.player_id)?.photo_path || !playerById.get(p.player_id)?.photo_path_bg_removed)
+        .map((p) => playerById.get(p.player_id)?.full_name || p.full_name);
       const photoByName = new Map<string, { photo_path: string; photo_focus_y: number | null }>();
+      const cutoutByName = new Map<string, string>();
       if (needPhoto.length > 0) {
         const { data: sameName } = await supabaseAdmin
           .from("players")
-          .select("full_name, photo_path, photo_focus_y")
+          .select("full_name, photo_path, photo_path_bg_removed, photo_focus_y")
           .in("full_name", needPhoto)
-          .not("photo_path", "is", null);
+          .or("photo_path.not.is.null,photo_path_bg_removed.not.is.null");
         for (const p of (sameName || []) as any[]) {
           const key = String(p.full_name).toLowerCase();
           if (p.photo_path && !photoByName.has(key)) photoByName.set(key, p);
+          if (p.photo_path_bg_removed && !cutoutByName.has(key)) cutoutByName.set(key, p.photo_path_bg_removed);
         }
       }
+
+      // Each player's season in this competition, for the stacked card: averages, the total and
+      // where this game's Swish Score ranks among their own games.
+      type SeasonRow = { player_id: string; game_key: string | null; pts: number | null; reb: number | null; ast: number | null; stl: number | null; blk: number | null; game_score: number | null };
+      const seasonRows = playerIds.length
+        ? ((
+            await supabaseAdmin
+              .from("vw_player_game_scores")
+              .select("player_id,game_key,pts,reb,ast,stl,blk,game_score")
+              .in("league_id", leagueIds)
+              .in("player_id", playerIds)
+              .limit(2000)
+              .returns<SeasonRow[]>()
+          ).data || [])
+        : [];
+      const seasonByPlayer = new Map<string, SeasonRow[]>();
+      for (const r of seasonRows) {
+        const list = seasonByPlayer.get(r.player_id) || [];
+        list.push(r);
+        seasonByPlayer.set(r.player_id, list);
+      }
+      const seasonLine = (playerId: string, gameKey: string | null, score: number | null) => {
+        const games = seasonByPlayer.get(playerId) || [];
+        if (games.length === 0) return null;
+        const avg = (pick: (g: SeasonRow) => number | null) =>
+          Math.round((games.reduce((sum, g) => sum + (Number(pick(g)) || 0), 0) / games.length) * 10) / 10;
+        const better = score == null ? 0 : games.filter((g) => g.game_key !== gameKey && Number(g.game_score) > Number(score)).length;
+        return {
+          games: games.length,
+          ppg: avg((g) => g.pts),
+          rpg: avg((g) => g.reb),
+          apg: avg((g) => g.ast),
+          spg: avg((g) => g.stl),
+          bpg: avg((g) => g.blk),
+          total_pts: games.reduce((sum, g) => sum + (Number(g.pts) || 0), 0),
+          score_rank: better + 1,
+        };
+      };
 
       const statsByKey = new Map<string, any>((statsResp.data || []).map((s: any) => [`${s.game_key}_${s.player_id}`, s]));
       const gameByKey = new Map<string, any>((gamesResp.data || []).map((g: any) => [g.game_key, g]));
@@ -4421,6 +4463,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           game_score: perf.game_score,
           photoUrl: photoUrl(player?.photo_path || borrowed?.photo_path),
           photoFocusY: player?.photo_path ? player?.photo_focus_y ?? 50 : borrowed?.photo_focus_y ?? 50,
+          cutoutUrl: photoUrl(player?.photo_path_bg_removed || cutoutByName.get(String(fullName).toLowerCase())),
+          shirt: s?.shirtnumber != null && String(s.shirtnumber).trim() !== "" ? String(s.shirtnumber).trim() : null,
+          season: seasonLine(perf.player_id, perf.game_key, perf.game_score),
           opponent_name: g ? (isHome ? g.away_team : g.home_team) : null,
           game_result:
             myScore != null && oppScore != null
