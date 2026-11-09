@@ -136,7 +136,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     return STACK_READINGS.some((r) => r.id === stored) ? (stored as StackReading) : "box";
   });
   const [accent, setAccent] = useState<string>(() => readJson<string>(ACCENT_KEY, DEFAULT_ACCENT));
-  const stacked = kind === "player" && template === "stacked";
+  const stacked = template === "stacked";
 
   const [leagueLogoUrl, setLeagueLogoUrl] = useState<string | null>(null);
   const [logoColorHex, setLogoColorHex] = useState<string | null>(null);
@@ -348,6 +348,8 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       kind === "team"
         ? renderTeamOfTheWeek(chosen, brand, {
             style,
+            template,
+            accent,
             weekLabel: weekStart ? fmtWeek(weekStart) : "",
             teamLogoUrls: clubLogos,
             framing,
@@ -392,7 +394,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, chosen, potw, data, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName, style, clubLogos, weekStart, stacked, reading, accent]);
+  }, [kind, chosen, potw, data, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName, style, clubLogos, weekStart, stacked, template, reading, accent]);
 
   const toggle = (id: string) =>
     setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 5 ? cur : [...cur, id]));
@@ -473,13 +475,17 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
           <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className={FIELD} />
         </Field>
 
-        {kind === "player" && (
+        {(
           <Field
             label="Template"
             hint={
-              template === "stacked"
-                ? "The player's cut-out right of centre, a ladder of numbers down the left, the winning row ringed."
-                : "The full photo across the card, the stat line over its lower half."
+              kind === "team"
+                ? template === "stacked"
+                  ? "The five photos as one band on the stacked look's dark ground, poster numerals and grain."
+                  : "The five photos as one band in the shared Swish Social look."
+                : template === "stacked"
+                  ? "The player's cut-out right of centre, a ladder of numbers down the left, the winning row ringed."
+                  : "The full photo across the card, the stat line over its lower half."
             }
           >
             <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Template">
@@ -509,7 +515,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
           </Field>
         )}
 
-        {stacked && (
+        {stacked && kind === "player" && (
           <Field label="Ladder" hint={`${STACK_READINGS.find((r) => r.id === reading)?.hint}.`}>
             <Select
               value={reading}
@@ -729,7 +735,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                 </div>
               )}
 
-              {stacked && (
+              {stacked && kind === "player" && (
                 <p className={HINT}>
                   {target.cutoutUrl
                     ? "The stacked card uses the player's cut-out photo."
