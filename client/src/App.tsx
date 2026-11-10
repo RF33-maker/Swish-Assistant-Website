@@ -58,6 +58,7 @@ import PlusPage from "@/pages/plus";
 import CoachAccessSuccessPage from "@/pages/coach-access-success";
 import CoachAccessAdminPage from "@/pages/admin/coach-access";
 import GameTimesAdminPage from "@/pages/admin/game-times";
+import FeedCommentsAdminPage from "@/pages/admin/feed-comments";
 import PrivacyPolicyPage from "@/pages/privacy";
 import TermsOfServicePage from "@/pages/terms";
 import CookiePolicyPage from "@/pages/cookies";
@@ -157,6 +158,7 @@ function Router() {
       <AdminRoute path="/admin/player-claims" component={PlayerClaimsAdminPage} />
       <AdminRoute path="/admin/coach-access" component={CoachAccessAdminPage} />
       <AdminRoute path="/admin/game-times" component={GameTimesAdminPage} />
+      <AdminRoute path="/admin/feed-comments" component={FeedCommentsAdminPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />
