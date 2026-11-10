@@ -37,7 +37,7 @@ import {
   type PhotoFraming,
 } from "@/lib/generateWeeklyCards";
 import { renderPlayerOfTheWeek } from "@/lib/generatePlayerOfTheWeekCard";
-import { renderPotwStack, STACK_READINGS, type StackReading } from "@/lib/generatePotwStackCard";
+import { PHOTO_LOOKS, renderPotwStack, STACK_READINGS, type PhotoLook, type StackReading } from "@/lib/generatePotwStackCard";
 import { DEFAULT_ACCENT } from "@/lib/generatePerformanceStyles";
 import { renderTeamOfTheWeek, teamPanelIndexAt } from "@/lib/generateTeamOfTheWeekCard";
 import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
@@ -75,6 +75,8 @@ const ALIGN_KEY = "weekly-awards-align";
 const TEMPLATE_KEY = "weekly-awards-player-template";
 const READING_KEY = "weekly-awards-stack-reading";
 const ACCENT_KEY = "weekly-awards-stack-accent";
+const RING_KEY = "weekly-awards-stack-ring";
+const PHOTO_LOOK_KEY = "weekly-awards-stack-photo-look";
 
 type PlayerTemplate = "photo" | "stacked";
 
@@ -136,6 +138,13 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     return STACK_READINGS.some((r) => r.id === stored) ? (stored as StackReading) : "box";
   });
   const [accent, setAccent] = useState<string>(() => readJson<string>(ACCENT_KEY, DEFAULT_ACCENT));
+  // The hand-drawn ring around the ladder's top row, on by default.
+  const [ring, setRing] = useState<boolean>(() => readJson<boolean>(RING_KEY, true) !== false);
+  // Behind a player with no cut-out: the blurred shot, or the dark ground with the accent as smoke.
+  const [photoLook, setPhotoLook] = useState<PhotoLook>(() => {
+    const stored = readJson<string>(PHOTO_LOOK_KEY, "blur");
+    return PHOTO_LOOKS.some((l) => l.id === stored) ? (stored as PhotoLook) : "blur";
+  });
   const stacked = template === "stacked";
 
   const [leagueLogoUrl, setLeagueLogoUrl] = useState<string | null>(null);
@@ -369,6 +378,8 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
               teamLogoUrl,
               framing: framing[potw!.player_id],
               showGameScore,
+              ring,
+              photoLook,
             })
           : renderPlayerOfTheWeek(potw!, brand, {
               style,
@@ -394,7 +405,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, chosen, potw, data, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName, style, clubLogos, weekStart, stacked, template, reading, accent]);
+  }, [kind, chosen, potw, data, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName, style, clubLogos, weekStart, stacked, template, reading, accent, ring, photoLook]);
 
   const toggle = (id: string) =>
     setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 5 ? cur : [...cur, id]));
@@ -533,6 +544,43 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                 ))}
               </SelectContent>
             </Select>
+          </Field>
+        )}
+
+        {stacked && kind === "player" && (
+          <Toggle
+            checked={ring}
+            onChange={(on) => {
+              setRing(on);
+              writeJson(RING_KEY, on);
+            }}
+            label="Ring the top row"
+            hint="The hand-drawn ring around the ladder's first row. Untick it for a plainer card."
+            testId="toggle-stack-ring"
+          />
+        )}
+
+        {stacked && kind === "player" && potw && !potw.cutoutUrl && (
+          <Field label="Photo backdrop" hint={`${PHOTO_LOOKS.find((l) => l.id === photoLook)?.hint}. With a cut-out the card has no backdrop to choose.`}>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Photo backdrop">
+              {PHOTO_LOOKS.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={photoLook === l.id}
+                  data-active={photoLook === l.id}
+                  onClick={() => {
+                    setPhotoLook(l.id);
+                    writeJson(PHOTO_LOOK_KEY, l.id);
+                  }}
+                  className="ch-chip px-3 py-2 text-sm"
+                  data-testid={`photo-look-${l.id}`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
           </Field>
         )}
 
