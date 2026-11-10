@@ -93,6 +93,18 @@ function slugify(name: string): string {
     .slice(0, 60);
 }
 
+/** The account that signed up with this email, if there is one. */
+async function findAccountByEmail(email: string): Promise<{ id: string; confirmed: boolean } | null> {
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(error.message);
+    const hit = data.users.find((u) => (u.email || "").toLowerCase() === email);
+    if (hit) return { id: hit.id, confirmed: !!hit.email_confirmed_at };
+    if (data.users.length < 1000) break;
+  }
+  return null;
+}
+
 /** A fresh single-use claim link for a profile; earlier unused links stop working. */
 async function createInvite(photographerId: string, email: string, adminId: string): Promise<{ url: string; expiresAt: string } | { error: string }> {
   await supabaseAdmin.from("photographer_invites").update({ expires_at: new Date().toISOString() }).eq("photographer_id", photographerId).is("used_at", null);
@@ -204,6 +216,67 @@ export function registerMediaSpotlightRoutes(app: Express, deps: Deps) {
       if ("error" in invite) return res.status(500).json({ error: invite.error });
       const emailResult = email ? await sendViaResend(email, inviteEmail(p.display_name, invite.url), `media-invite-${id}-${Date.now()}`) : null;
       res.json({ url: invite.url, expires_at: invite.expiresAt, email: emailResult });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Admin: hand a ready-made profile straight to someone who already has a
+  // Swish account, found by the email they signed up with. Same end state as
+  // claiming through an invite link (the profile is theirs, and Swish+ comes
+  // with it), without them needing the link.
+  app.post("/api/admin/media/photographers/:id/link", async (req: Request, res: Response) => {
+    try {
+      const adminId = await deps.requireAdmin(req, res);
+      if (!adminId) return;
+      const { id } = req.params;
+      if (!UUID.test(id)) return res.status(400).json({ error: "Invalid profile" });
+      const email = str(req.body?.email, 200).toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "That email address doesn't look right" });
+
+      const { data: p } = await supabaseAdmin.from("photographers").select("id, slug, display_name, user_id, status").eq("id", id).maybeSingle();
+      if (!p) return res.status(404).json({ error: "Profile not found" });
+      if (p.user_id) return res.status(400).json({ error: "This profile already belongs to an account. Unlink it first." });
+
+      const account = await findAccountByEmail(email);
+      if (!account) return res.status(404).json({ error: "No Swish account uses that email. Ask them to sign up first, or send an invite link instead." });
+      if (!account.confirmed) return res.status(400).json({ error: "That account hasn't confirmed its email yet. Link it once they have." });
+      const { data: existing } = await supabaseAdmin.from("photographers").select("id, display_name").eq("user_id", account.id).maybeSingle();
+      if (existing) return res.status(400).json({ error: `That account already owns a profile (${existing.display_name}).` });
+
+      const { error: upErr } = await supabaseAdmin
+        .from("photographers")
+        .update({ user_id: account.id, status: p.status === "hidden" ? "hidden" : "claimed" })
+        .eq("id", p.id);
+      if (upErr) return res.status(500).json({ error: upErr.message });
+      // Any invite link still out for this profile has nothing left to claim.
+      await supabaseAdmin.from("photographer_invites").update({ expires_at: new Date().toISOString() }).eq("photographer_id", p.id).is("used_at", null);
+
+      const emailResult = req.body?.notify === false ? null : await sendViaResend(email, welcomeEmail(p.display_name), `media-welcome-${p.id}`);
+      res.json({ ok: true, slug: p.slug, hidden: p.status === "hidden", email: emailResult });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Admin: take a profile back from its account (a wrong link, or someone
+  // leaving). The profile and its photos stay; the account loses the creator
+  // space and the Swish+ that came with it.
+  app.post("/api/admin/media/photographers/:id/unlink", async (req: Request, res: Response) => {
+    try {
+      const adminId = await deps.requireAdmin(req, res);
+      if (!adminId) return;
+      const { id } = req.params;
+      if (!UUID.test(id)) return res.status(400).json({ error: "Invalid profile" });
+      const { data: p } = await supabaseAdmin.from("photographers").select("id, user_id, status").eq("id", id).maybeSingle();
+      if (!p) return res.status(404).json({ error: "Profile not found" });
+      if (!p.user_id) return res.json({ ok: true });
+      const { error } = await supabaseAdmin
+        .from("photographers")
+        .update({ user_id: null, status: p.status === "hidden" ? "hidden" : "unclaimed" })
+        .eq("id", p.id);
+      if (error) return res.status(500).json({ error: error.message });
+      res.json({ ok: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Download, ExternalLink, Eye, EyeOff, Link2, Loader2, Mail, Plus, Star, Trash2 } from "lucide-react";
+import { Check, Copy, Download, ExternalLink, Eye, EyeOff, Link2, Loader2, Mail, Plus, Star, Trash2, UserCheck, UserX } from "lucide-react";
 import AdminPageShell, { AdminPageNotice } from "@/components/layout/AdminPageShell";
 import { PermissionBadge, PhotographerAvatar } from "@/components/media/PhotographerBits";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -174,11 +174,82 @@ function InviteDialog({ photographer, onClose }: { photographer: Photographer; o
   );
 }
 
+/** Hands a ready-made profile to someone who already has a Swish account, by the email they signed up with. */
+function LinkDialog({ photographer, onClose, onLinked }: { photographer: Photographer; onClose: () => void; onLinked: () => void }) {
+  const [email, setEmail] = useState(photographer.socials?.email ?? "");
+  const [notify, setNotify] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState<{ hidden: boolean; email: { sent: boolean; reason?: string } | null } | null>(null);
+
+  const link = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      setDone(await mediaApi(`/api/admin/media/photographers/${photographer.id}/link`, { body: { email: email.trim(), notify } }));
+      onLinked();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sa-pro">
+        <DialogHeader>
+          <DialogTitle>Link {photographer.display_name} to an account</DialogTitle>
+          <DialogDescription>For someone who already has a Swish account. The profile becomes theirs straight away, and Swish+ is added to the account.</DialogDescription>
+        </DialogHeader>
+        {done ? (
+          <div className="space-y-3">
+            <p className="text-[14px] text-[color:var(--ch-text)]">
+              Linked to {email.trim()}. {done.hidden ? "The profile is still hidden, so show it when it's ready." : "They can edit the profile and open the creator space."}
+            </p>
+            <p className="text-[13px] text-[color:var(--ch-text-2)]">
+              {done.email ? (done.email.sent ? "They've been emailed to say it's ready." : `Not emailed: ${done.email.reason}. Let them know yourself.`) : "No email was sent."}
+            </p>
+            <button type="button" onClick={onClose} className="ch-btn ch-btn-primary h-10 px-4">Done</button>
+          </div>
+        ) : (
+          <form onSubmit={link} className="space-y-3">
+            <div>
+              <label className={LABEL} htmlFor="link-email">The email they signed up with</label>
+              <input id="link-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={INPUT} autoComplete="off" data-testid="link-account-email" />
+            </div>
+            <label className="flex items-center gap-2 text-[13px] text-[color:var(--ch-text)]">
+              <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="h-4 w-4 accent-[color:var(--ch-accent)]" />
+              Email them to say their profile is ready
+            </label>
+            {error && <p className="text-[13px] text-red-600 dark:text-red-400" role="alert">{error}</p>}
+            <button type="submit" disabled={busy || !email.trim()} className="ch-btn ch-btn-primary h-10 px-4 disabled:opacity-60" data-testid="link-account-submit">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <UserCheck className="h-4 w-4" aria-hidden="true" />} Link to this account
+            </button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PhotographersTab() {
   const { data, isLoading } = useAllPhotographers();
   const queryClient = useQueryClient();
   const refresh = () => queryClient.invalidateQueries({ queryKey: MEDIA_QUERY_KEY });
   const [invite, setInvite] = useState<Photographer | null>(null);
+  const [link, setLink] = useState<Photographer | null>(null);
+
+  const unlink = async (p: Photographer) => {
+    if (!window.confirm(`Take ${p.display_name}'s profile back from its account? The profile and photos stay; the account loses the creator space and its free Swish+.`)) return;
+    try {
+      await mediaApi(`/api/admin/media/photographers/${p.id}/unlink`, { method: "POST" });
+      void refresh();
+    } catch (err: any) {
+      toast({ title: "Couldn't unlink", description: err.message, variant: "destructive" });
+    }
+  };
 
   const update = async (p: Photographer, patch: Partial<Photographer>) => {
     const { error } = await supabase.from("photographers").update(patch).eq("id", p.id);
@@ -217,8 +288,13 @@ function PhotographersTab() {
                 <div className="truncate text-[12px] text-[color:var(--ch-muted)]">{p.teams.join(", ") || "No teams listed"} · {creditLine(p)}</div>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
-                {p.status !== "claimed" && (
-                  <button type="button" onClick={() => setInvite(p)} className={SMALL}><Mail className="h-3.5 w-3.5" aria-hidden="true" /> Invite</button>
+                {!p.user_id ? (
+                  <>
+                    <button type="button" onClick={() => setInvite(p)} className={SMALL}><Mail className="h-3.5 w-3.5" aria-hidden="true" /> Invite</button>
+                    <button type="button" onClick={() => setLink(p)} className={SMALL} data-testid={`link-account-${p.slug}`}><UserCheck className="h-3.5 w-3.5" aria-hidden="true" /> Link to account</button>
+                  </>
+                ) : (
+                  <button type="button" onClick={() => unlink(p)} className={SMALL}><UserX className="h-3.5 w-3.5" aria-hidden="true" /> Unlink</button>
                 )}
                 <button type="button" onClick={() => update(p, { is_featured: !p.is_featured })} className={`${SMALL} ${p.is_featured ? "!border-[color:var(--ch-accent)] !text-[color:var(--ch-accent)]" : ""}`} aria-pressed={p.is_featured}>
                   <Star className="h-3.5 w-3.5" aria-hidden="true" /> {p.is_featured ? "Featured" : "Feature"}
@@ -250,6 +326,7 @@ function PhotographersTab() {
         </ul>
       )}
       {invite && <InviteDialog photographer={invite} onClose={() => setInvite(null)} />}
+      {link && <LinkDialog photographer={link} onClose={() => setLink(null)} onLinked={refresh} />}
     </div>
   );
 }
