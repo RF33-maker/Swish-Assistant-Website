@@ -1116,11 +1116,60 @@
   to { opacity: 1; transform: none; }
 }
 .ask-turn { animation: ask-turn-in 0.35s ease-out both; }
+/* An answer's tables and lists rise in under the words once they're written. */
+@keyframes ask-card-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.ask-card-in { animation: ask-card-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes ask-glow {
   0%, 100% { opacity: 0.85; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.06); }
 }
 .ask-glow { animation: ask-glow 7s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .ask-word, .ask-turn, .ask-glow, .ask-dots i, .ask-fade-dot, .ask-phrase, .ask-shimmer { animation: none; }
+  .ask-word, .ask-turn, .ask-card-in, .ask-glow, .ask-dots i, .ask-fade-dot, .ask-phrase, .ask-shimmer { animation: none; }
+}
+
+/* The small print under the question box keeps a soft halo of the page's own
+   background, so it stays readable when a bright fold of aurora passes behind. */
+.ask-fineprint {
+  text-shadow: 0 0 3px #f8fafc, 0 0 8px rgba(248, 250, 252, 0.95), 0 0 14px rgba(248, 250, 252, 0.8);
+}
+
+.dark .ask-fineprint {
+  text-shadow: 0 0 3px #0a0a0f, 0 0 8px rgba(10, 10, 15, 0.9), 0 0 14px rgba(10, 10, 15, 0.75);
+}
+
+/* Faint words in the aurora while Ask works (AuroraWords): made of light, so
+   they only lighten what's behind them (screen) and show only where the
+   aurora is lit; plain background stays untouched. Soft-edged and slow, and
+   they fade with the light when the answer lands. Screening a pale colour is
+   a gentle change, so light mode needs a higher opacity for the same faintness. */
+.aurora-words { transition: opacity 1.8s ease; }
+.aurora-words.is-calming { opacity: 0; }
+.aurora-word {
+  position: absolute;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: lowercase;
+  color: #fff1d6;
+  opacity: 0;
+  mix-blend-mode: screen;
+  text-shadow: 0 0 16px rgba(255, 236, 200, 0.9);
+  --aw-gain: 2;
+  animation-name: aurora-word;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+}
+.dark .aurora-word {
+  /* Saturated, so the lift stays warm instead of greying the orange. */
+  color: #ff9a3a;
+  text-shadow: 0 0 14px rgba(255, 140, 40, 0.8), 0 0 34px rgba(249, 115, 22, 0.6);
+  --aw-gain: 1;
+}
+@keyframes aurora-word {
+  0% { opacity: 0; transform: translate(-50%, -50%) translateY(10px); filter: blur(8px); }
+  35% { opacity: calc(var(--aw-peak, 0.2) * var(--aw-gain, 1)); filter: blur(1.4px); }
+  62% { opacity: calc(var(--aw-peak, 0.2) * var(--aw-gain, 1)); filter: blur(1.6px); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--aw-dx, 0px)), -50%) translateY(-14px); filter: blur(9px); }
 }

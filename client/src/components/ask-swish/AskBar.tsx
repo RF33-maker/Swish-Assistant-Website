@@ -1,7 +1,8 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowUp, Check, ChevronDown, Globe, Mic, Plus, RotateCcw, Sparkles, Square, Target } from "lucide-react";
 import { scopeLabel as fullLabel, type AskScope } from "@/lib/askSwish";
 import { withoutSeason } from "@/lib/leagueKeys";
+import { BorderBeam } from "@/components/ui/border-beam-search";
 import { useAskSwish } from "./AskSwishProvider";
 
 const scopeLabel = (s: AskScope | null) => {
@@ -54,9 +55,20 @@ interface Props {
   big?: boolean;
   /** Open the menus below the bar (when it sits mid-page) rather than above. */
   dropDown?: boolean;
+  /** Shown in place of the plus button, at the start of the bar. */
+  leading?: ReactNode;
+  /** An orange light that travels along the bottom edge (the app Home's Ask mode). */
+  beam?: boolean;
 }
 
-export default function AskBar({ onSubmit, groups, autoFocus = true, big = false, dropDown = false }: Props) {
+// The app Home's bar: with the Search/Ask switch at its start (`leading`), it
+// takes the Search bar's shape (HomeSearch: 56px tall, rounded-2xl, the switch
+// 10px in and the text 12px after it), so switching modes changes only what's
+// inside. 9px top and bottom around the 36px row, plus the border, is 56.
+const HOME_BAR_SHAPE = "rounded-2xl pl-2 pr-2 py-[9px]";
+
+export default function AskBar({ onSubmit, groups, autoFocus = true, big = false, dropDown = false, leading, beam = false }: Props) {
+  const homeBar = !!leading;
   const id = useId();
   const { busy, stop, reset, turns, scope, setScope, clearScope, quota } = useAskSwish();
   const [draft, setDraft] = useState("");
@@ -174,136 +186,160 @@ export default function AskBar({ onSubmit, groups, autoFocus = true, big = false
   const item = "w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13.5px] text-slate-700 dark:text-neutral-200 hover:bg-orange-500/10 focus:bg-orange-500/10 focus:outline-none";
   const iconBtn = "h-9 w-9 shrink-0 rounded-full grid place-items-center text-slate-500 dark:text-neutral-400 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-white/10 transition-colors";
 
-  return (
-    <div>
-      <form
-        onSubmit={(e) => { e.preventDefault(); send(); }}
-        data-listening={listening || undefined}
-        className={`relative flex flex-wrap items-end gap-1 rounded-[26px] border bg-white dark:bg-[#0a0a0f] px-1.5 py-1.5 transition-[border-color,box-shadow] duration-200 shadow-[0_10px_30px_-14px_rgba(15,23,42,0.35)] dark:shadow-[0_0_0_1px_rgba(249,115,22,0.08),0_18px_40px_-18px_rgba(249,115,22,0.45)] ${
-          listening ? "border-orange-500 ring-4 ring-orange-500/15" : "border-slate-200 dark:border-white/[0.12] focus-within:border-orange-400 dark:focus-within:border-orange-500/70 focus-within:ring-4 focus-within:ring-orange-500/10"
-        }`}
-      >
-        {/* Plus: questions to try, and a fresh start. */}
-        <div className="relative shrink-0">
-          <button
-            ref={plusBtn}
-            type="button"
-            className={iconBtn}
-            aria-label="Questions to try and more"
-            aria-haspopup="menu"
-            aria-expanded={menu === "plus"}
-            aria-controls={menu === "plus" ? `${id}-plus` : undefined}
-            onClick={() => setMenu((m) => (m === "plus" ? null : "plus"))}
-          >
-            <Plus className={`h-5 w-5 transition-transform ${menu === "plus" ? "rotate-45" : ""}`} aria-hidden="true" />
-          </button>
-          {menu === "plus" && (
-            <div ref={menuEl} id={`${id}-plus`} role="menu" aria-label="Ask Swish" onKeyDown={onMenuKey} className={`${menuBox} left-0`}>
-              {turns.length > 0 && (
-                <button type="button" role="menuitem" tabIndex={-1} className={item} onClick={() => { setMenu(null); reset(); refocus(); }}>
-                  <RotateCcw className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
-                  New chat
-                </button>
-              )}
-              {tries.length > 0 && (
-                <>
-                  <p className="px-3 pt-2 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-neutral-500">Questions to try</p>
-                  {tries.map((q) => (
-                    <button key={q} type="button" role="menuitem" tabIndex={-1} className={item} onClick={() => { setMenu(null); send(q); }}>
-                      <Sparkles className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
-                      <span className="min-w-0">{q}</span>
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        <label className={`min-w-0 flex-1 self-center ${expanded ? "order-first basis-full px-3 pt-1.5" : "px-1"}`}>
-          <span className="sr-only">Ask Swish</span>
-          <textarea
-            ref={area}
-            rows={1}
-            value={draft}
-            disabled={out}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKey}
-            placeholder={out ? "You're out of questions for now" : listening ? "Listening…" : label ? "Ask a question" : here ? "Ask anything" : "What do you want to find out?"}
-            className={`block w-full resize-none bg-transparent leading-6 outline-none placeholder:text-slate-400 dark:placeholder:text-neutral-500 overflow-y-auto ${big ? "text-[16px]" : "text-[16px] md:text-[15px]"}`}
-            style={{ height: LINE }}
-          />
-        </label>
-
-        {expanded && <span className="flex-1" aria-hidden="true" />}
-
-        {/* What Swish is looking at. */}
-        {(here || label) && (
-          <div className="relative shrink-0">
-            <button
-              ref={scopeBtn}
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={menu === "scope"}
-              aria-controls={menu === "scope" ? `${id}-scope` : undefined}
-              aria-label={`Looking at: ${label ?? "all leagues"}`}
-              onClick={() => setMenu((m) => (m === "scope" ? null : "scope"))}
-              className="h-9 inline-flex items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-orange-700 dark:text-orange-300 hover:bg-orange-500/10 transition-colors"
-            >
-              <span className="max-w-[96px] truncate">{label ?? "All leagues"}</span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            </button>
-            {menu === "scope" && (
-              <div ref={menuEl} id={`${id}-scope`} role="menu" aria-label="Looking at" onKeyDown={onMenuKey} className={`${menuBox} right-0`}>
-                <p className="px-3 pt-2 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-neutral-500">Swish is looking at</p>
-                {here && pageScope.current && (
-                  <button type="button" role="menuitemradio" aria-checked={!!scope} tabIndex={-1} className={item} onClick={() => { setScope(pageScope.current); setMenu(null); refocus(); }}>
-                    <Target className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-semibold">{here}</span>
-                      <span className="block text-[12px] text-slate-500 dark:text-neutral-400">Answers start from what you were viewing</span>
-                    </span>
-                    {scope && <Check className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />}
+  const formEl = (
+    <form
+      onSubmit={(e) => { e.preventDefault(); send(); }}
+      data-listening={listening || undefined}
+      className={`relative flex flex-wrap items-end gap-1 ${homeBar ? HOME_BAR_SHAPE : "rounded-[26px] px-1.5 py-1.5"} border bg-white dark:bg-[#0a0a0f] transition-[border-color,box-shadow] duration-200 shadow-[0_10px_30px_-14px_rgba(15,23,42,0.35)] dark:shadow-[0_0_0_1px_rgba(249,115,22,0.08),0_18px_40px_-18px_rgba(249,115,22,0.45)] ${
+        listening ? "border-orange-500 ring-4 ring-orange-500/15" : "border-slate-200 dark:border-white/[0.12] focus-within:border-orange-400 dark:focus-within:border-orange-500/70 focus-within:ring-4 focus-within:ring-orange-500/10"
+      }`}
+    >
+      {/* Plus: questions to try, and a fresh start. */}
+      {leading ? <div className="shrink-0 self-center pl-0.5">{leading}</div> : (
+      <div className="relative shrink-0">
+        <button
+          ref={plusBtn}
+          type="button"
+          className={iconBtn}
+          aria-label="Questions to try and more"
+          aria-haspopup="menu"
+          aria-expanded={menu === "plus"}
+          aria-controls={menu === "plus" ? `${id}-plus` : undefined}
+          onClick={() => setMenu((m) => (m === "plus" ? null : "plus"))}
+        >
+          <Plus className={`h-5 w-5 transition-transform ${menu === "plus" ? "rotate-45" : ""}`} aria-hidden="true" />
+        </button>
+        {menu === "plus" && (
+          <div ref={menuEl} id={`${id}-plus`} role="menu" aria-label="Ask Swish" onKeyDown={onMenuKey} className={`${menuBox} left-0`}>
+            {turns.length > 0 && (
+              <button type="button" role="menuitem" tabIndex={-1} className={item} onClick={() => { setMenu(null); reset(); refocus(); }}>
+                <RotateCcw className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
+                New chat
+              </button>
+            )}
+            {tries.length > 0 && (
+              <>
+                <p className="px-3 pt-2 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-neutral-500">Questions to try</p>
+                {tries.map((q) => (
+                  <button key={q} type="button" role="menuitem" tabIndex={-1} className={item} onClick={() => { setMenu(null); send(q); }}>
+                    <Sparkles className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
+                    <span className="min-w-0">{q}</span>
                   </button>
-                )}
-                <button type="button" role="menuitemradio" aria-checked={!scope} tabIndex={-1} className={item} onClick={() => { clearScope(); setMenu(null); refocus(); }}>
-                  <Globe className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-semibold">All leagues</span>
-                    <span className="block text-[12px] text-slate-500 dark:text-neutral-400">Anything across British basketball</span>
-                  </span>
-                  {!scope && <Check className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />}
-                </button>
-              </div>
+                ))}
+              </>
             )}
           </div>
         )}
+      </div>
+      )}
 
-        {busy ? (
-          <button type="button" onClick={stop} aria-label="Stop" className="h-9 w-9 shrink-0 rounded-full grid place-items-center bg-slate-900 text-white dark:bg-white dark:text-slate-900 transition-transform active:scale-95">
-            <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-          </button>
-        ) : canSend || !SR ? (
+      <label className={`min-w-0 flex-1 self-center ${expanded ? "order-first basis-full px-3 pt-1.5" : homeBar ? "pl-2 pr-1" : "px-1"}`}>
+        <span className="sr-only">Ask Swish</span>
+        <textarea
+          ref={area}
+          rows={1}
+          value={draft}
+          disabled={out}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onKey}
+          placeholder={out ? "You're out of questions for now" : listening ? "Listening…" : label ? "Ask a question" : here ? "Ask anything" : "What do you want to find out?"}
+          className={`block w-full resize-none bg-transparent leading-6 outline-none placeholder:text-slate-400 dark:placeholder:text-neutral-500 overflow-y-auto ${big ? "text-[16px]" : "text-[16px] md:text-[15px]"}`}
+          style={{ height: LINE }}
+        />
+      </label>
+
+      {expanded && <span className="flex-1" aria-hidden="true" />}
+
+      {/* What Swish is looking at. */}
+      {(here || label) && (
+        <div className="relative shrink-0">
           <button
-            type="submit"
-            disabled={!canSend}
-            aria-label="Send"
-            className="h-9 w-9 shrink-0 rounded-full grid place-items-center bg-orange-500 text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,0.8)] transition-all active:scale-95 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-white/10 dark:disabled:text-neutral-500"
+            ref={scopeBtn}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={menu === "scope"}
+            aria-controls={menu === "scope" ? `${id}-scope` : undefined}
+            aria-label={`Looking at: ${label ?? "all leagues"}`}
+            onClick={() => setMenu((m) => (m === "scope" ? null : "scope"))}
+            className="h-9 inline-flex items-center gap-1 rounded-full px-2.5 text-[12px] font-semibold text-orange-700 dark:text-orange-300 hover:bg-orange-500/10 transition-colors"
           >
-            <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.5} aria-hidden="true" />
+            <span className="max-w-[96px] truncate">{label ?? "All leagues"}</span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </button>
-        ) : (
-          <button type="button" onClick={listen} aria-label={listening ? "Stop listening" : "Speak"} aria-pressed={listening} className={`${iconBtn} ${listening ? "!text-orange-500" : ""}`}>
-            {listening ? (
-              <span className="flex items-end gap-[3px] h-4" aria-hidden="true">
-                {[0, 1, 2, 3].map((i) => <i key={i} className="w-[3px] rounded-full bg-orange-500 animate-pulse" style={{ height: `${[8, 14, 10, 12][i]}px`, animationDelay: `${i * 120}ms` }} />)}
-              </span>
-            ) : (
-              <Mic className="h-5 w-5" aria-hidden="true" />
-            )}
-          </button>
-        )}
-      </form>
+          {menu === "scope" && (
+            <div ref={menuEl} id={`${id}-scope`} role="menu" aria-label="Looking at" onKeyDown={onMenuKey} className={`${menuBox} right-0`}>
+              <p className="px-3 pt-2 pb-1 text-[10.5px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-neutral-500">Swish is looking at</p>
+              {here && pageScope.current && (
+                <button type="button" role="menuitemradio" aria-checked={!!scope} tabIndex={-1} className={item} onClick={() => { setScope(pageScope.current); setMenu(null); refocus(); }}>
+                  <Target className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">{here}</span>
+                    <span className="block text-[12px] text-slate-500 dark:text-neutral-400">Answers start from what you were viewing</span>
+                  </span>
+                  {scope && <Check className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />}
+                </button>
+              )}
+              <button type="button" role="menuitemradio" aria-checked={!scope} tabIndex={-1} className={item} onClick={() => { clearScope(); setMenu(null); refocus(); }}>
+                <Globe className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">All leagues</span>
+                  <span className="block text-[12px] text-slate-500 dark:text-neutral-400">Anything across British basketball</span>
+                </span>
+                {!scope && <Check className="h-4 w-4 shrink-0 text-orange-500" aria-hidden="true" />}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {busy ? (
+        <button type="button" onClick={stop} aria-label="Stop" className="h-9 w-9 shrink-0 rounded-full grid place-items-center bg-slate-900 text-white dark:bg-white dark:text-slate-900 transition-transform active:scale-95">
+          <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+        </button>
+      ) : canSend || !SR ? (
+        <button
+          type="submit"
+          disabled={!canSend}
+          aria-label="Send"
+          className="h-9 w-9 shrink-0 rounded-full grid place-items-center bg-orange-500 text-white shadow-[0_6px_16px_-6px_rgba(249,115,22,0.8)] transition-all active:scale-95 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none dark:disabled:bg-white/10 dark:disabled:text-neutral-500"
+        >
+          <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.5} aria-hidden="true" />
+        </button>
+      ) : (
+        <button type="button" onClick={listen} aria-label={listening ? "Stop listening" : "Speak"} aria-pressed={listening} className={`${iconBtn} ${listening ? "!text-orange-500" : ""}`}>
+          {listening ? (
+            <span className="flex items-end gap-[3px] h-4" aria-hidden="true">
+              {[0, 1, 2, 3].map((i) => <i key={i} className="w-[3px] rounded-full bg-orange-500 animate-pulse" style={{ height: `${[8, 14, 10, 12][i]}px`, animationDelay: `${i * 120}ms` }} />)}
+            </span>
+          ) : (
+            <Mic className="h-5 w-5" aria-hidden="true" />
+          )}
+        </button>
+      )}
+    </form>
+  );
+
+  return (
+    <div>
+      {beam ? (
+        // Orange only: the sunset palette with its hue swing narrowed so it
+        // stays orange rather than drifting into red or yellow. The library's
+        // dark preset in both themes: its light one is too faint to notice.
+        <BorderBeam
+          size="line"
+          colorVariant="sunset"
+          hueRange={8}
+          saturation={1.8}
+          brightness={1.1}
+          theme="dark"
+          duration={3.1}
+          borderRadius={homeBar ? 16 : 26}
+          // The app Home's switch morphs the search bar into this one.
+          style={{ viewTransitionName: "home-bar" }}
+        >
+          {formEl}
+        </BorderBeam>
+      ) : formEl}
       {note && <p className="mt-1.5 px-3 text-[12px] text-orange-700 dark:text-orange-300" aria-live="polite">{note}</p>}
     </div>
   );

@@ -12,6 +12,23 @@ import { useAskSwish } from "./AskSwishProvider";
 import AskCardView from "./AskCards";
 import AskBar from "./AskBar";
 import MetaballField from "./MetaballField";
+import AuroraField from "./AuroraField";
+import AuroraWords from "./AuroraWords";
+
+/** True inside the iOS app (Capacitor puts its bridge on window); false on the website. */
+const isNativeApp =
+  typeof window !== "undefined" &&
+  !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+
+// How many full Ask panels are on screen in the app. While any is, the html
+// element carries `ask-backdrop`: the strip under the clock and the header go
+// see-through, so the background runs to the top of the screen under the logo.
+let backdrops = 0;
+
+/** The full page's living background: "aurora" (orange light curtains) or
+ *  "ball" (the earlier orange metaball, MetaballField). Kept switchable so
+ *  the ball can come back by changing this one word. */
+const ASK_BACKGROUND: "aurora" | "ball" = "aurora";
 
 /**
  * The conversation itself: used inside the side drawer and mobile sheet, on
@@ -33,12 +50,23 @@ interface Props {
   /** Receives each finished answer (the scouting editor inserts it). */
   onAnswer?: (text: string) => void;
   autoFocus?: boolean;
+  /** Replaces the question box's plus button (the app Home puts its Search / Ask switch there). */
+  barLeading?: ReactNode;
+  /** Runs the orange beam along the question box (the app Home's Ask mode). */
+  barBeam?: boolean;
+  /** Stands in for the welcome's own greeting (the app Home passes its date
+   *  line and greeting). The box then sits straight under it, exactly where
+   *  Home's search bar is, and only what's below the box flows in. */
+  welcomeHeader?: ReactNode;
 }
+
+/** Space left above a question scrolled to the top: clear of the thread's faded top edge. */
+const THREAD_TOP_GAP = 16;
 
 const chip =
   "shrink-0 rounded-full border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-transparent px-3.5 py-2 text-[13px] leading-snug text-slate-700 dark:text-neutral-200 hover:border-orange-400 hover:text-orange-700 dark:hover:border-orange-500/60 dark:hover:text-orange-300 active:scale-[0.98] transition text-left";
 
-export default function AskSwishPanel({ onClose, size = "panel", onAnswer, autoFocus = true }: Props) {
+export default function AskSwishPanel({ onClose, size = "panel", onAnswer, autoFocus = true, barLeading, barBeam = false, welcomeHeader }: Props) {
   const { user } = useAuth();
   const { turns, busy, ask, stop, reset, scope, surface, quota, onAnswer: answerRef } = useAskSwish();
   const allowance = quotaLine(quota);
@@ -48,6 +76,18 @@ export default function AskSwishPanel({ onClose, size = "panel", onAnswer, autoF
   const label = scoped ? withoutSeason(scoped) : null;
   const big = size === "page";
   const started = turns.length > 0;
+  const backdrop = big && isNativeApp;
+
+  useEffect(() => {
+    if (!backdrop) return;
+    const root = document.documentElement;
+    backdrops += 1;
+    root.classList.add("ask-backdrop");
+    return () => {
+      backdrops -= 1;
+      if (backdrops === 0) root.classList.remove("ask-backdrop");
+    };
+  }, [backdrop]);
 
   useEffect(() => {
     if (!onAnswer) return;
@@ -62,12 +102,48 @@ export default function AskSwishPanel({ onClose, size = "panel", onAnswer, autoF
   });
 
   const last = turns[turns.length - 1];
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [turns.length, last?.answer.length, last?.cards.length, last?.status, wantsSignIn]);
+
+  // Answers are read from the top: asking brings the new question up to the
+  // top of the thread and the answer writes downwards under it, with the view
+  // left where it is (no following the text to the bottom). The newest turn is
+  // at least a thread's height tall so even a short one can reach the top.
+  const threadRef = useRef<HTMLDivElement>(null);
+  const lastTurnRef = useRef<HTMLDivElement>(null);
+  const [threadHeight, setThreadHeight] = useState(0);
+  const scrolledOnce = useRef(false);
+  useEffect(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    setThreadHeight(el.clientHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(() => setThreadHeight(el.clientHeight));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+  const measured = threadHeight > 0;
+  useEffect(() => {
+    const thread = threadRef.current;
+    if (!thread) return;
+    const turn = lastTurnRef.current;
+    const top = turn ? thread.scrollTop + turn.getBoundingClientRect().top - thread.getBoundingClientRect().top - THREAD_TOP_GAP : 0;
+    // A conversation restored on load jumps there; a new question glides.
+    thread.scrollTo({ top: Math.max(0, top), behavior: scrolledOnce.current ? "smooth" : "auto" });
+    scrolledOnce.current = true;
+  }, [turns.length, measured]);
+  // The sign-in prompt sits under everything, so that one still scrolls into view.
+  useEffect(() => { if (wantsSignIn) endRef.current?.scrollIntoView({ block: "end" }); }, [wantsSignIn]);
+
+  // The free strip between the end of the conversation and the bar, for the aurora's words.
+  const openSpace = () => {
+    const thread = threadRef.current;
+    const content = lastTurnRef.current?.firstElementChild;
+    return thread && content ? { top: content.getBoundingClientRect().bottom + 24, bottom: thread.getBoundingClientRect().bottom } : null;
+  };
 
   const bar = (
     <>
-      <AskBar onSubmit={(t) => submit(t)} groups={groups} autoFocus={autoFocus} big={big} dropDown={!started} />
-      <p className="mt-1.5 px-2 flex items-center justify-between gap-2 text-[10.5px] leading-tight text-slate-400 dark:text-neutral-500">
+      <AskBar onSubmit={(t) => submit(t)} groups={groups} autoFocus={autoFocus} big={big} dropDown={!started} leading={barLeading} beam={barBeam} />
+      <p className={`mt-1.5 px-2 flex items-center justify-between gap-2 text-[10.5px] leading-tight ${big ? "ask-fineprint text-slate-500 dark:text-neutral-400" : "text-slate-400 dark:text-neutral-500"}`}>
         <span>Answers come from the site's own data. Check anything that matters against the page.</span>
         {allowance && <span className="shrink-0 tabular-nums">{allowance}</span>}
       </p>
@@ -84,9 +160,20 @@ export default function AskSwishPanel({ onClose, size = "panel", onAnswer, autoF
 
   return (
     <div className="ask-swish relative flex h-full min-h-0 flex-col overflow-hidden bg-slate-50 dark:bg-[#0a0a0f] text-slate-900 dark:text-white">
-      {/* The page, drawer and phone sheet get the living metaball; embeds (the scouting editor) keep the plain glow. Both dim once a conversation is under way. */}
+      {/* The page, drawer and phone sheet get the living background (aurora, or the earlier metaball); embeds (the scouting editor) keep the plain glow. Both dim once a conversation is under way. */}
       {big || onClose ? (
-        <MetaballField busy={busy} dim={started} />
+        // In the app the full page's background fills the whole screen (fixed), behind the clock, the logo and the tab bar.
+        <div aria-hidden="true" className={backdrop ? "pointer-events-none fixed inset-0" : "contents"}>
+          {ASK_BACKGROUND === "aurora" ? (
+            <>
+              <AuroraField busy={busy} dim={started} />
+              {/* Words only until the answer starts arriving, and only in the open space under the conversation. */}
+              <AuroraWords active={busy && !!last && !last.answer && last.cards.length === 0} question={last?.question} status={last?.status} room={openSpace} />
+            </>
+          ) : (
+            <MetaballField busy={busy} dim={started} />
+          )}
+        </div>
       ) : (
         <div
           aria-hidden="true"
@@ -127,13 +214,25 @@ export default function AskSwishPanel({ onClose, size = "panel", onAnswer, autoF
       )}
 
       {/* Thread */}
-      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain [mask-image:linear-gradient(to_bottom,transparent,black_16px,black_calc(100%-20px),transparent)]">
+      <div ref={threadRef} className={`relative z-10 flex-1 min-h-0 overflow-y-auto overscroll-contain ${welcomeHeader && !started ? "[mask-image:linear-gradient(to_bottom,black_calc(100%-20px),transparent)]" : "[mask-image:linear-gradient(to_bottom,transparent,black_16px,black_calc(100%-20px),transparent)]"}`}>
         {started ? (
           <div className={`px-4 pt-2 pb-6 space-y-7 ${big ? "max-w-2xl mx-auto" : ""}`} role="log" aria-live="polite" aria-label="Conversation">
-            {turns.map((t) => <Turn key={t.id} turn={t} big={big} onPick={submit} busy={busy} />)}
+            {turns.map((t, i) => {
+              const newest = i === turns.length - 1;
+              return (
+                <div
+                  key={t.id}
+                  ref={newest ? lastTurnRef : undefined}
+                  // Tall enough to sit at the top: the thread less the top gap and the log's bottom padding.
+                  style={newest && measured ? { minHeight: Math.max(0, threadHeight - THREAD_TOP_GAP - 24) } : undefined}
+                >
+                  <Turn turn={t} big={big} onPick={submit} busy={busy} />
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <Welcome groups={groups} label={label} big={big} onPick={submit} bar={bar} />
+          <Welcome groups={groups} label={label} big={big} onPick={submit} bar={bar} header={welcomeHeader} />
         )}
         {wantsSignIn && !user && (
           <div className={`mx-4 mb-4 rounded-2xl border border-orange-300/60 dark:border-orange-500/30 px-4 py-3.5 text-sm ${big ? "max-w-2xl md:mx-auto" : ""}`}>
@@ -159,7 +258,7 @@ export default function AskSwishPanel({ onClose, size = "panel", onAnswer, autoF
 }
 
 /** The greeting, word by word, and questions to try. */
-function Welcome({ groups, label, big, onPick, bar }: { groups: { label: string; questions: string[] }[]; label: string | null; big: boolean; onPick: (q: string) => void; bar: ReactNode }) {
+function Welcome({ groups, label, big, onPick, bar, header }: { groups: { label: string; questions: string[] }[]; label: string | null; big: boolean; onPick: (q: string) => void; bar: ReactNode; header?: ReactNode }) {
   const { name, part } = useGreeting();
   const hello = `Good ${part}${name ? `, ${name}` : ""}.`;
   const ask = label ? "What do you want to know?" : "What shall we look into?";
@@ -170,6 +269,39 @@ function Welcome({ groups, label, big, onPick, bar }: { groups: { label: string;
         {w}&nbsp;
       </span>
     ));
+
+  const suggestions = (delay: number) =>
+    groups.length > 0 && (
+      <div className="ask-word pb-3 space-y-3.5" style={{ animationDelay: `${delay}ms` }}>
+        {groups.map((g) => (
+          <div key={g.label}>
+            <p className="px-5 mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-600 dark:text-orange-400">{g.label}</p>
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide px-5 snap-x scroll-px-5">
+              {g.questions.map((q) => (
+                <button key={q} type="button" onClick={() => onPick(q)} className={`${chip} snap-start`}>{q}</button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+
+  // The app Home: its own header and the box stay put (same spacing as Home's
+  // search), and the line and questions underneath flow in.
+  if (header) {
+    return (
+      <div className={big ? "max-w-2xl mx-auto" : ""}>
+        <div className="px-5 pt-1">
+          {header}
+          <div className="relative z-20 mt-10">{bar}</div>
+          <p className="ask-word mt-5 text-[14px] leading-relaxed text-slate-600 dark:text-neutral-400" style={{ animationDelay: "160ms" }}>
+            {ask} Standings, scores, tip-offs, player and team stats, ratings, on/off and season highs.
+          </p>
+        </div>
+        <div className="mt-6">{suggestions(260)}</div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex min-h-full flex-col justify-center ${big ? "max-w-2xl mx-auto" : ""}`}>
@@ -195,20 +327,7 @@ function Welcome({ groups, label, big, onPick, bar }: { groups: { label: string;
       {/* The bar sits in the middle until the first question. */}
       <div className="ask-word relative z-20 px-3 pb-6" style={{ animationDelay: `${220 + n * 70}ms` }}>{bar}</div>
 
-      {groups.length > 0 && (
-        <div className="ask-word pb-3 space-y-3.5" style={{ animationDelay: `${300 + n * 70}ms` }}>
-          {groups.map((g) => (
-            <div key={g.label}>
-              <p className="px-5 mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-600 dark:text-orange-400">{g.label}</p>
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide px-5 snap-x scroll-px-5">
-                {g.questions.map((q) => (
-                  <button key={q} type="button" onClick={() => onPick(q)} className={`${chip} snap-start`}>{q}</button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {suggestions(300 + n * 70)}
     </div>
   );
 }
@@ -272,12 +391,22 @@ function Turn({ turn, big, onPick, busy }: { turn: AskTurn; big: boolean; onPick
           <Sparkles className="w-3.5 h-3.5 text-white" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1 space-y-3">
-          {turn.cards.map((card, i) => <AskCardView key={i} card={card} brandColor={BRAND} />)}
+          {/* The words come first; the tables and lists they're drawn from
+              follow once the answer is written, one after another. */}
           {turn.answer && (
             <div className={prose}><ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.answer}</ReactMarkdown></div>
           )}
           {live && !turn.error && (turn.status || !turn.answer) && (
             <Thinking status={turn.status} writing={!turn.status && turn.cards.length > 0} />
+          )}
+          {turn.done && turn.cards.length > 0 && (
+            <div className="space-y-3 pt-1">
+              {turn.cards.map((card, i) => (
+                <div key={i} className="ask-card-in" style={{ animationDelay: `${120 + i * 110}ms` }}>
+                  <AskCardView card={card} brandColor={BRAND} />
+                </div>
+              ))}
+            </div>
           )}
           {turn.error && turn.error.code === "rate_limited" ? (
             <div className="rounded-2xl border border-orange-300/60 dark:border-orange-500/30 px-4 py-3 text-sm">
