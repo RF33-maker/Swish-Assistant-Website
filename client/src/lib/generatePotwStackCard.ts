@@ -17,8 +17,8 @@ import {
   drawGrain,
   drawItalic,
   drawText,
+  ellipseGlow,
   ensureFonts,
-  fadeLayer,
   hexToRgb,
   italicWidth,
   layer,
@@ -39,14 +39,26 @@ export const STACK_READINGS: { id: StackReading; label: string; hint: string }[]
   { id: "season", label: "Season", hint: "The game and its Swish Score, then the season behind it" },
 ];
 
+/** What sits behind a player who has no cut-out: the shot itself, blurred, or the dark ground with the accent as smoke. */
+export type PhotoLook = "blur" | "smoke";
+
+export const PHOTO_LOOKS: { id: PhotoLook; label: string; hint: string }[] = [
+  { id: "blur", label: "Blur", hint: "The same shot, blurred and dimmed, runs under the whole card" },
+  { id: "smoke", label: "Smoke", hint: "The stacked look's dark ground, with the accent drifting over the ladder's side like smoke" },
+];
+
 export type StackOptions = {
   reading?: StackReading;
   accent?: string;
+  /** The backdrop when the player has no cut-out; `blur` unless the studio says otherwise. */
+  photoLook?: PhotoLook;
   /** "2 Nov – 8 Nov", shown after the competition in the header. */
   weekLabel?: string;
   teamLogoUrl?: string | null;
   framing?: PhotoFraming;
   showGameScore?: boolean;
+  /** The hand-drawn ring around the top row; on unless the studio turns it off. */
+  ring?: boolean;
 };
 
 const RIGHT = 470; // the ladder and header hang off this edge
@@ -245,28 +257,104 @@ function drawFigure(ctx: CanvasRenderingContext2D, img: HTMLImageElement, placem
   ctx.restore();
 }
 
-/** Without a cut-out: the game photo over the right of the card, melting in on its left and at the foot. */
-function drawPhotoFallback(ctx: CanvasRenderingContext2D, img: HTMLImageElement, fr: Framing) {
-  const box: Box = { x: 440, y: 40, w: CARD_W - 440, h: 1140 };
+/** Multiplies a layer's alpha by a ramp between two points, `a` to `b`, from `fromAlpha` to `toAlpha`. */
+function rampAlpha(c: CanvasRenderingContext2D, a: [number, number], b: [number, number], fromAlpha: number, toAlpha: number) {
+  const g = c.createLinearGradient(a[0], a[1], b[0], b[1]);
+  g.addColorStop(0, `rgba(0,0,0,${fromAlpha})`);
+  g.addColorStop(1, `rgba(0,0,0,${toAlpha})`);
+  c.save();
+  c.globalCompositeOperation = "destination-in";
+  c.fillStyle = g;
+  c.fillRect(0, 0, CARD_W, CARD_H);
+  c.restore();
+}
+
+const canBlur = (ctx: CanvasRenderingContext2D) => typeof (ctx as { filter?: unknown }).filter === "string";
+
+/**
+ * Smoke in the accent over the ladder's side of the ground: the grain tile blown up and blurred
+ * into slow blotches, tinted, and screened on inside a soft circle around (cx, cy). It gives the
+ * dark ground the warmth a cut-out's glow gives it, without a figure to glow around.
+ */
+function drawSmoke(ctx: CanvasRenderingContext2D, accent: string, cx: number, cy: number) {
+  const [noise, n] = layer();
+  drawGrain(n, 1, "source-over");
+  const [soft, f] = layer();
+  f.save();
+  if (canBlur(f)) f.filter = "blur(34px)";
+  f.drawImage(noise, 0, 0, CARD_W / 6, CARD_H / 6, -80, -80, CARD_W + 160, CARD_H + 160);
+  f.restore();
+  f.globalCompositeOperation = "multiply";
+  f.fillStyle = accent;
+  f.fillRect(0, 0, CARD_W, CARD_H);
+  const mask = f.createRadialGradient(cx, cy, 0, cx, cy, 820);
+  mask.addColorStop(0, "rgba(0,0,0,1)");
+  mask.addColorStop(0.55, "rgba(0,0,0,0.55)");
+  mask.addColorStop(1, "rgba(0,0,0,0)");
+  f.globalCompositeOperation = "destination-in";
+  f.fillStyle = mask;
+  f.fillRect(0, 0, CARD_W, CARD_H);
+  // A smooth warmth under the blotches, then the blotches.
+  ellipseGlow(ctx, cx, cy, 560, 680, [[0, withAlpha(accent, 0.16)], [1, "rgba(0,0,0,0)"]], "screen");
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.34;
+  ctx.drawImage(soft, 0, 0);
+  ctx.restore();
+}
+
+/**
+ * Without a cut-out: the sharp game photo fills the right of the card, top to bottom, so the
+ * player lands right of centre, and melts in from the middle. It reaches the top edge (the
+ * marks sit on a soft darkening, not a band) and thins out at the foot, where the context line
+ * and footer sit. What it melts into is the `look`: the same shot blurred and dimmed under the
+ * whole card, or the dark ground with the accent drifting over the ladder's side as smoke.
+ */
+function drawPhotoFallback(ctx: CanvasRenderingContext2D, img: HTMLImageElement, fr: Framing, accent: string, look: PhotoLook) {
+  const box: Box = { x: 440, y: 0, w: CARD_W - 440, h: CARD_H };
   const p = placeCover(img, box, fr);
   const [sheet, s] = layer();
-  s.save();
-  s.beginPath();
-  s.rect(box.x, box.y, box.w, box.h);
-  s.clip();
-  s.drawImage(img, p.left, p.top, p.dw, p.dh);
-  s.restore();
+
+  if (look === "blur") {
+    // The bed: the same shot grown about the player's spot until it covers the whole card, then
+    // blurred and dimmed, so the ladder's side is the photo's own light rather than a slab of black.
+    const ax = box.x + box.w / 2;
+    const ay = 600;
+    const k = Math.max(1, ax / (ax - p.left), (CARD_W - ax) / (p.left + p.dw - ax), ay / (ay - p.top), (CARD_H - ay) / (p.top + p.dh - ay));
+    const bed = { left: ax + (p.left - ax) * k, top: ay + (p.top - ay) * k, dw: p.dw * k, dh: p.dh * k };
+    s.save();
+    if (canBlur(s)) s.filter = "blur(30px)";
+    // Oversize so the blur's soft edge never shows the ground through it.
+    s.drawImage(img, bed.left - 60, bed.top - 60, bed.dw + 120, bed.dh + 120);
+    s.restore();
+    s.fillStyle = "rgba(14,12,17,0.58)";
+    s.fillRect(0, 0, CARD_W, CARD_H);
+  } else {
+    drawSmoke(ctx, accent, 300, 720);
+  }
+
+  // The sharp photo, melting in from the middle of the card.
+  const [sharp, h] = layer();
+  h.drawImage(img, p.left, p.top, p.dw, p.dh);
   // Dim it a little so the type and the ladder stay in charge.
-  s.fillStyle = "rgba(14,12,17,0.22)";
-  s.fillRect(box.x, box.y, box.w, box.h);
-  const side = s.createLinearGradient(box.x, 0, box.x + 260, 0);
-  side.addColorStop(0, "rgba(0,0,0,0)");
-  side.addColorStop(1, "rgba(0,0,0,1)");
-  s.globalCompositeOperation = "destination-in";
-  s.fillStyle = side;
-  s.fillRect(0, 0, CARD_W, CARD_H);
-  fadeLayer(s, box.y + box.h - 300, box.y + box.h);
+  h.fillStyle = "rgba(14,12,17,0.2)";
+  h.fillRect(0, 0, CARD_W, CARD_H);
+  rampAlpha(h, [430, 0], [750, 0], 0, 1);
+  s.drawImage(sharp, 0, 0);
+
+  // Into the ground at the top (the marks) and the foot (the context line, the footer).
+  rampAlpha(s, [0, 0], [0, 250], 0.4, 1);
+  rampAlpha(s, [0, 880], [0, 1250], 1, look === "blur" ? 0.3 : 0.06);
   ctx.drawImage(sheet, 0, 0);
+
+  if (look === "blur") {
+    // A trace of the accent's warmth on the ladder's side, as the ground has behind a cut-out.
+    ellipseGlow(ctx, 260, 640, 520, 600, [[0, withAlpha(accent, 0.12)], [1, "rgba(0,0,0,0)"]], "screen");
+    ellipseGlow(ctx, CARD_W * 0.66, CARD_H * 0.4, CARD_W * 0.46, CARD_H * 0.42, [[0, "rgba(255,255,255,0.08)"], [0.7, "rgba(0,0,0,0)"]], "screen");
+  } else {
+    // The photo's edge smokes into the ground, as a cut-out's glow does.
+    ellipseGlow(ctx, 600, 640, 230, 640, [[0, withAlpha(accent, 0.2)], [1, "rgba(0,0,0,0)"]], "screen");
+  }
 }
 
 /**
@@ -323,7 +411,7 @@ export async function renderPotwStack(
   brand: WeeklyCardBrand,
   options: StackOptions = {},
 ): Promise<HTMLCanvasElement> {
-  const { accent = DEFAULT_ACCENT, weekLabel = "", teamLogoUrl, showGameScore = true } = options;
+  const { accent = DEFAULT_ACCENT, weekLabel = "", teamLogoUrl, showGameScore = true, ring = true, photoLook = "blur" } = options;
   const winner = awards[0];
   if (!winner) throw new Error("No player for this week");
   const reading: StackReading = options.reading === "season" && !winner.season ? "box" : options.reading || "box";
@@ -350,7 +438,7 @@ export async function renderPotwStack(
   if (cutout) {
     drawFigure(ctx, cutout, placeCutout(cutout, FIGURE, fr), accent);
   } else if (photo) {
-    drawPhotoFallback(ctx, photo, fr);
+    drawPhotoFallback(ctx, photo, fr, accent, photoLook);
   }
 
   // ── marks ──
@@ -413,7 +501,7 @@ export async function renderPotwStack(
     drawSpaced(ctx, row.label, labelRight, blockTop, labelSize * 0.14, labelO);
     drawSpaced(ctx, sub, labelRight, blockTop + capHeight(ctx, labelO) + 7, subSize * 0.18, subO);
     ctx.restore();
-    if (i === 0) drawRing(ctx, RIGHT, cy, reading === "box" ? 380 : 440, accent);
+    if (i === 0 && ring) drawRing(ctx, RIGHT, cy, reading === "box" ? 380 : 440, accent);
     top += rowH + ROW_GAP;
   });
 
