@@ -18,6 +18,8 @@ import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerAskSwishRoutes } from "./askSwishRoutes";
 import { registerPlaybookRoutes } from "./playbookRoutes";
 import { registerFeedCommentRoutes } from "./feedComments";
+import { registerMediaSpotlightRoutes } from "./mediaSpotlight";
+import { registerCreatorSpaceRoutes } from "./creatorSpace";
 import { registerScoutRosterRoutes } from "./scoutRoster";
 import { registerBillingRoutes } from "./billing/billingRoutes";
 import { registerMemberAccountRoutes } from "./memberAccounts";
@@ -445,6 +447,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAskSwishRoutes(app);
   registerPlaybookRoutes(app);
   registerFeedCommentRoutes(app);
+  registerMediaSpotlightRoutes(app, { requireAdmin, authenticate: authenticateSupabaseUser });
+  registerCreatorSpaceRoutes(app);
   registerScoutRosterRoutes(app, { filterLeagueIdsForPublicScope });
   registerBillingRoutes(app);
   registerMemberAccountRoutes(app);

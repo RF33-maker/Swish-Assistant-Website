@@ -3,11 +3,12 @@ import { Link, useLocation } from "wouter"
 import type { ComponentType } from "react";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/use-auth";
-import { Users, Trophy, Share2, Code, Newspaper, CheckCircle, AlertCircle, RefreshCw, ArrowRight, BadgeCheck, LogOut, UserCheck } from "lucide-react";
+import { Users, Trophy, Share2, Code, Newspaper, CheckCircle, AlertCircle, RefreshCw, ArrowRight, BadgeCheck, LogOut, UserCheck, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast"
 import { supabase } from "@/lib/supabase"
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import { type MyClaim, claimEntry, useMyClaim } from "@/lib/playerClaims";
+import { useMyPhotographer } from "@/lib/mediaSpotlight";
 import { compactLogoUrl } from "@/lib/compactLogo";
 
 type SuggestedLeague = {
@@ -150,6 +151,7 @@ export default function DashboardLanding() {
   const [, navigate] = useLocation();
   const { isAdmin, isCoach, emailConfirmed, user, logoutMutation } = useAuth();
   const { data: myClaim, isLoading: myClaimLoading } = useMyClaim(user?.id);
+  const { data: myPhotographer } = useMyPhotographer(user?.id);
   // Coach (team) accounts get the Coaches Hub card too — everything else on
   // this dashboard (League Management, Social Tools, API/Widgets) stays
   // admin-only.
@@ -322,6 +324,32 @@ export default function DashboardLanding() {
           cta: "Review claims",
           enabled: true,
           testId: "card-player-claims",
+        }]
+      : []),
+    ...(myPhotographer
+      ? [{
+          key: "photographer",
+          icon: Camera,
+          title: "Creator profile",
+          description: "Your Media Spotlight page and the creator space",
+          body: "Edit your profile, upload and tag photos, pick your teams, and choose how Swish may use each photo.",
+          href: "/media/dashboard",
+          cta: "Open your dashboard",
+          enabled: true,
+          testId: "card-photographer-dashboard",
+        }]
+      : []),
+    ...(isAdmin
+      ? [{
+          key: "media",
+          icon: Camera,
+          title: "Media Spotlight",
+          description: "Creators, credit and the weekly pick",
+          body: "Approve creators, send invite links, schedule the homepage spotlight, moderate the creator board and copy the right credit line.",
+          href: "/admin/media",
+          cta: "Manage photographers",
+          enabled: true,
+          testId: "card-media-spotlight",
         }]
       : []),
     ...(isAdmin

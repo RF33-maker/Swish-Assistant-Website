@@ -8,12 +8,12 @@ import { useAuth } from "@/hooks/use-auth";
  * page, and later decide who gets which notifications.
  */
 
-export type FollowKind = "player" | "team" | "league";
+export type FollowKind = "player" | "team" | "league" | "creator";
 
 export interface Follow {
   id: string;
   kind: FollowKind;
-  /** /player/<key> or /team/<key>; a league's is "league:<brand>", "league:<brand>:women" or "competition:<slug>" (lib/leagueKeys.ts). */
+  /** /player/<key> or /team/<key>; a league's is "league:<brand>", "league:<brand>:women" or "competition:<slug>" (lib/leagueKeys.ts); a creator's is their profile slug. */
   key: string;
   label: string;
   subtitle: string | null;
@@ -32,6 +32,8 @@ export const followHref = (f: Pick<Follow, "kind" | "key">) => {
     const [type, slug] = f.key.split(":");
     return `/${type}/${slug}`;
   }
+  // A creator's key is their Media Spotlight profile slug.
+  if (f.kind === "creator") return `/media/photographers/${encodeURIComponent(f.key)}`;
   return `/${f.kind}/${encodeURIComponent(f.key)}`;
 };
 

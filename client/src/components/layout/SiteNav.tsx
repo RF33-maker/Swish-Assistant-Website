@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { Link, useLocation } from "wouter"
-import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2, BadgeCheck, UserCheck, Landmark, CreditCard, Sparkles, Mail, Moon, Sun } from "lucide-react"
+import { Home, Radio, Newspaper, Trophy, UserPlus, ExternalLink, Clock3, LogIn, ClipboardList, Settings, LayoutDashboard, Share2, BadgeCheck, UserCheck, Landmark, CreditCard, Sparkles, Mail, Moon, Sun, Camera } from "lucide-react"
 import { SheetClose } from "@/components/ui/sheet"
 import { useAskSwish } from "@/components/ask-swish/AskSwishProvider"
 import { ThemeToggle } from "@/components/ThemeToggle"
@@ -173,6 +173,7 @@ export default function SiteNav({
           ),
         },
       ))}
+      {internalLink("/media", location.startsWith("/media"), row(<Camera className="h-4 w-4" aria-hidden="true" />, "Media Spotlight"))}
 
       {leagues.length > 0 && (
         <>

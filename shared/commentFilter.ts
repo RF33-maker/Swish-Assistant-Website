@@ -66,9 +66,15 @@ const EMAIL = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
 // number. Dashes don't join, so a run of scores (102-94 86-83) isn't one.
 const PHONE = /(?:\+?\d[\s.()]?){10,}\d/;
 
-export function filterComment(text: string, bannedTerms: string[]): FilterResult {
-  if (LINK.test(text)) return { ok: false, reason: "Links aren't allowed in comments.", category: "link" };
-  if (EMAIL.test(text) || PHONE.test(text)) return { ok: false, reason: "Please don't share email addresses or phone numbers.", category: "contact_details" };
+/**
+ * `wordsOnly` skips the link and contact-detail checks, for the creator space,
+ * where members share their own work, kit links and how to reach them.
+ */
+export function filterComment(text: string, bannedTerms: string[], opts: { wordsOnly?: boolean } = {}): FilterResult {
+  if (!opts.wordsOnly) {
+    if (LINK.test(text)) return { ok: false, reason: "Links aren't allowed in comments.", category: "link" };
+    if (EMAIL.test(text) || PHONE.test(text)) return { ok: false, reason: "Please don't share email addresses or phone numbers.", category: "contact_details" };
+  }
 
   const padded = ` ${normaliseKeepingRuns(text)} `;
   const emojiText = stripEmojiModifiers(text);
