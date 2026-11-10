@@ -23,5 +23,16 @@ export default defineConfig({
   build: {
     outDir: "../dist",
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // React and Supabase change far less often than the app, so they get
+        // their own files: after a deploy, returning visitors keep these
+        // cached and only download the app code that changed.
+        manualChunks(id) {
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "vendor-react";
+          if (/[\\/]node_modules[\\/]@supabase[\\/]/.test(id)) return "vendor-supabase";
+        },
+      },
+    },
   },
 });

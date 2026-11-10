@@ -33,7 +33,7 @@ export function ProtectedRoute({
   component: Component,
 }: {
   path: string;
-  component: () => React.JSX.Element | null;
+  component: React.ComponentType<any>;
 }) {
   const { user, isAdmin, emailConfirmed, isLoading } = useAuth();
 
@@ -74,7 +74,7 @@ export function AdminRoute({
   component: Component,
 }: {
   path: string;
-  component: () => React.JSX.Element | null;
+  component: React.ComponentType<any>;
 }) {
   const { user, isAdmin, isLoading } = useAuth();
 
@@ -120,7 +120,7 @@ export function TeamRoute({
   component: Component,
 }: {
   path: string;
-  component: () => React.JSX.Element | null;
+  component: React.ComponentType<any>;
 }) {
   const { user, isAdmin, isCoach, isLoading } = useAuth();
 

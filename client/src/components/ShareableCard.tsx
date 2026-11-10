@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Download, Share2, Loader2, RefreshCw, AlertTriangle, Lock, Bell, Sparkles } from "lucide-react";
-import html2canvas from "html2canvas";
 import {
   Dialog,
   DialogContent,
@@ -279,6 +278,9 @@ export default function ShareableCard({
   const generatePngBlob = async (): Promise<Blob | null> => {
     if (generateCardBlob) return generateCardBlob();
     if (!captureRef.current) return null;
+    // html2canvas is only needed here, so it loads on the first capture (while
+    // the images below are fetched) instead of with every page that has a card.
+    const html2canvasLoading = import("html2canvas");
 
     // ── 1. Collect every image URL we know about ──────────────────────────
     // Include both DOM-scanned <img> tags AND images referenced in props,
@@ -391,6 +393,7 @@ export default function ShareableCard({
       }
     }
 
+    const { default: html2canvas } = await html2canvasLoading;
     const canvas = await html2canvas(captureEl, {
       backgroundColor: isCompactCapture ? null : "#ffffff",
       scale: isCompactCapture ? 3 : 2,
