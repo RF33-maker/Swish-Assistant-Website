@@ -58,6 +58,14 @@ import PlusPage from "@/pages/plus";
 import CoachAccessSuccessPage from "@/pages/coach-access-success";
 import CoachAccessAdminPage from "@/pages/admin/coach-access";
 import GameTimesAdminPage from "@/pages/admin/game-times";
+import FeedCommentsAdminPage from "@/pages/admin/feed-comments";
+import MediaSpotlightPage from "@/pages/media/MediaSpotlightPage";
+import PhotographersDirectoryPage from "@/pages/media/PhotographersDirectoryPage";
+import PhotographerProfilePage from "@/pages/media/PhotographerProfilePage";
+import PhotographerDashboardPage from "@/pages/media/PhotographerDashboardPage";
+import MediaClaimPage from "@/pages/media/MediaClaimPage";
+import CreatorSpacePage from "@/pages/media/CreatorSpacePage";
+import MediaSpotlightAdminPage from "@/pages/admin/media-spotlight";
 import PrivacyPolicyPage from "@/pages/privacy";
 import TermsOfServicePage from "@/pages/terms";
 import CookiePolicyPage from "@/pages/cookies";
@@ -122,6 +130,11 @@ function Router() {
       <Route path="/ask" component={AskSwishPage} />
       <Route path="/widget/:type" component={WidgetPage} />
       <Route path="/embed" component={EmbedGuide} />
+      <Route path="/media" component={MediaSpotlightPage} />
+      <Route path="/media/photographers" component={PhotographersDirectoryPage} />
+      <Route path="/media/photographers/:slug" component={PhotographerProfilePage} />
+      <Route path="/media/claim/:token" component={MediaClaimPage} />
+      <Route path="/media/creators" component={CreatorSpacePage} />
       <Route path="/news" component={NewsIndexPage} />
       <Route path="/british-basketball-history" component={BritishBasketballHistoryPage} />
       <Route path="/swish-score" component={SwishScorePage} />
@@ -139,6 +152,7 @@ function Router() {
       <ProtectedRoute path="/payment" component={PaymentPage} />
       <ProtectedRoute path="/coach-access/success" component={CoachAccessSuccessPage} />
       <ProtectedRoute path="/my-profile/edit" component={EditMyProfilePage} />
+      <ProtectedRoute path="/media/dashboard" component={PhotographerDashboardPage} />
       <AdminRoute path="/social-tools" component={SocialToolsPage} />
       <AdminRoute path="/api-widgets" component={WidgetBuilder} />
 
@@ -157,6 +171,8 @@ function Router() {
       <AdminRoute path="/admin/player-claims" component={PlayerClaimsAdminPage} />
       <AdminRoute path="/admin/coach-access" component={CoachAccessAdminPage} />
       <AdminRoute path="/admin/game-times" component={GameTimesAdminPage} />
+      <AdminRoute path="/admin/media" component={MediaSpotlightAdminPage} />
+      <AdminRoute path="/admin/feed-comments" component={FeedCommentsAdminPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />

@@ -19,6 +19,7 @@ import ExploreSection from "@/components/home/ExploreSection"
 import HistoryComingSoon from "@/components/home/HistoryComingSoon"
 import HomeFooter from "@/components/home/HomeFooter"
 import SectionHeader from "@/components/home/SectionHeader"
+import PhotographerSpotlight from "@/components/home/PhotographerSpotlight"
 import { InstagramFeedSection } from "@/components/InstagramFeedSection"
 import { useAuth } from "@/hooks/use-auth"
 import { useReadableTeamColor } from "@/hooks/useReadableColor"
@@ -206,6 +207,8 @@ export default function LandingPage() {
       <div data-story="media">
       <PodcastSection />
       <TopPlayersSection />
+      {/* Photographer of the Week, from the Media Spotlight schedule. Nothing scheduled, nothing shown. */}
+      <PhotographerSpotlight />
 
       {/* Stay Connected — Instagram feed */}
       <section className="py-12 md:py-16" aria-labelledby="social-heading">
