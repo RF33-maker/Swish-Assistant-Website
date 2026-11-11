@@ -43,6 +43,8 @@ const MIN_OFF_POSS = 50;
 
 interface PlayerPerformanceSplitsProps {
   playerId: string;
+  /** All of the player's ids (one per competition); defaults to playerId. */
+  playerIds?: string[];
   leagueId?: string;
   leagueIds?: string[];
   teamId?: string;
@@ -297,6 +299,7 @@ function SplitTable({
 
 export function PlayerPerformanceSplits({
   playerId,
+  playerIds,
   leagueId,
   leagueIds,
   teamId,
@@ -312,22 +315,26 @@ export function PlayerPerformanceSplits({
 
   // leagueIds (multi) takes precedence over the legacy leagueId. Empty means no filter.
   const effectiveLeagueIds: string[] = leagueIds ?? (leagueId ? [leagueId] : []);
+  const ids = playerIds && playerIds.length > 0 ? Array.from(new Set(playerIds)).sort() : [playerId];
 
   // Every competition the player has on/off for, newest season first.
   const { data: rows, isLoading, isError } = useQuery<CompetitionRow[]>({
-    queryKey: ["player-on-off-seasons", playerId, effectiveLeagueIds.join(","), teamId],
+    queryKey: ["player-on-off-seasons", ids.join(","), effectiveLeagueIds.join(","), teamId],
     queryFn: async () => {
       let query = supabase
         .from("player_on_off_season")
         .select("*")
-        .eq("player_id", playerId)
+        .in("player_id", ids)
         .order("on_poss_for", { ascending: false });
       if (effectiveLeagueIds.length === 1) query = query.eq("league_id", effectiveLeagueIds[0]);
       else if (effectiveLeagueIds.length > 1) query = query.in("league_id", effectiveLeagueIds);
       if (teamId) query = query.eq("team_id", teamId);
       const { data, error } = await query;
       if (error) throw error;
-      const found = (data ?? []) as OnOffRow[];
+      // One row per competition: a player split across two ids in the same
+      // competition keeps the bigger sample (rows come largest first).
+      const seen = new Set<string>();
+      const found = ((data ?? []) as OnOffRow[]).filter((r) => !seen.has(r.league_id) && !!seen.add(r.league_id));
       if (!found.length) return [];
       const { data: comps } = await supabase
         .from("competitions")
