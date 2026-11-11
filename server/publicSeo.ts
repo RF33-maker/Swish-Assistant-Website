@@ -5,7 +5,7 @@ import { supabaseAdmin } from "./supabaseServiceClient";
 import { isSameTeam } from "./teamIdentityService";
 import { getLeagueSides } from "./teamSides";
 import { getSeoIndex, isIndexableGame, playerSegment, resolveClub, slugifyName, type IndexClub, type SeoIndex } from "./seoIndex";
-import { gameRecap, playerBio, teamSeasonSummary } from "@shared/recaps";
+import { gameRecap, isFinishedCompetition, playerBio, teamSeasonSummary } from "@shared/recaps";
 import { clubSlug, teamClubKey } from "@shared/teamIdentity";
 import { articleDocToHtml, articleTagHref, type ArticleDoc, type ArticleTag } from "@shared/newsArticle";
 import { isUnder18, isYouthCompetition } from "@shared/youth";
@@ -766,7 +766,7 @@ async function renderClubTeam(club: IndexClub, competitionParam: string | null, 
 
   // Each competition's league ids: itself, plus private children that display
   // under it (the same scoping the index uses).
-  const { data: allCompetitions } = await supabaseAdmin.from("competitions").select("league_id, slug, is_public, parent_league_id");
+  const { data: allCompetitions } = await supabaseAdmin.from("competitions").select("league_id, slug, is_public, parent_league_id, season");
   const slugByLeague = new Map((allCompetitions || []).filter((c: any) => c.is_public && c.slug).map((c: any) => [c.league_id, c.slug]));
   const leagueIdsFor = (slug: string) => (allCompetitions || [])
     .filter((c: any) => c.slug === slug || (!c.is_public && slugByLeague.get(c.parent_league_id) === slug))
@@ -840,7 +840,13 @@ async function renderClubTeam(club: IndexClub, competitionParam: string | null, 
   const ppg = games.length ? games.reduce((n, g) => n + g.pts, 0) / games.length : null;
   const oppPpg = games.length ? games.reduce((n, g) => n + g.oppPts, 0) / games.length : null;
   const top = roster[0] as any;
+  const hasUpcoming = index.games.some((g) => g.competitionSlug === selected.competitionSlug && !!g.date
+    && new Date(g.date).getTime() > Date.now() && (g.homeKey === club.clubKey || g.awayKey === club.clubKey));
   const summary = teamSeasonSummary({
+    finished: isFinishedCompetition({
+      name: selected.competitionName,
+      season: (allCompetitions || []).find((c: any) => c.slug === selected.competitionSlug)?.season,
+      lastPlayed: games[0]?.date || selected.lastmod, hasUpcoming }),
     team: club.name,
     competition: selected.competitionName,
     wins: record?.wins || 0,
