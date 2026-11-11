@@ -10,11 +10,20 @@ import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { getTeamAbbreviation } from "@/lib/teamUtils";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, Filter, Instagram, LayoutDashboard, BarChart3, CalendarDays, Crosshair, Award, Lock, X as XIcon, BadgeCheck } from "lucide-react";
+import { ArrowLeft, Trophy, Instagram, LayoutDashboard, BarChart3, CalendarDays, Crosshair, Award, Lock, X as XIcon, BadgeCheck } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import { normalizeInstagramHandle } from "@/lib/instagram";
+import {
+  ALL_SEASONS,
+  filterSlug,
+  leagueFamilyName,
+  readProfileFilter,
+  seasonForCompetition,
+  writeProfileFilter,
+  type ProfileFilterState,
+  type SeasonInfo,
+} from "@/lib/profileFilter";
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerBanner } from "@/components/PlayerBanner";
 import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
@@ -160,100 +169,81 @@ interface PlayerProfileContentProps {
   manageHead?: boolean;
 }
 
-interface LeagueDropdownProps {
-  leagues: { id: string; name: string }[];
-  selectedLeagueIds: Set<string>;
-  onToggle: (id: string) => void;
-  onClear: () => void;
-  label: string;
-  accentColor?: string;
+/** One competition the player has games in, placed in a season and a league. */
+interface CompetitionFacet {
+  leagueId: string;
+  name: string;
+  /** filterSlug of familyName: the ?league= value. */
+  familyKey: string;
+  /** The league without its season ("NBL Division One"). */
+  familyName: string;
+  season: SeasonInfo;
+  /** Time of the player's latest game in it. */
+  last: number;
 }
 
-function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, accentColor }: LeagueDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+interface LeagueFamily {
+  key: string;
+  name: string;
+  seasons: Set<string>;
+  last: number;
+}
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+const UNKNOWN_SEASON: SeasonInfo = { key: 'other', label: 'Other games', order: -1 };
 
-  const isFiltered = selectedLeagueIds.size > 0;
+interface ProfileFilterBarProps {
+  seasons: SeasonInfo[];
+  families: LeagueFamily[];
+  /** The season in view, or ALL_SEASONS. */
+  seasonValue: string;
+  /** The league in view, or "" for every league. */
+  leagueValue: string;
+  onSeasonChange: (season: string) => void;
+  onLeagueChange: (league: string) => void;
+}
 
+/**
+ * Season and league pickers for the whole profile. Native selects: they cope
+ * with long lists and open the phone's own picker.
+ */
+function ProfileFilterBar({ seasons, families, seasonValue, leagueValue, onSeasonChange, onLeagueChange }: ProfileFilterBarProps) {
+  const showSeason = seasons.length > 1;
+  const showLeague = families.length > 1;
+  if (!showSeason && !showLeague) return null;
+  // Leagues the player played in during the chosen season.
+  const leagueOptions = seasonValue === ALL_SEASONS
+    ? families
+    : families.filter((f) => f.seasons.has(seasonValue) || f.key === leagueValue);
+  const selectClass = 'ch-input h-9 w-full sm:w-auto min-w-0 sm:max-w-[18rem] cursor-pointer pl-3 pr-8 text-[13px] font-medium truncate';
   return (
-    <div ref={ref} className="relative inline-block">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className={`ch-btn ${isFiltered ? 'text-white' : 'ch-btn-ghost'}`}
-        style={isFiltered ? { backgroundColor: accentColor } : undefined}
-        data-testid="player-league-filter"
-      >
-        <Filter className="w-3.5 h-3.5" />
-        <span className="max-w-[12rem] truncate">{label}</span>
-        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {open && (
-        <div role="menu" className="ch-card absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 z-50 min-w-[220px] py-1 overflow-hidden shadow-[var(--ch-shadow-lg)]">
-          <button
-            type="button"
-            role="menuitemcheckbox"
-            aria-checked={!isFiltered}
-            onClick={() => { onClear(); setOpen(false); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-semibold text-left transition-colors hover:bg-[color:var(--ch-surface-2)] ${
-              !isFiltered ? 'text-[color:var(--ch-text)]' : 'text-[color:var(--ch-text-2)]'
-            }`}
-          >
-            <span
-              className="w-3.5 h-3.5 rounded flex items-center justify-center border flex-shrink-0 border-[color:var(--ch-border-strong)]"
-              style={!isFiltered ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
-            >
-              {!isFiltered && (
-                <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </span>
-            All Leagues
-          </button>
-          <div className="my-1 border-t border-[color:var(--ch-border)]" />
-          {leagues.map(league => {
-            const checked = selectedLeagueIds.has(league.id);
-            return (
-              <button
-                key={league.id}
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={checked}
-                onClick={() => onToggle(league.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-left transition-colors hover:bg-[color:var(--ch-surface-2)] ${
-                  checked ? 'text-[color:var(--ch-text)]' : 'text-[color:var(--ch-text-2)]'
-                }`}
-              >
-                <span
-                  className="w-3.5 h-3.5 rounded flex items-center justify-center border flex-shrink-0 border-[color:var(--ch-border-strong)]"
-                  style={checked ? { backgroundColor: accentColor, borderColor: accentColor } : undefined}
-                >
-                  {checked && (
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </span>
-                {league.name}
-              </button>
-            );
-          })}
-        </div>
+    <div className={`grid ${showSeason && showLeague ? 'grid-cols-[minmax(0,2fr)_minmax(0,3fr)]' : 'grid-cols-1'} sm:flex sm:items-center gap-2 w-full sm:w-auto`} data-testid="player-profile-filter">
+      {showSeason && (
+        <select
+          value={seasonValue}
+          onChange={(e) => onSeasonChange(e.target.value)}
+          aria-label="Season"
+          className={selectClass}
+          data-testid="player-season-filter"
+        >
+          {seasons.map((s) => (
+            <option key={s.key} value={s.key}>{s.label}</option>
+          ))}
+          <option value={ALL_SEASONS}>All seasons</option>
+        </select>
+      )}
+      {showLeague && (
+        <select
+          value={leagueValue}
+          onChange={(e) => onLeagueChange(e.target.value)}
+          aria-label="League"
+          className={selectClass}
+          data-testid="player-league-filter"
+        >
+          <option value="">All leagues</option>
+          {leagueOptions.map((f) => (
+            <option key={f.key} value={f.key}>{f.name}</option>
+          ))}
+        </select>
       )}
     </div>
   );
@@ -280,11 +270,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   } : null);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
-  const [selectedLeagueIds, setSelectedLeagueIds] = useState<Set<string>>(new Set());
+  // Season + league for every tab, read from and kept in the URL.
+  const [filter, setFilter] = useState<ProfileFilterState>(() => readProfileFilter(window.location.search));
   const [singleLeagueBrandColor, setSingleLeagueBrandColor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [aiAnalysis, setAiAnalysis] = useState<string>("");
-  const [analysisLoading, setAnalysisLoading] = useState(false);
   const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
   const [leagueSlugs, setLeagueSlugs] = useState<Map<string, string>>(new Map());
   const [competitionParentMap, setCompetitionParentMap] = useState<Map<string, string>>(new Map());
@@ -309,94 +298,167 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   const [selectedGameForCard, setSelectedGameForCard] = useState<PlayerStat | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Parent-league expansion memos ────────────────────────────────────────
+  // ── The profile filter: one season + one league for every tab ────────────
   // Declared early so they are initialised before any useEffect that
   // references them (avoids temporal dead zone errors).
-  const parentToComps = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const [compId, parentId] of competitionParentMap) {
-      if (!map.has(parentId)) map.set(parentId, new Set());
-      map.get(parentId)!.add(compId);
-    }
-    return map;
-  }, [competitionParentMap]);
 
-  const expandedCompIds = useMemo(() => {
-    if (selectedLeagueIds.size === 0) return new Set<string>();
-    const out = new Set<string>();
-    for (const parentId of selectedLeagueIds) {
-      const comps = parentToComps.get(parentId);
-      if (comps) comps.forEach(id => out.add(id));
-      else out.add(parentId);
+  // Every competition the player has games in, with its season and league.
+  const competitionIndex = useMemo(() => {
+    const latest = new Map<string, number>();
+    for (const s of playerStats) {
+      if (!s.league_id) continue;
+      const t = new Date(s.game_date || s.created_at || '').getTime();
+      const prev = latest.get(s.league_id);
+      if (prev === undefined || Number.isNaN(prev) || t > prev) latest.set(s.league_id, t);
     }
-    return out;
-  }, [selectedLeagueIds, parentToComps]);
-
-  // ── URL query param sync ─────────────────────────────────────────────────
-  // On mount: UUIDs are applied immediately. Non-UUID slugs are stored in a ref
-  // and resolved against the server-side-fetched leagueSlugs map once it is
-  // available — this avoids the anon-client RLS risk for private/child leagues.
-  const pendingLeagueParamRef = useRef<string | null>(null);
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const leagueParam = params.get('league');
-    if (!leagueParam) return;
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (UUID_RE.test(leagueParam)) {
-      setSelectedLeagueIds(new Set([leagueParam]));
-    } else {
-      // Store slug for deferred resolution once enrichment populates leagueSlugs.
-      pendingLeagueParamRef.current = leagueParam;
+    const index = new Map<string, CompetitionFacet>();
+    for (const [leagueId, last] of Array.from(latest.entries())) {
+      const name = leagueNames.get(leagueId) || '';
+      const parentId = competitionParentMap.get(leagueId);
+      const parentName = parentId && parentId !== leagueId ? leagueNames.get(parentId) || '' : '';
+      const season = seasonForCompetition([name, parentName], Number.isNaN(last) ? null : last) ?? UNKNOWN_SEASON;
+      // Competitions grouped under a parent (REBA stops, age groups) take its name.
+      const familyName = leagueFamilyName(parentName || name || 'Other games');
+      index.set(leagueId, {
+        leagueId,
+        name: name || 'Competition',
+        familyKey: filterSlug(familyName) || leagueId,
+        familyName,
+        season,
+        last: Number.isNaN(last) ? 0 : last,
+      });
     }
-  }, []);
+    return index;
+  }, [playerStats, leagueNames, competitionParentMap]);
 
-  // Resolve pending slug param once the server-side leagueSlugs map is ready.
-  useEffect(() => {
-    const slug = pendingLeagueParamRef.current;
-    if (!slug || leagueSlugs.size === 0) return;
-    for (const [id, s] of leagueSlugs.entries()) {
-      if (s === slug) {
-        setSelectedLeagueIds(new Set([id]));
-        pendingLeagueParamRef.current = null;
-        break;
+  // Newest first.
+  const filterSeasons = useMemo(() => {
+    const byKey = new Map<string, SeasonInfo>();
+    for (const c of Array.from(competitionIndex.values())) byKey.set(c.season.key, c.season);
+    return Array.from(byKey.values()).sort((a, b) => b.order - a.order);
+  }, [competitionIndex]);
+
+  // Most recently played first.
+  const leagueFamilies = useMemo(() => {
+    const byKey = new Map<string, LeagueFamily>();
+    for (const c of Array.from(competitionIndex.values())) {
+      let f = byKey.get(c.familyKey);
+      if (!f) {
+        f = { key: c.familyKey, name: c.familyName, seasons: new Set(), last: 0 };
+        byKey.set(c.familyKey, f);
       }
+      f.seasons.add(c.season.key);
+      f.last = Math.max(f.last, c.last);
     }
-  }, [leagueSlugs]);
+    return Array.from(byKey.values()).sort((a, b) => b.last - a.last);
+  }, [competitionIndex]);
 
-  // Write URL: prefer slug if we have it, else fall back to league_id.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (selectedLeagueIds.size === 1) {
-      const [id] = Array.from(selectedLeagueIds);
-      const slug = leagueSlugs.get(id);
-      params.set('league', slug || id);
-    } else {
-      params.delete('league');
+  const leagueFamily = filter.league ? leagueFamilies.find((f) => f.key === filter.league) ?? null : null;
+
+  // No ?season= means the latest season (of the chosen league, if there is one).
+  const activeSeason = useMemo<SeasonInfo | null>(() => {
+    if (filter.season === ALL_SEASONS) return null;
+    if (filter.season) return filterSeasons.find((s) => s.key === filter.season) ?? null;
+    if (filterSeasons.length < 2) return null;
+    const pool = leagueFamily ? filterSeasons.filter((s) => leagueFamily.seasons.has(s.key)) : filterSeasons;
+    return pool[0] ?? null;
+  }, [filter.season, filterSeasons, leagueFamily]);
+
+  // The competitions in view; null when nothing is filtered out.
+  const scopeLeagueIds = useMemo(() => {
+    if (!activeSeason && !leagueFamily) return null;
+    const ids = new Set<string>();
+    for (const c of Array.from(competitionIndex.values())) {
+      if (activeSeason && c.season.key !== activeSeason.key) continue;
+      if (leagueFamily && c.familyKey !== leagueFamily.key) continue;
+      ids.add(c.leagueId);
     }
-    const newSearch = params.toString();
-    const newUrl = newSearch
-      ? `${window.location.pathname}?${newSearch}`
-      : window.location.pathname;
-    window.history.replaceState(null, '', newUrl);
-  }, [selectedLeagueIds, leagueSlugs]);
+    return ids;
+  }, [activeSeason, leagueFamily, competitionIndex]);
+  const scopeKey = scopeLeagueIds ? Array.from(scopeLeagueIds).sort().join(',') : 'all';
+  const inScope = (leagueId?: string | null) => !scopeLeagueIds || (!!leagueId && scopeLeagueIds.has(leagueId));
+
+  // "BCB Trophy · 2025-26", "2025-26", "BCB Trophy", or null for everything.
+  const scopeLabel = [leagueFamily?.name, activeSeason?.label].filter(Boolean).join(' · ') || null;
+  const seasonSelectValue = activeSeason?.key ?? ALL_SEASONS;
+
+  const changeSeason = (season: string) => {
+    setFilter((prev) => {
+      const family = prev.league ? leagueFamilies.find((f) => f.key === prev.league) : undefined;
+      // A league the player didn't play in that season would leave nothing to show.
+      const keepLeague = !!family && (season === ALL_SEASONS || family.seasons.has(season));
+      return { season, league: keepLeague ? prev.league : null };
+    });
+  };
+  const changeLeague = (league: string) => {
+    setFilter((prev) => ({ season: prev.season ?? activeSeason?.key ?? null, league: league || null }));
+  };
+
+  // The filter lives in the URL, so a refresh or a shared link keeps it.
+  useEffect(() => {
+    writeProfileFilter(filter);
+  }, [filter]);
+
+  // Another player in the same view starts from that page's own URL.
+  const filterPlayerRef = useRef(playerSlug);
+  useEffect(() => {
+    if (filterPlayerRef.current === playerSlug) return;
+    filterPlayerRef.current = playerSlug;
+    setFilter(readProfileFilter(window.location.search));
+  }, [playerSlug]);
+
+  // Older links named one competition (?league=<competition slug or id>).
+  // Once the names are in, turn that into its league and season.
+  useEffect(() => {
+    const raw = filter.league;
+    if (!raw || leagueSlugs.size === 0 || leagueFamilies.some((f) => f.key === raw)) return;
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const id = UUID_RE.test(raw) ? raw : Array.from(leagueSlugs.entries()).find(([, s]) => s === raw)?.[0];
+    if (!id) return;
+    const comp = competitionIndex.get(id);
+    if (comp) {
+      setFilter((prev) => ({ league: comp.familyKey, season: prev.season ?? comp.season.key }));
+      return;
+    }
+    // A parent league: every season of its competitions.
+    const child = Array.from(competitionIndex.values()).find((c) => competitionParentMap.get(c.leagueId) === id);
+    if (child) setFilter((prev) => ({ league: child.familyKey, season: prev.season ?? ALL_SEASONS }));
+  }, [filter.league, leagueSlugs, leagueFamilies, competitionIndex, competitionParentMap]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (activeTab === 'overview') params.delete('tab');
     else params.set('tab', activeTab);
     const search = params.toString();
-    window.history.replaceState(null, '', search ? `${window.location.pathname}?${search}` : window.location.pathname);
+    window.history.replaceState(window.history.state, '', search ? `${window.location.pathname}?${search}` : window.location.pathname);
   }, [activeTab]);
 
-  // ── Brand color for single-league selection ───────────────────────────────
-  // Uses brand_primary_colour when set; falls back to color extraction from
-  // the league logo image (same path league pages use).
+  // The newest game in view decides the team and league the banner shows.
+  const latestScopedStat = useMemo(() => {
+    if (!scopeLeagueIds) return null;
+    let best: PlayerStat | null = null;
+    let bestTime = -Infinity;
+    for (const s of playerStats) {
+      if (!s.league_id || !scopeLeagueIds.has(s.league_id)) continue;
+      const t = new Date(s.game_date || s.created_at || '').getTime();
+      if (best === null || t > bestTime) { best = s; bestTime = t; }
+    }
+    return best;
+  }, [playerStats, scopeLeagueIds]);
+
+  const teamBrandingLeagueId = latestScopedStat?.league_id || playerInfo?.leagueId || "";
+  const teamNameForBranding = (latestScopedStat && (latestScopedStat.team_name || latestScopedStat.team)?.trim()) || playerInfo?.team || "";
+
+  // A chosen league brings its own colour (brand_primary_colour, else the
+  // colour of its logo, as league pages do).
+  const hasLeagueFilter = !!leagueFamily;
+  const leagueBrandId = hasLeagueFilter ? teamBrandingLeagueId : '';
   useEffect(() => {
-    if (selectedLeagueIds.size !== 1) {
+    if (!leagueBrandId) {
       setSingleLeagueBrandColor(null);
       return;
     }
-    const [leagueId] = Array.from(selectedLeagueIds);
+    const leagueId = leagueBrandId;
     let cancelled = false;
     (async () => {
       try {
@@ -426,34 +488,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedLeagueIds]);
-
-  // When exactly one league is filtered, use that league's ID for team-logo
-  // colour extraction so the banner reflects the filtered league's branding
-  // (e.g. NBL D1 red) rather than the player's primary registration league.
-  // Falls back to the player's own leagueId when no filter is active.
-  const teamBrandingLeagueId = useMemo(() => {
-    if (selectedLeagueIds.size === 1) return Array.from(selectedLeagueIds)[0];
-    return playerInfo?.leagueId || "";
-  }, [selectedLeagueIds, playerInfo?.leagueId]);
-
-  // Derive the player's team name within the selected league so that
-  // extractTeamColors looks up the right logo (e.g. NBL D1 red team, not the
-  // REBA SL team). playerMatches has one entry per identity record, each with
-  // its own league_id and team. Fall back to the primary team when unfiltered.
-  const teamNameForBranding = useMemo(() => {
-    if (selectedLeagueIds.size !== 1) return playerInfo?.team || "";
-    const selectedId = Array.from(selectedLeagueIds)[0];
-    // Direct match on the selected league/competition ID
-    const direct = playerMatches.find(m => m.league_id === selectedId);
-    if (direct) return direct.team;
-    // Parent-league selected: search its child competitions
-    for (const compId of expandedCompIds) {
-      const child = playerMatches.find(m => m.league_id === compId);
-      if (child) return child.team;
-    }
-    return playerInfo?.team || "";
-  }, [selectedLeagueIds, playerMatches, expandedCompIds, playerInfo?.team]);
+  }, [leagueBrandId]);
 
   // Clickable league/team chips shown on the banner, for cross-navigation to
   // the currently-displayed league and team (mirrors teamBrandingLeagueId /
@@ -476,7 +511,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
   // Always try the displayed team's logo, including inline profiles that pass
   // the parent league colour as an override. That override is only a fallback.
-  const hasLeagueFilter = selectedLeagueIds.size === 1;
   const { colors: teamBrandingColors, primaryColor: brandedPrimary } = useTeamBranding({
     teamName: teamNameForBranding,
     leagueId: teamBrandingLeagueId,
@@ -491,89 +525,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     singleLeagueBrandColor ||
     brandedPrimary;
   const readablePrimary = useReadableTeamColor(primaryColor);
-
-  // ── Re-run rankings and AI analysis when the league filter changes ────────
-  // Handles all three cases: All leagues (empty), single league, multi-league.
-  // Rankings are computed only for a single-league selection (cross-league
-  // rankings aren't meaningful). AI is always regenerated from the current
-  // filtered game set.
-  const prevLeagueFilterRef = useRef<string>('');
-  useEffect(() => {
-    const key = Array.from(selectedLeagueIds).sort().join(',');
-    if (key === prevLeagueFilterRef.current) return;
-    prevLeagueFilterRef.current = key;
-
-    if (!playerInfo?.name || playerStats.length === 0) return;
-
-    // Compute averages from the filtered game set (all, selected, or combined).
-    // expandedCompIds maps selected parent league IDs → their competition IDs.
-    const scopedGames = playerStats.filter(
-      (s: any) => (expandedCompIds.size === 0 || expandedCompIds.has(s.league_id)) && playedInGame(s)
-    );
-    if (scopedGames.length === 0) return;
-
-    const lt = scopedGames.reduce((acc: any, g: any) => ({
-      points: acc.points + (g.spoints || g.points || 0),
-      rebounds: acc.rebounds + (g.sreboundstotal || g.rebounds_total || 0),
-      assists: acc.assists + (g.sassists || g.assists || 0),
-      steals: acc.steals + (g.ssteals || 0),
-      blocks: acc.blocks + (g.sblocks || 0),
-      fg_made: acc.fg_made + (g.sfieldgoalsmade || 0),
-      fg_att: acc.fg_att + (g.sfieldgoalsattempted || 0),
-      three_made: acc.three_made + (g.sthreepointersmade || 0),
-      three_att: acc.three_att + (g.sthreepointersattempted || 0),
-      ft_made: acc.ft_made + (g.sfreethrowsmade || 0),
-      ft_att: acc.ft_att + (g.sfreethrowsattempted || 0),
-    }), { points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fg_made: 0, fg_att: 0, three_made: 0, three_att: 0, ft_made: 0, ft_att: 0 });
-    const lg = scopedGames.length;
-    const scopedAvg: SeasonAverages = {
-      games_played: lg,
-      avg_points: lt.points / lg,
-      avg_rebounds: lt.rebounds / lg,
-      avg_assists: lt.assists / lg,
-      avg_steals: lt.steals / lg,
-      avg_blocks: lt.blocks / lg,
-      fg_percentage: lt.fg_att > 0 ? (lt.fg_made / lt.fg_att) * 100 : 0,
-      three_point_percentage: lt.three_att > 0 ? (lt.three_made / lt.three_att) * 100 : 0,
-      ft_percentage: lt.ft_att > 0 ? (lt.ft_made / lt.ft_att) * 100 : 0,
-      avg_efficiency: 0,
-    };
-
-    // Rankings: meaningful only for a single-parent selection (expand to
-    // first actual competition ID so the rankings query hits the right data).
-    if (selectedLeagueIds.size === 1) {
-      const [parentId] = Array.from(selectedLeagueIds);
-      const compIds = Array.from(expandedCompIds);
-      const rankingLeagueId = compIds.length > 0 ? compIds[0] : parentId;
-      const playerIds = playerMatches.map((m: PlayerMatch) => m.id);
-      setPlayerRankings(null);
-      calculateRankings(rankingLeagueId, scopedAvg, playerInfo.name, playerIds)
-        .then(ranks => { if (ranks) setPlayerRankings(ranks); })
-        .catch(err => console.warn('[Rankings] filter re-calc error:', err));
-    } else {
-      setPlayerRankings(null);
-    }
-
-    // AI scouting report: always regenerate from the current filtered averages.
-    setAnalysisLoading(true);
-    const analysisData: PlayerAnalysisData = {
-      name: playerInfo.name,
-      games_played: scopedAvg.games_played,
-      avg_points: scopedAvg.avg_points,
-      avg_rebounds: scopedAvg.avg_rebounds,
-      avg_assists: scopedAvg.avg_assists,
-      avg_steals: scopedAvg.avg_steals,
-      avg_blocks: scopedAvg.avg_blocks,
-      fg_percentage: scopedAvg.fg_percentage,
-      three_point_percentage: scopedAvg.three_point_percentage,
-      ft_percentage: scopedAvg.ft_percentage,
-    };
-    generatePlayerAnalysis(analysisData)
-      .then(analysis => setAiAnalysis(analysis))
-      .catch(() => setAiAnalysis("Dynamic player with strong fundamentals and competitive drive."))
-      .finally(() => setAnalysisLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLeagueIds, expandedCompIds, playerStats, playerInfo?.name]);
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1410,75 +1361,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           };
           setSeasonAverages(averages);
 
-          const rankingLeagueId = gamesPlayed[0].league_id;
-          if (rankingLeagueId) {
-            const leagueOnlyGames = gamesPlayed.filter((g: any) => g.league_id === rankingLeagueId);
-            if (leagueOnlyGames.length > 0) {
-              const lt = leagueOnlyGames.reduce((acc: any, g: any) => ({
-                points: acc.points + (g.spoints || 0),
-                rebounds: acc.rebounds + (g.sreboundstotal || 0),
-                assists: acc.assists + (g.sassists || 0),
-                steals: acc.steals + (g.ssteals || 0),
-                blocks: acc.blocks + (g.sblocks || 0),
-                fg_made: acc.fg_made + (g.sfieldgoalsmade || 0),
-                fg_att: acc.fg_att + (g.sfieldgoalsattempted || 0),
-                three_made: acc.three_made + (g.sthreepointersmade || 0),
-                three_att: acc.three_att + (g.sthreepointersattempted || 0),
-                ft_made: acc.ft_made + (g.sfreethrowsmade || 0),
-                ft_att: acc.ft_att + (g.sfreethrowsattempted || 0),
-              }), { points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0, fg_made: 0, fg_att: 0, three_made: 0, three_att: 0, ft_made: 0, ft_att: 0 });
-              const lg = leagueOnlyGames.length;
-              const rankAverages: SeasonAverages = {
-                games_played: lg,
-                avg_points: lt.points / lg,
-                avg_rebounds: lt.rebounds / lg,
-                avg_assists: lt.assists / lg,
-                avg_steals: lt.steals / lg,
-                avg_blocks: lt.blocks / lg,
-                fg_percentage: lt.fg_att > 0 ? (lt.fg_made / lt.fg_att) * 100 : 0,
-                three_point_percentage: lt.three_att > 0 ? (lt.three_made / lt.three_att) * 100 : 0,
-                ft_percentage: lt.ft_att > 0 ? (lt.ft_made / lt.ft_att) * 100 : 0,
-                avg_efficiency: 0,
-              };
-              // Fire-and-forget: ranking math walks every player_stats row
-              // in the league (5k+ for full-season leagues) and would
-              // otherwise hold the "Loading…" spinner up for ~5–10s.
-              // Letting it resolve in the background lets the profile
-              // render immediately and the rank chips fill in shortly
-              // after.
-              calculateRankings(rankingLeagueId, rankAverages, pInfo.name, playerIds)
-                .then((ranks) => { if (ranks) setPlayerRankings(ranks); })
-                .catch((err) => console.warn('[Rankings] background error:', err));
-            }
-          }
-
-          if (pInfo && averages) {
-            // Fire-and-forget: the OpenAI roundtrip can take 3–8s on a
-            // cold function call and previously held the whole profile
-            // on the loading spinner. Now we let the page render
-            // immediately and hydrate the analysis blurb (and its small
-            // loading state) when the OpenAI request resolves.
-            setAnalysisLoading(true);
-            const analysisData: PlayerAnalysisData = {
-              name: pInfo.name,
-              games_played: averages.games_played,
-              avg_points: averages.avg_points,
-              avg_rebounds: averages.avg_rebounds,
-              avg_assists: averages.avg_assists,
-              avg_steals: averages.avg_steals,
-              avg_blocks: averages.avg_blocks,
-              fg_percentage: averages.fg_percentage,
-              three_point_percentage: averages.three_point_percentage,
-              ft_percentage: averages.ft_percentage,
-            };
-            generatePlayerAnalysis(analysisData)
-              .then((analysis) => setAiAnalysis(analysis))
-              .catch((error) => {
-                console.error("❌ AI Analysis error:", error);
-                setAiAnalysis("Dynamic player with strong fundamentals and competitive drive.");
-              })
-              .finally(() => setAnalysisLoading(false));
-          }
+          // Rankings follow the profile filter (see the effect on rankingLeagueId).
         }
 
         // Background enrichment: derive opponents from game_schedule and
@@ -1678,16 +1561,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     };
   }, [playerSlug]);
 
+  // The games every tab shows: the ones in the filter that the player played in.
   const filteredStats = useMemo(() => {
-    let stats = playerStats;
-    if (expandedCompIds.size > 0) {
-      stats = playerStats.filter(stat => {
-        const statLeagueId = stat.players?.league_id || stat.league_id;
-        return statLeagueId && expandedCompIds.has(statLeagueId);
-      });
-    }
+    const stats = scopeLeagueIds
+      ? playerStats.filter(stat => !!stat.league_id && scopeLeagueIds.has(stat.league_id))
+      : playerStats;
     return stats.filter(stat => playedInGame(stat));
-  }, [playerStats, expandedCompIds]);
+  }, [playerStats, scopeLeagueIds]);
 
   // On/off for each game in the log, from the whole game's box +/-.
   const gameLogOnOff = useGameLogOnOff(filteredStats, activeTab === 'games');
@@ -1716,35 +1596,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       { stat: bestGame, label: 'Best', heading: 'Best game' },
     ];
   }, [filteredStats]);
-
-  // ── League filter data ────────────────────────────────────────────────────
-  // One item per parent league (or self if no parent). Competitions that share
-  // a parent brand (e.g. "Hoopsfix Pro-Am 2024-25" + "2025-26") collapse into
-  // a single "Hoopsfix Pro-Am" entry.
-  const filterableLeagues = useMemo(() => {
-    const seen = new Set<string>();
-    const leagues: { id: string; name: string }[] = [];
-    const addLeague = (leagueId: string) => {
-      const parentId = competitionParentMap.get(leagueId) || leagueId;
-      if (!seen.has(parentId)) {
-        seen.add(parentId);
-        leagues.push({
-          id: parentId,
-          name: leagueNames.get(parentId) || leagueNames.get(leagueId) || parentId,
-        });
-      }
-    };
-    for (const match of playerMatches) {
-      if (match.league_id) addLeague(match.league_id);
-    }
-    // Also pick up leagues that came in via linkedPlayerIds stats
-    // (those player IDs may not be in public.players so they won't
-    // appear in playerMatches, but their stats have league_id set).
-    for (const stat of playerStats) {
-      if (stat.league_id) addLeague(stat.league_id);
-    }
-    return leagues;
-  }, [playerMatches, playerStats, leagueNames, competitionParentMap]);
 
   const filteredSeasonAverages = useMemo(() => {
     if (!filteredStats || filteredStats.length === 0) return null;
@@ -1784,6 +1635,30 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     };
   }, [filteredStats]);
 
+  // League ranks only mean something inside one competition, so they show
+  // when the filter (or the player's whole record) is a single competition.
+  const rankingLeagueId = scopeLeagueIds
+    ? (scopeLeagueIds.size === 1 ? Array.from(scopeLeagueIds)[0] : null)
+    : (competitionIndex.size === 1 ? Array.from(competitionIndex.keys())[0] : null);
+  const rankingKey = rankingLeagueId && filteredSeasonAverages && playerInfo?.name
+    ? [rankingLeagueId, playerInfo.name, playerMatches.map((m) => m.id).join('+'),
+       ...Object.values(filteredSeasonAverages).map((v) => Number(v).toFixed(3))].join('|')
+    : '';
+  const rankingInputRef = useRef({ filteredSeasonAverages, name: playerInfo?.name, ids: playerMatches.map((m) => m.id) });
+  rankingInputRef.current = { filteredSeasonAverages, name: playerInfo?.name, ids: playerMatches.map((m) => m.id) };
+  useEffect(() => {
+    setPlayerRankings(null);
+    const { filteredSeasonAverages: averages, name, ids } = rankingInputRef.current;
+    if (!rankingKey || !rankingLeagueId || !averages || !name) return;
+    let cancelled = false;
+    calculateRankings(rankingLeagueId, averages, name, ids)
+      .then((ranks) => { if (!cancelled && ranks) setPlayerRankings(ranks); })
+      .catch((err) => console.warn('[Rankings] error:', err));
+    return () => { cancelled = true; };
+    // calculateRankings is a plain helper of this component; rankingKey covers its inputs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rankingKey]);
+
   const nameVariationsWithLeagues = useMemo(() => {
     if (playerMatches.length <= 1) return [];
     const variations = playerMatches.map(match => ({
@@ -1796,10 +1671,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
   const playerShotGameKeys = useMemo(() => {
     if (!playerStats || playerStats.length === 0) return [];
-    // Scope shot chart to selected leagues (if any)
-    const baseStats = expandedCompIds.size > 0
-      ? playerStats.filter(s => s.league_id && expandedCompIds.has(s.league_id))
-      : playerStats;
+    const baseStats = playerStats.filter(s => inScope(s.league_id));
     const sorted = [...baseStats]
       .filter(s => s.game_key)
       .sort((a, b) => new Date(b.game_date || b.created_at || '').getTime() - new Date(a.game_date || a.created_at || '').getTime());
@@ -1807,7 +1679,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     if (playerShotChartRange === "last10") return sorted.slice(0, 10).map(s => s.game_key).filter(Boolean) as string[];
     if (playerShotChartRange.startsWith("game:")) return [playerShotChartRange.replace("game:", "")];
     return sorted.map(s => s.game_key).filter(Boolean) as string[];
-  }, [playerStats, playerShotChartRange, expandedCompIds]);
+  }, [playerStats, playerShotChartRange, scopeLeagueIds]);
 
   const playerIdsForShots = useMemo(() => playerMatches.map(m => m.id), [playerMatches]);
 
@@ -1829,15 +1701,18 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
   const playerShotGamesWithKeys = useMemo(() => {
     if (!playerStats) return [];
-    const baseStats = expandedCompIds.size > 0
-      ? playerStats.filter(s => s.league_id && expandedCompIds.has(s.league_id))
-      : playerStats;
+    const baseStats = playerStats.filter(s => inScope(s.league_id));
     return baseStats
       .filter(s => s.game_key)
       .sort((a, b) => new Date(b.game_date || b.created_at || '').getTime() - new Date(a.game_date || a.created_at || '').getTime())
       .map(s => ({ game_key: s.game_key!, opponent: s.opponent || 'TBD', date: s.game_date || s.created_at || '' }))
       .filter((g, i, arr) => arr.findIndex(x => x.game_key === g.game_key) === i);
-  }, [playerStats, selectedLeagueIds]);
+  }, [playerStats, scopeLeagueIds]);
+
+  // A game picked for the shot chart may not be in a new filter.
+  useEffect(() => {
+    setPlayerShotChartRange((range) => (range.startsWith('game:') ? 'season' : range));
+  }, [scopeKey]);
 
   const playerPhotoOriginalUrl = useMemo(
     () => getPlayerPhotoUrlCached(playerInfo?.photoPath ?? null, photoCacheBuster || undefined),
@@ -1925,9 +1800,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     teamLogoUrl: shareTeamLogoUrl,
     primaryColor,
   };
-  const shareFilterLabel = selectedLeagueIds.size === 1
-    ? (leagueNames.get(Array.from(selectedLeagueIds)[0]) || null)
-    : selectedLeagueIds.size > 1 ? `${selectedLeagueIds.size} competitions` : null;
+  const shareFilterLabel = scopeLabel;
   /** The stretch of games the shot chart is showing, for its card. */
   const shotRangeLabel = (): string | undefined => {
     if (playerShotChartRange === "season") return "Full Season";
@@ -1946,10 +1819,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   const careerStats = useMemo(() => {
     if (!playerStats || playerStats.length === 0) return [];
 
-    // Filter by selected leagues when active
-    const baseStats = expandedCompIds.size > 0
-      ? playerStats.filter((stat: any) => stat.league_id && expandedCompIds.has(stat.league_id))
-      : playerStats;
+    const baseStats = playerStats.filter((stat: any) => inScope(stat.league_id));
 
     const leagueGroups = new Map<string, any[]>();
     baseStats.forEach((stat: any) => {
@@ -2012,7 +1882,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       });
     });
     return seasons;
-  }, [playerStats, leagueNames, selectedLeagueIds]);
+  }, [playerStats, leagueNames, scopeLeagueIds]);
 
   const careerTotals = useMemo(() => {
     if (careerStats.length === 0) return null;
@@ -2084,7 +1954,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   );
 
   // Every league_id that collapses to the same parent brand as the current
-  // season — the same grouping `filterableLeagues` already uses to combine
+  // season — the same parent grouping the profile filter uses to combine
   // e.g. "Hoopsfix Pro-Am 2024-25" + "2025-26" into one filter entry. Reused
   // here to scope the "all-time" record-holder check to the whole
   // competition's history, not just this one season.
@@ -2184,6 +2054,18 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     // computeHighs is a plain helper of this component.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerAccolades, pastSeasons, pastSeasonMaxes]);
+
+  // Highs and accolades for the games in the filter.
+  const scopeHighs = useMemo(
+    () => (scopeLeagueIds ? computeHighs(filteredStats) : []),
+    // computeHighs is a plain helper of this component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredStats, scopeLeagueIds],
+  );
+  const scopedAccolades = useMemo(
+    () => (scopeLeagueIds ? accoladeCollection.filter((a) => !!a.leagueId && scopeLeagueIds.has(a.leagueId)) : accoladeCollection),
+    [accoladeCollection, scopeLeagueIds],
+  );
 
   // ── Trading cards (Latest, Best, and any game picked from the log) ────────
   // Each card needs its game's result and its league's logo on top of the
@@ -2378,35 +2260,26 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     return register ? `/auth?tab=register&next=${next}` : `/auth?next=${next}`;
   };
 
-  const leagueFilter = filterableLeagues.length > 1 ? (() => {
-    const label = selectedLeagueIds.size === 0
-      ? 'All Leagues'
-      : selectedLeagueIds.size === 1
-        ? filterableLeagues.find(l => selectedLeagueIds.has(l.id))?.name ?? 'All Leagues'
-        : `${selectedLeagueIds.size} Leagues`;
-    return (
-      <LeagueDropdown
-        leagues={filterableLeagues}
-        selectedLeagueIds={selectedLeagueIds}
-        onToggle={(id) => {
-          setSelectedLeagueIds(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id); else next.add(id);
-            return next;
-          });
-        }}
-        onClear={() => setSelectedLeagueIds(new Set())}
-        label={label}
-        accentColor={readablePrimary.onWhite}
-      />
-    );
-  })() : null;
+  const profileFilter = (
+    <ProfileFilterBar
+      seasons={filterSeasons}
+      families={leagueFamilies}
+      seasonValue={seasonSelectValue}
+      leagueValue={leagueFamily?.key ?? ''}
+      onSeasonChange={changeSeason}
+      onLeagueChange={changeLeague}
+    />
+  );
+  const hasProfileFilter = filterSeasons.length > 1 || leagueFamilies.length > 1;
+  // Across more than one season the averages are career averages.
+  const averagesAreCareer = !activeSeason && filterSeasons.length > 1;
 
   const pillStyle = { color: readablePrimary.body };
 
   // Beside the cards, the last section sits level with their bottom edge.
   // Plenty of players have no accolades, so their highs take that slot.
-  const sideHighs = accoladeCollection.length > 0 ? [] : (seasonHighs.length > 0 ? seasonHighs : careerHighs).slice(0, 3);
+  const sideHighs = scopedAccolades.length > 0 ? [] : (scopeLeagueIds ? scopeHighs : seasonHighs.length > 0 ? seasonHighs : careerHighs).slice(0, 3);
+  const sideHighsTitle = scopeLeagueIds ? (activeSeason ? 'Season highs' : 'League highs') : seasonHighs.length > 0 ? 'Season highs' : 'Career highs';
 
   const collectionPlayer: AccoladeCardPlayer = {
     id: playerInfo?.playerId || playerSlug,
@@ -2449,7 +2322,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
       {playerInfo && (
         <PlayerBanner
-          playerInfo={hasLeagueFilter && teamNameForBranding && teamBrandingLeagueId
+          playerInfo={scopeLeagueIds && teamNameForBranding && teamBrandingLeagueId
             ? { ...playerInfo, team: teamNameForBranding, leagueId: teamBrandingLeagueId }
             : playerInfo}
           playerPhotoUrl={playerPhotoUrl}
@@ -2511,7 +2384,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             );
           })}
         </nav>
-        {leagueFilter && <div className="pb-2 sm:pb-2.5 shrink-0">{leagueFilter}</div>}
+        {hasProfileFilter && <div className="pb-2 sm:pb-2.5 sm:shrink-0 min-w-0">{profileFilter}</div>}
       </div>
 
       <div className="mt-5 md:mt-6 space-y-8 md:space-y-10">
@@ -2594,7 +2467,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             </section>
           )}
 
-          <div className={`pp-side min-w-0 ${accoladeCollection.length > 0 || sideHighs.length > 0 ? 'pp-side-fill' : ''}`}>
+          <div className={`pp-side min-w-0 ${scopedAccolades.length > 0 || sideHighs.length > 0 ? 'pp-side-fill' : ''}`}>
         {filteredSeasonAverages && (() => {
           type StatTile = { value: number; label: string; rank?: number };
           const seasonStats: StatTile[] = [
@@ -2605,15 +2478,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
             { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
           ];
-          const filterLabel = selectedLeagueIds.size === 1
-            ? (leagueNames.get(Array.from(selectedLeagueIds)[0]) || 'Filtered')
-            : selectedLeagueIds.size > 1 ? `${selectedLeagueIds.size} Leagues` : null;
+          const filterLabel = scopeLabel;
 
           // The downloadable card: drawn on a canvas in the Swish Social look, in the club's colour.
           const generateCardBlob = () =>
             generateStatTilesCardBlob({
               player: sharePlayer,
-              title: "SEASON AVERAGES",
+              title: averagesAreCareer ? "CAREER AVERAGES" : "SEASON AVERAGES",
               banner: shareFilterLabel || "All competitions",
               games: filteredSeasonAverages.games_played,
               tiles: seasonStats.map((stat) => ({ label: stat.label, value: stat.value.toFixed(1), rank: stat.rank })),
@@ -2622,7 +2493,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           return (
             <ShareableCard
               flat
-              title="Season Averages"
+              title={averagesAreCareer ? "Career Averages" : "Season Averages"}
               fileSlug="season-averages"
               player={{
                 name: playerInfo?.name || "Player",
@@ -2638,7 +2509,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             >
               <div>
                 <div className="flex items-center justify-between gap-3 mb-4 pr-10">
-                  <h3 className="whitespace-nowrap ch-section-title">Season averages</h3>
+                  <h3 className="whitespace-nowrap ch-section-title">{averagesAreCareer ? 'Career averages' : 'Season averages'}</h3>
                   {filterLabel && (
                     <span className="text-[11px] font-semibold uppercase tracking-[0.08em] truncate" style={pillStyle}>
                       {filterLabel}
@@ -2708,14 +2579,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
         {sideHighs.length > 0 && (
           <div>
-            <h3 className="ch-section-title mb-4">{seasonHighs.length > 0 ? 'Season highs' : 'Career highs'}</h3>
+            <h3 className="ch-section-title mb-4">{sideHighsTitle}</h3>
             <div className="pp-tiles-6 grid grid-cols-3 gap-x-6 gap-y-5">
               {sideHighs.map((stat) => <FlatStat key={stat.label} label={stat.label} value={stat.value} />)}
             </div>
           </div>
         )}
 
-        {accoladeCollection.length > 0 && (
+        {scopedAccolades.length > 0 && (
           <div>
             <div className="flex items-center justify-between gap-3 mb-4">
               <h3 className="ch-section-title">Accolades</h3>
@@ -2725,12 +2596,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 className="text-xs font-semibold hover:underline underline-offset-2"
                 style={{ color: readablePrimary.body }}
               >
-                View the collection ({accoladeCollection.length})
+                View the collection ({scopedAccolades.length})
               </button>
             </div>
             <div className="pp-accolades">
               <AccoladeChips
-                accolades={accoladeCollection}
+                accolades={scopedAccolades}
                 teamColor={primaryColor || '#f97316'}
                 readableTeamColor={readablePrimary.body}
                 onOpen={() => setActiveTab('accolades')}
@@ -2744,21 +2615,17 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         </>}
 
         {activeTab === 'splits' && playerInfo?.playerId && (
-          selectedLeagueIds.size > 1 ? (
-            <div className="py-5 text-sm text-[color:var(--ch-text-2)]">
-              Select a single league to see on/off impact.
-            </div>
-          ) : (
-            <PlayerPerformanceSplits
-              playerId={playerInfo.playerId}
-              leagueIds={Array.from(expandedCompIds)}
-              playerName={playerInfo.name}
-              playerTeam={playerInfo.team}
-              playerPhotoUrl={playerPhotoUrl}
-              primaryColor={primaryColor}
-              teamLogoUrl={shareTeamLogoUrl}
-            />
-          )
+          // Every id the player has (one per competition), so each competition's on/off is found.
+          <PlayerPerformanceSplits
+            playerId={playerInfo.playerId}
+            playerIds={Array.from(new Set([playerInfo.playerId, ...playerMatches.map((m) => m.id), ...(linkedPlayerIds ?? [])]))}
+            leagueIds={scopeLeagueIds ? Array.from(scopeLeagueIds) : []}
+            playerName={playerInfo.name}
+            playerTeam={playerInfo.team}
+            playerPhotoUrl={playerPhotoUrl}
+            primaryColor={primaryColor}
+            teamLogoUrl={shareTeamLogoUrl}
+          />
         )}
 
         {activeTab === 'stats' && <>
@@ -2779,6 +2646,34 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           // A player with only one season on record has identical season/career
           // highs — showing both blocks would just be the same numbers twice.
           const isSingleSeason = !!currentSeason && currentSeason.games.length === playedCareerGames.length;
+          // With a filter on, the highs are those games' highs; the career
+          // highs follow when the filter leaves some games out.
+          if (scopeLeagueIds) {
+            const coversCareer = filteredStats.length === playedCareerGames.length;
+            return (
+              <div className="space-y-8">
+                {scopeHighs.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <h3 className="whitespace-nowrap ch-section-title">{coversCareer ? 'Career high' : activeSeason ? 'Season high' : 'League high'}</h3>
+                      {scopeLabel && (
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] truncate" style={pillStyle}>
+                          {scopeLabel}
+                        </span>
+                      )}
+                    </div>
+                    <HighsGrid highs={scopeHighs} />
+                  </div>
+                )}
+                {careerHighs.length > 0 && !coversCareer && (
+                  <div>
+                    <h3 className="ch-section-title mb-4">Career high</h3>
+                    <HighsGrid highs={careerHighs} />
+                  </div>
+                )}
+              </div>
+            );
+          }
           return (
             <div className="space-y-8">
               {seasonHighs.length > 0 && (
@@ -2807,7 +2702,17 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         {careerStats.length > 0 && (
           <div>
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <h3 className="ch-section-title">Career stats</h3>
+              <div className="min-w-0">
+                <h3 className="ch-section-title">{activeSeason ? 'Season stats' : 'Career stats'}</h3>
+                {activeSeason && filterSeasons.length > 1 && (
+                  <p className="mt-1.5 text-xs text-[color:var(--ch-text-2)]">
+                    {activeSeason.label} only.{' '}
+                    <button type="button" className="font-semibold hover:underline underline-offset-2" style={pillStyle} onClick={() => changeSeason(ALL_SEASONS)}>
+                      Every season
+                    </button>
+                  </p>
+                )}
+              </div>
               <div className="ch-seg self-start" role="tablist" aria-label="Career stats view">
                 {["averages", "totals", "advanced"].map(tab => (
                   <button
@@ -2910,7 +2815,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                   ))}
                   {careerTotals && careerStats.length > 1 && (
                     <tr className="font-bold text-[color:var(--ch-text)] border-t-2 tabular-nums" style={{ borderColor: readablePrimary.accent }}>
-                      <td className="px-2 py-2 text-xs uppercase" style={{ color: readablePrimary.body }}>Career</td>
+                      <td className="px-2 py-2 text-xs uppercase" style={{ color: readablePrimary.body }}>{scopeLeagueIds ? 'Total' : 'Career'}</td>
                       <td className="px-2 py-2 text-xs"></td>
                       {renderCareerRow(careerTotals)}
                     </tr>
@@ -3025,18 +2930,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               {filteredStats.length > 0 && (
                 <span className="hidden sm:block">Tap a game for its card</span>
               )}
-              {selectedLeagueIds.size > 0 && (
-                <span>
-                  {selectedLeagueIds.size === 1
-                    ? `Filtered: ${leagueNames.get(Array.from(selectedLeagueIds)[0]) || 'League'}`
-                    : `${selectedLeagueIds.size} leagues selected`}
-                </span>
-              )}
+              {scopeLabel && <span>{scopeLabel}</span>}
             </div>
           </div>
           {filteredStats.length === 0 ? (
             <div className="py-5 text-sm text-[color:var(--ch-text-2)]">
-              No game statistics found for this player{selectedLeagueIds.size > 0 ? " in the selected league(s)" : ""}.
+              No games for this player{scopeLabel ? ` in ${scopeLabel}` : ""}.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -3152,18 +3051,29 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                   Records, league-leader finishes and career-best seasons, one holder per season. Tap a card to flip it.
                 </p>
               </div>
-              {accoladeCollection.length > 0 && (
+              {scopedAccolades.length > 0 && (
                 <span className="text-xs font-medium tabular-nums text-[color:var(--ch-muted)]">
-                  {accoladeCollection.length} card{accoladeCollection.length === 1 ? '' : 's'}
+                  {scopedAccolades.length} card{scopedAccolades.length === 1 ? '' : 's'}
+                  {scopedAccolades.length < accoladeCollection.length ? ` of ${accoladeCollection.length}` : ''}
                 </span>
               )}
             </div>
-            <AccoladeCollection
-              accolades={accoladeCollection}
-              player={collectionPlayer}
-              seasonOrder={playedSeasons.map((s) => s.label)}
-              competitions={cardLeagues ?? {}}
-            />
+            {scopeLabel && scopedAccolades.length === 0 && accoladeCollection.length > 0 && (
+              <p className="text-sm text-[color:var(--ch-text-2)]">
+                No cards from {scopeLabel}.{' '}
+                <button type="button" className="font-semibold hover:underline underline-offset-2" style={pillStyle} onClick={() => setFilter({ season: ALL_SEASONS, league: null })}>
+                  Show all {accoladeCollection.length}
+                </button>
+              </p>
+            )}
+            {!(scopeLabel && scopedAccolades.length === 0 && accoladeCollection.length > 0) && (
+              <AccoladeCollection
+                accolades={scopedAccolades}
+                player={collectionPlayer}
+                seasonOrder={playedSeasons.map((s) => s.label)}
+                competitions={cardLeagues ?? {}}
+              />
+            )}
           </section>
         )}
       </div>
