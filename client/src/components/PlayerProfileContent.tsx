@@ -269,6 +269,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     leagueSlug: playerLeagues.find((l) => l.id === playerInfo.leagueId)?.slug ?? playerLeagues[0]?.slug ?? null,
   } : null);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
+  // Every id whose games the profile shows: name matches, identity links, linked ids.
+  const [statsPlayerIds, setStatsPlayerIds] = useState<string[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
   // Season + league for every tab, read from and kept in the URL.
   const [filter, setFilter] = useState<ProfileFilterState>(() => readProfileFilter(window.location.search));
@@ -1016,22 +1018,26 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           // Non-fatal — fall through to fuzzy matching below
         }
 
-        // Fetch only the small set of name-variant players we'll match
-        // against. We use a contains-style match here intentionally: this
-        // path needs to find variants with extra middle initials, suffixes,
-        // accent stripping, etc. that the namesMatch dedupe handles. The
-        // search term is the *last* significant token (typically a
-        // surname), and we cap the fetch at 20 rows + only the columns
-        // PLAYER_PROFILE_COLUMNS exposes — the previous `.limit(100)` with
-        // `select('*')` was wasteful for what is essentially a dedupe loop.
+        // Every player row with the surname as a word, for namesMatch to sort
+        // out (middle initials, suffixes, nicknames). The search term is the
+        // last significant token (typically a surname). No row cap: a common
+        // surname has well over a hundred rows once past seasons are in, and
+        // a cap dropped the player's own older rows at random. Read in pages
+        // of 1000 (the API's per-request maximum), ordered so pages don't overlap.
         const surnameLike = `${searchQuery.replace(/[,()*%\\]/g, '')}%`;
-        const allPlayersResult = await supabase
-          .from('players').select(PLAYER_PROFILE_COLUMNS)
-          // The surname as a word, not any substring: "%Saa%" also catches every
-          // "Isaac" and the 20-row cap then drops real matches at random.
-          .or(`full_name.ilike.${surnameLike},full_name.ilike.% ${surnameLike}`)
-          .limit(40);
-        const { data: allPlayersData, error: allPlayersError } = allPlayersResult;
+        const SURNAME_PAGE = 1000;
+        const allPlayersData: any[] = [];
+        for (let from = 0; from < 20 * SURNAME_PAGE; from += SURNAME_PAGE) {
+          const { data: page, error: pageError } = await supabase
+            .from('players').select(PLAYER_PROFILE_COLUMNS)
+            // The surname as a word, not any substring: "%Saa%" would also catch every "Isaac".
+            .or(`full_name.ilike.${surnameLike},full_name.ilike.% ${surnameLike}`)
+            .order('id')
+            .range(from, from + SURNAME_PAGE - 1);
+          if (pageError) { console.warn("[PlayerProfile] name candidates:", pageError.message); break; }
+          allPlayersData.push(...(page || []));
+          if (!page || page.length < SURNAME_PAGE) break;
+        }
 
         const identityPlayersRes = identityLinkedIds.length > 0
           ? await supabase.from('players').select(PLAYER_PROFILE_COLUMNS).in('id', identityLinkedIds)
@@ -1044,7 +1050,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         const seen = new Set<string>([initialPlayer.id]);
         let allPlayers: any[] = [initialPlayer];
 
-        if (!allPlayersError && allPlayersData && allPlayersData.length > 0) {
+        if (allPlayersData.length > 0) {
           allPlayers = [
             initialPlayer,
             ...allPlayersData.filter((p: any) => {
@@ -1134,7 +1140,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         // age groups). These IDs are used only for the stats fetch — the
         // profile info and league names are resolved from the stats rows
         // themselves by the background enrichment pass.
-        const allStatsPlayerIds = Array.from(new Set([...playerIds, ...(linkedPlayerIds || [])]));
+        // Identity-group ids are definite links, so their games are fetched
+        // even when their players row isn't readable here (players in
+        // competitions that aren't public; their box scores can still be).
+        const allStatsPlayerIds = Array.from(new Set([...playerIds, ...identityLinkedIds, ...(linkedPlayerIds || [])]));
+        setStatsPlayerIds(allStatsPlayerIds);
 
         // Note: previously this query joined `players:player_id(full_name, league_id)`
         // which forced a costly nested lookup and frequently triggered Supabase
@@ -1681,7 +1691,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     return sorted.map(s => s.game_key).filter(Boolean) as string[];
   }, [playerStats, playerShotChartRange, scopeLeagueIds]);
 
-  const playerIdsForShots = useMemo(() => playerMatches.map(m => m.id), [playerMatches]);
+  const playerIdsForShots = useMemo(
+    () => Array.from(new Set([...playerMatches.map(m => m.id), ...statsPlayerIds])),
+    [playerMatches, statsPlayerIds],
+  );
 
   const { data: playerShotData, isLoading: playerShotsLoading } = useQuery({
     queryKey: ['player-shot-chart', playerIdsForShots, playerShotGameKeys],
@@ -2618,7 +2631,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           // Every id the player has (one per competition), so each competition's on/off is found.
           <PlayerPerformanceSplits
             playerId={playerInfo.playerId}
-            playerIds={Array.from(new Set([playerInfo.playerId, ...playerMatches.map((m) => m.id), ...(linkedPlayerIds ?? [])]))}
+            playerIds={Array.from(new Set([playerInfo.playerId, ...playerMatches.map((m) => m.id), ...statsPlayerIds]))}
             leagueIds={scopeLeagueIds ? Array.from(scopeLeagueIds) : []}
             playerName={playerInfo.name}
             playerTeam={playerInfo.team}
