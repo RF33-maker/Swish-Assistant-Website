@@ -61,20 +61,51 @@ export interface TeamSummaryInput {
   ppg?: number | null;
   oppPpg?: number | null;
   topScorer?: { name: string; ppg: number } | null;
+  /** The competition is over, so the line reads in the past tense ("had", "led"). */
+  finished?: boolean;
+}
+
+/**
+ * Whether a team's competition is over: nothing left on its schedule, and
+ * either from an earlier season than today's (seasons turn over on 1 August)
+ * or not played in for four months (for names without a year, "REBA Season 1").
+ */
+export function isFinishedCompetition({ name, season, lastPlayed, hasUpcoming, now = new Date() }: {
+  name?: string | null;
+  season?: string | null;
+  lastPlayed?: string | null;
+  hasUpcoming?: boolean;
+  now?: Date;
+}): boolean {
+  if (hasUpcoming) return false;
+  const source = `${season || ""} ${name || ""}`;
+  const range = source.match(/((?:19|20)\d{2})\s*[-/]\s*((?:19|20)?\d{2})/);
+  const single = source.match(/((?:19|20)\d{2})(?!.*(?:19|20)\d{2})/);
+  const endYear = range
+    ? Number(range[2].length === 4 ? range[2] : `${range[1].slice(0, 2)}${range[2]}`)
+    : single ? Number(single[1]) : null;
+  const currentEndYear = now.getUTCMonth() >= 7 ? now.getUTCFullYear() + 1 : now.getUTCFullYear();
+  if (endYear != null && endYear < currentEndYear) return true;
+  const last = lastPlayed ? new Date(lastPlayed).getTime() : NaN;
+  return Number.isFinite(last) && now.getTime() - last > 120 * 86_400_000;
 }
 
 /** "Bristol Flyers II have a 12-8 record in BCB 2025-26, averaging 81.3 points and allowing 77.9. …" */
-export function teamSeasonSummary({ team, competition, wins = 0, losses = 0, ppg, oppPpg, topScorer }: TeamSummaryInput): string {
+export function teamSeasonSummary({ team, competition, wins = 0, losses = 0, ppg, oppPpg, topScorer, finished = false }: TeamSummaryInput): string {
   const played = wins + losses;
   const parts: string[] = [];
   if (played) {
-    let s = `${team} have a ${wins}-${losses} record${competition ? ` in ${competition}` : ""}`;
+    let s = finished
+      ? `${team} finished with a ${wins}-${losses} record${competition ? ` in ${competition}` : ""}`
+      : `${team} have a ${wins}-${losses} record${competition ? ` in ${competition}` : ""}`;
     if (ppg != null && ppg > 0) s += `, averaging ${one(ppg)} points${oppPpg != null && oppPpg > 0 ? ` and allowing ${one(oppPpg)}` : ""} per game`;
     parts.push(`${s}.`);
   } else if (competition) {
-    parts.push(`${team} play in ${competition}.`);
+    parts.push(`${team} ${finished ? "played" : "play"} in ${competition}.`);
   }
-  if (topScorer && topScorer.ppg > 0) parts.push(`${topScorer.name} leads the team with ${one(topScorer.ppg)} points per game.`);
+  if (topScorer && topScorer.ppg > 0) {
+    parts.push(`${topScorer.name} ${finished ? "led" : "leads"} the team with ${one(topScorer.ppg)} points per game.`);
+  }
   return parts.join(" ");
 }
 
