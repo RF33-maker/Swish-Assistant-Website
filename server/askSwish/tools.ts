@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AskCard, AskEvent, AskNavButton, AskScope, AskSurface } from "@shared/askSwish";
 import { gamePath, playerPath, teamPath } from "@shared/seo";
 import { shotZone, type ShotZoneKey } from "@shared/shotZones";
+import { clubDisplayName } from "@shared/teamIdentity";
 import * as d from "./data";
 
 /**
@@ -58,6 +59,81 @@ async function resolveLeague(ctx: ToolContext, league?: string | null): Promise<
 
 const leagueNav = (c: d.Competition): AskNavButton | null =>
   c.slug ? { label: c.name, href: `/league/${c.slug}`, kind: "competition" } : null;
+
+// ---------- past seasons ----------
+
+/** The two inputs every tool that can look back through a league's seasons takes. */
+const HISTORY_PROPS = {
+  seasons: { type: "string", enum: ["current", "all"], description: "\"all\" covers every season of the league on the site, for all-time questions (records, 'ever', 'in history', 'all-time', careers). Default: the one season named in league, or in scope." },
+  former_names: { type: "boolean", description: "With seasons \"all\": also count seasons the league played under a former name (default true; e.g. today's NBL Division One was NBL Division Two until 2024-25). false keeps only the seasons under the name asked about." },
+};
+const HISTORY_SCHEMA = { seasons: z.enum(["current", "all"]).optional(), former_names: z.boolean().optional() };
+
+/** What a question covers: one season (the default), or every season of the league. */
+interface Coverage {
+  comp: d.Competition;
+  ids: string[];
+  allTime: boolean;
+  /** "NBL Division Two, 2017-18 to 2024-25", or the competition's name for one season. */
+  title: string;
+  /** For all-time answers: the seasons covered and any former/later names, for the model to pass on. */
+  note: string;
+  /** league_id → "2019-20" (season label, plus the league's name at the time when that changed). */
+  tag: (leagueId: string) => string;
+  /** league_id → the slug its games are linked under. */
+  slugOf: (leagueId: string) => string | null;
+}
+
+async function coverage(ctx: ToolContext, league: string | undefined, seasons: "current" | "all" | undefined, formerNames: boolean | undefined): Promise<Coverage> {
+  const comp = await resolveLeague(ctx, league);
+  const comps = await d.visibleCompetitions();
+  const byId = new Map(comps.map((c) => [c.league_id, c]));
+  const slugOf = (id: string) => { const c = byId.get(id); return c?.slug ?? (c?.parent_league_id ? byId.get(c.parent_league_id)?.slug ?? null : null); };
+  if (seasons !== "all") {
+    return { comp, ids: await d.leagueFamily(comp.league_id), allTime: false, title: comp.name, note: "", tag: () => d.seasonLabel(comp), slugOf };
+  }
+  const span = await d.seasonSpan(comp, { formerNames });
+  const ids = Array.from(new Set((await Promise.all(span.seasons.map((s) => d.leagueFamily(s.league_id)))).flat()));
+  const tags = await d.seasonTags(span);
+  const first = span.seasons[0], last = span.seasons[span.seasons.length - 1];
+  const range = span.seasons.length > 1 ? `${d.seasonLabel(first)} to ${d.seasonLabel(last)}` : d.seasonLabel(first);
+  return { comp, ids, allTime: true, title: `${span.parts.map((p) => p.name).join(" / ")}, ${range}`, note: d.describeSpan(span), tag: (id) => tags.get(id) ?? "", slugOf };
+}
+
+/** A person (or club) summed over many games, remembering the names, teams and seasons behind it. */
+type Pile = Totals & { name: string; team: string; player_id: string | null; teams: Map<string, number>; leagues: Set<string>; latest: string };
+
+function pile<T extends { game_date: string | null; league_id: string }>(rows: T[], keyOf: (r: T) => string, who: (r: T) => { name: string; team: string; player_id: string | null }): Map<string, Pile> {
+  const out = new Map<string, Pile>();
+  for (const r of rows) {
+    const key = keyOf(r);
+    const w = who(r);
+    let t = out.get(key);
+    if (!t) { t = { ...zeroTotals(), ...w, teams: new Map(), leagues: new Set(), latest: "" }; out.set(key, t); }
+    const date = r.game_date ?? "";
+    if (date > t.latest) { t.latest = date; t.name = w.name; t.team = w.team; t.player_id = w.player_id ?? t.player_id; }
+    t.games++;
+    t.min += d.minutesOf((r as { min?: string | null }).min ?? null);
+    t.teams.set(w.team, (t.teams.get(w.team) ?? 0) + 1);
+    t.leagues.add(r.league_id);
+    const row = r as unknown as Partial<Record<TotalKey, number | null>>;
+    for (const k of TOTAL_KEYS) t[k] += row[k] ?? 0;
+  }
+  return out;
+}
+
+/** "Ipswich, Greenwich Titans" — a pile's clubs, most games first, one name per club ("Sheffield Arrows Senior Men I" is Sheffield Arrows). */
+const teamsOf = (t: Pile, n = 2) => {
+  const clubs = new Map<string, { name: string; games: number }>();
+  for (const [name, games] of Array.from(t.teams.entries())) {
+    const k = d.teamClubKey(name);
+    const c = clubs.get(k) ?? { name: clubDisplayName(name), games: 0 };
+    c.games += games;
+    clubs.set(k, c);
+  }
+  const list = Array.from(clubs.values()).sort((a, b) => b.games - a.games);
+  return list.slice(0, n).map((c) => c.name).join(", ") + (list.length > n ? ` +${list.length - n}` : "");
+};
 
 // ---------- stat catalogue for leaders / records ----------
 
@@ -183,10 +259,23 @@ export const searchEntities: ToolDef = {
     const byId = new Map(comps.map((c) => [c.league_id, c.name]));
     if (kind === "any" || kind === "competition") {
       const q = query.toLowerCase();
-      const hits = comps.filter((c) => c.name.toLowerCase().includes(q) || (c.slug ?? "").includes(q)).slice(0, 8);
+      const hits = comps.filter((c) => c.name.toLowerCase().includes(q) || (c.slug ?? "").includes(q))
+        .sort((a, b) => (d.seasonStart(b) ?? 0) - (d.seasonStart(a) ?? 0)).slice(0, 10);
       const best = await d.findCompetition(query);
       if (best && !hits.includes(best)) hits.unshift(best);
-      if (hits.length) out.push("Competitions:\n" + hits.map((c) => `- ${c.name} (league_id ${c.league_id}${c.season ? `, ${c.season}` : ""})`).join("\n"));
+      if (hits.length) {
+        out.push("Competitions:\n" + hits.map((c) => `- ${c.name} (league_id ${c.league_id}${c.season ? `, ${c.season}` : ""})`).join("\n"));
+        // The leagues behind those hits, with every season held and any change of name.
+        const seen = new Set<string>();
+        const lines: string[] = [];
+        for (const h of hits) {
+          const span = await d.seasonSpan(h);
+          if (seen.has(span.asked.key) || lines.length >= 3) continue;
+          seen.add(span.asked.key);
+          if (span.seasons.length > 1 || span.renamedTo) lines.push(`- ${span.asked.name}: ${d.describeSpan(span)}`);
+        }
+        if (lines.length) out.push(`Past seasons (name one season as league, e.g. "${hits[0].name}", or use seasons "all" for all-time):\n${lines.join("\n")}`);
+      }
     }
     if (kind === "any" || kind === "team") {
       const ids = comps.map((c) => c.league_id);
@@ -223,22 +312,121 @@ export const getStandings: ToolDef = {
   },
 };
 
+/**
+ * get_leaders across every season of a league: career rankings (a person's
+ * seasons summed) or the best single seasons ever. Traditional and shooting
+ * stats only — the advanced figures are per-season views.
+ */
+async function leadersAllTime(input: any, ctx: ToolContext): Promise<string> {
+  const cov = await coverage(ctx, input.league, "all", input.former_names);
+  const scope: "players" | "teams" = input.scope ?? "players";
+  const group: "career" | "season" = input.group ?? "career";
+  const per: "game" | "total" = input.per ?? "game";
+  const limit = input.limit ?? 10;
+  const head = `All-time, ${cov.title}. ${cov.note}\n`;
+  status(ctx, `Going through every season of ${cov.title.split(",")[0]}…`);
+  const pctDef = PLAYER_PCT[input.stat];
+  const lowerFirst = (PLAYER_TRAD[input.stat] ?? TEAM_TRAD[input.stat] ?? pctDef)?.lower ?? false;
+
+  /** Qualifier and value for a pile, the same way the one-season ranking works. */
+  const rank = (list: Pile[], col: TotalKey | null, minGames: (t: Pile) => number) => {
+    const minAtt = input.min_attempts_per_game ?? (pctDef?.needs === "fga" ? 4 : pctDef?.needs ? 1.5 : 0);
+    return list
+      .filter((t) => t.games >= minGames(t) && (!pctDef?.needs || t[pctDef.needs] / t.games >= minAtt))
+      .map((t) => ({ t, v: pctDef ? (input.stat === "min" ? t.min / t.games : pctDef.calc(t)) : col ? (per === "total" ? t[col] : t[col] / t.games) : null }))
+      .filter((x): x is { t: Pile; v: number } => x.v != null && Number.isFinite(x.v))
+      .sort((a, b) => (lowerFirst ? a.v - b.v : b.v - a.v))
+      .slice(0, limit);
+  };
+  /** Per-season qualifier: half the games of the busiest in that season, as on a season leaderboard. */
+  const seasonMin = (list: Pile[]) => {
+    const most = new Map<string, number>();
+    for (const t of list) for (const l of Array.from(t.leagues)) most.set(l, Math.max(most.get(l) ?? 0, t.games));
+    return (t: Pile) => input.min_games ?? minGamesDefault(most.get(Array.from(t.leagues)[0]) ?? t.games);
+  };
+  const fmtV = (v: number) => (pctDef && input.stat !== "min" ? `${v.toFixed(1)}%` : per === "total" && !pctDef ? String(Math.round(v)) : d.fmt1(v));
+
+  if (scope === "players") {
+    const def = PLAYER_TRAD[input.stat] ?? pctDef;
+    if (!def) return `"${input.stat}" is only ranked one season at a time (advanced figures are per season). Ask for one season, or use one of: ${[...Object.keys(PLAYER_TRAD), ...Object.keys(PLAYER_PCT)].join(", ")}.`;
+    const games = await d.playerGamesAcross(cov.ids, { team: input.team });
+    if (!games.length) return `${head}No box scores in these seasons.`;
+    const person = d.personGrouper(games, group === "career" ? await d.identityOf(games.map((g) => g.player_id ?? "")) : new Map());
+    const piles = Array.from(pile(games, (g) => (group === "career" ? person(g) : `${person(g)}#${g.league_id}`), (g) => ({ name: g.player_name, team: g.team_name, player_id: g.player_id })).values());
+    const col = PLAYER_TRAD[input.stat]?.col as TotalKey | undefined;
+    const most = Math.max(0, ...piles.map((t) => t.games));
+    const careerMin = input.min_games ?? (per === "total" && !pctDef ? 1 : Math.min(30, minGamesDefault(most)));
+    const ranked = rank(piles, col ?? null, group === "career" ? () => careerMin : per === "total" && !pctDef ? () => input.min_games ?? 1 : seasonMin(piles));
+    if (!ranked.length) return `${head}No qualifying players.`;
+    const what = group === "career" ? (per === "total" && !pctDef ? "career totals" : "career per game") : (per === "total" && !pctDef ? "best single seasons (totals)" : "best single seasons (per game)");
+    const qual = group === "career" ? (careerMin > 1 ? `min ${careerMin} career games` : "") : per === "total" && !pctDef ? "" : "min half the games of the busiest player that season";
+    card(ctx, {
+      kind: "leaderboard", title: `${def.label} — ${what}, ${cov.title}`, unit: pctDef ? def.unit : per === "total" ? "total" : def.unit,
+      rows: ranked.map((x, i) => ({
+        rank: i + 1, name: x.t.name,
+        sub: group === "career" ? `${teamsOf(x.t)} · ${x.t.leagues.size} season${x.t.leagues.size === 1 ? "" : "s"} · ${x.t.games} GP` : `${clubDisplayName(x.t.team)} · ${cov.tag(Array.from(x.t.leagues)[0])} · ${x.t.games} GP`,
+        value: fmtV(x.v),
+      })),
+    });
+    const top = ranked[0].t;
+    if (top.player_id) addNav(ctx, { label: top.name, href: playerPath({ full_name: top.name, id: top.player_id }) ?? "", kind: "player" });
+    return `${head}${def.label}, ${what}${qual ? `, ${qual}` : ""}${input.team ? `, ${input.team} only` : ""}. ${group === "career" ? "A player's seasons are joined by linked player records or identical full name." : ""}\n` +
+      ranked.map((x, i) => `${i + 1}. ${x.t.name} (${group === "career" ? teamsOf(x.t, 3) : `${clubDisplayName(x.t.team)}, ${cov.tag(Array.from(x.t.leagues)[0])}`}) ${fmtV(x.v)} — ${x.t.games} GP${group === "career" ? ` over ${x.t.leagues.size} season${x.t.leagues.size === 1 ? "" : "s"}` : ""}, ${x.t.pts} pts (${d.fmt1(x.t.pts / x.t.games)} ppg), ${d.fmt1(x.t.reb / x.t.games)} rpg, ${d.fmt1(x.t.ast / x.t.games)} apg`).join("\n");
+  }
+
+  // teams: a club's seasons are joined by its club key, so renamed sides stay together.
+  const clubKey = (name: string, leagueId: string) => (group === "career" ? d.teamClubKey(name) : `${d.teamClubKey(name)}#${leagueId}`);
+  if (input.stat === "pts_allowed" || input.stat === "point_diff") {
+    const results = await d.finalResults(cov.ids, 20000);
+    const by = new Map<string, { name: string; latest: string; leagues: Set<string>; games: number; pf: number; pa: number }>();
+    const add = (team: string, leagueId: string, date: string, pf: number, pa: number) => {
+      const k = clubKey(team, leagueId);
+      const e = by.get(k) ?? { name: team, latest: "", leagues: new Set<string>(), games: 0, pf: 0, pa: 0 };
+      if (date > e.latest) { e.latest = date; e.name = team; }
+      e.games++; e.pf += pf; e.pa += pa; e.leagues.add(leagueId); by.set(k, e);
+    };
+    for (const g of results) { add(g.home_team, g.league_id, g.match_time ?? "", g.home_score, g.away_score); add(g.away_team, g.league_id, g.match_time ?? "", g.away_score, g.home_score); }
+    const minG = input.min_games ?? (group === "career" ? 20 : 5);
+    const ranked = Array.from(by.values()).filter((e) => e.games >= minG)
+      .map((e) => ({ e, v: input.stat === "pts_allowed" ? e.pa / e.games : (e.pf - e.pa) / e.games }))
+      .sort((a, b) => (input.stat === "pts_allowed" ? a.v - b.v : b.v - a.v)).slice(0, limit);
+    const label = input.stat === "pts_allowed" ? "Points allowed" : "Point differential";
+    const what = group === "career" ? "all seasons together" : "best single seasons";
+    card(ctx, { kind: "leaderboard", title: `${label} per game — ${what}, ${cov.title}`, unit: "per game", rows: ranked.map((x, i) => ({ rank: i + 1, name: x.e.name, sub: group === "career" ? `${x.e.leagues.size} seasons · ${x.e.games} GP` : `${cov.tag(Array.from(x.e.leagues)[0])} · ${x.e.games} GP`, value: d.fmt1(x.v) })) });
+    return `${head}${label} per game, teams, ${what}, min ${minG} games:\n` + ranked.map((x, i) => `${i + 1}. ${x.e.name}${group === "season" ? ` (${cov.tag(Array.from(x.e.leagues)[0])})` : ` (${x.e.leagues.size} seasons)`} ${d.fmt1(x.v)} — ${x.e.games} GP`).join("\n");
+  }
+  const tdef = TEAM_TRAD[input.stat];
+  if (!tdef && !pctDef) return `"${input.stat}" is only ranked one season at a time for teams (advanced figures are per season). Use one of: ${[...Object.keys(TEAM_TRAD), ...Object.keys(PLAYER_PCT).filter((k) => k !== "min"), "pts_allowed", "point_diff"].join(", ")}.`;
+  const games = await d.teamGamesAcross(cov.ids, { team: input.team });
+  const piles = Array.from(pile(games, (g) => clubKey(g.team_name, g.league_id), (g) => ({ name: g.team_name, team: g.team_name, player_id: null })).values());
+  const minG = input.min_games ?? (group === "career" ? 20 : 5);
+  const ranked = rank(piles, (tdef?.col as TotalKey) ?? null, () => minG);
+  const label = (tdef ?? pctDef).label;
+  const what = group === "career" ? "all seasons together" : "best single seasons";
+  card(ctx, { kind: "leaderboard", title: `${label} — teams, ${what}, ${cov.title}`, unit: pctDef ? pctDef.unit : per === "total" ? "total" : tdef.unit, rows: ranked.map((x, i) => ({ rank: i + 1, name: x.t.name, sub: group === "career" ? `${x.t.leagues.size} seasons · ${x.t.games} GP` : `${cov.tag(Array.from(x.t.leagues)[0])} · ${x.t.games} GP`, value: fmtV(x.v) })) });
+  return `${head}${label}, teams, ${what}, ${per === "total" ? "totals" : "per game"}, min ${minG} games:\n` + ranked.map((x, i) => `${i + 1}. ${x.t.name}${group === "season" ? ` (${cov.tag(Array.from(x.t.leagues)[0])})` : ` (${x.t.leagues.size} seasons)`} ${fmtV(x.v)} — ${x.t.games} GP`).join("\n");
+}
+
 export const getLeaders: ToolDef = {
   name: "get_leaders",
-  description: `Ranked leaders for one stat, players or teams, in a competition. Per-game averages by default (per="game"); per="total" for season totals. Stats: ${STAT_KEYS.join(", ")}. Percentages and advanced stats are averages with a minimum games/attempts qualifier; pts_allowed and point_diff are team defence. Optional team filter for "top scorers for X".`,
+  description: `Ranked leaders for one stat, players or teams, in a competition. Per-game averages by default (per="game"); per="total" for season totals. Stats: ${STAT_KEYS.join(", ")}. Percentages and advanced stats are averages with a minimum games/attempts qualifier; pts_allowed and point_diff are team defence. Optional team filter for "top scorers for X". With seasons "all" it ranks across every season of the league (traditional and shooting stats only): group "career" (default) sums each player's seasons — all-time leading scorer is stat pts, per "total"; group "season" ranks the best single seasons ever.`,
   input_schema: {
     type: "object",
     properties: {
       stat: { type: "string", enum: STAT_KEYS }, scope: { type: "string", enum: ["players", "teams"] }, per: { type: "string", enum: ["game", "total"] },
       league: { type: "string" }, team: { type: "string" }, min_games: { type: "integer" }, min_attempts_per_game: { type: "number" }, limit: { type: "integer" },
+      ...HISTORY_PROPS,
+      group: { type: "string", enum: ["career", "season"], description: "With seasons \"all\": career sums across seasons (default); season ranks single seasons." },
     },
     required: ["stat"],
   },
   schema: z.object({
     stat: z.string(), scope: z.enum(["players", "teams"]).optional(), per: z.enum(["game", "total"]).optional(), league: z.string().optional(),
     team: z.string().optional(), min_games: z.number().int().min(1).optional(), min_attempts_per_game: z.number().min(0).optional(), limit: z.number().int().min(1).max(25).optional(),
+    ...HISTORY_SCHEMA, group: z.enum(["career", "season"]).optional(),
   }),
   async run(input, ctx) {
+    if (input.seasons === "all") return leadersAllTime(input, ctx);
     const comp = await resolveLeague(ctx, input.league);
     const ids = await d.leagueFamily(comp.league_id);
     const scope = input.scope ?? "players";
@@ -348,7 +536,10 @@ async function playerProfile(ctx: ToolContext, name: string, comp: d.Competition
     return i >= 0 ? `${i + 1}/${sorted.length}` : "n/q";
   };
   const g = t.games;
-  const onOff = t.player_id ? (await d.onOffProfiles(ids, { player: t.name })).find((r) => r.player_id === t.player_id) : undefined;
+  // On/off reads a heavy view that can time out; the rest of the profile still stands without it.
+  const onOff = t.player_id
+    ? await d.onOffProfiles(ids, { player: t.name }).then((rows) => rows.find((r) => r.player_id === t.player_id)).catch((e) => { console.warn(`[ask-swish] on/off for ${t.name}: ${e instanceof Error ? e.message : e}`); return undefined; })
+    : undefined;
   const players = t.player_id ? [] : await d.findPlayers(t.name, ids);
   const pid = t.player_id ?? players[0]?.id ?? null;
   const slug = players[0]?.slug ?? null;
@@ -397,18 +588,28 @@ export const getPlayer: ToolDef = {
       const p = await playerProfile(ctx, name, comp, true);
       if (p) return p.text;
     }
-    // Not in scope — find where they play.
+    // Not in scope — find where they play, newest season first (past seasons are on the site too).
     const comps = await d.visibleCompetitions();
-    const found = await d.findPlayers(name, comps.map((c) => c.league_id));
+    const startOf = (id: string | null) => { const c = comps.find((x) => x.league_id === id); return c ? d.recency(c) : 0; };
+    const found = (await d.findPlayers(name, comps.map((c) => c.league_id))).sort((a, b) => startOf(b.league_id) - startOf(a.league_id));
     if (!found.length) return `No player named "${name}" found in any competition.`;
-    const tried = new Set<string>();
-    for (const f of found) {
-      if (!f.league_id || tried.has(f.league_id)) continue;
-      tried.add(f.league_id);
-      const c = comps.find((x) => x.league_id === f.league_id);
-      if (!c) continue;
-      const p = await playerProfile(ctx, f.full_name, c, true);
-      if (p) return `(Found in ${c.name}, not the competition in scope.)\n${p.text}`;
+    // A players row keeps the competition it was created in (a returner's can be last season's,
+    // or a cup's), so go by where their box scores are: newest league season first.
+    const q = name.toLowerCase().trim();
+    // The exact name first, then full names before "S. Surname" stubs.
+    const names = Array.from(new Set(found.map((f) => f.full_name)))
+      .sort((a, b) => Number(b.toLowerCase() === q) - Number(a.toLowerCase() === q) || Number(!!d.personKey(b)) - Number(!!d.personKey(a)));
+    for (const full of names.slice(0, 3)) {
+      const mine = found.filter((f) => f.full_name === full);
+      const played = (await d.playerGamesById(mine.map((f) => f.id))).map((g) => g.league_id);
+      const order = Array.from(new Set([...played, ...mine.map((f) => f.league_id)].filter((id): id is string => !!id)))
+        .sort((a, b) => startOf(b) - startOf(a));
+      for (const id of order.slice(0, 4)) {
+        const c = comps.find((x) => x.league_id === id);
+        if (!c) continue;
+        const p = await playerProfile(ctx, full, c, true);
+        if (p) return `(Found in ${c.name}, not the competition in scope.)\n${p.text}`;
+      }
     }
     return `${found[0].full_name} is listed with ${found[0].team_name ?? "a team"} but has no game stats yet.`;
   },
@@ -485,8 +686,10 @@ export const getTeam: ToolDef = {
     if (comp) { const t = await teamProfile(ctx, name, comp, true); if (t) return t.text; }
     const comps = await d.visibleCompetitions();
     const { supabaseAdmin } = await import("../supabaseServiceClient");
-    const { data } = await supabaseAdmin.from("teams").select("name, league_id").ilike("name", `%${name}%`).in("league_id", comps.map((c) => c.league_id)).limit(10);
-    for (const row of (data || []) as Array<{ name: string; league_id: string }>) {
+    const { data } = await supabaseAdmin.from("teams").select("name, league_id").ilike("name", `%${name}%`).in("league_id", comps.map((c) => c.league_id)).limit(40);
+    const startOf = (id: string | null) => { const c = comps.find((x) => x.league_id === id); return c ? d.recency(c) : 0; };
+    const rows = ((data || []) as Array<{ name: string; league_id: string }>).sort((a, b) => startOf(b.league_id) - startOf(a.league_id)).slice(0, 10);
+    for (const row of rows) {
       const c = comps.find((x) => x.league_id === row.league_id);
       if (!c) continue;
       const t = await teamProfile(ctx, row.name, c, true);
@@ -664,33 +867,162 @@ export const getOnOff: ToolDef = {
   },
 };
 
+const RECORD_STATS = ["pts", "reb", "oreb", "ast", "stl", "blk", "tpm", "fgm", "ftm", "plus_minus", "margin"] as const;
+
 export const getGameRecords: ToolDef = {
   name: "get_game_records",
-  description: "Best single-game performances this season for a stat (players or teams): season highs, 'most points in a game', biggest wins (stat 'margin').",
-  input_schema: { type: "object", properties: { stat: { type: "string", enum: ["pts", "reb", "ast", "stl", "blk", "tpm", "plus_minus", "margin"] }, scope: { type: "string", enum: ["players", "teams"] }, league: { type: "string" }, team: { type: "string" }, limit: { type: "integer" } }, required: ["stat"] },
-  schema: z.object({ stat: z.enum(["pts", "reb", "ast", "stl", "blk", "tpm", "plus_minus", "margin"]), scope: z.enum(["players", "teams"]).optional(), league: z.string().optional(), team: z.string().optional(), limit: z.number().int().min(1).max(20).optional() }),
+  description: "Best single-game performances for a stat, players or teams. By default the season in scope (season highs, 'most points in a game this season'); with seasons \"all\", the all-time records across every season of the league on the site ('single-game scoring record in NBL Division Two', 'most rebounds ever in a game'). stat 'margin' is the biggest wins. Each row gives the season, date and game.",
+  input_schema: { type: "object", properties: { stat: { type: "string", enum: RECORD_STATS }, scope: { type: "string", enum: ["players", "teams"] }, league: { type: "string" }, team: { type: "string" }, limit: { type: "integer" }, ...HISTORY_PROPS }, required: ["stat"] },
+  schema: z.object({ stat: z.enum(RECORD_STATS), scope: z.enum(["players", "teams"]).optional(), league: z.string().optional(), team: z.string().optional(), limit: z.number().int().min(1).max(20).optional(), ...HISTORY_SCHEMA }),
   async run(input, ctx) {
-    const comp = await resolveLeague(ctx, input.league);
-    status(ctx, `Finding season highs in ${comp.name}…`);
-    const ids = await d.leagueFamily(comp.league_id);
-    const limit = input.limit ?? 8;
-    if (input.stat === "margin") {
-      const results = await d.finalResults(ids);
-      const ranked = results.map((g) => ({ g, m: Math.abs(g.home_score - g.away_score) })).sort((a, b) => b.m - a.m).slice(0, limit);
-      card(ctx, { kind: "table", title: `Biggest margins — ${comp.name}`, columns: ["Date", "Game", "Margin"], rows: ranked.map((x) => [d.ukDate(x.g.match_time), `${x.g.home_team} ${x.g.home_score}-${x.g.away_score} ${x.g.away_team}`, x.m]), highlightCol: 2 });
-      return `Biggest margins, ${comp.name}:\n` + ranked.map((x, i) => `${i + 1}. ${d.ukDate(x.g.match_time)} ${x.g.home_team} ${x.g.home_score}-${x.g.away_score} ${x.g.away_team} (by ${x.m}, game_key ${x.g.game_key})`).join("\n");
+    const cov = await coverage(ctx, input.league, input.seasons, input.former_names);
+    status(ctx, cov.allTime ? `Searching every season of ${cov.title.split(",")[0]} for records…` : `Finding season highs in ${cov.title}…`);
+    const limit = input.limit ?? (cov.allTime ? 10 : 8);
+    const when = (iso: string | null) => (cov.allTime ? d.ukDateY(iso) : d.ukDate(iso));
+    const head = cov.allTime ? `All-time, ${cov.title}. ${cov.note}\n` : "";
+    const scope = input.scope ?? "players";
+    const pre = (leagueId: string) => (cov.allTime ? [cov.tag(leagueId)] : []);
+    const seasonCol = cov.allTime ? ["Season"] : [];
+    const gameNav = (leagueId: string, key: string, label: string) => addNav(ctx, { label, href: gamePath(cov.slugOf(leagueId), key), kind: "game" });
+    const tieNote = (vals: number[]) => (vals.length > limit && vals[limit] === vals[limit - 1] ? `\n(More games also reached ${vals[limit]}; only the first ${limit} are listed.)` : "");
+
+    if (input.stat === "margin" || (scope === "teams" && input.stat === "plus_minus")) {
+      const results = await d.finalResults(cov.ids, 20000);
+      const ranked = results.map((g) => ({ g, m: Math.abs(g.home_score - g.away_score) }))
+        .sort((a, b) => b.m - a.m || String(a.g.match_time).localeCompare(String(b.g.match_time)));
+      if (!ranked.length) return `${head}No completed games in ${cov.title}.`;
+      const shown = ranked.slice(0, limit);
+      card(ctx, { kind: "table", title: `Biggest margins — ${cov.title}`, columns: [...seasonCol, "Date", "Game", "Margin"], rows: shown.map((x) => [...pre(x.g.league_id), when(x.g.match_time), `${x.g.home_team} ${x.g.home_score}-${x.g.away_score} ${x.g.away_team}`, x.m]), highlightCol: seasonCol.length + 2 });
+      gameNav(shown[0].g.league_id, shown[0].g.game_key, `${shown[0].g.home_team} v ${shown[0].g.away_team}`);
+      return `${head}Biggest margins, ${cov.title}, from ${results.length} completed games:\n` + shown.map((x, i) => `${i + 1}. ${cov.allTime ? `${cov.tag(x.g.league_id)}, ` : ""}${when(x.g.match_time)} ${x.g.home_team} ${x.g.home_score}-${x.g.away_score} ${x.g.away_team} (by ${x.m}, game_key ${x.g.game_key})`).join("\n") + tieNote(ranked.map((x) => x.m));
     }
+
     const label = PLAYER_TRAD[input.stat]?.label ?? input.stat;
-    if ((input.scope ?? "players") === "players") {
-      const games = (await d.playerGames(ids, { team: input.team })).filter((g) => (g as any)[input.stat] != null);
-      const ranked = [...games].sort((a, b) => ((b as any)[input.stat] ?? 0) - ((a as any)[input.stat] ?? 0)).slice(0, limit);
-      card(ctx, { kind: "table", title: `${label} — single-game highs, ${comp.name}`, columns: ["Player", "Game", label], rows: ranked.map((g) => [`${g.player_name} (${g.team_name})`, `${d.ukDate(g.game_date)} ${g.hometeam ?? ""} v ${g.awayteam ?? ""}`, (g as any)[input.stat]]), highlightCol: 2 });
-      return `${label} single-game highs, ${comp.name}:\n` + ranked.map((g, i) => `${i + 1}. ${g.player_name} (${g.team_name}) ${(g as any)[input.stat]} — ${d.ukDate(g.game_date)} ${g.hometeam} v ${g.awayteam}: ${g.pts} pts, ${g.reb} reb, ${g.ast} ast, ${g.fgm}/${g.fga} FG (game_key ${g.game_key})`).join("\n");
+    if (scope === "players") {
+      const rows = await d.topPlayerGames(cov.ids, input.stat, { team: input.team, limit: limit + 1 });
+      if (!rows.length) return `${head}No box scores for ${cov.title}${input.team ? ` and ${input.team}` : ""}.`;
+      const v = (g: d.PlayerGame) => Number((g as any)[input.stat]);
+      const shown = rows.slice(0, limit);
+      card(ctx, { kind: "table", title: `${label} — ${cov.allTime ? "single-game records" : "single-game highs"}, ${cov.title}`, columns: ["Player", ...seasonCol, "Game", label], rows: shown.map((g) => [`${g.player_name} (${clubDisplayName(g.team_name)})`, ...pre(g.league_id), `${when(g.game_date)} ${clubDisplayName(g.hometeam ?? "")} v ${clubDisplayName(g.awayteam ?? "")}`, v(g)]), highlightCol: seasonCol.length + 2 });
+      const top = shown[0];
+      if (top.player_id) addNav(ctx, { label: top.player_name, href: playerPath({ full_name: top.player_name, id: top.player_id }) ?? "", kind: "player" });
+      gameNav(top.league_id, top.game_key, `${top.hometeam ?? ""} v ${top.awayteam ?? ""}`);
+      return `${head}${label} single-game ${cov.allTime ? "records" : "highs"}, ${cov.title}${input.team ? `, ${input.team}` : ""}:\n` + shown.map((g, i) => `${i + 1}. ${g.player_name} (${clubDisplayName(g.team_name)}) ${v(g)} — ${cov.allTime ? `${cov.tag(g.league_id)}, ` : ""}${when(g.game_date)} ${clubDisplayName(g.hometeam ?? "")} v ${clubDisplayName(g.awayteam ?? "")}: ${g.pts} pts, ${g.reb} reb, ${g.ast} ast, ${g.fgm}/${g.fga} FG, ${g.tpm}/${g.tpa} 3PT, ${g.ftm}/${g.fta} FT (game_key ${g.game_key})`).join("\n") + tieNote(rows.map(v));
     }
-    const games = (await d.teamGames(ids, { team: input.team })).filter((g) => (g as any)[input.stat] != null);
-    const ranked = [...games].sort((a, b) => ((b as any)[input.stat] ?? 0) - ((a as any)[input.stat] ?? 0)).slice(0, limit);
-    card(ctx, { kind: "table", title: `${label} — team single-game highs, ${comp.name}`, columns: ["Team", "Game", label], rows: ranked.map((g) => [g.team_name, `${d.ukDate(g.game_date)} ${g.hometeam ?? ""} v ${g.awayteam ?? ""}`, (g as any)[input.stat]]), highlightCol: 2 });
-    return `${label} team single-game highs, ${comp.name}:\n` + ranked.map((g, i) => `${i + 1}. ${g.team_name} ${(g as any)[input.stat]} — ${d.ukDate(g.game_date)} ${g.hometeam} v ${g.awayteam} (game_key ${g.game_key})`).join("\n");
+    const rows = await d.topTeamGames(cov.ids, input.stat, { team: input.team, limit: limit + 1 });
+    if (!rows.length) return `${head}No team box scores for ${cov.title}.`;
+    const v = (g: d.TeamGame) => Number((g as any)[input.stat]);
+    const shown = rows.slice(0, limit);
+    card(ctx, { kind: "table", title: `${label} — team single-game ${cov.allTime ? "records" : "highs"}, ${cov.title}`, columns: ["Team", ...seasonCol, "Game", label], rows: shown.map((g) => [g.team_name, ...pre(g.league_id), `${when(g.game_date)} ${clubDisplayName(g.hometeam ?? "")} v ${clubDisplayName(g.awayteam ?? "")}`, v(g)]), highlightCol: seasonCol.length + 2 });
+    gameNav(shown[0].league_id, shown[0].game_key, `${shown[0].hometeam ?? ""} v ${shown[0].awayteam ?? ""}`);
+    return `${head}${label} team single-game ${cov.allTime ? "records" : "highs"}, ${cov.title}:\n` + shown.map((g, i) => `${i + 1}. ${g.team_name} ${v(g)} — ${cov.allTime ? `${cov.tag(g.league_id)}, ` : ""}${when(g.game_date)} ${g.hometeam} v ${g.awayteam} (game_key ${g.game_key})`).join("\n") + tieNote(rows.map(v));
+  },
+};
+
+// ---------- league history ----------
+
+export const getCompetitionHistory: ToolDef = {
+  name: "get_competition_history",
+  description: "Season-by-season history of a league on the site: every season held, games played, who finished top of the regular-season table and their record, and the leading scorer (points per game). Includes seasons under the league's former name unless former_names is false. Use for 'who won X in 2019', 'past winners', 'which seasons do you have', 'how far back does the data go'. Play-offs and cups are separate competitions, so top of the table is not always the champion — say 'finished top' rather than 'won the title'.",
+  input_schema: { type: "object", properties: { league: { type: "string" }, former_names: HISTORY_PROPS.former_names } },
+  schema: z.object({ league: z.string().optional(), former_names: z.boolean().optional() }),
+  async run({ league, former_names }, ctx) {
+    const comp = await resolveLeague(ctx, league);
+    const span = await d.seasonSpan(comp, { formerNames: former_names });
+    status(ctx, `Going back through ${span.asked.name} seasons…`);
+    const tags = await d.seasonTags(span);
+    const seasons = await Promise.all(span.seasons.map(async (s) => {
+      const ids = await d.leagueFamily(s.league_id);
+      const [results, games] = await Promise.all([d.finalResults(ids), d.playerGamesAcross(ids)]);
+      const table = d.computeStandings(results);
+      const totals = Array.from(totalsByPlayer(games).values());
+      const maxGames = Math.max(0, ...totals.map((t) => t.games));
+      const scorer = totals.filter((t) => t.games >= minGamesDefault(maxGames)).sort((a, b) => b.pts / b.games - a.pts / a.games)[0] ?? null;
+      return { s, tag: tags.get(s.league_id) ?? d.seasonLabel(s), games: results.length, table, scorer };
+    }));
+    const played = seasons.filter((x) => x.games > 0);
+    if (!played.length) return `${d.describeSpan(span)}\nNo completed games recorded for any of these seasons.`;
+    const level = (x: (typeof seasons)[number]) => x.table[1] && x.table[1].wins === x.table[0].wins && x.table[1].losses === x.table[0].losses ? ` (level with ${x.table[1].team}, ahead on points difference)` : "";
+    card(ctx, {
+      kind: "table", title: `${span.parts.map((p) => p.name).join(" / ")} — season by season`, subtitle: "Top of the regular-season table; play-offs and cups are separate",
+      columns: ["Season", "Games", "Top of the table", "Record", "Top scorer", "PPG"],
+      rows: [...played].reverse().map((x) => [x.tag, x.games, x.table[0] ? clubDisplayName(x.table[0].team) : "–", x.table[0] ? `${x.table[0].wins}-${x.table[0].losses}` : "–", x.scorer ? `${x.scorer.name} (${clubDisplayName(x.scorer.team)})` : "–", x.scorer ? d.fmt1(x.scorer.pts / x.scorer.games) : "–"]),
+    });
+    const latest = played[played.length - 1].s;
+    addNav(ctx, leagueNav(latest));
+    const named = (c: d.Competition) => (c.name.includes(d.seasonLabel(c)) || d.seasonStart(c) === d.seasonStartOf(c.name) ? c.name : `${c.name} ${d.seasonLabel(c)}`);
+    return `${d.describeSpan(span)}\nSeason by season (oldest first; "top" is the regular-season table on the site, not necessarily the champion):\n` + seasons.map((x) => x.games
+      ? `${named(x.s)}: ${x.games} games, ${x.table.length} teams. Top: ${x.table[0].team} ${x.table[0].wins}-${x.table[0].losses}${level(x)}${x.table[1] ? `; 2nd ${x.table[1].team} ${x.table[1].wins}-${x.table[1].losses}` : ""}. Top scorer: ${x.scorer ? `${x.scorer.name} (${x.scorer.team}) ${d.fmt1(x.scorer.pts / x.scorer.games)} ppg in ${x.scorer.games} games` : "–"}`
+      : `${named(x.s)}: no completed games recorded`).join("\n");
+  },
+};
+
+export const getPlayerCareer: ToolDef = {
+  name: "get_player_career",
+  description: "A player's career season by season across every competition and season on the site: team, games, points, rebounds, assists and shooting for each season, totals for each league, career totals and averages, and their best scoring games. Use for 'X's career', 'how many points has X scored in the NBL', 'X's stats in previous seasons', 'when did X play for Y'. Optional league keeps only that league's seasons (all of them, including its former names unless former_names is false).",
+  input_schema: { type: "object", properties: { name: { type: "string" }, league: { type: "string" }, former_names: HISTORY_PROPS.former_names }, required: ["name"] },
+  schema: z.object({ name: z.string().min(2), league: z.string().optional(), former_names: z.boolean().optional() }),
+  async run({ name, league, former_names }, ctx) {
+    status(ctx, `Gathering ${name}'s seasons…`);
+    const comps = await d.visibleCompetitions();
+    const byId = new Map(comps.map((c) => [c.league_id, c]));
+    const found = (await d.findPlayers(name, null, 120)).filter((p) => !p.league_id || byId.has(p.league_id));
+    if (!found.length) return `No player named "${name}" on the site. Call search_entities to check the spelling.`;
+    // Several people can match a partial name: group by full name and take the closest.
+    const want = d.personKey(name) ?? name.toLowerCase().trim();
+    const people = new Map<string, d.PlayerRow[]>();
+    for (const p of found) { const k = d.personKey(p.full_name) ?? p.full_name.toLowerCase(); people.set(k, [...(people.get(k) ?? []), p]); }
+    const ranked = Array.from(people.entries()).sort(([a, pa], [b, pb]) =>
+      Number(b === want) - Number(a === want) || Number(b.startsWith(want)) - Number(a.startsWith(want)) || pb.length - pa.length);
+    const [, rows] = ranked[0];
+    const ids = await d.identityMates(rows.map((p) => p.id));
+    let games = (await d.playerGamesById(ids)).filter((g) => byId.has(g.league_id));
+    let scopeNote = "";
+    if (league) {
+      const cov = await coverage(ctx, league, "all", former_names);
+      const keep = new Set(cov.ids);
+      games = games.filter((g) => keep.has(g.league_id));
+      scopeNote = `Limited to ${cov.title}. `;
+    }
+    if (!games.length) return `${rows[0].full_name} has no box scores on the site${league ? ` in ${league}` : ""}.`;
+    const parentOf = (id: string) => byId.get(id)?.parent_league_id ?? id;
+    const seasons = Array.from(pile(games, (g) => parentOf(g.league_id), (g) => ({ name: g.player_name, team: g.team_name, player_id: g.player_id })).entries())
+      .map(([id, t]) => ({ comp: byId.get(id)!, t }))
+      .filter((x) => x.comp)
+      .sort((a, b) => a.t.latest.localeCompare(b.t.latest));
+    const career = pile(games, () => "all", (g) => ({ name: g.player_name, team: g.team_name, player_id: g.player_id })).get("all")!;
+    // Totals per league, keyed by the league itself rather than its name: the old NBL Division One
+    // (now BCB) and today's NBL Division One share a name but are different leagues.
+    const perLeague = new Map<string, { label: string; piles: Pile[] }>();
+    for (const x of seasons) {
+      const span = await d.seasonSpan(x.comp, { formerNames: false });
+      const e = perLeague.get(span.asked.key) ?? { label: span.asked.name + (span.nowCalled ? ` (now ${span.nowCalled.name})` : ""), piles: [] };
+      e.piles.push(x.t);
+      perLeague.set(span.asked.key, e);
+    }
+    const years = Array.from(new Set(seasons.map((x) => d.seasonLabel(x.comp))));
+    const yearRange = years.length > 1 ? `${years[0]} to ${years[years.length - 1]}` : years[0];
+    const line = (t: Totals) => `${t.games} GP, ${d.fmt1(t.pts / t.games)} pts, ${d.fmt1(t.reb / t.games)} reb, ${d.fmt1(t.ast / t.games)} ast, FG ${d.pct(t.fgm, t.fga)}, 3PT ${t.tpm}/${t.tpa} (${d.pct(t.tpm, t.tpa)}), FT ${d.pct(t.ftm, t.fta)}`;
+    const best = [...games].sort((a, b) => b.pts - a.pts || String(a.game_date).localeCompare(String(b.game_date))).slice(0, 3);
+    card(ctx, {
+      kind: "table", title: `${career.name} — career`, subtitle: `${seasons.length} season${seasons.length === 1 ? "" : "s"} on the site · per game`,
+      columns: ["Season", "Team", "GP", "PPG", "RPG", "APG", "FG%", "3P%"],
+      rows: [
+        ...[...seasons].reverse().map((x) => [x.comp.name, teamsOf(x.t), x.t.games, d.fmt1(x.t.pts / x.t.games), d.fmt1(x.t.reb / x.t.games), d.fmt1(x.t.ast / x.t.games), d.pct(x.t.fgm, x.t.fga), d.pct(x.t.tpm, x.t.tpa)]),
+        ["Career", "", career.games, d.fmt1(career.pts / career.games), d.fmt1(career.reb / career.games), d.fmt1(career.ast / career.games), d.pct(career.fgm, career.fga), d.pct(career.tpm, career.tpa)],
+      ],
+      highlightCol: 3,
+    });
+    addNav(ctx, { label: career.name, href: playerPath({ full_name: career.name, id: career.player_id }) ?? "", kind: "player" });
+    const others = ranked.slice(1, 4).map(([, ps]) => `${ps[0].full_name} (${ps[0].team_name ?? "?"})`);
+    return [
+      `${scopeNote}${career.name}: ${seasons.length} competition${seasons.length === 1 ? "" : "s"} over ${years.length} season${years.length === 1 ? "" : "s"} on the site (${yearRange}). Seasons are joined by linked player records or the identical full name; if two teams look unrelated, they may be different players with the same name.`,
+      `Career: ${line(career)}; totals ${career.pts} pts, ${career.reb} reb, ${career.ast} ast, ${career.stl} stl, ${career.blk} blk.`,
+      perLeague.size > 1 ? `By league: ${Array.from(perLeague.values()).map(({ label, piles }) => { const s = piles.reduce((acc, t) => { acc.games += t.games; acc.pts += t.pts; return acc; }, { games: 0, pts: 0 }); return `${label} ${piles.length} season${piles.length === 1 ? "" : "s"}, ${s.games} GP, ${s.pts} pts (${d.fmt1(s.pts / s.games)} ppg)`; }).join("; ")}` : "",
+      `Season by season (oldest first):\n${seasons.map((x) => `${x.comp.name} — ${teamsOf(x.t, 3)}: ${line(x.t)}, ${d.fmt1(x.t.min / x.t.games)} mpg`).join("\n")}`,
+      `Best scoring games: ${best.map((g) => `${g.pts} pts v ${g.side === "home" || (g.hometeam && d.isSameTeam(g.hometeam, g.team_name)) ? g.awayteam : g.hometeam} (${d.ukDateY(g.game_date)}, ${byId.get(g.league_id)?.name ?? "?"}, game_key ${g.game_key})`).join("; ")}`,
+      others.length ? `Other players matched "${name}": ${others.join(", ")}` : "",
+    ].filter(Boolean).join("\n");
   },
 };
 
@@ -799,7 +1131,9 @@ export const suggestFollowUps: ToolDef = {
   schema: z.object({ questions: z.array(z.string().min(3).max(90)).min(1).max(3) }),
   async run({ questions }, ctx) {
     ctx.followUps = questions;
-    return "Noted.";
+    // The model sometimes drafts its answer while thinking, calls this, then
+    // ends with "see above". Nothing it has written so far reaches the user.
+    return "Chips saved. The user has not seen any answer yet: write the full answer now, with its numbers (and, for all-time answers, the seasons covered), as your final message.";
   },
 };
 
@@ -1014,7 +1348,7 @@ export const getShotZones: ToolDef = {
   },
 };
 
-export const ALL_TOOLS: ToolDef[] = [searchEntities, getStandings, getLeaders, getPlayer, getTeam, compare, getScores, getGame, getOnOff, getShotZones, getGameRecords, getPlayByPlay, getLineups, suggestFollowUps];
+export const ALL_TOOLS: ToolDef[] = [searchEntities, getStandings, getLeaders, getPlayer, getTeam, compare, getScores, getGame, getOnOff, getShotZones, getGameRecords, getCompetitionHistory, getPlayerCareer, getPlayByPlay, getLineups, suggestFollowUps];
 
 export function toolsFor(surface: AskSurface): ToolDef[] {
   return ALL_TOOLS.filter((t) => !t.surfaces || t.surfaces.includes(surface));
