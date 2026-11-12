@@ -1,3 +1,4 @@
+import { Suspense, useEffect } from "react";
 import { Redirect, Route, Switch } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -9,71 +10,114 @@ import { HelmetProvider } from "react-helmet-async";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import NotFound from "@/pages/not-found";
-import AuthPage from "@/pages/auth";
 import LandingPage from "@/pages/landing-page";
-import LeaguePage from "./pages/pages/league/[slug]";
-import CompetitionPage from "./pages/pages/competition/[slug]";
-
-import PlayerStatsPage from "./pages/pages/player/[id]";
-import PlayersListPage from "./pages/players-list";
-import PostLoginDashboard from "@/pages/post-login-dashboard";
-import CoachesHub from "@/pages/CoachesHub";
-import TeamProfile from "@/pages/TeamProfile";
-import TeamsList from "@/pages/TeamsList";
-import LeagueTeams from "@/pages/LeagueTeams";
-import TeamLogoManager from "@/pages/TeamLogoManager";
-import LeagueAdmin from "@/pages/LeagueAdmin";
-import LeagueManagement from "@/pages/LeagueManagement";
-import SocialToolsPage from "@/pages/social-tools";
-import WidgetBuilder from "@/pages/widget-builder";
-import NewsManager from "@/pages/NewsManager";
-import NewsEditorPage from "@/pages/NewsEditorPage";
-import NewsPreviewPage from "@/pages/NewsPreviewPage";
-import NewsArticlePage from "@/pages/NewsArticlePage";
-import NewsIndexPage from "@/pages/NewsIndexPage";
-import BritishBasketballHistoryPage from "@/pages/BritishBasketballHistoryPage";
-import SwishScorePage from "@/pages/SwishScorePage";
-import WidgetPage from "@/pages/widgets/WidgetPage";
-import EmbedGuide from "@/pages/embed-guide";
-import GamePage from "@/pages/GamePage";
-import ScoresPage from "@/pages/ScoresPage";
-import PlaybookSharePage from "@/pages/PlaybookSharePage";
 import { AuthProvider } from "./hooks/use-auth";
 import { AdminRoute, ProtectedRoute, TeamRoute } from "./lib/protected-route";
-import ResetPassword from "./pages/reset-password";
-import AuthConfirm from "./pages/auth-confirm";
-import SettingsPage from "@/pages/settings-page";
-import ProfilePage from "./pages/profile-page";
-import ImportPlayersPage from "@/pages/admin/import-players";
-import UnconfirmedAccountsPage from "@/pages/admin/unconfirmed-accounts";
-import PlayerClaimsAdminPage from "@/pages/admin/player-claims";
-import ClaimProfilePage from "@/pages/claim-profile";
-import PublicProfilePage from "@/pages/public-profile";
-import PreferencesPage from "@/pages/PreferencesPage";
-import EditMyProfilePage from "@/pages/edit-my-profile";
-import PaymentPage from "@/pages/payment";
-import ContactSalesPage from "@/pages/contact-sales";
-import CoachAccessPage from "@/pages/coach-access";
-import PlusPage from "@/pages/plus";
-import CoachAccessSuccessPage from "@/pages/coach-access-success";
-import CoachAccessAdminPage from "@/pages/admin/coach-access";
-import GameTimesAdminPage from "@/pages/admin/game-times";
-import FeedCommentsAdminPage from "@/pages/admin/feed-comments";
-import MediaSpotlightPage from "@/pages/media/MediaSpotlightPage";
-import PhotographersDirectoryPage from "@/pages/media/PhotographersDirectoryPage";
-import PhotographerProfilePage from "@/pages/media/PhotographerProfilePage";
-import PhotographerDashboardPage from "@/pages/media/PhotographerDashboardPage";
-import MediaClaimPage from "@/pages/media/MediaClaimPage";
-import CreatorSpacePage from "@/pages/media/CreatorSpacePage";
-import MediaSpotlightAdminPage from "@/pages/admin/media-spotlight";
-import PrivacyPolicyPage from "@/pages/privacy";
-import TermsOfServicePage from "@/pages/terms";
-import CookiePolicyPage from "@/pages/cookies";
 import { CookieBanner } from "@/components/CookieBanner";
-import AskSwishPage from "@/pages/AskSwishPage";
 import { AskSwishProvider } from "@/components/ask-swish/AskSwishProvider";
 import AskSwishLauncher from "@/components/ask-swish/AskSwishLauncher";
+import { lazyWithReload } from "@/lib/lazyWithReload";
 
+// The homepage (and the 404, which shares its header and search) ship in the
+// main bundle so "/" needs one script. Every other page is its own chunk,
+// fetched when its route first renders, so a phone landing on the homepage
+// doesn't download the admin tools, Coaches Hub, the social studio and the
+// PDF and chart libraries those pages pull in.
+const AuthPage = lazyWithReload(() => import("@/pages/auth"));
+const LeaguePage = lazyWithReload(() => import("./pages/pages/league/[slug]"));
+const CompetitionPage = lazyWithReload(() => import("./pages/pages/competition/[slug]"));
+const PlayerStatsPage = lazyWithReload(() => import("./pages/pages/player/[id]"));
+const PlayersListPage = lazyWithReload(() => import("./pages/players-list"));
+const PostLoginDashboard = lazyWithReload(() => import("@/pages/post-login-dashboard"));
+const CoachesHub = lazyWithReload(() => import("@/pages/CoachesHub"));
+const TeamProfile = lazyWithReload(() => import("@/pages/TeamProfile"));
+const TeamsList = lazyWithReload(() => import("@/pages/TeamsList"));
+const LeagueTeams = lazyWithReload(() => import("@/pages/LeagueTeams"));
+const TeamLogoManager = lazyWithReload(() => import("@/pages/TeamLogoManager"));
+const LeagueAdmin = lazyWithReload(() => import("@/pages/LeagueAdmin"));
+const LeagueManagement = lazyWithReload(() => import("@/pages/LeagueManagement"));
+const SocialToolsPage = lazyWithReload(() => import("@/pages/social-tools"));
+const WidgetBuilder = lazyWithReload(() => import("@/pages/widget-builder"));
+const NewsManager = lazyWithReload(() => import("@/pages/NewsManager"));
+const NewsEditorPage = lazyWithReload(() => import("@/pages/NewsEditorPage"));
+const NewsPreviewPage = lazyWithReload(() => import("@/pages/NewsPreviewPage"));
+const NewsArticlePage = lazyWithReload(() => import("@/pages/NewsArticlePage"));
+const NewsIndexPage = lazyWithReload(() => import("@/pages/NewsIndexPage"));
+const BritishBasketballHistoryPage = lazyWithReload(() => import("@/pages/BritishBasketballHistoryPage"));
+const SwishScorePage = lazyWithReload(() => import("@/pages/SwishScorePage"));
+const WidgetPage = lazyWithReload(() => import("@/pages/widgets/WidgetPage"));
+const EmbedGuide = lazyWithReload(() => import("@/pages/embed-guide"));
+const GamePage = lazyWithReload(() => import("@/pages/GamePage"));
+const ScoresPage = lazyWithReload(() => import("@/pages/ScoresPage"));
+const PlaybookSharePage = lazyWithReload(() => import("@/pages/PlaybookSharePage"));
+const ResetPassword = lazyWithReload(() => import("./pages/reset-password"));
+const AuthConfirm = lazyWithReload(() => import("./pages/auth-confirm"));
+const SettingsPage = lazyWithReload(() => import("@/pages/settings-page"));
+const ProfilePage = lazyWithReload(() => import("./pages/profile-page"));
+const ImportPlayersPage = lazyWithReload(() => import("@/pages/admin/import-players"));
+const UnconfirmedAccountsPage = lazyWithReload(() => import("@/pages/admin/unconfirmed-accounts"));
+const PlayerClaimsAdminPage = lazyWithReload(() => import("@/pages/admin/player-claims"));
+const ClaimProfilePage = lazyWithReload(() => import("@/pages/claim-profile"));
+const PublicProfilePage = lazyWithReload(() => import("@/pages/public-profile"));
+const PreferencesPage = lazyWithReload(() => import("@/pages/PreferencesPage"));
+const EditMyProfilePage = lazyWithReload(() => import("@/pages/edit-my-profile"));
+const PaymentPage = lazyWithReload(() => import("@/pages/payment"));
+const ContactSalesPage = lazyWithReload(() => import("@/pages/contact-sales"));
+const CoachAccessPage = lazyWithReload(() => import("@/pages/coach-access"));
+const PlusPage = lazyWithReload(() => import("@/pages/plus"));
+const CoachAccessSuccessPage = lazyWithReload(() => import("@/pages/coach-access-success"));
+const CoachAccessAdminPage = lazyWithReload(() => import("@/pages/admin/coach-access"));
+const GameTimesAdminPage = lazyWithReload(() => import("@/pages/admin/game-times"));
+const FeedCommentsAdminPage = lazyWithReload(() => import("@/pages/admin/feed-comments"));
+const MediaSpotlightPage = lazyWithReload(() => import("@/pages/media/MediaSpotlightPage"));
+const PhotographersDirectoryPage = lazyWithReload(() => import("@/pages/media/PhotographersDirectoryPage"));
+const PhotographerProfilePage = lazyWithReload(() => import("@/pages/media/PhotographerProfilePage"));
+const PhotographerDashboardPage = lazyWithReload(() => import("@/pages/media/PhotographerDashboardPage"));
+const MediaClaimPage = lazyWithReload(() => import("@/pages/media/MediaClaimPage"));
+const CreatorSpacePage = lazyWithReload(() => import("@/pages/media/CreatorSpacePage"));
+const MediaSpotlightAdminPage = lazyWithReload(() => import("@/pages/admin/media-spotlight"));
+const PrivacyPolicyPage = lazyWithReload(() => import("@/pages/privacy"));
+const TermsOfServicePage = lazyWithReload(() => import("@/pages/terms"));
+const CookiePolicyPage = lazyWithReload(() => import("@/pages/cookies"));
+const AskSwishPage = lazyWithReload(() => import("@/pages/AskSwishPage"));
+
+/**
+ * Shown while a page's chunk downloads: the page background and nothing else,
+ * so a fast load doesn't flash a spinner or text. .sa-pro gives the same
+ * background the pages use, light or dark (it follows the `dark` class).
+ */
+function PageFallback() {
+  return <div className="sa-pro min-h-screen" aria-hidden="true" />;
+}
+
+/**
+ * Once the first page has loaded and the browser is idle, fetch the pages
+ * people most often go to next, so moving around the site doesn't wait on a
+ * download. Skipped when the visitor has asked to save data or is on 2G.
+ */
+function usePrefetchPublicPages() {
+  useEffect(() => {
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType ?? "")) return;
+
+    let timer: number | undefined;
+    const prefetch = () => {
+      for (const page of [LeaguePage, PlayerStatsPage, TeamProfile, GamePage, ScoresPage, NewsIndexPage]) {
+        page.preload().catch(() => {});
+      }
+    };
+    const whenIdle = () => {
+      if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(prefetch, { timeout: 5000 });
+      else timer = window.setTimeout(prefetch, 2000);
+    };
+    if (document.readyState === "complete") whenIdle();
+    else window.addEventListener("load", whenIdle, { once: true });
+    return () => {
+      window.removeEventListener("load", whenIdle);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, []);
+}
 
 // The old league-leaders pages now live in each league page's Leaders section.
 function LeadersRedirect({ params }: { params: { slug: string } }) {
@@ -191,6 +235,7 @@ function ConditionalAnalytics() {
 }
 
 function App() {
+  usePrefetchPublicPages();
   return (
     <ErrorBoundary>
       <HelmetProvider>
@@ -200,7 +245,9 @@ function App() {
               <TooltipProvider>
                 <AskSwishProvider>
                   <Toaster />
-                  <Router />
+                  <Suspense fallback={<PageFallback />}>
+                    <Router />
+                  </Suspense>
                   <AskSwishLauncher />
                   <ConditionalAnalytics />
                   <CookieBanner />

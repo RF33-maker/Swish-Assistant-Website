@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, ReferenceLine, Tooltip, ResponsiveContainer } from 'recharts';
+import { Suspense, useMemo } from 'react';
 import { Flame } from 'lucide-react';
 import { parseGameFlow, computeBiggestRuns, computeLeadChanges, formatClock, type RawGameEvent } from '@/lib/gameFlow';
 import { periodLabel } from '@/lib/periodLabel';
+import { lazyWithReload } from '@/lib/lazyWithReload';
 
 interface Props {
   events: RawGameEvent[];
@@ -15,19 +15,8 @@ interface Props {
 const DEFAULT_HOME = '#f97316'; // matches the existing Feed tab's team_no===1 (home) orange
 const DEFAULT_AWAY = '#3b82f6'; // matches the existing Feed tab's team_no===2 (away) blue
 
-function CustomTooltip({ active, payload, homeTeam, awayTeam }: any) {
-  if (!active || !payload?.length) return null;
-  const p = payload[0].payload;
-  return (
-    <div className="bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg px-3 py-2 text-xs">
-      <div className="font-semibold text-slate-800 dark:text-white mb-1">
-        {periodLabel(p.period)} · {formatClock(p.clock)}
-      </div>
-      <div className="text-slate-600 dark:text-slate-300">{homeTeam} {p.homeScore} – {p.awayScore} {awayTeam}</div>
-      {p.playerName && <div className="text-slate-400 dark:text-neutral-500 mt-0.5">{p.playerName}</div>}
-    </div>
-  );
-}
+// Recharts loads only when a game flow is on screen (see GameFlowChart).
+const GameFlowChart = lazyWithReload(() => import('./GameFlowChart'));
 
 export default function GameFlowSummary({ events, homeTeam, awayTeam, homeColor = DEFAULT_HOME, awayColor = DEFAULT_AWAY }: Props) {
   const flow = useMemo(() => parseGameFlow(events), [events]);
@@ -51,10 +40,6 @@ export default function GameFlowSummary({ events, homeTeam, awayTeam, homeColor 
     );
   }
 
-  const maxMargin = Math.max(...flow.map(f => f.margin), 1);
-  const minMargin = Math.min(...flow.map(f => f.margin), -1);
-  const gradientOffset = maxMargin / (maxMargin - minMargin);
-
   return (
     <div className="space-y-4">
       <div>
@@ -63,26 +48,16 @@ export default function GameFlowSummary({ events, homeTeam, awayTeam, homeColor 
           <span className="flex items-center gap-1.5">{awayTeam}<span className="w-2 h-2 rounded-full" style={{ backgroundColor: awayColor }} /></span>
         </div>
         <div style={{ width: '100%', height: 160 }}>
-          <ResponsiveContainer>
-            <AreaChart data={flow} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
-              <defs>
-                <linearGradient id="gameFlowMargin" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset={0} stopColor={homeColor} stopOpacity={0.45} />
-                  <stop offset={gradientOffset} stopColor={homeColor} stopOpacity={0.15} />
-                  <stop offset={gradientOffset} stopColor={awayColor} stopOpacity={0.15} />
-                  <stop offset={1} stopColor={awayColor} stopOpacity={0.45} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="index" hide />
-              <YAxis hide domain={[minMargin, maxMargin]} />
-              <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1} />
-              {periodBoundaries.slice(1).map(b => (
-                <ReferenceLine key={b.period} x={b.index} stroke="#e2e8f0" strokeDasharray="3 3" />
-              ))}
-              <Area type="monotone" dataKey="margin" stroke="#64748b" strokeWidth={1.5} fill="url(#gameFlowMargin)" isAnimationActive={false} />
-              <Tooltip content={<CustomTooltip homeTeam={homeTeam} awayTeam={awayTeam} />} />
-            </AreaChart>
-          </ResponsiveContainer>
+          <Suspense fallback={null}>
+            <GameFlowChart
+              flow={flow}
+              periodBoundaries={periodBoundaries}
+              homeTeam={homeTeam}
+              awayTeam={awayTeam}
+              homeColor={homeColor}
+              awayColor={awayColor}
+            />
+          </Suspense>
         </div>
         <div className="flex justify-between text-[11px] text-slate-400 dark:text-neutral-500 px-2 -mt-1">
           {periodBoundaries.map(b => <span key={b.period}>{periodLabel(b.period)}</span>)}
