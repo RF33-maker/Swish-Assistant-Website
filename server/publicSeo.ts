@@ -144,6 +144,19 @@ function stripHeadDefaults(shell: string): string {
     .replace(/<meta\s+name=["']twitter:[^"']+["'][^>]*>/gi, "");
 }
 
+/**
+ * The crawlable copy in #root is for search engines and link previews, not
+ * people. While the app's script downloads, it used to show as a plain-text
+ * list of links. Visitors whose browser runs scripts now see only the page
+ * background until the app mounts and replaces #root. It is hidden visually,
+ * not removed, so crawlers still read it. If the app's script fails to load or
+ * throws before mounting, the copy is shown so the page is not left blank.
+ * The saved or system theme is applied up front (the same "dark" class the
+ * theme provider sets on mount) so dark-mode visitors don't wait on white.
+ */
+const CRAWLABLE_COPY_GUARD = `<script>(function(){var d=document.documentElement;d.classList.add("sa-booting");try{var t=localStorage.getItem("theme");if(t==="dark"||((!t||t==="system")&&window.matchMedia("(prefers-color-scheme: dark)").matches))d.classList.add("dark")}catch(e){}window.addEventListener("error",function(e){var t=e.target;if(t===window||(t&&t.tagName==="SCRIPT"))d.classList.remove("sa-booting")},true)})()</script>
+    <style>html.sa-booting #root>#crawlable-content{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important}</style>`;
+
 function injectSeo(shell: string, page: SeoPage): string {
   const url = canonicalUrl(page.canonicalPath);
   const image = page.image && /^https?:\/\//i.test(page.image) ? page.image : `${SITE_BASE}/og-image.png`;
@@ -181,7 +194,8 @@ function injectSeo(shell: string, page: SeoPage): string {
     <meta ${rh} name="twitter:card" content="summary_large_image" />
     <meta ${rh} name="twitter:title" content="${escapeHtml(page.title)}" />
     <meta ${rh} name="twitter:description" content="${escapeHtml(page.description)}" />
-    <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>`;
+    <script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, "\\u003c")}</script>
+    ${CRAWLABLE_COPY_GUARD}`;
 
   let html = withDevPreamble(stripHeadDefaults(shell).replace("</head>", `${metadata}\n</head>`));
   const seoBody = `<div id="root">
