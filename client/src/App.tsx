@@ -68,6 +68,14 @@ const PlusPage = lazyWithReload(() => import("@/pages/plus"));
 const CoachAccessSuccessPage = lazyWithReload(() => import("@/pages/coach-access-success"));
 const CoachAccessAdminPage = lazyWithReload(() => import("@/pages/admin/coach-access"));
 const GameTimesAdminPage = lazyWithReload(() => import("@/pages/admin/game-times"));
+const FeedCommentsAdminPage = lazyWithReload(() => import("@/pages/admin/feed-comments"));
+const MediaSpotlightPage = lazyWithReload(() => import("@/pages/media/MediaSpotlightPage"));
+const PhotographersDirectoryPage = lazyWithReload(() => import("@/pages/media/PhotographersDirectoryPage"));
+const PhotographerProfilePage = lazyWithReload(() => import("@/pages/media/PhotographerProfilePage"));
+const PhotographerDashboardPage = lazyWithReload(() => import("@/pages/media/PhotographerDashboardPage"));
+const MediaClaimPage = lazyWithReload(() => import("@/pages/media/MediaClaimPage"));
+const CreatorSpacePage = lazyWithReload(() => import("@/pages/media/CreatorSpacePage"));
+const MediaSpotlightAdminPage = lazyWithReload(() => import("@/pages/admin/media-spotlight"));
 const PrivacyPolicyPage = lazyWithReload(() => import("@/pages/privacy"));
 const TermsOfServicePage = lazyWithReload(() => import("@/pages/terms"));
 const CookiePolicyPage = lazyWithReload(() => import("@/pages/cookies"));
@@ -166,6 +174,11 @@ function Router() {
       <Route path="/ask" component={AskSwishPage} />
       <Route path="/widget/:type" component={WidgetPage} />
       <Route path="/embed" component={EmbedGuide} />
+      <Route path="/media" component={MediaSpotlightPage} />
+      <Route path="/media/photographers" component={PhotographersDirectoryPage} />
+      <Route path="/media/photographers/:slug" component={PhotographerProfilePage} />
+      <Route path="/media/claim/:token" component={MediaClaimPage} />
+      <Route path="/media/creators" component={CreatorSpacePage} />
       <Route path="/news" component={NewsIndexPage} />
       <Route path="/british-basketball-history" component={BritishBasketballHistoryPage} />
       <Route path="/swish-score" component={SwishScorePage} />
@@ -183,6 +196,7 @@ function Router() {
       <ProtectedRoute path="/payment" component={PaymentPage} />
       <ProtectedRoute path="/coach-access/success" component={CoachAccessSuccessPage} />
       <ProtectedRoute path="/my-profile/edit" component={EditMyProfilePage} />
+      <ProtectedRoute path="/media/dashboard" component={PhotographerDashboardPage} />
       <AdminRoute path="/social-tools" component={SocialToolsPage} />
       <AdminRoute path="/api-widgets" component={WidgetBuilder} />
 
@@ -201,6 +215,8 @@ function Router() {
       <AdminRoute path="/admin/player-claims" component={PlayerClaimsAdminPage} />
       <AdminRoute path="/admin/coach-access" component={CoachAccessAdminPage} />
       <AdminRoute path="/admin/game-times" component={GameTimesAdminPage} />
+      <AdminRoute path="/admin/media" component={MediaSpotlightAdminPage} />
+      <AdminRoute path="/admin/feed-comments" component={FeedCommentsAdminPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />

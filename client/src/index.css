@@ -1116,11 +1116,171 @@
   to { opacity: 1; transform: none; }
 }
 .ask-turn { animation: ask-turn-in 0.35s ease-out both; }
+/* An answer's tables and lists rise in under the words once they're written. */
+@keyframes ask-card-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.ask-card-in { animation: ask-card-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes ask-glow {
   0%, 100% { opacity: 0.85; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.06); }
 }
 .ask-glow { animation: ask-glow 7s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .ask-word, .ask-turn, .ask-glow, .ask-dots i, .ask-fade-dot, .ask-phrase, .ask-shimmer { animation: none; }
+  .ask-word, .ask-turn, .ask-card-in, .ask-glow, .ask-dots i, .ask-fade-dot, .ask-phrase, .ask-shimmer { animation: none; }
+}
+
+/* The small print under the question box keeps a soft halo of the page's own
+   background, so it stays readable when a bright fold of aurora passes behind. */
+.ask-fineprint {
+  text-shadow: 0 0 3px #f8fafc, 0 0 8px rgba(248, 250, 252, 0.95), 0 0 14px rgba(248, 250, 252, 0.8);
+}
+
+.dark .ask-fineprint {
+  text-shadow: 0 0 3px #0a0a0f, 0 0 8px rgba(10, 10, 15, 0.9), 0 0 14px rgba(10, 10, 15, 0.75);
+}
+
+/* Faint words in the aurora while Ask works (AuroraWords): made of light, so
+   they only lighten what's behind them (screen) and show only where the
+   aurora is lit; plain background stays untouched. Soft-edged and slow, and
+   they fade with the light when the answer lands. Screening a pale colour is
+   a gentle change, so light mode needs a higher opacity for the same faintness. */
+.aurora-words { transition: opacity 1.8s ease; }
+.aurora-words.is-calming { opacity: 0; }
+.aurora-word {
+  position: absolute;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: lowercase;
+  color: #fff1d6;
+  opacity: 0;
+  mix-blend-mode: screen;
+  text-shadow: 0 0 16px rgba(255, 236, 200, 0.9);
+  --aw-gain: 2;
+  animation-name: aurora-word;
+  animation-timing-function: ease-in-out;
+  animation-fill-mode: both;
+}
+.dark .aurora-word {
+  /* Saturated, so the lift stays warm instead of greying the orange. */
+  color: #ff9a3a;
+  text-shadow: 0 0 14px rgba(255, 140, 40, 0.8), 0 0 34px rgba(249, 115, 22, 0.6);
+  --aw-gain: 1;
+}
+@keyframes aurora-word {
+  0% { opacity: 0; transform: translate(-50%, -50%) translateY(10px); filter: blur(8px); }
+  35% { opacity: calc(var(--aw-peak, 0.2) * var(--aw-gain, 1)); filter: blur(1.4px); }
+  62% { opacity: calc(var(--aw-peak, 0.2) * var(--aw-gain, 1)); filter: blur(1.6px); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--aw-dx, 0px)), -50%) translateY(-14px); filter: blur(9px); }
+}
+
+/* ── Media Spotlight ──────────────────────────────────────────────────────
+   Photo strips on the photographer directory drift sideways on their own;
+   the track is drawn twice so the loop is seamless. Under reduced motion the
+   strip is a plain swipeable row. */
+@keyframes media-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.media-strip { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.media-strip-track { display: flex; width: max-content; gap: 10px; animation: media-marquee var(--media-marquee-duration, 40s) linear infinite; will-change: transform; }
+.media-strip:hover .media-strip-track { animation-play-state: paused; }
+.media-strip.is-static { overflow-x: auto; scroll-snap-type: x proximity; -webkit-mask-image: none; mask-image: none; scrollbar-width: none; }
+.media-strip.is-static::-webkit-scrollbar { display: none; }
+.media-strip.is-static .media-strip-track { animation: none; }
+.media-strip.is-static .media-strip-track > * { scroll-snap-align: start; }
+@media (prefers-reduced-motion: reduce) {
+  .media-strip { overflow-x: auto; -webkit-mask-image: none; mask-image: none; }
+  .media-strip-track { animation: none; }
+}
+.media-lightbox img { -webkit-user-drag: none; user-select: none; }
+
+/* ── Media Spotlight: camera flashes in the backdrop ──────────────────────
+   components/media/CameraFlashes.tsx places one of these every few seconds:
+   a hot point with a four-point star and a soft bloom, up in a blink and gone
+   in about a second.
+
+   A flash can't be brighter than a light page, so on the light theme it is
+   drawn with colour and shape instead of brightness: a saturated amber burst
+   around a white centre, with a faint grey afterglow that makes the centre
+   read as the brightest thing there. On the dark theme it is plain light. */
+.media-flash {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: scale(var(--flash-size, 1));
+}
+.media-flash > span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  will-change: opacity, transform;
+}
+.media-flash-bloom {
+  width: 280px;
+  height: 280px;
+  margin: -140px 0 0 -140px;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle, #fff 0%, rgba(255, 170, 72, 0.95) 7%, rgba(249, 115, 22, 0.5) 17%, rgba(249, 115, 22, 0.16) 36%, transparent 60%),
+    radial-gradient(circle, transparent 30%, rgba(15, 23, 42, 0.07) 46%, transparent 70%);
+  animation: media-flash-bloom 1.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+/* The star: a long horizontal ray, with a shorter vertical one drawn by ::before. */
+.media-flash-streak {
+  width: 230px;
+  height: 2px;
+  margin: -1px 0 0 -115px;
+  background: linear-gradient(90deg, transparent, rgba(234, 88, 12, 0.95) 50%, transparent);
+  animation: media-flash-core 0.85s ease-out both;
+}
+.media-flash-streak::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 120px;
+  margin: -60px 0 0 -1px;
+  background: linear-gradient(180deg, transparent, rgba(234, 88, 12, 0.85) 50%, transparent);
+}
+.media-flash-core {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.95), 0 0 16px 7px rgba(249, 115, 22, 0.7);
+  animation: media-flash-core 0.75s ease-out both;
+}
+.dark .media-flash-bloom {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.34) 9%, rgba(210, 225, 255, 0.1) 32%, transparent 64%);
+  mix-blend-mode: screen;
+}
+.dark .media-flash-streak { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7) 50%, transparent); }
+.dark .media-flash-streak::before { background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.6) 50%, transparent); }
+.dark .media-flash-core { box-shadow: 0 0 16px 6px rgba(255, 255, 255, 0.75); }
+@keyframes media-flash-bloom {
+  0% { opacity: 0; transform: scale(0.5); }
+  8% { opacity: 1; transform: scale(1); }
+  16% { opacity: 0.95; }
+  40% { opacity: 0.4; }
+  100% { opacity: 0; transform: scale(1.1); }
+}
+.dark .media-flash-bloom { animation-name: media-flash-bloom-dark; }
+@keyframes media-flash-bloom-dark {
+  0% { opacity: 0; transform: scale(0.55); }
+  9% { opacity: 0.7; transform: scale(1); }
+  28% { opacity: 0.32; }
+  100% { opacity: 0; transform: scale(1.12); }
+}
+@keyframes media-flash-core {
+  0% { opacity: 0; transform: scale(0.4); }
+  10% { opacity: 1; transform: scale(1); }
+  22% { opacity: 1; }
+  100% { opacity: 0; transform: scale(0.7); }
+}
+@media (max-width: 640px) {
+  .media-flash { transform: scale(calc(var(--flash-size, 1) * 0.7)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .media-flash { display: none; }
 }

@@ -11,7 +11,7 @@ import { useAskScope } from "@/components/ask-swish/AskSwishProvider";
 import { Helmet } from "react-helmet-async";
 import { gamePath, teamPath, teamSeoDescription, teamSeoTitle } from "@shared/seo";
 import { clubSlug } from "@shared/teamIdentity";
-import { teamSeasonSummary } from "@shared/recaps";
+import { isFinishedCompetition, teamSeasonSummary } from "@shared/recaps";
 import EntityLink from "@/components/EntityLink";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
@@ -425,16 +425,43 @@ export default function TeamProfile() {
     enabled: isPermanentRoute && !!routeTeamName,
     staleTime: 5 * 60_000,
   });
-  const pageCompetition = teamPage
+  const defaultCompetition = teamPage
+    ? teamPage.competitions.find((c) => !c.youth) || teamPage.competitions[0] || null
+    : null;
+  const listedCompetition = teamPage && competitionQuery
     ? teamPage.competitions.find((c) => c.slug === competitionQuery)
-      || teamPage.competitions.find((c) => !c.youth)
-      || teamPage.competitions[0]
-      || null
+    : undefined;
+  // The page's list comes from an index the server rebuilds hourly, but the
+  // competition switcher reads the database directly, so a season published
+  // since the last rebuild can be picked and not be in the list. Follow the
+  // switcher's own entry for it (the same, already-cached request) rather
+  // than falling back to the newest season.
+  const competitionUnlisted = !!teamPage && !!competitionQuery && !listedCompetition;
+  const { data: switcherCompetitions = [], isLoading: switcherLoading } = useTeamCompetitions(
+    competitionUnlisted ? defaultCompetition?.teamName : null,
+    defaultCompetition?.slug,
+  );
+  const unlistedCompetition = competitionUnlisted
+    ? switcherCompetitions.find((c) => c.slug === competitionQuery)
+    : undefined;
+  const pageCompetition = teamPage
+    ? listedCompetition
+      || (unlistedCompetition
+        ? {
+            slug: unlistedCompetition.slug,
+            name: unlistedCompetition.name,
+            teamName: unlistedCompetition.teamName,
+            lastPlayed: unlistedCompetition.lastPlayed || null,
+            youth: false,
+            leagueIds: [unlistedCompetition.league_id],
+          }
+        : null)
+      || defaultCompetition
     : null;
   const teamName = isPermanentRoute
-    ? teamPage && pageCompetition
+    ? teamPage && pageCompetition && !(competitionUnlisted && switcherLoading)
       ? encodeURIComponent(pageCompetition.teamName)
-      : teamPageLoading ? undefined : routeTeamName
+      : teamPageLoading || (competitionUnlisted && switcherLoading) ? undefined : routeTeamName
     : routeTeamName;
   const leagueSlug = competitionSlug || legacyLeagueSlug || pageCompetition?.slug;
   const [location, navigate] = useLocation();
@@ -1365,7 +1392,15 @@ export default function TeamProfile() {
   // renders for this page (shared/recaps.ts).
   const teamDisplayName = teamPage?.name || team.name;
   const scoredGames = team.games.filter((g) => g.opponentScore != null);
+  // An older season reads in the past tense: "finished with", "led the team".
+  const seasonFinished = isFinishedCompetition({
+    name: team.league?.name || pageCompetition?.name || currentCompetition?.name,
+    season: currentCompetition?.season,
+    lastPlayed: latestGames[0]?.date || pageCompetition?.lastPlayed,
+    hasUpcoming: upcomingGames.length > 0,
+  });
   const seasonSummary = teamSeasonSummary({
+    finished: seasonFinished,
     team: teamDisplayName,
     competition: team.league?.name || pageCompetition?.name,
     wins: team.wins,
