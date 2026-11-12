@@ -6,6 +6,7 @@ import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import BCBLogo from "@/assets/BCB Logo.jpg";
 import LeagueDefaultImage from "@/assets/league-default.jpg";
 import { compactLogoUrl } from "@/lib/compactLogo";
+import AllTimeLeaders from "@/components/league/AllTimeLeaders";
 
 interface League {
   id: string;
@@ -331,6 +332,10 @@ export default function CompetitionPage() {
           <div className="mt-6 py-12 text-center text-sm text-[color:var(--ch-text-2)]">
             No competitions available yet.
           </div>
+        )}
+
+        {seasons.length > 0 && (
+          <AllTimeLeaders brandId={league.id} gender={availableGenders.length > 0 ? selectedGender : ""} />
         )}
       </main>
     </div>
