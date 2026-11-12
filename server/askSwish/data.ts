@@ -361,53 +361,61 @@ export interface OnOffRow {
 }
 
 /**
- * On/off per player for a competition, summed over its completed games.
+ * On/off per player for a competition, from player_on_off_season: one row per
+ * (competition, team, player), filled by refresh_player_on_off, which the
+ * lineup builder runs after every game. It is the table the player page's
+ * on/off panel reads, so Ask quotes the same numbers. (The per-game
+ * player_on_off view recomputes "off" and team totals for every game in the
+ * database on each read and times out for a whole league.)
  *
- * The season view (player_on_off_impact_profile_v1) recomputes every
- * competition on each read and times out for a whole league, so this reads
- * the per-game view for the league's game keys instead and weights each
- * game's ratings by the seconds behind them. Confidence follows the site's
- * labels: Low under 60 on-court minutes or 3 games, High from 150 minutes.
+ * A player with several rows in the family (moved team, or parent + child
+ * competitions) has his counts summed and the ratings recomputed with the
+ * table's formulas. Eligibility is the table's qualifying rule: 100 on-court
+ * and 50 off-court possessions. Confidence is Low when not qualified, High
+ * from 150 on-court minutes over 5 games.
  */
 export async function onOffProfiles(leagueIds: string[], opts: { player?: string; teamId?: string; eligibleOnly?: boolean } = {}): Promise<OnOffRow[]> {
-  const keys = (await finalResults(leagueIds)).map((g) => g.game_key);
-  if (!keys.length) return [];
-  type Row = { player_id: string; player_name: string; team_id: string | null; game_key: string; on_seconds: number | null; off_seconds: number | null; on_ortg: number | null; off_ortg: number | null; on_drtg: number | null; off_drtg: number | null; on_nrtg: number | null; off_nrtg: number | null };
-  const rows: Row[] = [];
-  // Forty games at ~25 players each stays under one page per chunk.
-  for (let i = 0; i < keys.length; i += 40) {
-    rows.push(...await allRows<Row>("on/off", (from, to) => {
-      let q = db.from("player_on_off")
-        .select("player_id, player_name, team_id, game_key, on_seconds, off_seconds, on_ortg, off_ortg, on_drtg, off_drtg, on_nrtg, off_nrtg")
-        .in("game_key", keys.slice(i, i + 40));
-      if (opts.player) q = q.ilike("player_name", `%${opts.player}%`);
-      if (opts.teamId) q = q.eq("team_id", opts.teamId);
-      return q.order("player_id").range(from, to);
-    }, 5000));
-  }
-  const by = new Map<string, { name: string; team: string | null; games: Set<string>; onS: number; offS: number; on: Record<"ortg" | "drtg" | "nrtg", number>; off: Record<"ortg" | "drtg" | "nrtg", number> }>();
+  if (!leagueIds.length) return [];
+  type Row = {
+    league_id: string; team_id: string; player_id: string; player_name: string | null; games: number;
+    on_secs: number; off_secs: number; on_poss_for: number; off_poss_for: number; on_poss_against: number; off_poss_against: number;
+    on_pts_for: number; off_pts_for: number; on_pts_against: number; off_pts_against: number;
+  };
+  const rows = await allRows<Row>("on/off", (from, to) => {
+    let q = db.from("player_on_off_season")
+      .select("league_id, team_id, player_id, player_name, games, on_secs, off_secs, on_poss_for, off_poss_for, on_poss_against, off_poss_against, on_pts_for, off_pts_for, on_pts_against, off_pts_against")
+      .in("league_id", leagueIds);
+    if (opts.player) q = q.ilike("player_name", `%${opts.player}%`);
+    if (opts.teamId) q = q.eq("team_id", opts.teamId);
+    return q.order("league_id").order("team_id").order("player_id").range(from, to);
+  }, 10000);
+  const KEYS = ["on_secs", "off_secs", "on_poss_for", "off_poss_for", "on_poss_against", "off_poss_against", "on_pts_for", "off_pts_for", "on_pts_against", "off_pts_against"] as const;
+  type Sum = Record<(typeof KEYS)[number], number> & { name: string; league: string; team: string; teamSecs: number; games: number };
+  const by = new Map<string, Sum>();
   for (const r of rows) {
-    const e = by.get(r.player_id) ?? { name: r.player_name, team: r.team_id, games: new Set<string>(), onS: 0, offS: 0, on: { ortg: 0, drtg: 0, nrtg: 0 }, off: { ortg: 0, drtg: 0, nrtg: 0 } };
-    const onS = r.on_seconds ?? 0, offS = r.off_seconds ?? 0;
-    e.games.add(r.game_key);
-    if (onS > 0 && r.on_nrtg != null) { e.onS += onS; e.on.ortg += Number(r.on_ortg ?? 0) * onS; e.on.drtg += Number(r.on_drtg ?? 0) * onS; e.on.nrtg += Number(r.on_nrtg) * onS; }
-    if (offS > 0 && r.off_nrtg != null) { e.offS += offS; e.off.ortg += Number(r.off_ortg ?? 0) * offS; e.off.drtg += Number(r.off_drtg ?? 0) * offS; e.off.nrtg += Number(r.off_nrtg) * offS; }
+    const e = by.get(r.player_id) ?? { name: r.player_name ?? "", league: r.league_id, team: r.team_id, teamSecs: -1, games: 0, ...Object.fromEntries(KEYS.map((k) => [k, 0])) } as Sum;
+    for (const k of KEYS) e[k] += Number(r[k] ?? 0);
+    e.games += r.games ?? 0;
+    // Label the player with the team and competition he played most minutes for.
+    if (Number(r.on_secs ?? 0) > e.teamSecs) { e.teamSecs = Number(r.on_secs ?? 0); e.team = r.team_id; e.league = r.league_id; if (r.player_name) e.name = r.player_name; }
     by.set(r.player_id, e);
   }
+  const rate = (pts: number, poss: number) => (poss > 0 ? (100 * pts) / poss : null);
+  const minus = (a: number | null, b: number | null) => (a == null || b == null ? null : a - b);
   const out: OnOffRow[] = [];
   for (const [player_id, e] of Array.from(by.entries())) {
-    if (!e.onS) continue;
-    const on = (k: "ortg" | "drtg" | "nrtg") => e.on[k] / e.onS;
-    const off = (k: "ortg" | "drtg" | "nrtg") => (e.offS ? e.off[k] / e.offS : null);
-    const onMin = e.onS / 60, offMin = e.offS / 60;
-    const eligible = onMin >= 60 && offMin >= 20 && e.games.size >= 3;
+    if (e.on_secs <= 0) continue;
+    const on_ortg = rate(e.on_pts_for, e.on_poss_for), off_ortg = rate(e.off_pts_for, e.off_poss_for);
+    const on_drtg = rate(e.on_pts_against, e.on_poss_against), off_drtg = rate(e.off_pts_against, e.off_poss_against);
+    const on_nrtg = minus(on_ortg, on_drtg), off_nrtg = minus(off_ortg, off_drtg);
+    const eligible = (e.on_poss_for + e.on_poss_against) / 2 >= 100 && (e.off_poss_for + e.off_poss_against) / 2 >= 50;
     if (opts.eligibleOnly && !eligible) continue;
-    const swing = off("nrtg") == null ? null : on("nrtg") - off("nrtg")!;
+    const onMin = e.on_secs / 60;
     out.push({
-      league_id: leagueIds[0], player_id, player_name: e.name, team_id: e.team, games: e.games.size,
-      on_minutes: onMin, off_minutes: offMin, on_nrtg: on("nrtg"), off_nrtg: off("nrtg"), on_ortg: on("ortg"), off_ortg: off("ortg"), on_drtg: on("drtg"), off_drtg: off("drtg"),
-      raw_net_swing: swing, adjusted_net_swing: null,
-      sample_confidence: onMin >= 150 && e.games.size >= 5 ? "High" : eligible ? "Medium" : "Low",
+      league_id: e.league, player_id, player_name: e.name, team_id: e.team, games: e.games,
+      on_minutes: onMin, off_minutes: e.off_secs / 60, on_nrtg, off_nrtg, on_ortg, off_ortg, on_drtg, off_drtg,
+      raw_net_swing: minus(on_nrtg, off_nrtg), adjusted_net_swing: null,
+      sample_confidence: !eligible ? "Low" : onMin >= 150 && e.games >= 5 ? "High" : "Medium",
       is_leaderboard_eligible: eligible, impact_summary_label: null,
     });
   }
