@@ -26,6 +26,7 @@ import { registerMemberAccountRoutes } from "./memberAccounts";
 import { registerNewsArticleRoutes } from "./newsArticles";
 import { registerWeekendReportRoutes } from "./weekendReports";
 import { registerNblScoreRoutes } from "./nblScores";
+import { registerAllTimeLeaderRoutes } from "./allTimeLeaders";
 import { registerNationalCupRoutes } from "./nationalCup";
 import { registerPreferredNameRoutes } from "./preferredNames";
 import { registerClaimEmailRoutes } from "./claimEmail";
@@ -2699,6 +2700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerNewsArticleRoutes(app, requireAdmin);
   registerWeekendReportRoutes(app, { requireAdmin, formatName: formatCanonicalPlayerName });
   registerNblScoreRoutes(app, { requireAdmin });
+  registerAllTimeLeaderRoutes(app);
   registerNationalCupRoutes(app, { requireAdmin });
   registerClaimEmailRoutes(app, { requireAdmin });
   registerGameTimeReviewRoutes(app, { requireAdmin });
