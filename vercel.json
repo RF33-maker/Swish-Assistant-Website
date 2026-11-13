@@ -6,7 +6,8 @@
     { "path": "/api/cron/nbl-scores", "schedule": "0 21 * * 6,0" },
     { "path": "/api/cron/national-cup", "schedule": "30 22 * * *" },
     { "path": "/api/cron/weekend-reports", "schedule": "0 7 * * 1,4" },
-    { "path": "/api/cron/coach-access", "schedule": "0 3 * * *" }
+    { "path": "/api/cron/coach-access", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/all-time", "schedule": "30 4 * * *" }
   ],
   "functions": {
     "api/index.js": {

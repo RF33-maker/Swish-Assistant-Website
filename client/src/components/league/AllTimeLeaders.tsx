@@ -165,7 +165,8 @@ function ranks(values: number[]): number[] {
 
 export default function AllTimeLeaders({ brandId, gender }: { brandId: string; gender: string }) {
   const [view, setView] = useState<View>("averages");
-  const [scope, setScope] = useState<Scope>("all");
+  // Regular season by default: the way career records are usually counted.
+  const [scope, setScope] = useState<Scope>("league");
   const [minGames, setMinGames] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [data, setData] = useState<AllTimeData | null>(null);
@@ -231,7 +232,7 @@ export default function AllTimeLeaders({ brandId, gender }: { brandId: string; g
           )}
         </div>
         <div className="ch-seg self-start md:self-auto" role="tablist" aria-label="Games counted">
-          {([["all", "All games"], ["league", "League only"]] as const).map(([key, label]) => (
+          {([["league", "Regular season"], ["all", "All games"]] as const).map(([key, label]) => (
             <button key={key} role="tab" aria-selected={scope === key} data-active={scope === key} onClick={() => setScope(key)} className="px-3 h-8 text-xs font-semibold">
               {label}
             </button>
@@ -329,7 +330,7 @@ export default function AllTimeLeaders({ brandId, gender }: { brandId: string; g
       {!loading && data && (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[11px] text-[color:var(--ch-muted)] max-w-xl">
-            {scope === "league" ? "League games only: cups, trophies and play-offs are left out. " : "Every public game, cups and play-offs included. "}
+            {scope === "league" ? "Regular season only: cups, trophies and play-offs are left out. " : "Every public game, cups and play-offs included. "}
             Careers join a player's seasons under one name; old seasons can carry gaps where the live feed did.
           </p>
           <button onClick={() => setExpanded((e) => !e)} className="ch-btn ch-btn-ghost h-9 px-3.5 text-xs">
