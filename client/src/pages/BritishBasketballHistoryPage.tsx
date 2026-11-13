@@ -3,6 +3,9 @@ import { Helmet } from "react-helmet-async";
 import { Link } from "wouter";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import AllTimeLeaders from "@/components/league/AllTimeLeaders";
+import { supabase } from "@/lib/supabase";
+import { HISTORY_LEAGUES, type HistoryLeague } from "@/lib/historyLeagues";
+import { competitionNameWithoutSeason, competitionTypeOrder, seasonOf } from "@/lib/leagueSeasons";
 import { gamePath, teamPath } from "@shared/seo";
 import { clubDisplayName } from "@shared/teamIdentity";
 
@@ -13,24 +16,17 @@ const SITE_URL = "https://swishassistant.com";
  * leaders, the single-game records and full career boards, all from
  * /api/leagues/:brandId/all-time (server/allTimeLeaders.ts).
  *
+ * Each season also lists every competition played that year (league, cup, trophy,
+ * play-offs). Past seasons are not offered in the league pickers, so this page and the
+ * History tab on each league page are how people reach them.
+ *
  * Only the box scores already on the site count; nothing here comes from outside archives.
  * Each season keeps the team names of the time ("Glasgow Rocks", "Esh Group Eagles
  * Newcastle"); team links still land on today's club.
  */
 
-const SLB = "56cac2cb-6d34-459c-afa8-c34a8d4aa00f";
-const BCB = "fdf9aa2d-6685-4ad8-a558-811e96a741df";
-const NBL = "3b022087-839f-4329-aa5e-d39d9688139a";
-
-type LeagueOption = { id: string; brandId: string; gender: string; name: string; short: string; lineage: string };
-
-const LEAGUES: LeagueOption[] = [
-  { id: "slb-men", brandId: SLB, gender: "Men", name: "Super League Basketball", short: "SLB", lineage: "Played as the British Basketball League (BBL) until 2024." },
-  { id: "slb-women", brandId: SLB, gender: "Women", name: "Women's Super League Basketball", short: "SLB Women", lineage: "Played as the Women's British Basketball League (WBBL) until 2023." },
-  { id: "bcb", brandId: BCB, gender: "", name: "British Championship Basketball", short: "BCB", lineage: "Played as NBL Division One until 2025." },
-  { id: "nbl-men", brandId: NBL, gender: "Men", name: "NBL Division One", short: "NBL D1", lineage: "Played as NBL Division Two until 2025." },
-  { id: "nbl-women", brandId: NBL, gender: "Women", name: "WNBL Division One", short: "WNBL D1", lineage: "The women's National Basketball League's Division One." },
-];
+type LeagueOption = HistoryLeague;
+const LEAGUES = HISTORY_LEAGUES;
 
 type StatKey = "pts" | "reb" | "ast" | "stl" | "blk" | "tpm";
 
@@ -142,17 +138,43 @@ function RecordsStrip({ data, gender }: { data: HistoryData; gender: string }) {
   );
 }
 
-function SeasonRow({ season, gender, stats }: { season: SeasonSummary; gender: string; stats: typeof STATS }) {
+type SeasonCompetitionLink = { name: string; slug: string };
+
+function CompetitionLinks({ competitions }: { competitions: SeasonCompetitionLink[] }) {
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 text-sm font-medium text-[color:var(--ch-text-2)]">
+      {competitions.map((c, i) => (
+        <span key={c.slug} className="inline-flex items-baseline gap-x-1.5">
+          {i > 0 && <span aria-hidden className="text-[color:var(--ch-muted)]">·</span>}
+          <Link href={`/competition/${c.slug}`} className="hover:underline hover:text-[color:var(--ch-text)]">
+            {competitionNameWithoutSeason(c.name)}
+          </Link>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function SeasonRow({
+  season,
+  competitions,
+  gender,
+  stats,
+}: {
+  season: SeasonSummary;
+  competitions: SeasonCompetitionLink[];
+  gender: string;
+  stats: typeof STATS;
+}) {
+  const links = competitions.length > 0 ? competitions : [{ name: season.competition, slug: season.competitionSlug }];
   return (
     <div className="py-5 border-b border-[color:var(--ch-border)]">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="ch-display font-bold text-2xl tabular-nums text-[color:var(--ch-text)]">{season.season}</h3>
-        <Link href={`/competition/${season.competitionSlug}`} className="text-sm font-medium text-[color:var(--ch-text-2)] hover:underline">
-          {season.competition}
-        </Link>
-        <span className="text-xs text-[color:var(--ch-muted)]">
-          {season.games} games on file · leaders played {season.minGames}+
-        </span>
+        <CompetitionLinks competitions={links} />
+      </div>
+      <div className="mt-1 text-xs text-[color:var(--ch-muted)]">
+        {season.games} league games on file · leaders played {season.minGames}+
       </div>
       <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
         {season.bestRecord && (
@@ -181,6 +203,55 @@ function SeasonRow({ season, gender, stats }: { season: SeasonSummary; gender: s
       </div>
     </div>
   );
+}
+
+// A season with cups or trophies on file but no league games.
+function CompetitionsOnlyRow({ label, competitions }: { label: string; competitions: SeasonCompetitionLink[] }) {
+  return (
+    <div className="py-5 border-b border-[color:var(--ch-border)]">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h3 className="ch-display font-bold text-2xl tabular-nums text-[color:var(--ch-text)]">{label}</h3>
+        <CompetitionLinks competitions={competitions} />
+      </div>
+      <div className="mt-1 text-xs text-[color:var(--ch-muted)]">No league games on file this season.</div>
+    </div>
+  );
+}
+
+/** Every public competition of one league (and gender), grouped by season label. */
+function useSeasonCompetitions(brandId: string, gender: string) {
+  const [bySeason, setBySeason] = useState<Map<string, { sort: number; competitions: SeasonCompetitionLink[] }>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    setBySeason(new Map());
+    let query = supabase
+      .from("competitions")
+      .select("league_id, parent_league_id, age_group, stop, name, slug, season, gender")
+      .eq("competition_id", brandId)
+      .eq("is_public", true);
+    if (gender) query = query.eq("gender", gender);
+    query.then(({ data }) => {
+      if (cancelled || !data) return;
+      const rows = data as Array<{ league_id: string; parent_league_id: string | null; age_group: string | null; stop: number | null; name: string; slug: string; season: string | null }>;
+      const ids = new Set(rows.map((r) => r.league_id));
+      const map = new Map<string, { sort: number; competitions: SeasonCompetitionLink[] }>();
+      for (const r of rows) {
+        // Age-group and stop children are reached from their season parent.
+        if (r.parent_league_id && ids.has(r.parent_league_id) && (r.age_group || r.stop != null)) continue;
+        const s = seasonOf(r);
+        if (!s) continue;
+        const entry = map.get(s.label) ?? { sort: s.sort, competitions: [] };
+        entry.competitions.push({ name: r.name, slug: r.slug });
+        map.set(s.label, entry);
+      }
+      map.forEach((entry) => {
+        entry.competitions.sort((a, b) => competitionTypeOrder(a.name) - competitionTypeOrder(b.name) || a.name.localeCompare(b.name));
+      });
+      setBySeason(map);
+    });
+    return () => { cancelled = true; };
+  }, [brandId, gender]);
+  return bySeason;
 }
 
 function readLeague(): LeagueOption {
@@ -225,6 +296,24 @@ export default function BritishBasketballHistoryPage() {
       /* the page still works without the URL */
     }
   };
+
+  const seasonCompetitions = useSeasonCompetitions(league.brandId, league.gender);
+
+  // League seasons with their summaries, plus seasons that only had cups or trophies.
+  const seasonRows = useMemo(() => {
+    const summaries = data?.seasons || [];
+    const covered = new Set(summaries.map((s) => s.season));
+    const rows: Array<{ sort: number; label: string; summary: SeasonSummary | null; competitions: SeasonCompetitionLink[] }> = summaries.map((summary) => ({
+      sort: seasonOf({ season: summary.season, name: summary.competition })?.sort ?? 0,
+      label: summary.season,
+      summary,
+      competitions: seasonCompetitions.get(summary.season)?.competitions || [],
+    }));
+    seasonCompetitions.forEach((entry, label) => {
+      if (!covered.has(label)) rows.push({ sort: entry.sort, label, summary: null, competitions: entry.competitions });
+    });
+    return rows.sort((a, b) => b.sort - a.sort);
+  }, [data, seasonCompetitions]);
 
   const gaps = useMemo(() => (data ? missingSeasons(data.seasons || []) : []), [data]);
   const shownStats = allStats ? STATS : STATS.slice(0, 3);
@@ -311,20 +400,24 @@ export default function BritishBasketballHistoryPage() {
             <>
               <RecordsStrip data={data} gender={league.gender} />
 
-              {(data.seasons?.length ?? 0) > 0 && (
+              {seasonRows.length > 0 && (
               <section className="mt-12" aria-labelledby="seasons-heading">
                 <div className="flex flex-wrap items-end justify-between gap-3 pb-2 border-b border-[color:var(--ch-border-strong)]">
                   <div>
                     <h2 id="seasons-heading" className="ch-eyebrow">Season by season</h2>
-                    <p className="mt-1 text-xs text-[color:var(--ch-muted)]">League games only. Per-game leaders played at least half the season's games.</p>
+                    <p className="mt-1 text-xs text-[color:var(--ch-muted)]">Every competition each season. Leaders count league games only and played at least half the season's games.</p>
                   </div>
                   <button onClick={() => setAllStats((v) => !v)} className="ch-btn ch-btn-ghost h-8 px-3 text-xs">
                     {allStats ? "Points, rebounds, assists" : "Add steals, blocks, threes"}
                   </button>
                 </div>
-                {data.seasons.map((season) => (
-                  <SeasonRow key={season.season} season={season} gender={league.gender} stats={shownStats} />
-                ))}
+                {seasonRows.map((row) =>
+                  row.summary ? (
+                    <SeasonRow key={row.label} season={row.summary} competitions={row.competitions} gender={league.gender} stats={shownStats} />
+                  ) : (
+                    <CompetitionsOnlyRow key={row.label} label={row.label} competitions={row.competitions} />
+                  ),
+                )}
               </section>
               )}
             </>
