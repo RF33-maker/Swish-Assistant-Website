@@ -8,7 +8,8 @@
  *  - `careers`: one row per player (totals over every game played) for anyone with
  *    at least MIN_CAREER_GAMES games, so the page can sort by any column and set its
  *    own minimum-games line without another request;
- *  - `records`: the best single games for each headline stat.
+ *  - `records`: the best single games for each headline stat;
+ *  - `seasons`: each league season's per-game leaders and best record (for the History page).
  *
  * A player is grouped across seasons by their identity group when they have one,
  * otherwise by name (the same way profiles join a career together). "League only"
@@ -72,13 +73,39 @@ export type AllTimeRecord = {
   line: { pts: number; reb: number; ast: number; stl: number; blk: number; tpm: number };
 };
 
+type StatKey = (typeof RECORD_STATS)[number]["key"];
+
+export type SeasonLeader = {
+  key: string;
+  name: string;
+  href: string | null;
+  /** The team as it was named that season ("Glasgow Rocks", not today's name). */
+  team: string | null;
+  /** Per game. */
+  value: number;
+  gp: number;
+};
+
+/** One league season (cups, trophies and play-offs left out). */
+export type SeasonSummary = {
+  season: string;
+  competition: string;
+  competitionSlug: string;
+  games: number;
+  /** Games needed to lead a per-game board: half the most anyone played that season, at least 5. */
+  minGames: number;
+  leaders: Record<StatKey, SeasonLeader[]>;
+  bestRecord: { team: string; wins: number; losses: number } | null;
+};
+
 export type AllTimeResponse = {
   competitions: number;
   games: number;
   firstSeason: string | null;
   lastSeason: string | null;
   careers: AllTimeCareer[];
-  records: Record<(typeof RECORD_STATS)[number]["key"], AllTimeRecord[]>;
+  records: Record<StatKey, AllTimeRecord[]>;
+  seasons: SeasonSummary[];
 };
 
 const num = (v: unknown) => {
@@ -123,7 +150,11 @@ const initialSurname = (key: string) => {
 function seasonLabel(comp: Comp): string | null {
   const raw = `${comp.season || ""} ${comp.name}`;
   const m = raw.match(/\b(20\d{2})\s*[-/]\s*(20)?(\d{2})\b/);
-  return m ? `${m[1]}/${m[3]}` : comp.season || null;
+  if (m) return `${m[1]}/${m[3]}`;
+  // "SLB Championship 26-27"
+  const short = comp.name.match(/\b(\d{2})\s*[-/]\s*(\d{2})\s*$/);
+  if (short && Number(short[2]) === (Number(short[1]) + 1) % 100) return `20${short[1]}/${short[2]}`;
+  return comp.season || null;
 }
 
 async function inBatches<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -146,6 +177,40 @@ async function statsForComp(leagueId: string): Promise<StatRow[]> {
     if ((data?.length || 0) < 1000) break;
   }
   return rows;
+}
+
+const SEASON_LEADERS = 3;
+
+// Wins and losses per team (as named in that competition) from the team box scores.
+async function teamRecords(leagueId: string): Promise<Map<string, { wins: number; losses: number }>> {
+  const rows: Array<{ name: string; side: string; game_key: string; tot_spoints: number | null }> = [];
+  for (let from = 0; from < 20_000; from += 1000) {
+    const { data, error } = await supabaseAdmin
+      .from("team_stats")
+      .select("name, side, game_key, tot_spoints")
+      .eq("league_id", leagueId)
+      .not("game_key", "is", null)
+      .order("id")
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    rows.push(...((data || []) as any[]));
+    if ((data?.length || 0) < 1000) break;
+  }
+  const byGame = new Map<string, typeof rows>();
+  for (const r of rows) byGame.set(r.game_key, [...(byGame.get(r.game_key) || []), r]);
+  const out = new Map<string, { wins: number; losses: number }>();
+  byGame.forEach((sides) => {
+    const [a, b] = sides;
+    if (sides.length !== 2 || a.tot_spoints == null || b.tot_spoints == null || a.tot_spoints === b.tot_spoints) return;
+    const winner = num(a.tot_spoints) > num(b.tot_spoints) ? a : b;
+    const loser = winner === a ? b : a;
+    for (const [team, won] of [[winner.name, true], [loser.name, false]] as const) {
+      const t = out.get(team) || { wins: 0, losses: 0 };
+      if (won) t.wins += 1; else t.losses += 1;
+      out.set(team, t);
+    }
+  });
+  return out;
 }
 
 async function identityGroups(playerIds: string[]): Promise<Map<string, string>> {
@@ -189,10 +254,22 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     if (!fullBySurname.has(is)) fullBySurname.set(is, new Set());
     fullBySurname.get(is)!.add(k);
   }
+  // A name seen under exactly one identity group joins it, so rows from before the
+  // player was grouped (other seasons, other player ids) count in the same career.
+  const identitiesByName = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const id = r.player_id && identity.get(r.player_id);
+    const k = nameKey(cleanName(r));
+    if (!id || !k || isInitialForm(k)) continue;
+    if (!identitiesByName.has(k)) identitiesByName.set(k, new Set());
+    identitiesByName.get(k)!.add(id);
+  }
   const groupOf = (r: StatRow): string => {
     const viaIdentity = r.player_id && identity.get(r.player_id);
     if (viaIdentity) return viaIdentity;
     const k = nameKey(cleanName(r)) || `pid:${r.player_id}`;
+    const named = identitiesByName.get(k);
+    if (named && named.size === 1) return Array.from(named)[0];
     if (isInitialForm(k)) {
       const options = fullBySurname.get(initialSurname(k) || "");
       if (options && options.size === 1) return `name:${Array.from(options)[0]}`;
@@ -292,19 +369,106 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     });
   }
 
+  // ── Season by season: league competitions only ──────────────────────
+  type SeasonAcc = { gp: number; teams: Map<string, number> } & Record<StatKey, number>;
+  const seasonComps = new Map<string, Comp[]>();
+  for (const c of comps) {
+    const label = seasonLabel(c);
+    if (!label || KNOCKOUT_NAME.test(c.name)) continue;
+    seasonComps.set(label, [...(seasonComps.get(label) || []), c]);
+  }
+  const seasonPlayers = new Map<string, Map<string, SeasonAcc>>();
+  const seasonGames = new Map<string, Set<string>>();
+  for (const r of recordRows) {
+    const comp = compById.get(r.league_id)!;
+    const label = seasonLabel(comp);
+    if (!label || !seasonComps.has(label) || KNOCKOUT_NAME.test(comp.name)) continue;
+    if (!seasonPlayers.has(label)) { seasonPlayers.set(label, new Map()); seasonGames.set(label, new Set()); }
+    seasonGames.get(label)!.add(`${r.league_id}:${r.game_key}`);
+    const players = seasonPlayers.get(label)!;
+    let p = players.get(r.__key);
+    if (!p) {
+      p = { gp: 0, teams: new Map(), pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
+      players.set(r.__key, p);
+    }
+    p.gp += 1;
+    if (r.team_name) p.teams.set(r.team_name, (p.teams.get(r.team_name) || 0) + 1);
+    for (const stat of RECORD_STATS) p[stat.key] += num(r[stat.column]);
+  }
+  const leagueRecords = new Map<string, Map<string, { wins: number; losses: number }>>();
+  const leagueCompIds = Array.from(seasonComps.values()).flat().map((c) => c.league_id);
+  await inBatches(leagueCompIds, COMPS_AT_ONCE, async (id) => { leagueRecords.set(id, await teamRecords(id)); });
+
+  const seasons: SeasonSummary[] = Array.from(seasonPlayers.entries()).map(([label, players]) => {
+    const compsThisSeason = seasonComps.get(label)!;
+    const games = seasonGames.get(label)!;
+    const main = [...compsThisSeason].sort((a, b) =>
+      Array.from(games).filter((g) => g.startsWith(`${b.league_id}:`)).length - Array.from(games).filter((g) => g.startsWith(`${a.league_id}:`)).length,
+    )[0];
+    const most = Math.max(0, ...Array.from(players.values()).map((p) => p.gp));
+    const minGames = Math.max(5, Math.ceil(most / 2));
+    const qualified = Array.from(players.entries()).filter(([, p]) => p.gp >= minGames);
+    const leaders = {} as SeasonSummary["leaders"];
+    for (const stat of RECORD_STATS) {
+      leaders[stat.key] = qualified
+        .map(([key, p]) => ({ key, p, value: p[stat.key] / p.gp }))
+        .filter((x) => x.value > 0)
+        .sort((a, b) => b.value - a.value || b.p.gp - a.p.gp)
+        .slice(0, SEASON_LEADERS)
+        .map(({ key, p, value }) => ({
+          key,
+          name: "",
+          href: null,
+          team: Array.from(p.teams.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || null,
+          value: Math.round(value * 100) / 100,
+          gp: p.gp,
+        }));
+    }
+    const teamTotals = new Map<string, { wins: number; losses: number }>();
+    for (const c of compsThisSeason) {
+      leagueRecords.get(c.league_id)?.forEach((rec, team) => {
+        const t = teamTotals.get(team) || { wins: 0, losses: 0 };
+        teamTotals.set(team, { wins: t.wins + rec.wins, losses: t.losses + rec.losses });
+      });
+    }
+    // Old feeds can miss a side's box score; a "best record" from a fraction of the games misleads.
+    const decided = Array.from(teamTotals.values()).reduce((n, t) => n + t.wins, 0);
+    const mostPlayed = Math.max(0, ...Array.from(teamTotals.values()).map((t) => t.wins + t.losses));
+    const best = decided < games.size * 0.8 ? undefined : Array.from(teamTotals.entries())
+      .filter(([, t]) => t.wins + t.losses >= mostPlayed * 0.75)
+      .sort((a, b) => b[1].wins / (b[1].wins + b[1].losses) - a[1].wins / (a[1].wins + a[1].losses) || b[1].wins - a[1].wins)[0];
+    return {
+      season: label,
+      competition: main.name,
+      competitionSlug: main.slug,
+      games: games.size,
+      minGames,
+      leaders,
+      bestRecord: best ? { team: best[0], wins: best[1].wins, losses: best[1].losses } : null,
+    };
+  }).sort((a, b) => b.season.localeCompare(a.season));
+
   // Opponents for the record games.
   const recordGameKeys = Array.from(new Set(Object.values(records).flat().map((r) => r.gameKey)));
   const fixtures = new Map<string, { home: string | null; away: string | null }>();
+  const sidesByGame = new Map<string, string[]>();
   for (let i = 0; i < recordGameKeys.length; i += 200) {
-    const { data } = await supabaseAdmin
-      .from("game_schedule")
-      .select("game_key, hometeam, awayteam")
-      .in("game_key", recordGameKeys.slice(i, i + 200));
+    const keys = recordGameKeys.slice(i, i + 200);
+    const [{ data }, { data: teamRows }] = await Promise.all([
+      supabaseAdmin.from("game_schedule").select("game_key, hometeam, awayteam").in("game_key", keys),
+      supabaseAdmin.from("team_stats").select("game_key, league_id, name").in("game_key", keys),
+    ]);
     for (const g of data || []) fixtures.set(g.game_key, { home: g.hometeam, away: g.awayteam });
+    for (const t of teamRows || []) {
+      if (!t.name || !compById.has(t.league_id)) continue;
+      const id = `${t.league_id}:${t.game_key}`;
+      sidesByGame.set(id, [...(sidesByGame.get(id) || []), t.name]);
+    }
   }
 
   // Profile links + photos for every player who appears anywhere in the response.
-  const linkIds = Array.from(new Set([...keptCareers, ...Object.values(records).flat().map((r) => careers.get(r.key)!)]
+  const seasonLeaderCareers = seasons.flatMap((x) => Object.values(x.leaders).flat()).map((l) => careers.get(l.key)!);
+  const linkIds = Array.from(new Set([...keptCareers, ...Object.values(records).flat().map((r) => careers.get(r.key)!), ...seasonLeaderCareers]
     .map((c) => (c as Acc).lastPlayer?.id).filter(Boolean) as string[]));
   const players = new Map<string, { slug: string | null; full_name: string | null; photo: string | null }>();
   for (let i = 0; i < linkIds.length; i += 300) {
@@ -325,8 +489,21 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
       const c = careers.get(r.key)!;
       r.name = c.name;
       r.href = c.href;
+      const comp = Array.from(compById.values()).find((c) => c.slug === r.competitionSlug);
+      const sides = comp ? sidesByGame.get(`${comp.league_id}:${r.gameKey}`) : undefined;
+      if (r.team && sides?.length === 2 && sides.includes(r.team)) r.opponent = sides.find((n) => n !== r.team) || null;
       const f = fixtures.get(r.gameKey);
-      if (f && r.team) r.opponent = f.home === r.team ? f.away : f.away === r.team ? f.home : null;
+      if (!r.opponent && f && r.team) r.opponent = f.home === r.team ? f.away : f.away === r.team ? f.home : null;
+    }
+  }
+
+  for (const x of seasons) {
+    for (const list of Object.values(x.leaders)) {
+      for (const l of list) {
+        const c = careers.get(l.key)!;
+        l.name = c.name;
+        l.href = c.href;
+      }
     }
   }
 
@@ -341,6 +518,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
       min: Math.round(c.min),
     })),
     records,
+    seasons,
   };
 }
 

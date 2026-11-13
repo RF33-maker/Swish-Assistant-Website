@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAskScope } from "@/components/ask-swish/AskSwishProvider";
 import { Helmet } from "react-helmet-async";
 import { gamePath, teamPath, teamSeoDescription, teamSeoTitle } from "@shared/seo";
-import { clubSlug } from "@shared/teamIdentity";
+import { clubDisplayName, clubSlug, isFormerName } from "@shared/teamIdentity";
 import { isFinishedCompetition, teamSeasonSummary } from "@shared/recaps";
 import EntityLink from "@/components/EntityLink";
 import { normalizeTeamName } from "@/lib/teamUtils";
@@ -1391,6 +1391,12 @@ export default function TeamProfile() {
   // and a plain-English line about the season — the same text the server
   // renders for this page (shared/recaps.ts).
   const teamDisplayName = teamPage?.name || team.name;
+  // A season played under an old name ("Manchester Giants", 2022-23) reads as it was, with
+  // today's club underneath; the page, its title and links stay today's club.
+  const seasonTeamName = pageCompetition?.teamName && isFormerName(pageCompetition.teamName)
+    ? clubDisplayName(pageCompetition.teamName)
+    : null;
+  const headingName = seasonTeamName || teamDisplayName;
   const scoredGames = team.games.filter((g) => g.opponentScore != null);
   // An older season reads in the past tense: "finished with", "led the team".
   const seasonFinished = isFinishedCompetition({
@@ -1401,7 +1407,7 @@ export default function TeamProfile() {
   });
   const seasonSummary = teamSeasonSummary({
     finished: seasonFinished,
-    team: teamDisplayName,
+    team: headingName,
     competition: team.league?.name || pageCompetition?.name,
     wins: team.wins,
     losses: team.losses,
@@ -1505,8 +1511,11 @@ export default function TeamProfile() {
                     </div>
                   )}
                   <h1 className="ch-display uppercase font-bold leading-[0.92] tracking-tight break-words text-[2rem] sm:text-[2.6rem] md:text-[3.4rem] mt-1">
-                    {teamDisplayName}
+                    {headingName}
                   </h1>
+                  {seasonTeamName && seasonTeamName !== teamDisplayName && (
+                    <div className="mt-1 text-sm font-semibold" style={{ opacity: 0.8 }}>Now {teamDisplayName}</div>
+                  )}
                   {seasonSummary && (
                     <p className="mt-2 max-w-2xl text-sm leading-relaxed" style={{ opacity: 0.85 }} data-testid="team-season-summary">
                       {seasonSummary}
