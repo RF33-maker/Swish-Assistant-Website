@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Download, ImagePlus, Loader2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -167,6 +167,67 @@ export function ColourField({
         )}
       </div>
     </Field>
+  );
+}
+
+/**
+ * "f97316" or "#F97316" -> "#f97316"; anything else -> null. Three-digit shorthand is left out on
+ * purpose: every six-digit code passes through three digits while it is being typed.
+ */
+export function parseHexColour(text: string): string | null {
+  const t = text.trim().replace(/^#/, "");
+  return /^[0-9a-f]{6}$/i.test(t) ? `#${t.toLowerCase()}` : null;
+}
+
+/**
+ * One colour, set two ways: the browser's colour picker (with its RGB sliders) or a typed hex code.
+ * The two stay in step; a half-typed code is left alone until it is a whole one.
+ */
+export function ColourHexInput({
+  value,
+  onChange,
+  label,
+  testId,
+}: {
+  value: string;
+  onChange: (hex: string) => void;
+  /** What the colour is for, read out by screen readers. */
+  label: string;
+  testId?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const invalid = parseHexColour(draft) === null;
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={parseHexColour(value) ?? "#f97316"}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-9 w-12 flex-none cursor-pointer rounded-lg border border-[color:var(--ch-border-strong)] bg-[color:var(--ch-surface)] p-0.5"
+        aria-label={`${label}: colour picker`}
+        data-testid={testId ? `${testId}-picker` : undefined}
+      />
+      <input
+        type="text"
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          const hex = parseHexColour(e.target.value);
+          if (hex) onChange(hex);
+        }}
+        onBlur={() => setDraft(value)}
+        maxLength={7}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoComplete="off"
+        placeholder="#f97316"
+        aria-label={`${label}: hex code`}
+        aria-invalid={invalid}
+        className={`${FIELD} !w-[6.5rem] flex-none font-mono text-[13px] uppercase ${invalid ? "!border-red-500/70" : ""}`}
+        data-testid={testId ? `${testId}-hex` : undefined}
+      />
+    </div>
   );
 }
 
