@@ -167,8 +167,8 @@ export default function SiteNav({
         "History",
         {
           extra: (
-            <span className="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-neutral-800 dark:text-neutral-400">
-              Soon
+            <span className="whitespace-nowrap rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+              New
             </span>
           ),
         },

@@ -4,8 +4,8 @@ import SectionHeader from "@/components/home/SectionHeader";
 import { Reveal } from "@/components/home/motion";
 
 /**
- * Homepage teaser for the British basketball history archive. A placeholder
- * until the archive itself ships; it points at /british-basketball-history.
+ * Homepage link to the British basketball history page (/british-basketball-history):
+ * season leaders, single-game records and career boards for every league on file.
  */
 export default function HistoryComingSoon() {
   return (
@@ -13,9 +13,9 @@ export default function HistoryComingSoon() {
       <div className="max-w-7xl mx-auto px-5 md:px-8">
         <SectionHeader
           id="history-heading"
-          eyebrow="Coming soon"
+          eyebrow="History"
           title="British basketball history"
-          description="British basketball history is important. It is coming soon to Swish Assistant so it is never lost."
+          description="Every season on file, league by league, so British basketball history is never lost."
         />
         <Reveal>
           <Link
@@ -27,10 +27,10 @@ export default function HistoryComingSoon() {
               <Landmark className="h-5 w-5" aria-hidden="true" />
             </span>
             <span className="flex-1 text-sm md:text-[15px] text-[color:var(--ch-text-2)]">
-              Seasons, players and careers from across the British game, kept in one place.
+              Each season's leaders, the best single games and whole careers added up, from the WBBL in 2014/15 to today.
             </span>
             <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[color:var(--ch-accent)]">
-              Find out more
+              Explore
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
             </span>
           </Link>

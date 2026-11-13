@@ -13,7 +13,52 @@ const ALIASES: Record<string, string> = {
   diawysctempo: "diawysc",
 };
 
+/**
+ * Old names of today's clubs, as the feed spelt them in those seasons. The stored rows keep the
+ * old name (a 2019 box score still reads "Glasgow Rocks"), but the club's page, records and
+ * history group them under today's side. Matched on the whole name, not the normalised key,
+ * so "Sheffield Sharks" (the BBL side in 2015-16) joins B. Braun Sheffield Sharks while NBL's
+ * "Sheffield Sharks Senior Men" stays its own side; and a women's competition's side is named
+ * "... Women" (sideName), so none of these reach the women's teams.
+ */
+const FORMER_NAMES: Array<[stored: string, today: string]> = [
+  ["Glasgow Rocks", "caledoniagladiators"],
+  ["Radisson Red Glasgow Rocks", "caledoniagladiators"],
+  ["Glen Luss Glasgow Rocks", "caledoniagladiators"],
+  ["Surrey Scorchers", "surrey89ers"],
+  ["Manchester Giants", "manchesterbasketball"],
+  ["Esh Group Eagles Newcastle", "newcastleeagles"],
+  ["Seriös Group Newcastle Eagles", "newcastleeagles"],
+  ["DBL Sharks Sheffield", "bbraunsheffieldsharks"],
+  ["Sheffield Sharks", "bbraunsheffieldsharks"],
+  ["Plymouth University Raiders", "plymouthraiders"],
+];
+
+function formerNameKey(name: string): string {
+  return (name || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const FORMER_KEY = new Map(FORMER_NAMES.map(([stored, today]) => [formerNameKey(stored), today]));
+
+/** True for a club's old name (see FORMER_NAMES): grouped with today's side, never its page title. */
+export function isFormerName(name: string): boolean {
+  return FORMER_KEY.has(formerNameKey(name));
+}
+
+/** The old names that group with this club side, spelt as stored ("Glasgow Rocks" for Caledonia Gladiators). */
+export function formerNamesOf(name: string): string[] {
+  const key = identityKey(name);
+  return FORMER_NAMES.filter(([, today]) => today === key).map(([stored]) => stored);
+}
+
 export function identityKey(name: string): string {
+  const former = FORMER_KEY.get(formerNameKey(name));
+  if (former) return former;
   const normalized = (name || "")
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")

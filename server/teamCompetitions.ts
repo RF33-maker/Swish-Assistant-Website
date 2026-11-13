@@ -2,6 +2,7 @@ import { supabaseAdmin } from "./supabaseServiceClient";
 import { isSameTeam } from "./teamIdentityService";
 import { getLeagueSides } from "./teamSides";
 import { clubSearchCore } from "@shared/clubLeagues";
+import { formerNamesOf } from "@shared/teamIdentity";
 
 // Every competition one club has played in, with its record and game-level
 // team totals in each. Each competition gives the club its own team_id (and
@@ -70,10 +71,13 @@ export async function getTeamCompetitions(teamName: string, competitionSlug?: st
 
   // Only rows already public at row level (the same rule anon RLS applies),
   // so a private competition shows up only for data its owner has published.
+  // The club's old names too ("Glasgow Rocks" for Caledonia Gladiators): the rows keep the name
+  // they were played under, and the identity check below groups them with today's side.
+  const patterns = [core, ...formerNamesOf(wantedSide).map(clubSearchCore)].filter((p) => p.length >= 3);
   const { data: ownRows, error } = await supabaseAdmin
     .from("team_stats")
     .select(TEAM_STAT_COLUMNS)
-    .ilike("name", `%${core}%`)
+    .or(patterns.map((p) => `name.ilike.*${p.replace(/[(),"*]/g, "")}*`).join(","))
     .eq("is_public", true)
     .not("game_key", "is", null)
     .limit(2000);

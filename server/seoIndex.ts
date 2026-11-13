@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { SITE_BASE, isPlaceholderTeamName } from "@shared/seo";
-import { clubDisplayName, clubSlug, teamClubKey } from "@shared/teamIdentity";
+import { clubDisplayName, clubSlug, isFormerName, teamClubKey } from "@shared/teamIdentity";
 import { isUnder18, isYouthCompetition } from "@shared/youth";
 import { getLeagueSides } from "./teamSides";
 
@@ -275,7 +275,9 @@ async function buildSeoIndex(): Promise<SeoIndex> {
   }
   const draftClubs = Array.from(groups.entries()).map(([clubKey, members]) => {
     const adult = members.filter((m) => !m.youth);
-    const pool = adult.length ? adult : members;
+    // A club's old names (Glasgow Rocks, Surrey Scorchers) never title today's page.
+    const current = adult.filter((m) => !isFormerName(m.name));
+    const pool = current.length ? current : adult.length ? adult : members;
     // The most-used name across the side's competitions, without NBL's suffixes.
     const best = [...pool].sort((a, b) => b.rows - a.rows || a.name.localeCompare(b.name))[0];
     return {
@@ -292,7 +294,7 @@ async function buildSeoIndex(): Promise<SeoIndex> {
           leagueIds: leagueIdsBySlug.get(m.competitionSlug) || [],
         }))
         .sort((a, b) => String(b.lastmod || "").localeCompare(String(a.lastmod || ""))),
-      lastmod: pool.reduce<string | null>((acc, m) => later(acc, m.lastmod), null),
+      lastmod: (adult.length ? adult : members).reduce<string | null>((acc, m) => later(acc, m.lastmod), null),
       youth: adult.length === 0,
       rows: members.reduce((n, m) => n + m.rows, 0),
     };
