@@ -5,6 +5,7 @@ import { PlayerPhotoControl } from "@/components/social/PlayerPhotoControl";
 import {
   BTN_GHOST,
   ColourField,
+  ColourHexInput,
   CompetitionField,
   ERROR,
   FIELD,
@@ -20,13 +21,14 @@ import {
   type CompetitionOption,
 } from "@/components/social/studioUi";
 import CardStylePicker, { useCardStyle } from "@/components/social/CardStylePicker";
-import { usesLeagueColour } from "@/lib/cardStyle";
+import { cleanTeamLabel, usesLeagueColour } from "@/lib/cardStyle";
 import { photoChangeLendsTo, usePlayerPhotoChange } from "@/lib/playerPhotos";
 import { supabase } from "@/lib/supabase";
 import { useCompetitionCardBrand } from "@/hooks/useCompetitionCardBrand";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { canvasToBlob, DEFAULT_FRAMING, ensureDisplayFont, type PhotoFraming } from "@/lib/generateWeeklyCards";
 import { renderLeadersCard } from "@/lib/generateLeadersCards";
+import { renderTeamLeadersDesign, teamCardColour, TEAM_LEADERS_DESIGNS, type TeamLeadersDesign } from "@/lib/generateTeamLeadersDesigns";
 import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import type { LeadersResponse } from "@/types/leaders";
 
@@ -35,6 +37,36 @@ const SLUG_KEY = "weekly-awards-slug";
 
 function stripSeason(name: string): string {
   return name.replace(/\s*\(?\d{4}\s*[-/–]\s*\d{2,4}\)?\s*$/, "").trim();
+}
+
+// Team leaders: the two poster designs, or the shared Swish Social look ("classic") with its styles.
+type TeamDesign = TeamLeadersDesign | "classic";
+const DESIGN_KEY = "team-leaders-design";
+const TEAM_DESIGNS: { id: TeamDesign; label: string; hint: string }[] = [
+  ...TEAM_LEADERS_DESIGNS,
+  { id: "classic", label: "Classic", hint: "The shared Swish Social look, in the style and colour chosen below" },
+];
+
+function readStoredDesign(): TeamDesign {
+  try {
+    const stored = localStorage.getItem(DESIGN_KEY);
+    return TEAM_DESIGNS.find((d) => d.id === stored)?.id ?? "print";
+  } catch {
+    return "print";
+  }
+}
+
+// Cards: a colour picked by hand for a club's card, remembered per club so it carries across categories and weeks.
+const CARD_COLOURS_KEY = "team-leaders-card-colours";
+const clubKey = (name: string) => cleanTeamLabel(name).toLowerCase();
+
+function readCardColours(): Record<string, string> {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CARD_COLOURS_KEY) || "{}");
+    return stored && typeof stored === "object" ? (stored as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
 }
 
 const ATTEMPT_LABEL: Record<string, string> = { "FG%": "FGA", "3P%": "3PA", "FT%": "FTA" };
@@ -52,7 +84,7 @@ function fmtShift(v: number): string {
   return n > 0 ? `+${n}%` : `${n}%`;
 }
 
-/** Player / Team league leaders: the top five in a category, led by the #1 player's photo or the #1 club's crest. */
+/** Player / Team league leaders: the top five in a category, led by the #1 player's photo or the #1 club's logo. */
 export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   const initialSlug = new URLSearchParams(window.location.search).get("slug") || readStoredCompetition(SLUG_KEY) || DEFAULT_SLUG;
 
@@ -60,6 +92,32 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   const [slug, setSlug] = useState(initialSlug);
   const [category, setCategory] = useState("pts");
   const [style, setStyle] = useCardStyle();
+  const [teamDesign, setTeamDesign] = useState<TeamDesign>(readStoredDesign);
+  // The poster designs are for the team card only; the player card is always the shared look.
+  const design: TeamDesign = kind === "team" ? teamDesign : "classic";
+  const [cardColours, setCardColours] = useState<Record<string, string>>(readCardColours);
+  const [logoColours, setLogoColours] = useState<string[]>([]);
+  const setCardColour = (name: string, hex: string | null) => {
+    setCardColours((prev) => {
+      const next = { ...prev };
+      if (hex) next[clubKey(name)] = hex;
+      else delete next[clubKey(name)];
+      try {
+        localStorage.setItem(CARD_COLOURS_KEY, JSON.stringify(next));
+      } catch {
+        // remembering the colour is a convenience only
+      }
+      return next;
+    });
+  };
+  const chooseDesign = (next: TeamDesign) => {
+    setTeamDesign(next);
+    try {
+      localStorage.setItem(DESIGN_KEY, next);
+    } catch {
+      // remembering the design is a convenience only
+    }
+  };
   const [minGamesText, setMinGamesText] = useState("");
   const [data, setData] = useState<LeadersResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -133,6 +191,20 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
     };
   }, [data]);
 
+  // Cards: what each club's card would be without a pick, so its picker starts on the colour the card is showing.
+  useEffect(() => {
+    let cancelled = false;
+    setLogoColours([]);
+    if (design !== "cards" || !data) return;
+    void Promise.all(data.leaders.map((_, i) => teamCardColour(teamLogoUrls[i]))).then((colours) => !cancelled && setLogoColours(colours));
+    return () => {
+      cancelled = true;
+    };
+  }, [design, data, teamLogoUrls]);
+
+  // The picked colours for the clubs on this card, in card order; a joined string so the card only redraws when one changes.
+  const pickedColours = (data?.leaders ?? []).map((l) => cardColours[clubKey(l.name)] ?? "").join(",");
+
   const brand = useMemo(
     () => ({ leagueName: subtitle || data?.league.name || "", leagueLogoUrl, primaryHex }),
     [subtitle, data, leagueLogoUrl, primaryHex],
@@ -163,7 +235,8 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
   const renderToken = useRef(0);
   const [rendering, setRendering] = useState(false);
   const [hasCard, setHasCard] = useState(false);
-  const fileName = `${kind}-leaders-${category}-${slug}${style === "league" ? "" : `-${style}`}.png`;
+  const look = design === "classic" ? (style === "league" ? "" : `-${style}`) : `-${design}`;
+  const fileName = `${kind}-leaders-${category}-${slug}${look}.png`;
 
   useEffect(() => {
     const token = ++renderToken.current;
@@ -176,7 +249,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
     }
     setRendering(true);
     setShareFile(null);
-    void renderLeadersCard({
+    const card = {
       kind,
       style,
       categoryTitle: data.category.title,
@@ -186,7 +259,9 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
       teamLogoUrls,
       framing: leaderFraming,
       footnote: footnoteFor(data),
-    })
+    };
+    const teamColours = pickedColours.split(",").map((c) => c || null);
+    void (design === "classic" ? renderLeadersCard(card) : renderTeamLeadersDesign(design, card, { teamColours }))
       .then((canvas) => {
         if (token !== renderToken.current) return;
         canvas.style.cssText = "display:block;width:100%;height:auto;";
@@ -202,7 +277,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, style, data, brand, teamLogoUrls, leaderFraming, fileName]);
+  }, [kind, style, design, data, brand, teamLogoUrls, leaderFraming, fileName, pickedColours]);
 
   const download = async () => {
     const canvas = cardCanvasRef.current;
@@ -242,7 +317,7 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
         description={
           kind === "player"
             ? "The top five players in a category, led by the leader's photo."
-            : "The top five teams in a category, led by the leader's club crest."
+            : "The top five teams in a category, built round the clubs' logos."
         }
         className="order-2 lg:order-1"
         bodyClassName="space-y-4"
@@ -283,9 +358,72 @@ export default function LeadersStudio({ kind }: { kind: "player" | "team" }) {
           <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} className={FIELD} />
         </Field>
 
-        <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />
+        {kind === "team" && (
+          <Field label="Design" hint={`${TEAM_DESIGNS.find((d) => d.id === design)?.hint}.`}>
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Design">
+              {TEAM_DESIGNS.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={design === d.id}
+                  data-active={design === d.id}
+                  onClick={() => chooseDesign(d.id)}
+                  className="ch-chip px-3 py-2 text-sm"
+                  data-testid={`design-${d.id}`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
 
-        {usesLeagueColour(style) && <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />}
+        {design === "cards" && data && data.leaders.length > 0 && (
+          <Field
+            label="Card colours"
+            hint="Each card takes its colour from the club's logo. Pick another with the colour picker or type a hex code; it is remembered for that club in this browser."
+          >
+            <div className="space-y-2">
+              {data.leaders.slice(0, 5).map((l, i) => {
+                const picked = cardColours[clubKey(l.name)];
+                const label = cleanTeamLabel(l.name);
+                return (
+                  <div key={l.id} className="flex items-center gap-2" data-testid={`card-colour-row-${i + 1}`}>
+                    <span className="w-4 flex-none text-right text-xs font-semibold tabular-nums text-[color:var(--ch-text-2)]">{l.rank}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[color:var(--ch-text)]" title={label}>
+                      {label}
+                    </span>
+                    <ColourHexInput
+                      value={picked ?? logoColours[i] ?? "#2b3040"}
+                      onChange={(hex) => setCardColour(l.name, hex)}
+                      label={`${label} card colour`}
+                      testId={`card-colour-${i + 1}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCardColour(l.name, null)}
+                      disabled={!picked}
+                      title="Back to the colour from the club's logo"
+                      aria-label={`Reset ${label} card colour`}
+                      className={`${BTN_GHOST} flex-none !px-2 disabled:opacity-30`}
+                      data-testid={`card-colour-${i + 1}-reset`}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </Field>
+        )}
+
+        {/* The poster designs bring their own colours, so the style and colour only apply to the shared look. */}
+        {design === "classic" && <CardStylePicker value={style} onChange={setStyle} primaryHex={primaryHex} />}
+
+        {design === "classic" && usesLeagueColour(style) && (
+          <ColourField value={primaryHex} custom={!!colorOverride} onChange={updateColour} onReset={resetColour} />
+        )}
 
         {error && <p className={ERROR}>{error}</p>}
       </Panel>

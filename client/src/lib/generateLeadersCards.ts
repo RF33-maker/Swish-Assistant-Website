@@ -1,8 +1,12 @@
 /**
  * Player / Team league leaders cards (1080×1350), drawn on a canvas in the shared
- * Swish Social look (see cardStyle.ts). The #1 player's photo (or the #1 club's
- * crest) is the hero and dissolves into the card instead of sitting in a box; the
- * rest of the top five is listed underneath.
+ * Swish Social look (see cardStyle.ts).
+ *
+ * Player leaders: the #1 player's photo is the hero and dissolves into the card instead
+ * of sitting in a box; the rest of the top five is listed underneath.
+ *
+ * Team leaders: the clubs' logos carry the card. The #1 club's logo stands large beside
+ * its number, and the other four sit side by side under it, each as big as its column allows.
  */
 
 import swishLogoSrc from "@/assets/Swish Assistant Logo.png";
@@ -15,6 +19,7 @@ import {
   drawCrest,
   drawGlow,
   drawHeader,
+  drawLogoMark,
   drawRingedCrest,
   drawSpaced,
   drawTag,
@@ -69,6 +74,13 @@ const HERO_BOTTOM = 812;
 const HERO_TEXT_X = 590;
 const LIST_TOP = 834;
 const ROW_H = 89;
+
+/** Where the #1's name and number sit, top to bottom. */
+type HeroZone = { top: number; bottom: number };
+const PLAYER_HERO: HeroZone = { top: HERO_TOP, bottom: HERO_BOTTOM };
+/** The team card gives its hero a little less height, so the logos under it get more. */
+const TEAM_HERO: HeroZone = { top: 244, bottom: 720 };
+const STRIP_TOP = 740;
 
 /**
  * The leader's photo, worked into the card (see meltPhoto): it runs off the left of the
@@ -145,26 +157,28 @@ function drawHeroText(
   unit: string,
   clubLogo: HTMLImageElement | null,
   theme: Theme,
+  zone: HeroZone,
 ) {
   const x = HERO_TEXT_X;
   const maxW = CARD_W - SIDE - x;
+  const zoneH = zone.bottom - zone.top;
   const games = `${leader.games} ${leader.games === 1 ? "GAME" : "GAMES"}`;
 
   // The rank, ghosted large behind the block.
   ctx.save();
-  setFont(ctx, { size: 640, weight: 700 });
+  setFont(ctx, { size: Math.round((zoneH * 10) / 9), weight: 700 });
   ctx.textAlign = "right";
   ctx.textBaseline = "alphabetic";
   ctx.lineWidth = 3;
   ctx.strokeStyle = "rgba(255,255,255,0.13)";
-  ctx.strokeText(String(leader.rank), CARD_W - 6, HERO_BOTTOM - 62);
+  ctx.strokeText(String(leader.rank), CARD_W - 6, zone.bottom - Math.round(zoneH * 0.108));
   ctx.restore();
 
   const [given, family] = kind === "player" ? splitName(leader.name) : ["", ""];
   const name =
     kind === "player"
       ? fitLines(ctx, family, maxW, 122, 30, 700)
-      : fitLines(ctx, cleanTeamLabel(leader.name).toUpperCase(), maxW, 96, 30, 700);
+      : fitLines(ctx, cleanTeamLabel(leader.name).toUpperCase(), maxW, 84, 30, 700);
   const nameCap = capHeight(ctx, { size: name.size, weight: 700 });
   const nameGap = Math.round(name.size * 0.3);
   // The given name stays clearly the smaller line, even when a long surname has had to shrink.
@@ -174,14 +188,14 @@ function drawHeroText(
   const unitOpts: TextOpts = { size: 46, weight: 600, color: theme.accent };
   setFont(ctx, unitOpts);
   const unitW = ctx.measureText(unit).width;
-  const valueSize = fitSize(ctx, leader.display, maxW - unitW - 18, 204, 96, 700);
+  const valueSize = fitSize(ctx, leader.display, maxW - unitW - 18, kind === "player" ? 204 : 176, 96, 700);
   const valueCap = capHeight(ctx, { size: valueSize, weight: 700 });
 
   const club = kind === "player" ? cleanTeamLabel(leader.team_name).toUpperCase() : "";
   const metaH = kind === "player" ? 46 : 20;
   const blockH =
     40 + 30 + (given ? givenCap + 16 : 0) + name.lines.length * nameCap + (name.lines.length - 1) * nameGap + 26 + metaH + 36 + valueCap;
-  let y = Math.round(HERO_TOP + (HERO_BOTTOM - HERO_TOP - blockH) / 2);
+  let y = Math.round(zone.top + (zoneH - blockH) / 2);
 
   y += drawTag(ctx, "LEAGUE LEADER", x, y, theme) + 30;
 
@@ -278,6 +292,61 @@ function drawRows(
   });
 }
 
+/**
+ * Team leaders, ranks 2–5: one column each, side by side, so every club's logo gets a column's
+ * width instead of a slot at the start of a row. Rank, logo, number, then the club's name.
+ */
+function drawLogoStrip(ctx: CanvasRenderingContext2D, rest: Leader[], logos: (HTMLImageElement | null)[], theme: Theme) {
+  if (rest.length === 0) return;
+  const left = SIDE;
+  const right = CARD_W - SIDE;
+  const colW = Math.min(300, (right - left) / rest.length);
+  const x0 = (CARD_W - colW * rest.length) / 2;
+  const bottom = CARD_H - 150;
+
+  // The rule over the strip, tailing off at both ends.
+  const rule = ctx.createLinearGradient(left, 0, right, 0);
+  rule.addColorStop(0, "rgba(255,255,255,0)");
+  rule.addColorStop(0.08, "rgba(255,255,255,0.2)");
+  rule.addColorStop(0.92, "rgba(255,255,255,0.2)");
+  rule.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = rule;
+  ctx.fillRect(left, STRIP_TOP, right - left, 1.5);
+
+  rest.forEach((leader, i) => {
+    const cx = x0 + colW * i + colW / 2;
+    const textW = colW - 30;
+
+    if (i > 0) {
+      const divider = ctx.createLinearGradient(0, STRIP_TOP + 30, 0, bottom);
+      divider.addColorStop(0, "rgba(255,255,255,0)");
+      divider.addColorStop(0.2, "rgba(255,255,255,0.16)");
+      divider.addColorStop(0.8, "rgba(255,255,255,0.16)");
+      divider.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = divider;
+      ctx.fillRect(x0 + colW * i, STRIP_TOP + 30, 1.5, bottom - STRIP_TOP - 30);
+    }
+
+    let y = STRIP_TOP + 24;
+    y += drawTextTop(ctx, String(leader.rank), cx, y, { size: 42, weight: 700, color: theme.rank, align: "center" }) + 16;
+
+    const label = cleanTeamLabel(leader.name);
+    const logoH = 192;
+    drawLogoMark(ctx, cx, y + logoH / 2, colW - 34, logoH, logos[i], initialsOf(label), theme);
+    y += logoH + 24;
+
+    // Narrower than the name's room, so "45.6%" in one column never crowds the next.
+    const valueSize = fitSize(ctx, leader.display, colW - 56, 74, 40, 700);
+    y += drawTextTop(ctx, leader.display, cx, y, { size: valueSize, weight: 700, align: "center" }) + 20;
+
+    const name = fitLines(ctx, label, textW, 30, 18, 500);
+    name.lines.forEach((line) => {
+      y += drawTextTop(ctx, line, cx, y, { size: name.size, weight: 500, align: "center" }) + 10;
+    });
+    drawTextTop(ctx, `${leader.games} GP`, cx, y + 3, { size: 20, alpha: 0.66, align: "center" });
+  });
+}
+
 export async function renderLeadersCard(opts: LeadersCardOptions): Promise<HTMLCanvasElement> {
   const { kind, style = "league", categoryTitle, unit, leaders, brand, teamLogoUrls = [], framing = DEFAULT_FRAMING, footnote } = opts;
   await ensureDisplayFont();
@@ -299,22 +368,27 @@ export async function renderLeadersCard(opts: LeadersCardOptions): Promise<HTMLC
 
   // In the court style the leader stands in the paint: the key frames the hero art and its
   // free-throw line sits on the list's top rule.
-  drawBackdrop(ctx, theme, leagueLogo, { x: 340, y: LIST_TOP - 580 });
+  const zone = kind === "team" ? TEAM_HERO : PLAYER_HERO;
+  drawBackdrop(ctx, theme, leagueLogo, { x: 340, y: (kind === "team" ? STRIP_TOP : LIST_TOP) - 580 });
 
-  // ── hero art: the #1 player's photo, else a crest (their club's, or the #1 club's) ──
+  // ── hero art: the #1 club's logo, standing free; or the #1 player's photo, else their club's crest ──
   if (hero && kind === "player" && heroPhoto) {
     drawGlow(ctx, 300, 520, 560, theme.accent, theme.glow);
     drawHeroPhoto(ctx, heroPhoto, hero.photoFocusY ?? 30, framing, theme);
     drawTextShade(ctx);
+  } else if (hero && kind === "team") {
+    const cy = (zone.top + zone.bottom) / 2 + 4;
+    drawGlow(ctx, 296, cy, 430, "#ffffff", 0.2);
+    drawLogoMark(ctx, 296, cy, 468, 400, clubLogos[0] ?? null, initialsOf(cleanTeamLabel(hero.name)), theme);
   } else if (hero) {
-    const label = kind === "team" ? cleanTeamLabel(hero.name) : hero.name;
-    drawRingedCrest(ctx, 300, (HERO_TOP + HERO_BOTTOM) / 2 + 4, 178, clubLogos[0] ?? null, initialsOf(label), theme);
+    drawRingedCrest(ctx, 300, (HERO_TOP + HERO_BOTTOM) / 2 + 4, 178, clubLogos[0] ?? null, initialsOf(hero.name), theme);
   }
   drawVignette(ctx, theme);
 
   drawHeader(ctx, kind === "player" ? "PLAYER LEADERS" : "TEAM LEADERS", categoryTitle, brand.leagueName, theme);
-  if (hero) drawHeroText(ctx, kind, hero, unit, clubLogos[0] ?? null, theme);
-  drawRows(ctx, kind, top.slice(1), clubLogos.slice(1), theme);
+  if (hero) drawHeroText(ctx, kind, hero, unit, clubLogos[0] ?? null, theme, zone);
+  if (kind === "team") drawLogoStrip(ctx, top.slice(1), clubLogos.slice(1), theme);
+  else drawRows(ctx, kind, top.slice(1), clubLogos.slice(1), theme);
 
   drawFooter(ctx, [logo, "statsthread", leagueLogo], [brand.leagueName, footnote].filter(Boolean).join("  ·  "));
   return canvas;

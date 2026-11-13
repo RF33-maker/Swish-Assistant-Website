@@ -744,6 +744,123 @@ export function drawCrest(
   }
 }
 
+export type LogoRead = {
+  /** The part of the file that is actually drawn on, as fractions of its width and height. */
+  x: number; y: number; w: number; h: number;
+  /** No transparency to speak of: the logo comes on its own background. */
+  boxed: boolean;
+  /** Share of the logo that is near-black, which a dark card would swallow. */
+  dark: number;
+};
+
+const logoReads = new WeakMap<HTMLImageElement, LogoRead>();
+
+/** Where a logo's artwork sits inside its file (most carry empty padding) and how dark it is. */
+export function readLogo(img: HTMLImageElement): LogoRead {
+  const known = logoReads.get(img);
+  if (known) return known;
+  let read: LogoRead = { x: 0, y: 0, w: 1, h: 1, boxed: false, dark: 0 };
+  try {
+    const size = 128;
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const cx = c.getContext("2d", { willReadFrequently: true })!;
+    cx.drawImage(img, 0, 0, size, size);
+    const { data } = cx.getImageData(0, 0, size, size);
+    let x0 = size, y0 = size, x1 = -1, y1 = -1, solid = 0, dark = 0;
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const i = (y * size + x) * 4;
+        if (data[i + 3] < 40) continue;
+        solid += 1;
+        if (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2] < 62) dark += 1;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+    if (solid > 0) {
+      read = {
+        x: x0 / size, y: y0 / size, w: (x1 - x0 + 1) / size, h: (y1 - y0 + 1) / size,
+        boxed: solid >= size * size * 0.97,
+        dark: dark / solid,
+      };
+    }
+  } catch {
+    // a logo the canvas can't read back: draw the whole file as it comes
+  }
+  logoReads.set(img, read);
+  return read;
+}
+
+/**
+ * A club logo standing on the card by itself, as large as the given box allows: no disc, the
+ * file's empty padding ignored, and a light halo that follows the logo's own outline, stronger
+ * for a dark logo so it still reads low on the card. A logo that comes on its own background
+ * keeps it, with the corners rounded. Without a logo, the club's initials on a dark disc.
+ */
+export function drawLogoMark(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, maxW: number, maxH: number,
+  logo: HTMLImageElement | null,
+  fallback: string,
+  theme: Theme,
+) {
+  if (!logo) {
+    drawCrest(ctx, cx, cy, Math.min(maxW, maxH) * 0.4, null, fallback, theme);
+    return;
+  }
+  const read = readLogo(logo);
+  const sx = logo.naturalWidth * read.x;
+  const sy = logo.naturalHeight * read.y;
+  const sw = logo.naturalWidth * read.w;
+  const sh = logo.naturalHeight * read.h;
+  const scale = Math.min(maxW / sw, maxH / sh);
+  const dw = sw * scale;
+  const dh = sh * scale;
+  const dx = cx - dw / 2;
+  const dy = cy - dh / 2;
+  const span = Math.max(dw, dh);
+
+  ctx.save();
+  // Many stored logos are small files, so they are often drawn above their own size.
+  ctx.imageSmoothingQuality = "high";
+  if (read.boxed) {
+    const r = Math.min(dw, dh) * 0.1;
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = span * 0.12;
+    ctx.shadowOffsetY = span * 0.03;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.roundRect(dx, dy, dw, dh, r);
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.clip();
+    ctx.drawImage(logo, sx, sy, sw, sh, dx, dy, dw, dh);
+    ctx.restore();
+    return;
+  }
+
+  // The halo is the logo's own shadow, cast in white: the logo is drawn off the card and only its
+  // shadow lands here, so the light hugs the outline instead of sitting behind it as a shape.
+  const away = CARD_W * 4;
+  const need = Math.max(0, Math.min(1, (read.dark - 0.18) / 0.35));
+  ctx.shadowOffsetX = away;
+  ctx.shadowColor = `rgba(255,255,255,${0.2 + need * 0.25})`;
+  ctx.shadowBlur = span * 0.2;
+  ctx.drawImage(logo, sx, sy, sw, sh, dx - away, dy, dw, dh);
+  if (need > 0) {
+    ctx.shadowColor = `rgba(255,255,255,${0.55 + need * 0.4})`;
+    ctx.shadowBlur = Math.max(5, span * 0.035);
+    for (let i = 0; i < 3; i += 1) ctx.drawImage(logo, sx, sy, sw, sh, dx - away, dy, dw, dh);
+  }
+  ctx.shadowColor = "transparent";
+  ctx.drawImage(logo, sx, sy, sw, sh, dx, dy, dw, dh);
+  ctx.restore();
+}
+
 /** A crest as artwork in its own right: the disc, brand rings round it, and a soft halo behind. */
 export function drawRingedCrest(
   ctx: CanvasRenderingContext2D,
