@@ -311,6 +311,7 @@ export default function BritishBasketballHistoryPage() {
             <>
               <RecordsStrip data={data} gender={league.gender} />
 
+              {(data.seasons?.length ?? 0) > 0 && (
               <section className="mt-12" aria-labelledby="seasons-heading">
                 <div className="flex flex-wrap items-end justify-between gap-3 pb-2 border-b border-[color:var(--ch-border-strong)]">
                   <div>
@@ -321,10 +322,11 @@ export default function BritishBasketballHistoryPage() {
                     {allStats ? "Points, rebounds, assists" : "Add steals, blocks, threes"}
                   </button>
                 </div>
-                {(data.seasons || []).map((season) => (
+                {data.seasons.map((season) => (
                   <SeasonRow key={season.season} season={season} gender={league.gender} stats={shownStats} />
                 ))}
               </section>
+              )}
             </>
           )}
         </section>
