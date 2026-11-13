@@ -11,8 +11,19 @@ import { prefersReducedMotion } from "@/components/home/motion";
 export type NavSection = { id: string; label: string };
 export type NavLeague = { id: string; short: string; name: string; logo?: string };
 
-/** Space the bar takes when stuck, so a section jumped to isn't hidden under it. */
+/** Space the bar takes when stuck, if it can't be measured. */
 export const NAV_OFFSET = 80;
+
+/**
+ * How far down the page a section has to sit to clear the stuck bar: the bar's sticky top
+ * (0 on the website, below the status bar in the iOS app) plus its height, plus a gap.
+ */
+export function navOffset(): number {
+  const bar = typeof document !== "undefined" ? document.querySelector<HTMLElement>("[data-history-nav]") : null;
+  if (!bar) return NAV_OFFSET;
+  const top = parseFloat(getComputedStyle(bar).top) || 0;
+  return top + bar.offsetHeight + 16;
+}
 
 /** The section being read: the last one whose top has passed under the bar. */
 export function useActiveSection(ids: string[]): string | null {
@@ -23,9 +34,10 @@ export function useActiveSection(ids: string[]): string | null {
     const measure = () => {
       frame = 0;
       let current: string | null = null;
+      const offset = navOffset();
       for (const id of ids) {
         const el = document.getElementById(id);
-        if (el && el.getBoundingClientRect().top - NAV_OFFSET - 24 <= 0) current = id;
+        if (el && el.getBoundingClientRect().top - offset - 24 <= 0) current = id;
       }
       // At the foot of the page the last section can be too short to reach the bar.
       const atEnd = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
@@ -52,7 +64,7 @@ export function useActiveSection(ids: string[]): string | null {
 export function scrollToSection(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
-  const top = el.getBoundingClientRect().top + window.scrollY - NAV_OFFSET + 8;
+  const top = el.getBoundingClientRect().top + window.scrollY - navOffset();
   window.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion() ? "auto" : "smooth" });
   try {
     const url = new URL(window.location.href);
@@ -170,7 +182,7 @@ export default function HistoryNav({
       <div ref={sentinel} aria-hidden className={`h-px ${className}`} />
       {/* Below lg the site's floating menu button sits top right, so the bar stops short of
           it and lines its links up with the button's middle. */}
-      <div className={`sticky top-0 z-30 -mx-4 md:-mx-6 pl-4 pr-[68px] md:pl-6 lg:px-6 transition-[background-color,box-shadow] duration-200 ${stuck ? "ch-glass shadow-[0_1px_0_var(--ch-border-strong)]" : "shadow-[0_1px_0_var(--ch-border)]"}`}>
+      <div data-history-nav className={`sticky top-0 z-30 -mx-4 md:-mx-6 pl-4 pr-[68px] md:pl-6 lg:px-6 transition-[background-color,box-shadow] duration-200 ${stuck ? "ch-glass shadow-[0_1px_0_var(--ch-border-strong)]" : "shadow-[0_1px_0_var(--ch-border)]"}`}>
         <div className="flex h-16 pt-3 pb-2 lg:h-14 lg:py-0 items-center gap-3">
           {stuck && <LeagueMenu leagues={leagues} activeId={activeLeague} onPick={onPickLeague} />}
           <nav aria-label="On this page" className="min-w-0 flex-1">

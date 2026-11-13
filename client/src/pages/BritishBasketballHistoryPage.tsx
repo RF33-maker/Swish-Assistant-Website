@@ -4,7 +4,7 @@ import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import AllTimeLeaders from "@/components/league/AllTimeLeaders";
 import { Reveal, prefersReducedMotion } from "@/components/home/motion";
 import CareerLadders from "@/components/history/CareerLadders";
-import HistoryNav, { NAV_OFFSET, scrollToSection, type NavSection } from "@/components/history/HistoryNav";
+import HistoryNav, { navOffset, scrollToSection, type NavSection } from "@/components/history/HistoryNav";
 import LeagueTrends from "@/components/history/LeagueTrends";
 import QuickLook from "@/components/history/QuickLook";
 import RecordBoard from "@/components/history/RecordBoard";
@@ -191,7 +191,7 @@ export default function BritishBasketballHistoryPage() {
     // the reader has started scrolling in the meantime.
     const jump = () => {
       const el = document.getElementById(id);
-      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - NAV_OFFSET + 8 });
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - navOffset() });
       return window.scrollY;
     };
     let landed = -1;
