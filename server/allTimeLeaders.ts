@@ -13,13 +13,25 @@
  * A player is grouped across seasons by their identity group when they have one,
  * otherwise by name (the same way profiles join a career together). "League only"
  * leaves out cups, trophies, shields and play-offs.
+ *
+ * A build reads every box-score row the brand has ever had (about 6 seconds for
+ * Super League Basketball), so finished boards are stored in all_time_snapshots:
+ * built the first time anyone asks, rebuilt each night (GET /api/cron/all-time),
+ * and rebuilt straight away when an admin links or unlinks players.
  */
 
 import type { Express, Request, Response } from "express";
+import { timingSafeEqual } from "crypto";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { playerPath } from "../shared/seo";
 
-const CACHE_MS = 60 * 60 * 1000;
+/** How long one server instance keeps a board before reading the stored copy again. */
+const MEMORY_MS = 10 * 60 * 1000;
+/** A stored board older than this is still served, and rebuilt behind it. Nightly rebuild, with slack. */
+const STALE_MS = 26 * 60 * 60 * 1000;
+const SNAPSHOTS = "all_time_snapshots";
+/** The nightly run stops starting new builds after this, inside the 60s function limit. */
+const CRON_BUDGET_MS = 40 * 1000;
 const MIN_CAREER_GAMES = 5;
 const RECORDS_PER_STAT = 25;
 const COMPS_AT_ONCE = 6;
@@ -42,6 +54,11 @@ const STAT_COLUMNS =
 type Comp = { league_id: string; name: string; slug: string; season: string | null; gender: string | null };
 
 type StatRow = Record<string, any>;
+
+type Scope = "all" | "league";
+
+/** Box-score rows per competition, shared by the two scopes of one rebuild so each is read once. */
+type StatsCache = Map<string, Promise<StatRow[]>>;
 
 export type AllTimeCareer = {
   key: string;
@@ -132,7 +149,17 @@ async function inBatches<T, R>(items: T[], size: number, fn: (item: T) => Promis
   return out;
 }
 
-async function statsForComp(leagueId: string): Promise<StatRow[]> {
+function statsForComp(leagueId: string, cache?: StatsCache): Promise<StatRow[]> {
+  if (!cache) return readStatsForComp(leagueId);
+  let hit = cache.get(leagueId);
+  if (!hit) {
+    hit = readStatsForComp(leagueId);
+    cache.set(leagueId, hit);
+  }
+  return hit;
+}
+
+async function readStatsForComp(leagueId: string): Promise<StatRow[]> {
   const rows: StatRow[] = [];
   for (let from = 0; from < 100_000; from += 1000) {
     const { data, error } = await supabaseAdmin
@@ -148,8 +175,9 @@ async function statsForComp(leagueId: string): Promise<StatRow[]> {
   return rows;
 }
 
-async function identityGroups(playerIds: string[]): Promise<Map<string, string>> {
+async function identityGroups(playerIds: string[]): Promise<{ byPlayer: Map<string, string>; names: Map<string, string> }> {
   const byPlayer = new Map<string, string>();
+  const names = new Map<string, string>();
   for (let i = 0; i < playerIds.length; i += 300) {
     const { data, error } = await supabaseAdmin
       .from("player_identity_members")
@@ -158,10 +186,25 @@ async function identityGroups(playerIds: string[]): Promise<Map<string, string>>
     if (error) break; // table missing or unreadable: names alone still group careers
     for (const r of data || []) byPlayer.set(r.player_id, `id:${r.identity_id}`);
   }
-  return byPlayer;
+  // The name an admin gave the person, e.g. a married name over the one most of
+  // their old games were recorded under.
+  const identityIds = Array.from(new Set(Array.from(byPlayer.values()).map((k) => k.slice(3))));
+  for (let i = 0; i < identityIds.length; i += 300) {
+    const { data, error } = await supabaseAdmin
+      .from("player_identities")
+      .select("id, canonical_name")
+      .in("id", identityIds.slice(i, i + 300));
+    if (error) break;
+    for (const r of data || []) {
+      const name = String(r.canonical_name || "").replace(/\s+/g, " ").trim();
+      const key = nameKey(name);
+      if (key.includes(" ") && !isInitialForm(key)) names.set(`id:${r.id}`, name);
+    }
+  }
+  return { byPlayer, names };
 }
 
-export async function buildAllTime(brandId: string, gender: string, scope: "all" | "league"): Promise<AllTimeResponse | null> {
+export async function buildAllTime(brandId: string, gender: string, scope: Scope, stats?: StatsCache): Promise<AllTimeResponse | null> {
   const { data: compRows, error } = await supabaseAdmin
     .from("competitions")
     .select("league_id, name, slug, season, gender")
@@ -170,16 +213,19 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
   if (error) throw new Error(error.message);
   let comps = (compRows || []) as Comp[];
   const hasGenders = comps.some((c) => c.gender);
-  if (hasGenders && gender) comps = comps.filter((c) => !c.gender || c.gender === gender);
+  // A brand split by gender always has a gender picked on the page; a board mixing
+  // the men's and women's sides is never shown, so it isn't built (or stored).
+  if (hasGenders && !gender) return null;
+  if (hasGenders) comps = comps.filter((c) => !c.gender || c.gender === gender);
   if (scope === "league") comps = comps.filter((c) => !KNOCKOUT_NAME.test(c.name));
   if (comps.length === 0) return null;
   const compById = new Map(comps.map((c) => [c.league_id, c]));
 
-  const rows = (await inBatches(comps, COMPS_AT_ONCE, (c) => statsForComp(c.league_id))).flat().filter(played);
+  const rows = (await inBatches(comps, COMPS_AT_ONCE, (c) => statsForComp(c.league_id, stats))).flat().filter(played);
 
   // Group each row into a career: identity group first, else the player's name.
   // An initial-only name ("J. Smith") joins the one full name it can only mean.
-  const identity = await identityGroups(Array.from(new Set(rows.map((r) => r.player_id).filter(Boolean))));
+  const { byPlayer: identity, names: identityNames } = await identityGroups(Array.from(new Set(rows.map((r) => r.player_id).filter(Boolean))));
   const fullBySurname = new Map<string, Set<string>>();
   for (const r of rows) {
     const k = nameKey(cleanName(r));
@@ -245,15 +291,15 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     recordRows.push(r);
   }
 
-  // A career's display name: its full name used most often (never an initial form
-  // when a full one exists).
+  // A career's display name: the identity group's name when it has one, else its
+  // full name used most often (never an initial form when a full one exists).
   for (const c of Array.from(careers.values())) {
     const names = Array.from(c.names.entries()).sort((a, b) => {
       const ai = isInitialForm(nameKey(a[0])) ? 1 : 0;
       const bi = isInitialForm(nameKey(b[0])) ? 1 : 0;
       return ai - bi || b[1] - a[1];
     });
-    c.name = names[0]?.[0] || "Unknown player";
+    c.name = identityNames.get(c.key) || names[0]?.[0] || "Unknown player";
     c.teams = Array.from(c.teamLast.entries()).sort((a, b) => (a[1] < b[1] ? 1 : -1)).map(([t]) => t);
     const seasons = Array.from(c.seasonSet).sort();
     c.seasons = seasons.length;
@@ -344,21 +390,177 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
   };
 }
 
-const cache = new Map<string, { at: number; value: Promise<AllTimeResponse | null> }>();
+// ── Stored boards ──────────────────────────────────────────────────────────
 
-export function registerAllTimeLeaderRoutes(app: Express) {
+/** This instance's copy of each board, in front of the stored one. */
+const memory = new Map<string, { at: number; value: Promise<AllTimeResponse | null> }>();
+/** Builds in progress, so two asks for the same board share one build. */
+const rebuilding = new Map<string, Promise<AllTimeResponse | null>>();
+
+/** Only the genders competitions use, so a made-up value can't store a board of its own. */
+function normaliseGender(value: unknown): string {
+  const g = String(value || "").trim().toLowerCase();
+  return g === "men" ? "Men" : g === "women" ? "Women" : "";
+}
+
+const snapshotKey = (brandId: string, gender: string, scope: Scope) => `${brandId}|${gender}|${scope}`;
+
+async function readSnapshot(key: string): Promise<{ data: AllTimeResponse; builtAt: number } | null> {
+  const { data, error } = await supabaseAdmin.from(SNAPSHOTS).select("data, built_at").eq("key", key).maybeSingle();
+  if (error) {
+    // Table missing (before the migration) or unreadable: build live instead.
+    console.warn("[AllTime] snapshot read failed", error.message);
+    return null;
+  }
+  if (!data) return null;
+  return { data: data.data as AllTimeResponse, builtAt: new Date(data.built_at).getTime() };
+}
+
+/** Build one board now and store it. */
+export function rebuildAllTime(brandId: string, gender: string, scope: Scope, stats?: StatsCache): Promise<AllTimeResponse | null> {
+  const key = snapshotKey(brandId, gender, scope);
+  const running = rebuilding.get(key);
+  if (running) return running;
+  const job = (async () => {
+    const started = Date.now();
+    const data = await buildAllTime(brandId, gender, scope, stats);
+    if (data) {
+      const { error } = await supabaseAdmin.from(SNAPSHOTS).upsert({
+        key,
+        brand_id: brandId,
+        gender,
+        scope,
+        data,
+        built_at: new Date().toISOString(),
+        build_ms: Date.now() - started,
+      });
+      if (error) console.warn("[AllTime] snapshot write failed", key, error.message);
+    } else {
+      // No public competitions any more: drop the stored board so it isn't served.
+      await supabaseAdmin.from(SNAPSHOTS).delete().eq("key", key);
+    }
+    memory.set(key, { at: Date.now(), value: Promise.resolve(data) });
+    return data;
+  })();
+  rebuilding.set(key, job);
+  job.finally(() => rebuilding.delete(key)).catch(() => {});
+  return job;
+}
+
+/** The stored board, or a fresh build when there isn't one. A stale board is served while it rebuilds. */
+async function loadBoard(brandId: string, gender: string, scope: Scope): Promise<AllTimeResponse | null> {
+  const key = snapshotKey(brandId, gender, scope);
+  const stored = await readSnapshot(key);
+  if (!stored) return rebuildAllTime(brandId, gender, scope);
+  if (Date.now() - stored.builtAt > STALE_MS) {
+    rebuildAllTime(brandId, gender, scope).catch((err) => console.warn("[AllTime] background rebuild failed", key, err?.message));
+  }
+  return stored.data;
+}
+
+export type AllTimeRebuildResult = { rebuilt: string[]; failed: Array<{ key: string; error: string }>; left: string[] };
+
+/**
+ * Rebuild stored boards, oldest first: all of them, or only the given brands'.
+ * A board is only stored once someone has asked for it, so this keeps fresh the
+ * boards people actually look at. Stops starting new builds after budgetMs; the
+ * boards left over are still served, and the next run starts with them.
+ */
+export async function rebuildAllTimeSnapshots(opts: { brandIds?: string[]; budgetMs?: number } = {}): Promise<AllTimeRebuildResult> {
+  const started = Date.now();
+  const budget = opts.budgetMs ?? CRON_BUDGET_MS;
+  const result: AllTimeRebuildResult = { rebuilt: [], failed: [], left: [] };
+  if (opts.brandIds && opts.brandIds.length === 0) return result;
+
+  let query = supabaseAdmin.from(SNAPSHOTS).select("key, brand_id, gender, scope, built_at").order("built_at", { ascending: true });
+  if (opts.brandIds) query = query.in("brand_id", opts.brandIds);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  // Both scopes of one brand and gender read the same box scores, so they rebuild together.
+  type Board = { key: string; brand_id: string; gender: string; scope: Scope };
+  const groups = new Map<string, Board[]>();
+  for (const row of (data || []) as Board[]) {
+    const group = `${row.brand_id}|${row.gender}`;
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group)!.push(row);
+  }
+  const queue = Array.from(groups.values());
+  const worker = async () => {
+    for (let group = queue.shift(); group; group = queue.shift()) {
+      if (Date.now() - started > budget) {
+        result.left.push(...group.map((b) => b.key));
+        continue;
+      }
+      const stats: StatsCache = new Map();
+      for (const board of group) {
+        try {
+          await rebuildAllTime(board.brand_id, board.gender, board.scope, stats);
+          result.rebuilt.push(board.key);
+        } catch (err: any) {
+          result.failed.push({ key: board.key, error: err?.message || String(err) });
+        }
+      }
+    }
+  };
+  await Promise.all([worker(), worker()]);
+  return result;
+}
+
+/**
+ * After an admin links or unlinks players: rebuild the stored boards of every brand
+ * those players have played in. Waits up to timeoutMs so the admin's next look shows
+ * the change; anything slower carries on, and the nightly run catches what's left.
+ */
+export async function refreshAllTimeForPlayers(playerIds: string[], timeoutMs = 20_000): Promise<void> {
+  const ids = Array.from(new Set(playerIds.filter(Boolean)));
+  if (ids.length === 0) return;
+  try {
+    const leagueIds = new Set<string>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data } = await supabaseAdmin.from("players").select("league_id").in("id", ids.slice(i, i + 200));
+      for (const p of data || []) if (p.league_id) leagueIds.add(p.league_id);
+    }
+    if (leagueIds.size === 0) return;
+    const { data: comps } = await supabaseAdmin.from("competitions").select("competition_id").in("league_id", Array.from(leagueIds));
+    const brandIds = Array.from(new Set((comps || []).map((c: any) => c.competition_id).filter(Boolean))) as string[];
+    if (brandIds.length === 0) return;
+    for (const key of Array.from(memory.keys())) {
+      if (brandIds.some((b) => key.startsWith(`${b}|`))) memory.delete(key);
+    }
+    const job = rebuildAllTimeSnapshots({ brandIds, budgetMs: timeoutMs });
+    job.catch((err) => console.warn("[AllTime] rebuild after identity change failed", err?.message));
+    await Promise.race([job, new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
+  } catch (err: any) {
+    console.warn("[AllTime] rebuild after identity change failed", err?.message);
+  }
+}
+
+function cronAuthorised(req: Request): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const given = Buffer.from(String(req.headers.authorization ?? ""));
+  const expected = Buffer.from(`Bearer ${secret}`);
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+const UUID = /^[0-9a-f-]{36}$/i;
+
+type Deps = { requireAdmin: (req: Request, res: Response) => Promise<string | null> };
+
+export function registerAllTimeLeaderRoutes(app: Express, { requireAdmin }: Deps) {
   app.get("/api/leagues/:brandId/all-time", async (req: Request, res: Response) => {
     const brandId = String(req.params.brandId || "");
-    if (!/^[0-9a-f-]{36}$/i.test(brandId)) return res.status(400).json({ error: "Unknown league" });
-    const gender = String(req.query.gender || "").slice(0, 20);
-    const scope = req.query.scope === "league" ? "league" : "all";
-    const cacheKey = `${brandId}|${gender}|${scope}`;
+    if (!UUID.test(brandId)) return res.status(400).json({ error: "Unknown league" });
+    const gender = normaliseGender(req.query.gender);
+    const scope: Scope = req.query.scope === "league" ? "league" : "all";
+    const key = snapshotKey(brandId, gender, scope);
     try {
-      let hit = cache.get(cacheKey);
-      if (!hit || Date.now() - hit.at > CACHE_MS) {
-        hit = { at: Date.now(), value: buildAllTime(brandId, gender, scope) };
-        cache.set(cacheKey, hit);
-        hit.value.catch(() => cache.delete(cacheKey));
+      let hit = memory.get(key);
+      if (!hit || Date.now() - hit.at > MEMORY_MS) {
+        hit = { at: Date.now(), value: loadBoard(brandId, gender, scope) };
+        memory.set(key, hit);
+        hit.value.catch(() => memory.delete(key));
       }
       const data = await hit.value;
       if (!data) return res.status(404).json({ error: "No public competitions" });
@@ -366,6 +568,32 @@ export function registerAllTimeLeaderRoutes(app: Express) {
       res.json(data);
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Could not load all-time leaders" });
+    }
+  });
+
+  // GET /api/cron/all-time — the nightly rebuild. Vercel sends CRON_SECRET as a bearer token.
+  app.get("/api/cron/all-time", async (req: Request, res: Response) => {
+    if (!process.env.CRON_SECRET) return res.status(503).json({ error: "CRON_SECRET isn't set." });
+    if (!cronAuthorised(req)) return res.status(401).json({ error: "Unauthorised" });
+    try {
+      const result = await rebuildAllTimeSnapshots();
+      console.log("[AllTime] cron", JSON.stringify({ rebuilt: result.rebuilt.length, failed: result.failed, left: result.left.length }));
+      res.json(result);
+    } catch (err: any) {
+      console.error("[AllTime] cron failed", err?.message);
+      res.status(502).json({ error: err?.message || "Couldn't rebuild the all-time boards." });
+    }
+  });
+
+  // POST /api/admin/all-time/rebuild { brandId? } — rebuild now, e.g. after merging players by hand.
+  app.post("/api/admin/all-time/rebuild", async (req: Request, res: Response) => {
+    if (!(await requireAdmin(req, res))) return;
+    const brandId = typeof req.body?.brandId === "string" ? req.body.brandId : "";
+    if (brandId && !UUID.test(brandId)) return res.status(400).json({ error: "Unknown league" });
+    try {
+      res.json(await rebuildAllTimeSnapshots({ brandIds: brandId ? [brandId] : undefined, budgetMs: 50 * 1000 }));
+    } catch (err: any) {
+      res.status(502).json({ error: err?.message || "Couldn't rebuild the all-time boards." });
     }
   });
 }

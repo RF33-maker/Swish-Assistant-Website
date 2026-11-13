@@ -26,7 +26,7 @@ import { registerMemberAccountRoutes } from "./memberAccounts";
 import { registerNewsArticleRoutes } from "./newsArticles";
 import { registerWeekendReportRoutes } from "./weekendReports";
 import { registerNblScoreRoutes } from "./nblScores";
-import { registerAllTimeLeaderRoutes } from "./allTimeLeaders";
+import { registerAllTimeLeaderRoutes, refreshAllTimeForPlayers } from "./allTimeLeaders";
 import { registerNationalCupRoutes } from "./nationalCup";
 import { registerPreferredNameRoutes } from "./preferredNames";
 import { registerClaimEmailRoutes } from "./claimEmail";
@@ -2545,6 +2545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       photoFallbackCache = null;
+      await refreshAllTimeForPlayers(playerIds);
       res.json({ id: identity.id, canonicalName, playerIds });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -2595,6 +2596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       photoFallbackCache = null;
+      await refreshAllTimeForPlayers([playerId]);
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -2629,6 +2631,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       photoFallbackCache = null;
+      await refreshAllTimeForPlayers([playerId, ...(remaining || []).map((r: any) => r.player_id)]);
       res.json({ success: true, deleted });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -2643,6 +2646,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) return;
 
       const { identityId } = req.params;
+      // The members go with the group (cascade), so note them first for the all-time rebuild.
+      const { data: members } = await supabaseAdmin
+        .from('player_identity_members')
+        .select('player_id')
+        .eq('identity_id', identityId);
       const { error } = await supabaseAdmin
         .from('player_identities')
         .delete()
@@ -2650,6 +2658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error) return res.status(500).json({ error: error.message });
 
       photoFallbackCache = null;
+      await refreshAllTimeForPlayers((members || []).map((r: any) => r.player_id));
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -2700,7 +2709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerNewsArticleRoutes(app, requireAdmin);
   registerWeekendReportRoutes(app, { requireAdmin, formatName: formatCanonicalPlayerName });
   registerNblScoreRoutes(app, { requireAdmin });
-  registerAllTimeLeaderRoutes(app);
+  registerAllTimeLeaderRoutes(app, { requireAdmin });
   registerNationalCupRoutes(app, { requireAdmin });
   registerClaimEmailRoutes(app, { requireAdmin });
   registerGameTimeReviewRoutes(app, { requireAdmin });
