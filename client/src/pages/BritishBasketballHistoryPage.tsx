@@ -1,17 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { Link } from "wouter";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import AllTimeLeaders from "@/components/league/AllTimeLeaders";
-import { gamePath, teamPath } from "@shared/seo";
-import { clubDisplayName } from "@shared/teamIdentity";
+import { Reveal, prefersReducedMotion } from "@/components/home/motion";
+import CareerLadders from "@/components/history/CareerLadders";
+import HistoryNav, { NAV_OFFSET, scrollToSection, type NavSection } from "@/components/history/HistoryNav";
+import LeagueTrends from "@/components/history/LeagueTrends";
+import QuickLook from "@/components/history/QuickLook";
+import RecordBoard from "@/components/history/RecordBoard";
+import SeasonSpread from "@/components/history/SeasonSpread";
+import SeasonTimeline from "@/components/history/SeasonTimeline";
+import { CountUp, SectionHeading, isInProgress, seasonStart, type HistoryData } from "@/components/history/shared";
+import { supabase } from "@/lib/supabase";
 
 const SITE_URL = "https://swishassistant.com";
 
 /**
- * /british-basketball-history: every season on file, league by league. Season-by-season
- * leaders, the single-game records and full career boards, all from
- * /api/leagues/:brandId/all-time (server/allTimeLeaders.ts).
+ * /british-basketball-history: every season on file, league by league.
+ *
+ * Reads top to bottom as: pick a league, the league in four facts, then a bar that sticks
+ * to the top and jumps between the parts (seasons, records, careers, how the game has
+ * changed, the full leaderboards). The league, the open season and the part being read
+ * all live in the URL (?league=slb-women&season=2018-19#records), so any view can be shared.
+ * Everything comes from /api/leagues/:brandId/all-time (server/allTimeLeaders.ts); the
+ * pieces live in components/history.
  *
  * Only the box scores already on the site count; nothing here comes from outside archives.
  * Each season keeps the team names of the time ("Glasgow Rocks", "Esh Group Eagles
@@ -32,172 +44,74 @@ const LEAGUES: LeagueOption[] = [
   { id: "nbl-women", brandId: NBL, gender: "Women", name: "WNBL Division One", short: "WNBL D1", lineage: "The women's National Basketball League's Division One." },
 ];
 
-type StatKey = "pts" | "reb" | "ast" | "stl" | "blk" | "tpm";
+// "2018/19" in the page, "2018-19" in the URL.
+const seasonToParam = (season: string) => season.replace("/", "-");
+const seasonFromParam = (param: string | null) => (param && /^\d{4}-\d{2}$/.test(param) ? param.replace("-", "/") : null);
 
-type SeasonLeader = { key: string; name: string; href: string | null; team: string | null; value: number; gp: number };
-type SeasonSummary = {
-  season: string;
-  competition: string;
-  competitionSlug: string;
-  games: number;
-  minGames: number;
-  leaders: Record<StatKey, SeasonLeader[]>;
-  bestRecord: { team: string; wins: number; losses: number } | null;
-};
-type GameRecord = {
-  key: string;
-  name: string;
-  href: string | null;
-  value: number;
-  team: string | null;
-  opponent: string | null;
-  date: string | null;
-  competition: string;
-  competitionSlug: string;
-  gameKey: string;
-};
-type HistoryData = {
-  competitions: number;
-  games: number;
-  firstSeason: string | null;
-  lastSeason: string | null;
-  records: Record<StatKey, GameRecord[]>;
-  seasons: SeasonSummary[];
-};
-
-const STATS: Array<{ key: StatKey; label: string; record: string; unit: string }> = [
-  { key: "pts", label: "Points", record: "Points", unit: "ppg" },
-  { key: "reb", label: "Rebounds", record: "Rebounds", unit: "rpg" },
-  { key: "ast", label: "Assists", record: "Assists", unit: "apg" },
-  { key: "stl", label: "Steals", record: "Steals", unit: "spg" },
-  { key: "blk", label: "Blocks", record: "Blocks", unit: "bpg" },
-  { key: "tpm", label: "3-pointers", record: "3-pointers", unit: "per game" },
-];
-
-const formatDate = (iso: string | null) => {
-  if (!iso) return "";
-  const d = new Date(`${iso}T12:00:00Z`);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-};
-
-// "Solent Kestrels Senior Men" → "Solent Kestrels"; in a women's league the "Women" is implied.
-function teamLabel(name: string | null, gender: string): string {
-  if (!name) return "";
-  const shown = clubDisplayName(name);
-  return gender === "Women" ? shown.replace(/\s+Women$/i, "") : shown;
-}
-
-// Seasons between the first and last on file with no league games, e.g. "2024/25".
-function missingSeasons(seasons: SeasonSummary[]): string[] {
-  const starts = seasons.map((s) => Number(s.season.slice(0, 4))).filter(Number.isFinite);
-  if (starts.length < 2) return [];
-  const have = new Set(starts);
-  const out: string[] = [];
-  for (let y = Math.min(...starts) + 1; y < Math.max(...starts); y++) {
-    if (!have.has(y)) out.push(`${y}/${String((y + 1) % 100).padStart(2, "0")}`);
+function readUrl(): { league: LeagueOption; season: string | null } {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const league = LEAGUES.find((l) => l.id === params.get("league")) || LEAGUES[0];
+    return { league, season: seasonFromParam(params.get("season")) };
+  } catch {
+    return { league: LEAGUES[0], season: null };
   }
-  return out;
 }
 
-function TeamLink({ name, competitionSlug, gender }: { name: string | null; competitionSlug: string; gender: string }) {
-  if (!name) return null;
-  const href = teamPath(name, competitionSlug);
-  const label = teamLabel(name, gender);
-  return href ? <Link href={href} className="hover:underline">{label}</Link> : <>{label}</>;
+function writeUrl(league: LeagueOption, season: string | null, clearHash = false) {
+  try {
+    const url = new URL(window.location.href);
+    if (clearHash) url.hash = "";
+    if (league.id === LEAGUES[0].id) url.searchParams.delete("league");
+    else url.searchParams.set("league", league.id);
+    if (season) url.searchParams.set("season", seasonToParam(season));
+    else url.searchParams.delete("season");
+    window.history.replaceState(window.history.state, "", url.toString());
+  } catch {
+    /* the page still works without the URL */
+  }
 }
 
-function PlayerLink({ name, href, className }: { name: string; href: string | null; className: string }) {
-  return href ? <Link href={href} className={`${className} hover:underline`}>{name}</Link> : <span className={className}>{name}</span>;
+/** Each league brand's logo, for the picker and the league heading. */
+function useLeagueLogos(): Record<string, string> {
+  const [logos, setLogos] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    supabase
+      .from("leagues")
+      .select("id, logo_url")
+      .in("id", Array.from(new Set(LEAGUES.map((l) => l.brandId))))
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        const map: Record<string, string> = {};
+        for (const row of data as Array<{ id: string; logo_url: string | null }>) if (row.logo_url) map[row.id] = row.logo_url;
+        setLogos(map);
+      });
+    return () => { cancelled = true; };
+  }, []);
+  return logos;
 }
 
-function RecordsStrip({ data, gender }: { data: HistoryData; gender: string }) {
+function Figure({ value, label }: { value: number; label: string }) {
   return (
-    <section className="mt-10" aria-labelledby="records-heading">
-      <h2 id="records-heading" className="ch-eyebrow">Single-game records</h2>
-      <div className="mt-3 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-6">
-        {STATS.map((stat) => {
-          const best = data.records[stat.key] || [];
-          const top = best[0];
-          if (!top) return null;
-          const tied = best.filter((r) => r.value === top.value);
-          return (
-            <div key={stat.key} className="border-t border-[color:var(--ch-border-strong)] pt-3">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)]">{stat.record}</div>
-              <div className="mt-1 ch-display font-bold leading-none text-[2.4rem] tabular-nums text-[color:var(--ch-text)]">{top.value}</div>
-              {tied.slice(0, 2).map((r) => (
-                <div key={`${r.gameKey}-${r.key}`} className="mt-2">
-                  <PlayerLink name={r.name} href={r.href} className="block text-sm font-semibold text-[color:var(--ch-text)] break-words" />
-                  <Link href={gamePath(r.competitionSlug, r.gameKey)} className="block text-xs text-[color:var(--ch-text-2)] break-words hover:underline">
-                    {teamLabel(r.team, gender)}{r.opponent ? ` v ${teamLabel(r.opponent, gender)}` : ""}
-                    {r.date ? `, ${formatDate(r.date)}` : ""}
-                  </Link>
-                </div>
-              ))}
-              {tied.length > 2 && <div className="mt-1 text-xs text-[color:var(--ch-muted)]">and {tied.length - 2} more</div>}
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function SeasonRow({ season, gender, stats }: { season: SeasonSummary; gender: string; stats: typeof STATS }) {
-  return (
-    <div className="py-5 border-b border-[color:var(--ch-border)]">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h3 className="ch-display font-bold text-2xl tabular-nums text-[color:var(--ch-text)]">{season.season}</h3>
-        <Link href={`/competition/${season.competitionSlug}`} className="text-sm font-medium text-[color:var(--ch-text-2)] hover:underline">
-          {season.competition}
-        </Link>
-        <span className="text-xs text-[color:var(--ch-muted)]">
-          {season.games} games on file · leaders played {season.minGames}+
-        </span>
-      </div>
-      <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
-        {season.bestRecord && (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)]">Best record</div>
-            <div className="mt-1 text-sm font-semibold text-[color:var(--ch-text)] break-words">
-              <TeamLink name={season.bestRecord.team} competitionSlug={season.competitionSlug} gender={gender} />
-            </div>
-            <div className="text-xs tabular-nums text-[color:var(--ch-text-2)]">{season.bestRecord.wins}-{season.bestRecord.losses}</div>
-          </div>
-        )}
-        {stats.map((stat) => {
-          const leader = season.leaders[stat.key]?.[0];
-          if (!leader) return null;
-          return (
-            <div key={stat.key}>
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)]">{stat.label}</div>
-              <PlayerLink name={leader.name} href={leader.href} className="mt-1 block text-sm font-semibold text-[color:var(--ch-text)] break-words" />
-              <div className="text-xs text-[color:var(--ch-text-2)] break-words">
-                <span className="font-semibold tabular-nums text-[color:var(--ch-text)]">{leader.value.toFixed(1)}</span> {stat.unit}
-                {leader.team && <> · <TeamLink name={leader.team} competitionSlug={season.competitionSlug} gender={gender} /></>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+    <div className="min-w-0">
+      <dd className="ch-display font-bold leading-none tabular-nums text-[1.75rem] md:text-[2.25rem] text-[color:var(--ch-text)]"><CountUp value={value} /></dd>
+      <dt className="mt-1.5 text-xs font-semibold uppercase tracking-wider text-[color:var(--ch-text-2)]">{label}</dt>
     </div>
   );
 }
 
-function readLeague(): LeagueOption {
-  try {
-    const id = new URLSearchParams(window.location.search).get("league");
-    return LEAGUES.find((l) => l.id === id) || LEAGUES[0];
-  } catch {
-    return LEAGUES[0];
-  }
-}
-
 export default function BritishBasketballHistoryPage() {
-  const [league, setLeague] = useState<LeagueOption>(readLeague);
-  const [allStats, setAllStats] = useState(false);
+  const initial = useMemo(readUrl, []);
+  const [league, setLeague] = useState<LeagueOption>(initial.league);
   const [data, setData] = useState<HistoryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [picked, setPicked] = useState<string | null>(initial.season);
+  const leagueLogos = useLeagueLogos();
+  const leagueTop = useRef<HTMLDivElement | null>(null);
+  // A #section in the address is honoured once, when the first league has loaded.
+  const pendingHash = useRef<string | null>(typeof window !== "undefined" ? window.location.hash.replace(/^#/, "") || null : null);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,20 +128,79 @@ export default function BritishBasketballHistoryPage() {
     return () => { cancelled = true; };
   }, [league]);
 
-  const pick = (option: LeagueOption) => {
-    setLeague(option);
-    try {
-      const url = new URL(window.location.href);
-      if (option.id === LEAGUES[0].id) url.searchParams.delete("league");
-      else url.searchParams.set("league", option.id);
-      window.history.replaceState(window.history.state, "", url.toString());
-    } catch {
-      /* the page still works without the URL */
+  const pickLeague = (id: string, fromBar = false) => {
+    const option = LEAGUES.find((l) => l.id === id);
+    if (!option) return;
+    if (option.id !== league.id) {
+      setLeague(option);
+      setPicked(null);
+      // A new league starts from its overview, so the old #section no longer applies.
+      writeUrl(option, null, true);
+    }
+    // Changing league from the stuck bar goes back up to that league's overview.
+    if (fromBar && leagueTop.current) {
+      const top = leagueTop.current.getBoundingClientRect().top + window.scrollY - 16;
+      window.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion() ? "auto" : "smooth" });
     }
   };
 
-  const gaps = useMemo(() => (data ? missingSeasons(data.seasons || []) : []), [data]);
-  const shownStats = allStats ? STATS : STATS.slice(0, 3);
+  // Oldest first, the order the timeline reads in.
+  const seasons = useMemo(() => [...(data?.seasons || [])].sort((a, b) => seasonStart(a.season) - seasonStart(b.season)), [data]);
+  // Open on the last finished season: the one being played now is still filling in.
+  const season = useMemo(() => {
+    if (seasons.length === 0) return null;
+    const chosen = picked && seasons.find((s) => s.season === picked);
+    if (chosen) return chosen;
+    const finished = seasons.filter((s) => !isInProgress(s.season));
+    return finished[finished.length - 1] || seasons[seasons.length - 1];
+  }, [seasons, picked]);
+  const seasonIndex = season ? seasons.indexOf(season) : -1;
+
+  const pickSeason = useCallback((label: string) => {
+    setPicked(label);
+    writeUrl(league, label);
+  }, [league]);
+
+  const openSeason = useCallback((label: string) => {
+    pickSeason(label);
+    // Let the season render before measuring where its section sits.
+    requestAnimationFrame(() => scrollToSection("seasons"));
+  }, [pickSeason]);
+
+  const hasRecords = !!data?.records?.pts?.length;
+  const hasCareers = (data?.careers.length ?? 0) >= 5;
+  const hasTrends = seasons.filter((s) => s.perTeamGame).length >= 3;
+
+  const sections = useMemo<NavSection[]>(() => {
+    if (!data) return [];
+    const out: NavSection[] = [];
+    if (season) out.push({ id: "seasons", label: "Seasons" });
+    if (hasRecords) out.push({ id: "records", label: "Records" });
+    if (hasCareers) out.push({ id: "careers", label: "Careers" });
+    if (hasTrends) out.push({ id: "the-game", label: "The game" });
+    out.push({ id: "leaderboards", label: "Leaderboards" });
+    return out;
+  }, [data, season, hasRecords, hasCareers, hasTrends]);
+
+  // Honour #records and the like from a shared link, once the sections exist.
+  useEffect(() => {
+    const id = pendingHash.current;
+    if (!id || sections.length === 0) return;
+    if (!sections.some((s) => s.id === id)) { pendingHash.current = null; return; }
+    // Jump now, then once more after fonts and logos have settled the layout, unless
+    // the reader has started scrolling in the meantime.
+    const jump = () => {
+      const el = document.getElementById(id);
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - NAV_OFFSET + 8 });
+      return window.scrollY;
+    };
+    let landed = -1;
+    const frame = requestAnimationFrame(() => { pendingHash.current = null; landed = jump(); });
+    const settle = window.setTimeout(() => { if (Math.abs(window.scrollY - landed) < 2) jump(); }, 600);
+    return () => { cancelAnimationFrame(frame); window.clearTimeout(settle); };
+  }, [sections]);
+
+  const leagueLogo = leagueLogos[league.brandId];
 
   const canonical = `${SITE_URL}/british-basketball-history`;
   const description =
@@ -246,93 +219,175 @@ export default function BritishBasketballHistoryPage() {
       </Helmet>
       <SiteHeader />
 
-      <main className="max-w-6xl mx-auto px-4 md:px-6 pt-10 md:pt-14 pb-20">
+      <main className="max-w-6xl mx-auto px-4 md:px-6 pt-8 md:pt-12 pb-24">
         <div className="ch-rise max-w-3xl">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">History</div>
-          <h1 className="mt-2 ch-display uppercase font-bold tracking-tight leading-[0.95] text-[2.5rem] md:text-[4rem] text-[color:var(--ch-text)]">
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">History</div>
+          <h1 className="mt-2 ch-display font-bold tracking-tight leading-[0.95] text-[2.4rem] md:text-[3.5rem] text-[color:var(--ch-text)]">
             British basketball history
           </h1>
-          <p className="mt-4 text-base md:text-lg text-[color:var(--ch-text-2)]">
-            Every season on file, league by league: who led each year, the best single games and whole careers added up.
-            Each season keeps its team names as they were then.
+          <p className="mt-3 text-base md:text-[17px] leading-relaxed text-[color:var(--ch-text-2)]">
+            Every season on file, league by league. Pick a league, then jump to its seasons, records and careers.
           </p>
         </div>
 
-        <nav className="mt-8 flex flex-wrap gap-2" aria-label="League">
-          {LEAGUES.map((option) => {
-            const active = option.id === league.id;
-            return (
-              <button
-                key={option.id}
-                onClick={() => pick(option)}
-                aria-pressed={active}
-                className={`h-9 px-4 rounded-full text-sm font-semibold border transition-colors ${
-                  active
-                    ? "bg-[color:var(--ch-text)] text-[color:var(--ch-bg)] border-[color:var(--ch-text)]"
-                    : "border-[color:var(--ch-border-strong)] text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
-                }`}
-              >
-                {option.short}
-              </button>
-            );
-          })}
-        </nav>
+        {/* League picker */}
+        <div ref={leagueTop} className="mt-8 -mx-4 px-4 md:mx-0 md:px-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div role="tablist" aria-label="League" className="flex gap-2 min-w-max">
+            {LEAGUES.map((option) => {
+              const active = option.id === league.id;
+              const logo = leagueLogos[option.brandId];
+              return (
+                <button
+                  key={option.id}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => pickLeague(option.id)}
+                  className={`flex items-center gap-2.5 h-12 rounded-full pl-2 pr-4 text-[15px] font-semibold whitespace-nowrap transition-colors ${
+                    active
+                      ? "bg-[color:var(--ch-text)] text-[color:var(--ch-bg)]"
+                      : "text-[color:var(--ch-text)] shadow-[inset_0_0_0_1px_var(--ch-border-strong)] hover:bg-[color:var(--ch-surface-2)]"
+                  }`}
+                >
+                  {logo ? (
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full ${active ? "bg-white" : ""}`}>
+                      <img src={logo} alt="" className="h-7 w-7 object-contain" />
+                    </span>
+                  ) : (
+                    <span className="w-1.5" />
+                  )}
+                  {option.short}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-        <section className="mt-8" aria-labelledby="league-heading">
-          <h2 id="league-heading" className="ch-display uppercase font-bold tracking-tight leading-[0.95] text-[1.9rem] md:text-[2.5rem] text-[color:var(--ch-text)]">
-            {league.name}
-          </h2>
-          <p className="mt-2 text-sm text-[color:var(--ch-text-2)]">
-            {league.lineage}
+        {/* The league at a glance */}
+        <section key={league.id} className="ch-rise mt-10" aria-labelledby="league-heading">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-x-10 gap-y-6">
+            <div className="flex items-center gap-4 md:gap-5 min-w-0">
+              {leagueLogo && <img src={leagueLogo} alt="" className="h-14 w-14 md:h-[72px] md:w-[72px] shrink-0 object-contain" />}
+              <div className="min-w-0">
+                <h2 id="league-heading" className="ch-display font-bold tracking-tight leading-[1.05] text-[1.6rem] md:text-[2.1rem] text-[color:var(--ch-text)]">
+                  {league.name}
+                </h2>
+                <p className="mt-1.5 text-sm md:text-[15px] leading-relaxed text-[color:var(--ch-text-2)]">
+                  {league.lineage}
+                  {data?.firstSeason && (
+                    <>
+                      {" "}On file from {data.firstSeason}
+                      {data.lastSeason && data.lastSeason !== data.firstSeason ? ` to ${data.lastSeason}` : ""}.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
             {data && (
-              <>
-                {" "}
-                {data.firstSeason}
-                {data.lastSeason && data.lastSeason !== data.firstSeason ? ` to ${data.lastSeason}` : ""}: {data.games.toLocaleString("en-GB")} games
-                across {data.competitions} competitions.
-              </>
+              <dl className="grid grid-cols-3 gap-x-6 md:gap-x-10 shrink-0">
+                <Figure value={seasons.length} label="Seasons" />
+                <Figure value={data.games} label="Games" />
+                {data.players != null && <Figure value={data.players} label="Players" />}
+              </dl>
             )}
-          </p>
-          {gaps.length > 0 && (
-            <p className="mt-1 text-xs text-[color:var(--ch-muted)]">No league games on file for {gaps.join(", ")}.</p>
+          </div>
+
+          {data && (
+            <QuickLook data={data} seasons={seasons} gender={league.gender} onOpenSeason={openSeason} onJump={scrollToSection} />
           )}
 
           {loading && (
-            <div className="mt-10 space-y-4">
-              <div className="ch-skel h-32 rounded-[10px]" />
-              <div className="ch-skel h-64 rounded-[10px]" />
+            <div className="mt-10 space-y-4" aria-busy="true" aria-label="Loading this league's history">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                {[0, 1, 2, 3].map((i) => <div key={i} className="ch-skel h-28 rounded-[10px]" />)}
+              </div>
+              <div className="ch-skel h-14 rounded-[10px]" />
+              <div className="ch-skel h-72 rounded-[10px]" />
             </div>
           )}
           {!loading && failed && (
             <p className="mt-8 text-sm text-[color:var(--ch-text-2)]">This league's history could not be loaded just now.</p>
           )}
-
-          {data && (
-            <>
-              <RecordsStrip data={data} gender={league.gender} />
-
-              {(data.seasons?.length ?? 0) > 0 && (
-              <section className="mt-12" aria-labelledby="seasons-heading">
-                <div className="flex flex-wrap items-end justify-between gap-3 pb-2 border-b border-[color:var(--ch-border-strong)]">
-                  <div>
-                    <h2 id="seasons-heading" className="ch-eyebrow">Season by season</h2>
-                    <p className="mt-1 text-xs text-[color:var(--ch-muted)]">League games only. Per-game leaders played at least half the season's games.</p>
-                  </div>
-                  <button onClick={() => setAllStats((v) => !v)} className="ch-btn ch-btn-ghost h-8 px-3 text-xs">
-                    {allStats ? "Points, rebounds, assists" : "Add steals, blocks, threes"}
-                  </button>
-                </div>
-                {data.seasons.map((season) => (
-                  <SeasonRow key={season.season} season={season} gender={league.gender} stats={shownStats} />
-                ))}
-              </section>
-              )}
-            </>
-          )}
         </section>
 
-        {/* Career averages, totals and the full record boards. */}
-        <AllTimeLeaders key={league.id} brandId={league.brandId} gender={league.gender} />
+        {sections.length > 0 && (
+          <HistoryNav
+            className="mt-12"
+            leagues={LEAGUES.map((l) => ({ id: l.id, short: l.short, name: l.name, logo: leagueLogos[l.brandId] }))}
+            activeLeague={league.id}
+            onPickLeague={(id) => pickLeague(id, true)}
+            sections={sections}
+          />
+        )}
+
+        {data && season && (
+          <section id="seasons" className="mt-10" aria-labelledby="seasons-heading">
+            <SectionHeading
+              id="seasons-heading"
+              eyebrow="Season by season"
+              title="Every season on file"
+              note="Each year shows the side with the best league record. Pick a year to open that season."
+            />
+            <div className="mt-7">
+              <SeasonTimeline seasons={seasons} selected={season.season} onSelect={pickSeason} logos={data.logos} gender={league.gender} />
+            </div>
+            <SeasonSpread
+              season={season}
+              gender={league.gender}
+              logos={data.logos}
+              onPrev={seasonIndex > 0 ? () => pickSeason(seasons[seasonIndex - 1].season) : null}
+              onNext={seasonIndex < seasons.length - 1 ? () => pickSeason(seasons[seasonIndex + 1].season) : null}
+            />
+          </section>
+        )}
+
+        {data && hasRecords && (
+          <section id="records" className="mt-24" aria-labelledby="records-heading">
+            <Reveal>
+              <SectionHeading
+                id="records-heading"
+                eyebrow="Records"
+                title="Single-game records"
+                note="The most anyone has put up in one game, cups and play-offs included."
+              />
+              <RecordBoard data={data} gender={league.gender} />
+            </Reveal>
+          </section>
+        )}
+
+        {data && hasCareers && (
+          <section id="careers" className="mt-24" aria-labelledby="careers-heading">
+            <Reveal>
+              <SectionHeading
+                id="careers-heading"
+                eyebrow="Careers"
+                title="Career leaders"
+                note="Every season a player has on file, added up. The top five in each, drawn to scale against the leader."
+              />
+              <CareerLadders data={data} gender={league.gender} />
+            </Reveal>
+          </section>
+        )}
+
+        {data && hasTrends && (
+          <section id="the-game" className="mt-24" aria-labelledby="trends-heading">
+            <Reveal>
+              <SectionHeading
+                id="trends-heading"
+                eyebrow="The game"
+                title="How the league has changed"
+                note="What one team put up in an average league game, season by season."
+              />
+              <LeagueTrends seasons={seasons} />
+            </Reveal>
+          </section>
+        )}
+
+        {/* Career averages, percentages and the full record boards. */}
+        {data && (
+          <div id="leaderboards" className="mt-14">
+            <AllTimeLeaders key={`leaders-${league.id}`} brandId={league.brandId} gender={league.gender} />
+          </div>
+        )}
       </main>
     </div>
   );
