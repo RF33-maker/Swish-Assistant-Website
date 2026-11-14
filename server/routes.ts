@@ -14,6 +14,7 @@ import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague, teamClubKey } from "
 import { getTeamCompetitions } from "./teamCompetitions";
 import { getLeagueSides } from "./teamSides";
 import { clubLeagueIds, clubSearchCore } from "@shared/clubLeagues";
+import { isSameTeam } from "@shared/teamIdentity";
 import { registerScoutAgentRoutes } from "./scoutAgentRoutes";
 import { registerAskSwishRoutes } from "./askSwishRoutes";
 import { registerPlaybookRoutes } from "./playbookRoutes";
@@ -1483,7 +1484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // the coach's account is provisioned against only one of them.
       const core = clubSearchCore(homeTeam.name);
       const { data: siblingTeams, error: siblingError } = core.length >= 3
-        ? await supabaseAdmin.from("teams").select("name, league_id").ilike("name", `%${core}%`).limit(2000)
+        ? await supabaseAdmin.from("teams").select("team_id, name, league_id").ilike("name", `%${core}%`).limit(2000)
         : { data: [], error: null };
       if (siblingError) {
         console.error("team-competitions: sibling lookup failed:", siblingError.message);
@@ -1495,7 +1496,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const leagueIds = clubLeagueIds((siblingTeams || []) as any[], homeTeam.name, homeTeam.league_id, sides);
       const allowedIds = await filterLeagueIdsForPublicScope(leagueIds);
       if (allowedIds.length === 0) {
-        return res.json({ teamName: homeTeam.name, homeLeagueId: homeTeam.league_id, competitions: [] });
+        return res.json({ teamName: homeTeam.name, homeLeagueId: homeTeam.league_id, competitions: [], clubTeams: [] });
+      }
+
+      // The club's own team row in each of those competitions. Its box scores are filed under a
+      // different team_id in every competition, so reading one season across league and cup needs
+      // all of them.
+      const allowed = new Set(allowedIds);
+      const wantedSide = sides.name(homeTeam.name, homeTeam.league_id);
+      const clubTeams = new Map<string, { league_id: string; team_id: string }>();
+      if (allowed.has(homeTeam.league_id)) clubTeams.set(teamId, { league_id: homeTeam.league_id, team_id: teamId });
+      for (const row of (siblingTeams || []) as Array<{ team_id: string | null; name: string | null; league_id: string | null }>) {
+        if (!row.team_id || !row.name || !row.league_id || !allowed.has(row.league_id)) continue;
+        if (isSameTeam(sides.name(row.name, row.league_id), wantedSide)) clubTeams.set(row.team_id, { league_id: row.league_id, team_id: row.team_id });
       }
 
       const { data: comps, error: compsError } = await supabaseAdmin
@@ -1511,6 +1524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         teamName: homeTeam.name,
         homeLeagueId: homeTeam.league_id,
         competitions: comps || [],
+        clubTeams: Array.from(clubTeams.values()),
       });
     } catch (err: any) {
       console.error("team-competitions: unexpected error:", err.message);

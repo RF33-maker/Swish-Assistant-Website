@@ -71,6 +71,16 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
     return value.toFixed(1);
   }
 
+  // The count behind a shooting percentage, so 60% on 3-5 doesn't read like 60% on 60-100.
+  const madeAttempted = (p: PlayerSeasonAverage): string | null => {
+    switch (category.key) {
+      case 'fg_pct': return `${p.total_fgm} of ${p.total_fga}`;
+      case 'tp_pct': return `${p.total_tpm} of ${p.total_tpa}`;
+      case 'ft_pct': return `${p.total_ftm} of ${p.total_fta}`;
+      default: return null;
+    }
+  };
+
   const maxAbs = rows.reduce((m, r) => Math.max(m, Math.abs(r.value)), 0) || 1;
 
   return (
@@ -177,6 +187,7 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
                   else onSelectTeam?.(row.ref as TeamSeasonAverage);
                 };
                 const podium = i < 3;
+                const shotCount = entity === 'players' ? madeAttempted(row.ref as PlayerSeasonAverage) : null;
                 return (
                   <tr
                     key={row.id}
@@ -215,6 +226,7 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
                             style={{ width: `${Math.max((Math.abs(row.value) / maxAbs) * 100, 2)}%`, backgroundColor: podium ? readableBrand.accent : 'var(--ch-muted)', opacity: podium ? 1 : 0.5 }}
                           />
                         </div>
+                        {shotCount && <span className="tabular-nums text-[12px] text-[color:var(--ch-muted)] whitespace-nowrap">{shotCount}</span>}
                         <span className="font-semibold tabular-nums min-w-[3.5rem] text-right text-[color:var(--ch-text)]">{formatValue(row.value)}</span>
                       </div>
                     </td>

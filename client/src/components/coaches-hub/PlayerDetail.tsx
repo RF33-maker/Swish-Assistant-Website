@@ -12,6 +12,8 @@ interface Props {
   players: PlayerSeasonAverage[];
   teams: TeamSeasonAverage[];
   brandColor: string;
+  /** Names the tab the back button returns to, e.g. "Back to teams". */
+  backLabel?: string;
   onBack: () => void;
   onSelectTeam?: (team: TeamSeasonAverage) => void;
 }
@@ -73,7 +75,7 @@ function ordinal(n: number): string {
   }
 }
 
-export default function PlayerDetail({ player, players, teams, brandColor, onBack, onSelectTeam }: Props) {
+export default function PlayerDetail({ player, players, teams, brandColor, backLabel = 'Back', onBack, onSelectTeam }: Props) {
   const readableBrand = useReadableTeamColor(brandColor);
   const [tab, setTab] = useState<DetailTab>('profile');
   const [loading, setLoading] = useState(true);
@@ -172,10 +174,23 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
     { label: 'NET', value: player.advanced.net_rtg !== null ? (player.advanced.net_rtg > 0 ? `+${player.advanced.net_rtg.toFixed(1)}` : player.advanced.net_rtg.toFixed(1)) : '—' },
   ];
 
+  const gp = player.games_played;
+  const shootingLine = (label: string, made: number, attempted: number, pct: number | null) => ({
+    label,
+    pct: attempted > 0 && pct != null ? `${pct.toFixed(1)}%` : '—',
+    perGame: gp ? `${(made / gp).toFixed(1)} of ${(attempted / gp).toFixed(1)}` : '—',
+    total: `${made} of ${attempted}`,
+  });
+  const shooting = [
+    shootingLine('Field goals', player.total_fgm, player.total_fga, player.season_fg_pct),
+    shootingLine('Threes', player.total_tpm, player.total_tpa, player.season_tp_pct),
+    shootingLine('Free throws', player.total_ftm, player.total_fta, player.season_ft_pct),
+  ];
+
   return (
     <div>
       <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px] mb-4">
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to rankings
+        <ArrowLeft className="w-3.5 h-3.5" /> {backLabel}
       </button>
 
       <div className="ch-card overflow-hidden mb-6">
@@ -204,6 +219,30 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
               <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-neutral-500 mt-1">{s.label}</div>
             </div>
           ))}
+        </div>
+
+        {/* Makes and attempts behind each percentage: a game's worth, then the season's count. */}
+        <div className="border-t border-gray-200 dark:border-neutral-800 px-3 md:px-6 py-3">
+          <table className="w-full text-center">
+            <thead>
+              <tr className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-neutral-500">
+                <th className="w-14 md:w-20" />
+                {shooting.map((s) => <th key={s.label} scope="col" className="font-semibold pb-1.5 w-[30%]">{s.label}</th>)}
+              </tr>
+            </thead>
+            <tbody className="ch-num">
+              <tr>
+                <td />
+                {shooting.map((s) => <td key={s.label} className="text-[15px] md:text-base font-semibold text-slate-900 dark:text-white pb-1.5">{s.pct}</td>)}
+              </tr>
+              {([['A game', 'perGame'], ['Total', 'total']] as const).map(([label, field]) => (
+                <tr key={field} className="text-[11.5px] text-slate-500 dark:text-neutral-400">
+                  <th scope="row" className="text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-neutral-500 py-0.5 whitespace-nowrap">{label}</th>
+                  {shooting.map((s) => <td key={s.label} className="py-0.5 whitespace-nowrap">{s[field]}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         <div className="flex border-t border-gray-200 dark:border-neutral-800">
@@ -317,6 +356,8 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
                       <th className="py-2 pr-3 font-medium text-right hidden md:table-cell">BLK</th>
                       <th className="py-2 pr-3 font-medium text-right hidden md:table-cell">TO</th>
                       <th className="py-2 pl-3 font-medium text-right">FG</th>
+                      <th className="py-2 pl-3 font-medium text-right">3P</th>
+                      <th className="py-2 pl-3 font-medium text-right">FT</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -324,7 +365,7 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
                       <tr key={g.gameKey} className="border-b border-gray-100 dark:border-neutral-800/60 last:border-0">
                         <td className="py-2 pr-3 text-gray-500 dark:text-neutral-400 whitespace-nowrap">{g.date ? new Date(g.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '—'}</td>
                         <td className="py-2 pr-3 text-gray-900 dark:text-white whitespace-nowrap">{g.opponent}</td>
-                        <td className="py-2 pr-3">
+                        <td className="py-2 pr-3 whitespace-nowrap">
                           {g.result ? (
                             <span className={`font-semibold ${g.result === 'W' ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>{g.result}</span>
                           ) : '—'}
@@ -336,7 +377,9 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
                         <td className="py-2 pr-3 text-right text-gray-700 dark:text-neutral-300 hidden md:table-cell">{g.stl}</td>
                         <td className="py-2 pr-3 text-right text-gray-700 dark:text-neutral-300 hidden md:table-cell">{g.blk}</td>
                         <td className="py-2 pr-3 text-right text-gray-700 dark:text-neutral-300 hidden md:table-cell">{g.tov}</td>
-                        <td className="py-2 pl-3 text-right text-gray-700 dark:text-neutral-300 whitespace-nowrap">{g.fgm}-{g.fga}</td>
+                        <td className="py-2 pl-3 text-right text-gray-700 dark:text-neutral-300 whitespace-nowrap">{g.fgm}/{g.fga}</td>
+                        <td className="py-2 pl-3 text-right text-gray-700 dark:text-neutral-300 whitespace-nowrap">{g.tpm}/{g.tpa}</td>
+                        <td className="py-2 pl-3 text-right text-gray-700 dark:text-neutral-300 whitespace-nowrap">{g.ftm}/{g.fta}</td>
                       </tr>
                     ))}
                   </tbody>

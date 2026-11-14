@@ -107,6 +107,8 @@ function accumulateRawInto(target: RawPlayerAgg, source: RawPlayerAgg) {
 // merge (same-team, then cross-team for mid-season team switches) already proven
 // out on the public League Leaders page (`client/src/pages/pages/league-leaders/[slug].tsx`),
 // rather than inventing a second dedupe strategy.
+const PLAYER_STAT_COLUMNS = 'player_id, id, full_name, firstname, familyname, team_id, team_name, game_key, spoints, sreboundstotal, sassists, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted, efg_percent, ts_percent, three_point_rate, ast_percent, oreb_percent, dreb_percent, reb_percent, tov_percent, usage_percent, pie, off_rating, def_rating, net_rating, pts_percent_2pt, pts_percent_3pt, pts_percent_ft, pts_percent_midrange, pts_percent_pitp, pts_percent_fastbreak, pts_percent_second_chance, pts_percent_off_turnovers';
+
 export async function fetchAndMergePlayerRankings(leagueId: string): Promise<PlayerSeasonAverage[]> {
   let allRows: any[] = [];
   let page = 0;
@@ -115,7 +117,7 @@ export async function fetchAndMergePlayerRankings(leagueId: string): Promise<Pla
   while (hasMore) {
     const { data, error } = await supabase
       .from('player_stats')
-      .select('player_id, id, full_name, firstname, familyname, team_id, team_name, game_key, spoints, sreboundstotal, sassists, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted, efg_percent, ts_percent, three_point_rate, ast_percent, oreb_percent, dreb_percent, reb_percent, tov_percent, usage_percent, pie, off_rating, def_rating, net_rating, pts_percent_2pt, pts_percent_3pt, pts_percent_ft, pts_percent_midrange, pts_percent_pitp, pts_percent_fastbreak, pts_percent_second_chance, pts_percent_off_turnovers')
+      .select(PLAYER_STAT_COLUMNS)
       .eq('league_id', leagueId)
       .range(page * pageSize, (page + 1) * pageSize - 1);
     if (error) throw error;
@@ -124,7 +126,43 @@ export async function fetchAndMergePlayerRankings(leagueId: string): Promise<Pla
     hasMore = data.length === pageSize;
     page++;
   }
+  return mergePlayerRows(allRows, leagueId);
+}
 
+/** One box-score line, as read for a club across its competitions (see fetchClubPlayerRows). */
+export type ClubPlayerRow = Record<string, any> & { league_id: string; team_id: string; game_key: string | null };
+
+/**
+ * Every box-score line for one club's teams. A club has a different team_id in each competition
+ * it plays (league, cup, trophy), so this reads them together; the caller picks which
+ * competitions to count and passes those rows to mergePlayerRows.
+ */
+export async function fetchClubPlayerRows(clubTeams: Array<{ league_id: string; team_id: string }>): Promise<ClubPlayerRow[]> {
+  const teamIds = Array.from(new Set(clubTeams.map((t) => t.team_id)));
+  const leagueIds = Array.from(new Set(clubTeams.map((t) => t.league_id)));
+  if (teamIds.length === 0) return [];
+  // A team_id is only this club's inside its own competition.
+  const pairs = new Set(clubTeams.map((t) => `${t.league_id}|${t.team_id}`));
+  const rows: ClubPlayerRow[] = [];
+  const pageSize = 1000;
+  for (let page = 0; ; page++) {
+    const { data, error } = await supabase
+      .from('player_stats')
+      .select(`league_id, ${PLAYER_STAT_COLUMNS}`)
+      .in('team_id', teamIds)
+      .in('league_id', leagueIds)
+      .order('id', { ascending: true })
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+    if (error) throw error;
+    const batch = ((data || []) as unknown) as ClubPlayerRow[];
+    rows.push(...batch.filter((r) => pairs.has(`${r.league_id}|${r.team_id}`)));
+    if (batch.length < pageSize) break;
+  }
+  return rows;
+}
+
+/** Season averages from raw box-score lines, with one player's split identities merged into one row. */
+export function mergePlayerRows(allRows: any[], leagueId: string): PlayerSeasonAverage[] {
   // Pass 0: group by raw player_id (or row id if unresolved) — one bucket per
   // distinct database identity, exactly mirroring the source rows.
   const byId = new Map<string, RawPlayerAgg>();

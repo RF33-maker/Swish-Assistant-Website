@@ -31,6 +31,7 @@ import { ordinal } from '@/lib/gameReport';
 import MatchReport from '@/components/coaches-hub/MatchReport';
 import OpponentScoutReport from '@/components/coaches-hub/OpponentScoutReport';
 import FormComparison from '@/components/coaches-hub/FormComparison';
+import TeamsList, { type TeamsListRow } from '@/components/coaches-hub/TeamsList';
 import Playbook from '@/components/coaches-hub/Playbook';
 import { safelyParseReport } from "@/utils/parseReport";
 import { ScoutingReport } from "@/types/reportSchema";
@@ -43,6 +44,7 @@ import {
 } from "@/lib/advancedStats";
 import { fetchAndMergePlayerRankings, type PlayerSeasonAverage } from "@/lib/playerRankings";
 import { EXCLUDE_LIVE_GAMES } from "@/lib/gameResults";
+import { competitionSeasonLabel, competitionShortName } from "@/lib/teamSeasons";
 
 export type { PlayerSeasonAverage };
 
@@ -115,7 +117,7 @@ export interface MyTeamGame {
   matchTime: string | null;
 }
 
-type HubTab = 'overview' | 'compare' | 'rankings' | 'lineups' | 'trends' | 'scouting' | 'playbook';
+type HubTab = 'overview' | 'compare' | 'teams' | 'stats' | 'lineups' | 'trends' | 'scouting' | 'playbook';
 
 interface TopLeagueShortcut {
   // Display label/logo prefer the parent league brand (shorter, more
@@ -645,6 +647,23 @@ export default function CoachesHub() {
     return rows;
   }, [teamSeasonAverages, leagueGameResults, canonicalTeamName]);
 
+  // One row per club for the Teams tab: standings order, each with the stats row it has played
+  // most games under (the feed can list one club under two spellings).
+  const teamDirectory: TeamsListRow[] = useMemo(() => {
+    const byName = new Map<string, TeamSeasonAverage>();
+    teamSeasonAverages.forEach((t) => {
+      const name = canonicalTeamName(t.team_name);
+      const existing = byName.get(name);
+      if (!existing || (t.games_played || 0) > (existing.games_played || 0)) byName.set(name, t);
+    });
+    const rows: TeamsListRow[] = [];
+    standings.forEach((standing) => {
+      const team = byName.get(standing.teamName);
+      if (team) rows.push({ name: standing.teamName, team, standing });
+    });
+    return rows;
+  }, [teamSeasonAverages, standings, canonicalTeamName]);
+
   const myStanding = myTeam
     ? standings.find((s) => s.teamName === canonicalTeamName(myTeam.team_name))
     : undefined;
@@ -789,14 +808,18 @@ export default function CoachesHub() {
   // Grouped so "look something up" (Stats) and "write something" (Build) read
   // as two different jobs, not five flat equal-weight options. "Lineups" used
   // to be labelled "Advanced Insights", which collided with the "Advanced"
-  // category group inside Rankings below — renamed to what it actually shows.
+  // category group inside the Stats tab below — renamed to what it actually shows.
   const tabGroups: { group: string; tabs: { id: HubTab; label: string; icon: LucideIcon }[] }[] = [
     {
-      group: 'Stats', tabs: [
+      // Was "Stats", until the Rankings tab took that name.
+      group: 'Analysis', tabs: [
         { id: 'overview', label: 'Overview', icon: LayoutDashboard },
         // Needs a team of your own to compare from, so team (coach) logins only.
         ...(myTeam ? [{ id: 'compare' as HubTab, label: 'Compare', icon: ArrowLeftRight }] : []),
-        { id: 'rankings', label: 'Rankings', icon: ListOrdered },
+        // The way into any team's profile: every team in the competition, in standings order.
+        { id: 'teams', label: 'Teams', icon: Shield },
+        // Leaderboards for players and teams, one stat at a time. Was "Rankings".
+        { id: 'stats', label: 'Stats', icon: ListOrdered },
         { id: 'lineups', label: 'Lineups', icon: Users },
         { id: 'trends', label: 'Trends', icon: LineChart },
       ]
@@ -808,6 +831,9 @@ export default function CoachesHub() {
       ]
     },
   ];
+
+  // A player or team profile closes back onto the tab it was opened from.
+  const detailBackLabel = `Back to ${(tabGroups.flatMap((g) => g.tabs).find((t) => t.id === activeTab)?.label ?? 'overview').toLowerCase()}`;
 
   // Everything inside the hub reads its accent from this one variable.
   const hubStyle = { '--ch-accent': readableBrand } as CSSProperties;
@@ -834,7 +860,7 @@ export default function CoachesHub() {
             <Lock className="w-5 h-5 text-[color:var(--ch-text-2)]" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-[color:var(--ch-text)] mb-2">Sign in to Coaches Hub</h1>
-          <p className="text-sm text-[color:var(--ch-text-2)] mb-6">Scouting, rankings and game plans for your team — log in to continue.</p>
+          <p className="text-sm text-[color:var(--ch-text-2)] mb-6">Scouting, stats and game plans for your team — log in to continue.</p>
           <Link href="/auth" className="ch-btn ch-btn-primary w-full justify-center h-10">
             Log in
           </Link>
@@ -842,6 +868,23 @@ export default function CoachesHub() {
       </div>
     );
   }
+
+  // The switcher lists a coach's competitions season by season, newest first, so this season's
+  // league and cups sit together at the top instead of mixed in with every past year's.
+  const leaguesBySeason = (() => {
+    const groups = new Map<string, any[]>();
+    leagues.forEach((league) => {
+      // A competition with no year in its name or season can't be placed in one.
+      const label = competitionSeasonLabel(league);
+      const season = /(?:19|20)\d{2}/.test(label) ? label : 'Other competitions';
+      groups.set(season, [...(groups.get(season) ?? []), league]);
+    });
+    const year = (label: string) => Number(label.match(/(?:19|20)\d{2}/)?.[0] || 0);
+    return Array.from(groups, ([season, list]) => ({
+      season,
+      leagues: [...list].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))),
+    })).sort((a, b) => year(b.season) - year(a.season) || b.season.localeCompare(a.season));
+  })();
 
   const leagueSwitcher = selectedLeague && (
     <div className="relative shrink-0">
@@ -902,22 +945,26 @@ export default function CoachesHub() {
                 <p className="px-3 py-2 text-[13px] text-[color:var(--ch-muted)]">No leagues found matching "{searchQuery}"</p>
               )
             ) : (
-              <div className="max-h-64 overflow-y-auto">
-                <div className="ch-eyebrow px-3 pt-1.5 pb-1">Your leagues</div>
-                {leagues.map((league) => {
-                  const isCurrent = league.league_id === selectedLeague.league_id;
-                  return (
-                    <button
-                      key={league.league_id}
-                      onClick={() => { setSelectedLeague(league); setLeaguePickerOpen(false); }}
-                      className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 text-[13px] rounded-md hover:bg-[color:var(--ch-surface-3)]"
-                      style={isCurrent ? { color: readableBrand, fontWeight: 600 } : { color: 'var(--ch-text)' }}
-                    >
-                      <span className="truncate">{league.name}</span>
-                      {isCurrent && <Check className="w-4 h-4 shrink-0" />}
-                    </button>
-                  );
-                })}
+              <div className="max-h-80 overflow-y-auto">
+                {leaguesBySeason.map((group) => (
+                  <div key={group.season}>
+                    <div className="ch-eyebrow px-3 pt-2 pb-1 ch-num">{leaguesBySeason.length > 1 ? group.season : 'Your leagues'}</div>
+                    {group.leagues.map((league) => {
+                      const isCurrent = league.league_id === selectedLeague.league_id;
+                      return (
+                        <button
+                          key={league.league_id}
+                          onClick={() => { setSelectedLeague(league); setLeaguePickerOpen(false); }}
+                          className="w-full flex items-center justify-between gap-2 text-left px-3 py-2 text-[13px] rounded-md hover:bg-[color:var(--ch-surface-3)]"
+                          style={isCurrent ? { color: readableBrand, fontWeight: 600 } : { color: 'var(--ch-text)' }}
+                        >
+                          <span className="truncate">{leaguesBySeason.length > 1 ? competitionShortName(league.name) : league.name}</span>
+                          {isCurrent && <Check className="w-4 h-4 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1544,6 +1591,7 @@ export default function CoachesHub() {
                     players={playerSeasonAverages}
                     teams={teamSeasonAverages}
                     brandColor={brandColor}
+                    backLabel={detailBackLabel}
                     onBack={() => setDetailView(null)}
                     onSelectTeam={(team) => setDetailView({ type: 'team', team })}
                   />
@@ -1552,7 +1600,9 @@ export default function CoachesHub() {
                     team={detailView.team}
                     teams={teamSeasonAverages}
                     players={playerSeasonAverages}
+                    competition={selectedLeague}
                     brandColor={brandColor}
+                    backLabel={detailBackLabel}
                     onBack={() => setDetailView(null)}
                     onSelectPlayer={(player) => setDetailView({ type: 'player', player })}
                   />
@@ -1590,10 +1640,28 @@ export default function CoachesHub() {
                     )
                   )}
 
-                  {/* Rankings */}
-                  {activeTab === 'rankings' && (
+                  {/* Teams: the list to open a team's profile from */}
+                  {activeTab === 'teams' && (
                     <div>
-                      {tabIntro('01', 'Rankings', `Season averages across ${teamSeasonAverages.length} teams and ${playerSeasonAverages.length} players, updated as new stats are uploaded.`)}
+                      {tabIntro('01', 'Teams', `${teamDirectory.length} ${teamDirectory.length === 1 ? 'team' : 'teams'} in ${selectedLeague.name}, in standings order. Open one for its profile, roster and game log.`)}
+                      {teamDirectory.length > 0 ? (
+                        <TeamsList
+                          rows={teamDirectory}
+                          leagueId={selectedLeague.league_id}
+                          myTeamName={myTeam?.team_name}
+                          color={readableBrand}
+                          onSelectTeam={(team) => setDetailView({ type: 'team', team })}
+                        />
+                      ) : statsLoading ? loadingPanels : (
+                        emptyState(Shield, 'No teams yet', 'Teams appear here once this competition has box scores.')
+                      )}
+                    </div>
+                  )}
+
+                  {/* Stats (was Rankings) */}
+                  {activeTab === 'stats' && (
+                    <div>
+                      {tabIntro('01', 'Stats', `Season averages across ${teamSeasonAverages.length} teams and ${playerSeasonAverages.length} players, updated as new stats are uploaded.`)}
                       <FullRankings
                         players={playerSeasonAverages}
                         teams={teamSeasonAverages}
@@ -1606,10 +1674,10 @@ export default function CoachesHub() {
 
                   {/* Lineups — five-man unit net rating / plus-minus / minutes,
                       was labelled "Advanced Insights" which collided with the
-                      "Advanced" category group inside Rankings above. Coach
+                      "Advanced" category group inside Stats above. Coach
                       accounts get their own team only — reading-focused, not a
                       league-wide leaderboard; to see another team's lineups,
-                      visit that team's own profile (Rankings drill-in), which
+                      visit that team's own profile (Teams tab), which
                       shows the same scoped view. League owners still get the
                       full league here since they're not tied to one team. */}
                   {activeTab === 'lineups' && (
