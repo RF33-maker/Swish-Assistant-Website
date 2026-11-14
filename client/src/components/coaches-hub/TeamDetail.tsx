@@ -6,12 +6,17 @@ import { useReadableTeamColor } from '@/hooks/useReadableColor';
 import { getCategory, teamPercentileRow, type PercentileRow } from '@/lib/coachesHubCategories';
 import { fetchGameSchedule } from '@/lib/coachesHubGameData';
 import AdvancedInsights from './AdvancedInsights';
+import TeamRoster from './TeamRoster';
 
 interface Props {
   team: TeamSeasonAverage;
   teams: TeamSeasonAverage[];
   players: PlayerSeasonAverage[];
+  /** The competition the hub is open on, for the roster's season and competition filter. */
+  competition?: { league_id: string; name?: string | null; season?: string | null } | null;
   brandColor: string;
+  /** Names the tab the back button returns to, e.g. "Back to teams". */
+  backLabel?: string;
   onBack: () => void;
   onSelectPlayer?: (player: PlayerSeasonAverage) => void;
 }
@@ -60,7 +65,7 @@ function ordinal(n: number): string {
   }
 }
 
-export default function TeamDetail({ team, teams, players, brandColor, onBack, onSelectPlayer }: Props) {
+export default function TeamDetail({ team, teams, players, competition, brandColor, backLabel = 'Back', onBack, onSelectPlayer }: Props) {
   const readableBrand = useReadableTeamColor(brandColor);
   const [tab, setTab] = useState<DetailTab>('profile');
   const [loading, setLoading] = useState(true);
@@ -144,7 +149,7 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
   return (
     <div>
       <button onClick={onBack} className="ch-btn ch-btn-ghost h-8 px-2.5 text-[12.5px] mb-4">
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to rankings
+        <ArrowLeft className="w-3.5 h-3.5" /> {backLabel}
       </button>
 
       <div className="ch-card overflow-hidden mb-4">
@@ -198,44 +203,14 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <span className="ch-kicker-n" style={{ color: readableBrand.body }}>02</span>
-              <h3 className="text-[15px] md:text-base font-semibold tracking-tight text-slate-900 dark:text-white">Roster</h3>
-            </div>
-            {roster.length === 0 ? (
-              <p className="text-sm text-slate-400 dark:text-neutral-500 py-4 text-center">No tracked players for this team yet.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-neutral-500 border-b border-gray-200 dark:border-neutral-800">
-                      <th className="py-2 pr-3 font-medium">Player</th>
-                      <th className="py-2 pr-3 font-medium text-right">GP</th>
-                      <th className="py-2 pr-3 font-medium text-right">PTS</th>
-                      <th className="py-2 pr-3 font-medium text-right hidden sm:table-cell">REB</th>
-                      <th className="py-2 pl-3 font-medium text-right hidden sm:table-cell">AST</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {roster.map(p => (
-                      <tr key={`${p.player_name}-${p.team_id}`} className="border-b border-gray-100 dark:border-neutral-800/60 last:border-0">
-                        <td className="py-2 pr-3 font-medium">
-                          {onSelectPlayer ? (
-                            <button onClick={() => onSelectPlayer(p)} className="hover:underline text-left" style={{ color: readableBrand.body }}>{p.player_name}</button>
-                          ) : <span className="text-gray-900 dark:text-white">{p.player_name}</span>}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-gray-700 dark:text-neutral-300">{p.games_played}</td>
-                        <td className="py-2 pr-3 text-right font-semibold" style={{ color: readableBrand.body }}>{p.avg_pts.toFixed(1)}</td>
-                        <td className="py-2 pr-3 text-right text-gray-700 dark:text-neutral-300 hidden sm:table-cell">{p.avg_reb.toFixed(1)}</td>
-                        <td className="py-2 pl-3 text-right text-gray-700 dark:text-neutral-300 hidden sm:table-cell">{p.avg_ast.toFixed(1)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <TeamRoster
+            key={team.team_id}
+            team={team}
+            players={players}
+            competition={competition}
+            color={readableBrand.body}
+            onSelectPlayer={onSelectPlayer}
+          />
 
           <div>
             <div className="flex items-center gap-2.5 mb-3">
@@ -278,7 +253,7 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
                         <td className="py-2 pr-3 text-right text-gray-700 dark:text-neutral-300 hidden md:table-cell">{g.stl}</td>
                         <td className="py-2 pr-3 text-right text-gray-700 dark:text-neutral-300 hidden md:table-cell">{g.blk}</td>
                         <td className="py-2 pr-3 text-right text-gray-700 dark:text-neutral-300 hidden md:table-cell">{g.tov}</td>
-                        <td className="py-2 pl-3 text-right text-gray-700 dark:text-neutral-300 whitespace-nowrap">{g.fgm}-{g.fga}</td>
+                        <td className="py-2 pl-3 text-right text-gray-700 dark:text-neutral-300 whitespace-nowrap">{g.fgm}/{g.fga}</td>
                       </tr>
                     ))}
                   </tbody>

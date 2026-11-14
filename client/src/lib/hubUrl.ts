@@ -7,7 +7,7 @@
  *   /coaches-hub?league=<id>&tab=scouting&view=scout&opponent=London%20Lions
  */
 
-export const HUB_URL_TABS = ["overview", "compare", "rankings", "lineups", "trends", "scouting", "playbook"] as const;
+export const HUB_URL_TABS = ["overview", "compare", "teams", "stats", "lineups", "trends", "scouting", "playbook"] as const;
 export type HubUrlTab = (typeof HUB_URL_TABS)[number];
 
 export type HubUrlView =
@@ -32,7 +32,8 @@ export function readHubUrl(search: string): HubUrlState | null {
   const league = params.get("league");
   if (league) state.league = league;
 
-  const tab = params.get("tab");
+  // The Stats tab was called Rankings; links made then still open it.
+  const tab = params.get("tab") === "rankings" ? "stats" : params.get("tab");
   if (tab && (HUB_URL_TABS as readonly string[]).includes(tab)) state.tab = tab as HubUrlTab;
 
   const view = params.get("view");

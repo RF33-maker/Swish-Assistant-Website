@@ -11,6 +11,19 @@ export type TeamSeasonOption = {
   leagueIds: string[];
 };
 
+/** "2026/27" for a competition, read from its season field and name ("Trophy 2026/27", "... 2026-2027"). */
+export function competitionSeasonLabel(competition: TeamSeasonCompetition): string {
+  return seasonLabel(competition);
+}
+
+/** A competition's name without the season on the end: "BCB Trophy 2026-2027" reads "BCB Trophy". */
+export function competitionShortName(name: string | null | undefined): string {
+  const full = (name || "").trim();
+  // "2026-2027", "2026/27" and the short "26-27" on the end.
+  const short = full.replace(/[\s,(-]*(?:(?:19|20)\d{2}|\d{2})\s*[-/]\s*(?:19|20)?\d{2}\)?\s*$/, "").trim();
+  return short || full;
+}
+
 function seasonLabel(competition: TeamSeasonCompetition): string {
   const source = `${competition.season || ""} ${competition.name || ""}`.trim();
   const range = source.match(/((?:19|20)\d{2})\s*[-/]\s*((?:19|20)?\d{2})/);
