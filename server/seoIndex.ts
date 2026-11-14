@@ -190,6 +190,9 @@ async function loadIndexSource(): Promise<IndexSource> {
     .select("data, built_at")
     .eq("id", 1)
     .limit(1);
+  // A read that failed means the database is struggling: summarising directly
+  // is far heavier than the read, so don't pile that on.
+  if (error) throw error;
   const snapshot = rows?.[0];
   const stored = (snapshot?.data || null) as IndexSource | null;
   if (stored && Date.now() - new Date(snapshot!.built_at).getTime() < SNAPSHOT_STALE_MS) return stored;
@@ -198,7 +201,7 @@ async function loadIndexSource(): Promise<IndexSource> {
   const live = await supabaseAdmin.rpc("seo_index_source");
   if (!live.error && live.data) return live.data as IndexSource;
   if (stored) return stored;
-  throw error || live.error || new Error("SEO index snapshot unavailable");
+  throw live.error || new Error("SEO index snapshot unavailable");
 }
 
 /** League ids whose competitions can include under-18s (their own age, or a youth parent's). */
@@ -431,7 +434,7 @@ async function buildSeoIndex(): Promise<SeoIndex> {
 }
 
 /** After a failed build, wait this long before trying again, so a struggling database isn't asked on every request. */
-const RETRY_AFTER_FAILURE_MS = 60 * 1000;
+const RETRY_AFTER_FAILURE_MS = 3 * 60 * 1000;
 
 let cached: SeoIndex | null = null;
 let inFlight: Promise<SeoIndex> | null = null;
