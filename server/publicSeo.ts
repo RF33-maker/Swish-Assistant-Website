@@ -1040,7 +1040,48 @@ async function renderGame(gameKey: string, competitionSlug?: string): Promise<Se
 
 const CACHE_CONTROL = "public, max-age=300, s-maxage=600, stale-while-revalidate=86400";
 
+/**
+ * How long a visitor waits for the server-rendered page. Past this they get
+ * the plain app shell, which loads the same content itself, rather than a
+ * blank screen while a slow database answers.
+ */
+const RENDER_WAIT_MS = 3_000;
+
 export async function servePublicSeo(req: Request, res: Response, next: NextFunction) {
+  let timedOut = false;
+  const timer = setTimeout(async () => {
+    if (res.headersSent) return;
+    timedOut = true;
+    try {
+      const shell = withDevPreamble(stripHeadDefaults(await loadShell()));
+      if (res.headersSent) return;
+      console.warn(`Public SEO rendering passed ${RENDER_WAIT_MS}ms for ${req.path}; sent the plain shell.`);
+      res.status(200).type("html").set("Cache-Control", "no-store").send(shell);
+    } catch (error) {
+      console.error("Sending the plain shell after a slow render failed:", error);
+      if (!res.headersSent) next();
+    }
+  }, RENDER_WAIT_MS);
+  // Once the shell has gone, whatever the slow render does next is dropped.
+  const guarded: Response = new Proxy(res, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        if (timedOut) return guarded;
+        const out = value.apply(target, args);
+        return out === target ? guarded : out;
+      };
+    },
+  });
+  try {
+    await renderPublicSeo(req, guarded, (...args: [any?]) => { if (!timedOut) next(...args); });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function renderPublicSeo(req: Request, res: Response, next: NextFunction) {
   if (req.method !== "GET" && req.method !== "HEAD") return next();
   const pathname = req.path.replace(/\/+$/, "") || "/";
   const homeMatch = pathname === "/";
