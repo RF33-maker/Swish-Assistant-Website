@@ -21,7 +21,6 @@ import { getLeagueSides } from "./teamSides";
  */
 
 const INDEX_TTL_MS = 60 * 60 * 1000;
-const BATCH = 1000;
 /** A game this long past tip-off with no box score is treated as not played. */
 export const UNPLAYED_GRACE_MS = 2 * 24 * 60 * 60 * 1000;
 
@@ -124,13 +123,14 @@ export function playerSegment(player: { slug?: string | null; full_name?: string
  * vs "…Kings"): the most used, then the most recent, then alphabetical. The
  * team page canonicalises with this too, so the sitemap URL is the canonical.
  */
-export function pickTeamSpelling(rows: Array<{ team_name?: string | null; created_at?: string | null }>): string | null {
+export function pickTeamSpelling(rows: Array<{ team_name?: string | null; created_at?: string | null; count?: number }>): string | null {
   const tally = new Map<string, { count: number; latest: string }>();
   for (const row of rows) {
     const name = String(row.team_name || "").trim();
     if (!name) continue;
     const t = tally.get(name) || { count: 0, latest: "" };
-    t.count += 1;
+    // A row can stand for many box-score rows already counted by the database.
+    t.count += row.count ?? 1;
     const created = String(row.created_at || "");
     if (created > t.latest) t.latest = created;
     tally.set(name, t);
@@ -159,26 +159,46 @@ const day = (value: unknown): string | null => {
 };
 const later = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b);
 
-/** Every row of a table, paged on a unique column so pages never overlap. */
-async function fetchAll<T>(table: string, columns: string, orderBy: string): Promise<T[]> {
-  const { count, error } = await supabaseAdmin.from(table).select(orderBy, { count: "exact", head: true });
-  if (error) throw error;
-  const pages = Math.ceil((count || 0) / BATCH);
-  const out: T[] = [];
-  // A few pages at a time: player_stats is ~25 pages.
-  for (let start = 0; start < pages; start += 6) {
-    const batch = await Promise.all(
-      Array.from({ length: Math.min(6, pages - start) }, (_, i) => {
-        const from = (start + i) * BATCH;
-        return supabaseAdmin.from(table).select(columns).order(orderBy).range(from, from + BATCH - 1);
-      }),
-    );
-    for (const { data, error: e } of batch) {
-      if (e) throw e;
-      out.push(...((data || []) as T[]));
-    }
-  }
-  return out;
+/**
+ * What the index needs from the box scores, already summarised by the database
+ * (supabase/migrations/20261114_seo_index_snapshot.sql). Downloading every
+ * player_stats row to do this here stopped finishing inside a request once the
+ * history seasons were imported, so the database keeps the summary in one row
+ * and refreshes it every ten minutes.
+ */
+interface IndexSource {
+  /** [league_id, team_name, rows, latest created_at, last game day] — one per spelling per competition. */
+  teams: Array<[string, string, number, string | null, string | null]>;
+  /** [player_id, league_id, games, last game day, latest created_at, latest team_name] */
+  playerStats: Array<[string, string, number, string | null, string | null, string | null]>;
+  /** [game_key, league_id] for every game with a box score. */
+  statGames: Array<[string, string]>;
+  /** [game_key, league_id, matchtime, hometeam, awayteam] */
+  games: Array<[string, string, string | null, string | null, string | null]>;
+  /** [id, slug, full_name, date_of_birth] for players with a box score. */
+  players: Array<[string, string | null, string | null, string | null]>;
+}
+
+/** Past this the scheduled refresh has stopped, so work the summary out directly. */
+const SNAPSHOT_STALE_MS = 2 * 60 * 60 * 1000;
+
+async function loadIndexSource(): Promise<IndexSource> {
+  // Asked for as a list, not a single object: for one object the API re-parses
+  // the whole summary to unwrap it, which is slow on a busy database.
+  const { data: rows, error } = await supabaseAdmin
+    .from("seo_index_snapshot")
+    .select("data, built_at")
+    .eq("id", 1)
+    .limit(1);
+  const snapshot = rows?.[0];
+  const stored = (snapshot?.data || null) as IndexSource | null;
+  if (stored && Date.now() - new Date(snapshot!.built_at).getTime() < SNAPSHOT_STALE_MS) return stored;
+
+  console.warn(stored ? "SEO index snapshot is stale; summarising directly." : "SEO index snapshot missing; summarising directly.");
+  const live = await supabaseAdmin.rpc("seo_index_source");
+  if (!live.error && live.data) return live.data as IndexSource;
+  if (stored) return stored;
+  throw error || live.error || new Error("SEO index snapshot unavailable");
 }
 
 /** League ids whose competitions can include under-18s (their own age, or a youth parent's). */
@@ -195,16 +215,16 @@ async function buildSeoIndex(): Promise<SeoIndex> {
   const today = day(new Date(now).toISOString())!;
   const sides = await getLeagueSides();
 
-  const [competitionRows, gameRows, statRows, playerRows, articleRows] = await Promise.all([
+  const [competitionRows, source, articleRows] = await Promise.all([
     supabaseAdmin.from("competitions").select("league_id, name, slug, is_public, parent_league_id, age_group").then(({ data, error }) => {
       if (error) throw error;
       return data || [];
     }),
-    fetchAll<any>("game_schedule", "game_key, league_id, matchtime, hometeam, awayteam", "game_key"),
-    fetchAll<any>("player_stats", "id, player_id, league_id, team_name, game_key, created_at", "id"),
-    fetchAll<any>("players", "id, slug, full_name, league_id, date_of_birth", "id"),
+    loadIndexSource(),
     supabaseAdmin.from("news_articles").select("id, slug, title, published_at").eq("is_published", true).then(({ data }) => data || []),
   ]);
+  const gameRows = source.games.map(([game_key, league_id, matchtime, hometeam, awayteam]) => ({ game_key, league_id, matchtime, hometeam, awayteam }));
+  const playerRows = source.players.map(([id, slug, full_name, date_of_birth]) => ({ id, slug, full_name, date_of_birth }));
 
   // Public competitions, and private children that display under a public parent.
   const byLeague = new Map<string, any>(competitionRows.map((c: any) => [c.league_id, c]));
@@ -227,39 +247,39 @@ async function buildSeoIndex(): Promise<SeoIndex> {
   const competitionNameBySlug = new Map<string, string>();
   for (const c of competitionRows as any[]) if (c.is_public && c.slug) competitionNameBySlug.set(c.slug, c.name || c.slug);
 
-  const gameDate = new Map<string, string | null>();
-  for (const g of gameRows) gameDate.set(g.game_key, g.matchtime || null);
   const gamesWithStats = new Set<string>();
+  for (const [gameKey, leagueId] of source.statGames) {
+    if (publicSlugOf.has(leagueId)) gamesWithStats.add(gameKey);
+  }
 
   // Teams and players come from the box scores, so every URL has games behind it.
-  const teams = new Map<string, Omit<IndexTeam, "clubSlug" | "side"> & { leagueId: string; spellings: Array<{ team_name: string; created_at: string }> }>();
-  const playerStats = new Map<string, { games: Set<string>; lastmod: string | null; team: string | null; latestCreated: string; slug: string; slugs: Set<string>; youth: boolean }>();
-  for (const s of statRows) {
-    const slug = publicSlugOf.get(s.league_id);
-    if (!slug) continue;
-    const youth = youthLeagues.has(s.league_id);
-    if (s.game_key) gamesWithStats.add(s.game_key);
-    const date = day(gameDate.get(s.game_key) || s.created_at);
-    const created = String(s.created_at || "");
-    const teamName = String(s.team_name || "").trim();
-    if (teamName && !isPlaceholderTeamName(teamName)) {
-      const key = `${slug}|${slugifyName(teamName)}`;
-      const t = teams.get(key) || { competitionSlug: slug, name: teamName, leagueId: String(s.league_id), lastmod: null, rows: 0, youth: false, spellings: [] };
-      t.lastmod = later(t.lastmod, date);
-      t.rows += 1;
-      t.youth = t.youth || youth;
-      t.spellings.push({ team_name: teamName, created_at: created });
-      teams.set(key, t);
-    }
-    if (s.player_id) {
-      const p = playerStats.get(s.player_id) || { games: new Set<string>(), lastmod: null, team: null, latestCreated: "", slug, slugs: new Set<string>(), youth: false };
-      p.games.add(s.game_key || s.id);
-      p.slugs.add(slug);
-      p.youth = p.youth || youth;
-      p.lastmod = later(p.lastmod, date);
-      if (created >= p.latestCreated) { p.latestCreated = created; p.team = teamName || p.team; p.slug = slug; }
-      playerStats.set(s.player_id, p);
-    }
+  const teams = new Map<string, Omit<IndexTeam, "clubSlug" | "side"> & { leagueId: string; spellings: Array<{ team_name: string; created_at: string; count: number }> }>();
+  for (const [leagueId, rawName, rows, latestCreated, lastGame] of source.teams) {
+    const slug = publicSlugOf.get(leagueId);
+    const teamName = String(rawName || "").trim();
+    if (!slug || !teamName || isPlaceholderTeamName(teamName)) continue;
+    const key = `${slug}|${slugifyName(teamName)}`;
+    const t = teams.get(key) || { competitionSlug: slug, name: teamName, leagueId: String(leagueId), lastmod: null, rows: 0, youth: false, spellings: [] };
+    t.lastmod = later(t.lastmod, day(lastGame));
+    t.rows += rows;
+    t.youth = t.youth || youthLeagues.has(leagueId);
+    t.spellings.push({ team_name: teamName, created_at: String(latestCreated || ""), count: rows });
+    teams.set(key, t);
+  }
+
+  const playerStats = new Map<string, { games: number; lastmod: string | null; team: string | null; latestCreated: string; slug: string; slugs: Set<string>; youth: boolean }>();
+  for (const [playerId, leagueId, games, lastGame, latestCreated, latestTeam] of source.playerStats) {
+    const slug = publicSlugOf.get(leagueId);
+    if (!slug || !playerId) continue;
+    const p = playerStats.get(playerId) || { games: 0, lastmod: null, team: null, latestCreated: "", slug, slugs: new Set<string>(), youth: false };
+    p.games += games;
+    p.slugs.add(slug);
+    p.youth = p.youth || youthLeagues.has(leagueId);
+    p.lastmod = later(p.lastmod, day(lastGame));
+    // Their team and competition come from wherever they played most recently.
+    const created = String(latestCreated || "");
+    if (created >= p.latestCreated) { p.latestCreated = created; p.team = latestTeam || p.team; p.slug = slug; }
+    playerStats.set(playerId, p);
   }
 
   const teamList = Array.from(teams.values()).map(({ spellings, leagueId, ...t }) => {
@@ -332,7 +352,7 @@ async function buildSeoIndex(): Promise<SeoIndex> {
     const existing = players.get(segment);
     if (existing) {
       // Several rows can share one slug; the page merges them, so does the index.
-      existing.games += stats.games.size;
+      existing.games += stats.games;
       existing.lastmod = later(existing.lastmod, stats.lastmod);
       existing.youth = existing.youth || youth;
       stats.slugs.forEach((slug) => { if (!existing.competitionSlugs.includes(slug)) existing.competitionSlugs.push(slug); });
@@ -344,7 +364,7 @@ async function buildSeoIndex(): Promise<SeoIndex> {
       team: stats.team,
       competitionSlug: stats.slug,
       competitionSlugs: Array.from(stats.slugs),
-      games: stats.games.size,
+      games: stats.games,
       lastmod: stats.lastmod,
       youth,
     });
@@ -365,10 +385,11 @@ async function buildSeoIndex(): Promise<SeoIndex> {
     games.push({
       gameKey: g.game_key,
       competitionSlug: slug,
-      home: g.hometeam,
-      away: g.awayteam,
-      homeKey: teamClubKey(sides.name(g.hometeam, g.league_id)),
-      awayKey: teamClubKey(sides.name(g.awayteam, g.league_id)),
+      // isIndexableGame has already turned away games missing a side.
+      home: g.hometeam!,
+      away: g.awayteam!,
+      homeKey: teamClubKey(sides.name(g.hometeam!, g.league_id)),
+      awayKey: teamClubKey(sides.name(g.awayteam!, g.league_id)),
       date: g.matchtime || null,
       youth: youthLeagues.has(g.league_id),
     });
@@ -409,14 +430,23 @@ async function buildSeoIndex(): Promise<SeoIndex> {
   };
 }
 
+/** After a failed build, wait this long before trying again, so a struggling database isn't asked on every request. */
+const RETRY_AFTER_FAILURE_MS = 60 * 1000;
+
 let cached: SeoIndex | null = null;
 let inFlight: Promise<SeoIndex> | null = null;
+let lastFailure: { at: number; error: unknown } | null = null;
 
 export async function getSeoIndex(forceRefresh = false): Promise<SeoIndex> {
   if (!forceRefresh && cached && Date.now() - cached.builtAt < INDEX_TTL_MS) return cached;
+  if (!inFlight && lastFailure && Date.now() - lastFailure.at < RETRY_AFTER_FAILURE_MS) {
+    if (cached) return cached;
+    throw lastFailure.error;
+  }
   if (!inFlight) {
     inFlight = buildSeoIndex()
-      .then((index) => { cached = index; return index; })
+      .then((index) => { cached = index; lastFailure = null; return index; })
+      .catch((error) => { lastFailure = { at: Date.now(), error }; throw error; })
       .finally(() => { inFlight = null; });
   }
   try {
