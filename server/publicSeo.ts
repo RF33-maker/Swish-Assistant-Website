@@ -260,12 +260,21 @@ function opponentOf(teamName: string, schedule: any): string {
   return isSameTeam(schedule.hometeam || "", teamName) ? schedule.awayteam : schedule.hometeam;
 }
 
+/** A page renders without the index's extras rather than wait this long for it. */
+const INDEX_WAIT_MS = 10_000;
+
 async function tryIndex(): Promise<SeoIndex | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    return await getSeoIndex();
+    return await Promise.race([
+      getSeoIndex(),
+      new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), INDEX_WAIT_MS); }),
+    ]);
   } catch (error) {
     console.error("SEO index unavailable:", error);
     return null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
