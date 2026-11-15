@@ -19,6 +19,7 @@
 import type { Express, Request, Response } from "express";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { playerPath } from "../shared/seo";
+import { identityKey } from "../shared/teamIdentity";
 
 const CACHE_MS = 60 * 60 * 1000;
 const MIN_CAREER_GAMES = 5;
@@ -71,6 +72,8 @@ export type AllTimeRecord = {
   competitionSlug: string;
   gameKey: string;
   line: { pts: number; reb: number; ast: number; stl: number; blk: number; tpm: number };
+  /** The record holder's headshot (a storage path or URL), if any profile linked to them has one. */
+  photo: string | null;
 };
 
 type StatKey = (typeof RECORD_STATS)[number]["key"];
@@ -96,16 +99,26 @@ export type SeasonSummary = {
   minGames: number;
   leaders: Record<StatKey, SeasonLeader[]>;
   bestRecord: { team: string; wins: number; losses: number } | null;
+  /** The top of the table by win rate; empty when too few results are on file to trust it. */
+  standings: Array<{ team: string; wins: number; losses: number }>;
+  /** What one team put up in an average game that season. */
+  perTeamGame: { pts: number; tpm: number; tpa: number; ast: number } | null;
+  /** The most points anyone scored in one league game that season. */
+  high: { key: string; name: string; href: string | null; value: number; team: string | null; gameKey: string; competitionSlug: string } | null;
 };
 
 export type AllTimeResponse = {
   competitions: number;
   games: number;
+  /** Everyone who played at least one game (careers only lists MIN_CAREER_GAMES and up). */
+  players: number;
   firstSeason: string | null;
   lastSeason: string | null;
   careers: AllTimeCareer[];
   records: Record<StatKey, AllTimeRecord[]>;
   seasons: SeasonSummary[];
+  /** Team name as stored → logo, for every team with one (old names borrow today's club logo). */
+  logos: Record<string, string>;
 };
 
 const num = (v: unknown) => {
@@ -226,6 +239,62 @@ async function identityGroups(playerIds: string[]): Promise<Map<string, string>>
   return byPlayer;
 }
 
+const STANDINGS_SHOWN = 5;
+
+// A logo for each team name, found by club identity so "Glasgow Rocks" borrows the
+// Caledonia Gladiators logo. Logos come from teams.logo_url and from the team-logos
+// bucket, where most are only stored as "<league_id>_<Team_Name>.<ext>" files (the
+// same files the league and team pages read). Logos for this brand's own competitions win.
+async function teamLogos(names: string[], brandLeagueIds: Set<string>): Promise<Record<string, string>> {
+  const rows: Array<{ name: string; logo_url: string; league_id: string | null }> = [];
+  for (let from = 0; from < 20_000; from += 1000) {
+    const { data, error } = await supabaseAdmin
+      .from("teams")
+      .select("name, logo_url, league_id")
+      .not("logo_url", "is", null)
+      .order("team_id")
+      .range(from, from + 999);
+    if (error) break;
+    rows.push(...((data || []) as any[]));
+    if ((data?.length || 0) < 1000) break;
+  }
+  for (let offset = 0; offset < 20_000; offset += 1000) {
+    const { data, error } = await supabaseAdmin.storage.from("team-logos").list("", { limit: 1000, offset });
+    if (error || !data?.length) break;
+    for (const file of data) {
+      const m = file.name.match(/^([0-9a-f-]{36})_(.+)\.[a-z0-9]+$/i);
+      if (!m) continue;
+      rows.push({
+        name: m[2].replace(/_/g, " "),
+        logo_url: supabaseAdmin.storage.from("team-logos").getPublicUrl(file.name).data.publicUrl,
+        league_id: m[1],
+      });
+    }
+    if (data.length < 1000) break;
+  }
+  const own = new Map<string, string>();
+  const any = new Map<string, string>();
+  for (const r of rows) {
+    const key = identityKey(r.name);
+    if (!key || !r.logo_url) continue;
+    if (r.league_id && brandLeagueIds.has(r.league_id) && !own.has(key)) own.set(key, r.logo_url);
+    if (!any.has(key)) any.set(key, r.logo_url);
+  }
+  const out: Record<string, string> = {};
+  for (const name of names) {
+    const key = identityKey(name);
+    // A women's side with no logo of its own wears the club's.
+    const club = key.replace(/women$/, "");
+    // A reserve side ("Sevenoaks Suns II") with no logo of its own wears the first team's.
+    const reserve = name.match(/^(.+?)\s+(?:II|III)(?:\s+Women)?$/i);
+    const first = reserve ? identityKey(reserve[1]) : club;
+    const url = own.get(key) || any.get(key) || own.get(club) || any.get(club) || own.get(`${club}women`) || any.get(`${club}women`) ||
+      (first !== club ? own.get(first) || any.get(first) : undefined);
+    if (url) out[name] = url;
+  }
+  return out;
+}
+
 export async function buildAllTime(brandId: string, gender: string, scope: "all" | "league"): Promise<AllTimeResponse | null> {
   const { data: compRows, error } = await supabaseAdmin
     .from("competitions")
@@ -277,7 +346,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     return `name:${k}`;
   };
 
-  type Acc = AllTimeCareer & { names: Map<string, number>; lastPlayer: { id: string; at: string; name: string } | null; teamLast: Map<string, string>; seasonSet: Set<string> };
+  type Acc = AllTimeCareer & { names: Map<string, number>; lastPlayer: { id: string; at: string; name: string } | null; teamLast: Map<string, string>; seasonSet: Set<string>; ids: Set<string> };
   const careers = new Map<string, Acc>();
   const games = new Set<string>();
   const recordRows: StatRow[] = [];
@@ -291,7 +360,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
       c = {
         key, name: "", href: null, photo: null, teams: [], first: null, last: null, seasons: 0,
         gp: 0, min: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
-        names: new Map(), lastPlayer: null, teamLast: new Map(), seasonSet: new Set(),
+        names: new Map(), lastPlayer: null, teamLast: new Map(), seasonSet: new Set(), ids: new Set(),
       };
       careers.set(key, c);
     }
@@ -299,6 +368,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     if (name) c.names.set(name, (c.names.get(name) || 0) + 1);
     const at = String(r.created_at || "");
     if (r.player_id && (!c.lastPlayer || at > c.lastPlayer.at)) c.lastPlayer = { id: r.player_id, at, name };
+    if (r.player_id) c.ids.add(r.player_id);
     if (r.team_name) {
       const prev = c.teamLast.get(r.team_name);
       if (!prev || at > prev) c.teamLast.set(r.team_name, at);
@@ -365,6 +435,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
           pts: num(r.spoints), reb: num(r.sreboundstotal), ast: num(r.sassists),
           stl: num(r.ssteals), blk: num(r.sblocks), tpm: num(r.sthreepointersmade),
         },
+        photo: null,
       };
     });
   }
@@ -379,12 +450,24 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
   }
   const seasonPlayers = new Map<string, Map<string, SeasonAcc>>();
   const seasonGames = new Map<string, Set<string>>();
+  const seasonTotals = new Map<string, { teamGames: Set<string>; pts: number; tpm: number; tpa: number; ast: number; high: StatRow | null }>();
   for (const r of recordRows) {
     const comp = compById.get(r.league_id)!;
     const label = seasonLabel(comp);
     if (!label || !seasonComps.has(label) || KNOCKOUT_NAME.test(comp.name)) continue;
-    if (!seasonPlayers.has(label)) { seasonPlayers.set(label, new Map()); seasonGames.set(label, new Set()); }
+    if (!seasonPlayers.has(label)) {
+      seasonPlayers.set(label, new Map());
+      seasonGames.set(label, new Set());
+      seasonTotals.set(label, { teamGames: new Set(), pts: 0, tpm: 0, tpa: 0, ast: 0, high: null });
+    }
     seasonGames.get(label)!.add(`${r.league_id}:${r.game_key}`);
+    const totals = seasonTotals.get(label)!;
+    totals.teamGames.add(`${r.league_id}:${r.game_key}:${r.team_name}`);
+    totals.pts += num(r.spoints);
+    totals.tpm += num(r.sthreepointersmade);
+    totals.tpa += num(r.sthreepointersattempted);
+    totals.ast += num(r.sassists);
+    if (!totals.high || num(r.spoints) > num(totals.high.spoints)) totals.high = r;
     const players = seasonPlayers.get(label)!;
     let p = players.get(r.__key);
     if (!p) {
@@ -434,9 +517,14 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     // Old feeds can miss a side's box score; a "best record" from a fraction of the games misleads.
     const decided = Array.from(teamTotals.values()).reduce((n, t) => n + t.wins, 0);
     const mostPlayed = Math.max(0, ...Array.from(teamTotals.values()).map((t) => t.wins + t.losses));
-    const best = decided < games.size * 0.8 ? undefined : Array.from(teamTotals.entries())
+    const table = decided < games.size * 0.8 ? [] : Array.from(teamTotals.entries())
       .filter(([, t]) => t.wins + t.losses >= mostPlayed * 0.75)
-      .sort((a, b) => b[1].wins / (b[1].wins + b[1].losses) - a[1].wins / (a[1].wins + a[1].losses) || b[1].wins - a[1].wins)[0];
+      .sort((a, b) => b[1].wins / (b[1].wins + b[1].losses) - a[1].wins / (a[1].wins + a[1].losses) || b[1].wins - a[1].wins);
+    const best = table[0];
+    const totals = seasonTotals.get(label)!;
+    const tg = totals.teamGames.size;
+    const perGame = (n: number) => Math.round((n / tg) * 10) / 10;
+    const top = totals.high && num(totals.high.spoints) > 0 ? totals.high : null;
     return {
       season: label,
       competition: main.name,
@@ -445,6 +533,11 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
       minGames,
       leaders,
       bestRecord: best ? { team: best[0], wins: best[1].wins, losses: best[1].losses } : null,
+      standings: table.slice(0, STANDINGS_SHOWN).map(([team, t]) => ({ team, wins: t.wins, losses: t.losses })),
+      perTeamGame: tg > 0 ? { pts: perGame(totals.pts), tpm: perGame(totals.tpm), tpa: perGame(totals.tpa), ast: perGame(totals.ast) } : null,
+      high: top
+        ? { key: top.__key, name: "", href: null, value: num(top.spoints), team: top.team_name || null, gameKey: top.game_key, competitionSlug: compById.get(top.league_id)!.slug }
+        : null,
     };
   }).sort((a, b) => b.season.localeCompare(a.season));
 
@@ -467,7 +560,10 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
   }
 
   // Profile links + photos for every player who appears anywhere in the response.
-  const seasonLeaderCareers = seasons.flatMap((x) => Object.values(x.leaders).flat()).map((l) => careers.get(l.key)!);
+  const seasonLeaderCareers = [
+    ...seasons.flatMap((x) => Object.values(x.leaders).flat()).map((l) => careers.get(l.key)!),
+    ...seasons.filter((x) => x.high).map((x) => careers.get(x.high!.key)!),
+  ];
   const linkIds = Array.from(new Set([...keptCareers, ...Object.values(records).flat().map((r) => careers.get(r.key)!), ...seasonLeaderCareers]
     .map((c) => (c as Acc).lastPlayer?.id).filter(Boolean) as string[]));
   const players = new Map<string, { slug: string | null; full_name: string | null; photo: string | null }>();
@@ -484,11 +580,36 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     c.href = playerPath({ id: c.lastPlayer.id, slug: p?.slug ?? null, full_name: c.name });
     c.photo = p?.photo ?? null;
   }
+
+  // Record holders get a face on the records board. When the profile we link to has no
+  // photo, any other profile that is the same player (an older club, a merged id) will do.
+  const holders = Array.from(new Set(Object.values(records).flat().map((r) => r.key)))
+    .map((k) => careers.get(k)!)
+    .filter((c) => !c.photo);
+  const spareIds = Array.from(new Set(holders.flatMap((c) => Array.from(c.ids)).filter((id) => !players.has(id))));
+  const sparePhotos = new Map<string, string>();
+  for (let i = 0; i < spareIds.length; i += 300) {
+    const { data } = await supabaseAdmin
+      .from("players")
+      .select("id, photo_path_bg_removed, photo_path")
+      .in("id", spareIds.slice(i, i + 300));
+    for (const p of data || []) {
+      const photo = p.photo_path_bg_removed || p.photo_path;
+      if (photo) sparePhotos.set(p.id, photo);
+    }
+  }
+  for (const c of holders) {
+    for (const id of Array.from(c.ids)) {
+      const photo = players.get(id)?.photo || sparePhotos.get(id);
+      if (photo) { c.photo = photo; break; }
+    }
+  }
   for (const list of Object.values(records)) {
     for (const r of list) {
       const c = careers.get(r.key)!;
       r.name = c.name;
       r.href = c.href;
+      r.photo = c.photo;
       const comp = Array.from(compById.values()).find((c) => c.slug === r.competitionSlug);
       const sides = comp ? sidesByGame.get(`${comp.league_id}:${r.gameKey}`) : undefined;
       if (r.team && sides?.length === 2 && sides.includes(r.team)) r.opponent = sides.find((n) => n !== r.team) || null;
@@ -505,20 +626,33 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
         l.href = c.href;
       }
     }
+    if (x.high) {
+      const c = careers.get(x.high.key)!;
+      x.high.name = c.name;
+      x.high.href = c.href;
+    }
   }
+
+  const teamNames = new Set<string>();
+  for (const r of rows) if (r.team_name) teamNames.add(r.team_name);
+  for (const x of seasons) for (const t of x.standings) teamNames.add(t.team);
+  for (const list of Object.values(records)) for (const r of list) if (r.opponent) teamNames.add(r.opponent);
+  const logos = await teamLogos(Array.from(teamNames), new Set(comps.map((c) => c.league_id)));
 
   const seasonList = comps.map(seasonLabel).filter(Boolean).sort() as string[];
   return {
     competitions: comps.length,
     games: games.size,
+    players: careers.size,
     firstSeason: seasonList[0] || null,
     lastSeason: seasonList[seasonList.length - 1] || null,
-    careers: keptCareers.map(({ names, lastPlayer, teamLast, seasonSet, ...c }) => ({
+    careers: keptCareers.map(({ names, lastPlayer, teamLast, seasonSet, ids, ...c }) => ({
       ...c,
       min: Math.round(c.min),
     })),
     records,
     seasons,
+    logos,
   };
 }
 
