@@ -37,6 +37,8 @@ export type GameRecord = {
   competitionSlug: string;
   gameKey: string;
   line?: Record<StatKey, number>;
+  /** Headshot path or URL; older servers leave it out. */
+  photo?: string | null;
 };
 
 export type Career = {

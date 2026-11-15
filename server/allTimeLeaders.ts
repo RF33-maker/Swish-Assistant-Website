@@ -72,6 +72,8 @@ export type AllTimeRecord = {
   competitionSlug: string;
   gameKey: string;
   line: { pts: number; reb: number; ast: number; stl: number; blk: number; tpm: number };
+  /** The record holder's headshot (a storage path or URL), if any profile linked to them has one. */
+  photo: string | null;
 };
 
 type StatKey = (typeof RECORD_STATS)[number]["key"];
@@ -324,7 +326,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     return `name:${k}`;
   };
 
-  type Acc = AllTimeCareer & { names: Map<string, number>; lastPlayer: { id: string; at: string; name: string } | null; teamLast: Map<string, string>; seasonSet: Set<string> };
+  type Acc = AllTimeCareer & { names: Map<string, number>; lastPlayer: { id: string; at: string; name: string } | null; teamLast: Map<string, string>; seasonSet: Set<string>; ids: Set<string> };
   const careers = new Map<string, Acc>();
   const games = new Set<string>();
   const recordRows: StatRow[] = [];
@@ -338,7 +340,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
       c = {
         key, name: "", href: null, photo: null, teams: [], first: null, last: null, seasons: 0,
         gp: 0, min: 0, pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
-        names: new Map(), lastPlayer: null, teamLast: new Map(), seasonSet: new Set(),
+        names: new Map(), lastPlayer: null, teamLast: new Map(), seasonSet: new Set(), ids: new Set(),
       };
       careers.set(key, c);
     }
@@ -346,6 +348,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     if (name) c.names.set(name, (c.names.get(name) || 0) + 1);
     const at = String(r.created_at || "");
     if (r.player_id && (!c.lastPlayer || at > c.lastPlayer.at)) c.lastPlayer = { id: r.player_id, at, name };
+    if (r.player_id) c.ids.add(r.player_id);
     if (r.team_name) {
       const prev = c.teamLast.get(r.team_name);
       if (!prev || at > prev) c.teamLast.set(r.team_name, at);
@@ -412,6 +415,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
           pts: num(r.spoints), reb: num(r.sreboundstotal), ast: num(r.sassists),
           stl: num(r.ssteals), blk: num(r.sblocks), tpm: num(r.sthreepointersmade),
         },
+        photo: null,
       };
     });
   }
@@ -556,11 +560,36 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     c.href = playerPath({ id: c.lastPlayer.id, slug: p?.slug ?? null, full_name: c.name });
     c.photo = p?.photo ?? null;
   }
+
+  // Record holders get a face on the records board. When the profile we link to has no
+  // photo, any other profile that is the same player (an older club, a merged id) will do.
+  const holders = Array.from(new Set(Object.values(records).flat().map((r) => r.key)))
+    .map((k) => careers.get(k)!)
+    .filter((c) => !c.photo);
+  const spareIds = Array.from(new Set(holders.flatMap((c) => Array.from(c.ids)).filter((id) => !players.has(id))));
+  const sparePhotos = new Map<string, string>();
+  for (let i = 0; i < spareIds.length; i += 300) {
+    const { data } = await supabaseAdmin
+      .from("players")
+      .select("id, photo_path_bg_removed, photo_path")
+      .in("id", spareIds.slice(i, i + 300));
+    for (const p of data || []) {
+      const photo = p.photo_path_bg_removed || p.photo_path;
+      if (photo) sparePhotos.set(p.id, photo);
+    }
+  }
+  for (const c of holders) {
+    for (const id of Array.from(c.ids)) {
+      const photo = players.get(id)?.photo || sparePhotos.get(id);
+      if (photo) { c.photo = photo; break; }
+    }
+  }
   for (const list of Object.values(records)) {
     for (const r of list) {
       const c = careers.get(r.key)!;
       r.name = c.name;
       r.href = c.href;
+      r.photo = c.photo;
       const comp = Array.from(compById.values()).find((c) => c.slug === r.competitionSlug);
       const sides = comp ? sidesByGame.get(`${comp.league_id}:${r.gameKey}`) : undefined;
       if (r.team && sides?.length === 2 && sides.includes(r.team)) r.opponent = sides.find((n) => n !== r.team) || null;
@@ -597,7 +626,7 @@ export async function buildAllTime(brandId: string, gender: string, scope: "all"
     players: careers.size,
     firstSeason: seasonList[0] || null,
     lastSeason: seasonList[seasonList.length - 1] || null,
-    careers: keptCareers.map(({ names, lastPlayer, teamLast, seasonSet, ...c }) => ({
+    careers: keptCareers.map(({ names, lastPlayer, teamLast, seasonSet, ids, ...c }) => ({
       ...c,
       min: Math.round(c.min),
     })),
