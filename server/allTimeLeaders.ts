@@ -242,7 +242,9 @@ async function identityGroups(playerIds: string[]): Promise<Map<string, string>>
 const STANDINGS_SHOWN = 5;
 
 // A logo for each team name, found by club identity so "Glasgow Rocks" borrows the
-// Caledonia Gladiators logo. Logos uploaded for this brand's own competitions win.
+// Caledonia Gladiators logo. Logos come from teams.logo_url and from the team-logos
+// bucket, where most are only stored as "<league_id>_<Team_Name>.<ext>" files (the
+// same files the league and team pages read). Logos for this brand's own competitions win.
 async function teamLogos(names: string[], brandLeagueIds: Set<string>): Promise<Record<string, string>> {
   const rows: Array<{ name: string; logo_url: string; league_id: string | null }> = [];
   for (let from = 0; from < 20_000; from += 1000) {
@@ -252,9 +254,23 @@ async function teamLogos(names: string[], brandLeagueIds: Set<string>): Promise<
       .not("logo_url", "is", null)
       .order("team_id")
       .range(from, from + 999);
-    if (error) return {};
+    if (error) break;
     rows.push(...((data || []) as any[]));
     if ((data?.length || 0) < 1000) break;
+  }
+  for (let offset = 0; offset < 20_000; offset += 1000) {
+    const { data, error } = await supabaseAdmin.storage.from("team-logos").list("", { limit: 1000, offset });
+    if (error || !data?.length) break;
+    for (const file of data) {
+      const m = file.name.match(/^([0-9a-f-]{36})_(.+)\.[a-z0-9]+$/i);
+      if (!m) continue;
+      rows.push({
+        name: m[2].replace(/_/g, " "),
+        logo_url: supabaseAdmin.storage.from("team-logos").getPublicUrl(file.name).data.publicUrl,
+        league_id: m[1],
+      });
+    }
+    if (data.length < 1000) break;
   }
   const own = new Map<string, string>();
   const any = new Map<string, string>();
@@ -269,7 +285,11 @@ async function teamLogos(names: string[], brandLeagueIds: Set<string>): Promise<
     const key = identityKey(name);
     // A women's side with no logo of its own wears the club's.
     const club = key.replace(/women$/, "");
-    const url = own.get(key) || any.get(key) || own.get(club) || any.get(club) || own.get(`${club}women`) || any.get(`${club}women`);
+    // A reserve side ("Sevenoaks Suns II") with no logo of its own wears the first team's.
+    const reserve = name.match(/^(.+?)\s+(?:II|III)(?:\s+Women)?$/i);
+    const first = reserve ? identityKey(reserve[1]) : club;
+    const url = own.get(key) || any.get(key) || own.get(club) || any.get(club) || own.get(`${club}women`) || any.get(`${club}women`) ||
+      (first !== club ? own.get(first) || any.get(first) : undefined);
     if (url) out[name] = url;
   }
   return out;

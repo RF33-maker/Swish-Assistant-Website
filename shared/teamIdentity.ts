@@ -32,6 +32,8 @@ const FORMER_NAMES: Array<[stored: string, today: string]> = [
   ["DBL Sharks Sheffield", "bbraunsheffieldsharks"],
   ["Sheffield Sharks", "bbraunsheffieldsharks"],
   ["Plymouth University Raiders", "plymouthraiders"],
+  ["Essex & Herts Leopards", "essexleopards"],
+  ["Signs Express Falkirk Fury", "falkirkfury"],
 ];
 
 function formerNameKey(name: string): string {
