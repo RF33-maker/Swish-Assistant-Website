@@ -373,14 +373,22 @@ export function placeCutout(img: HTMLImageElement, box: Box, fr: Framing): Place
   return { left: fig.x - b.x * dw, top: fig.y - b.y * dh, dw, dh, fig };
 }
 
-/** A full photo fills its box edge to edge; the sliders pick which part shows. */
+/**
+ * A full photo fills its box edge to edge. With the sliders at rest it shows the middle across
+ * and the photo's focus point down; the sliders then move the photo the way they read, as they
+ * move a cut-out: Right moves the player right, Down moves them down.
+ */
 export function placeCover(img: HTMLImageElement, box: Box, fr: Framing): Placement {
   const scale = Math.max(box.w / img.naturalWidth, box.h / img.naturalHeight) * Math.max(1, fr.zoom);
   const dw = img.naturalWidth * scale;
   const dh = img.naturalHeight * scale;
+  // Which part of the photo shows (0 = its left or top edge): the resting point less the nudge.
+  const clamp = (v: number) => Math.max(0, Math.min(100, v));
+  const showX = clamp(100 - fr.x);
+  const showY = clamp(2 * fr.focusY - fr.y);
   return {
-    left: box.x + (box.w - dw) * (fr.x / 100),
-    top: box.y + (box.h - dh) * (fr.y / 100),
+    left: box.x + (box.w - dw) * (showX / 100),
+    top: box.y + (box.h - dh) * (showY / 100),
     dw,
     dh,
   };

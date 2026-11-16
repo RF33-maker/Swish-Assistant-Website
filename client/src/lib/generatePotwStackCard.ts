@@ -22,7 +22,6 @@ import {
   hexToRgb,
   italicWidth,
   layer,
-  placeCover,
   placeCutout,
   poster,
   withAlpha,
@@ -304,29 +303,66 @@ function drawSmoke(ctx: CanvasRenderingContext2D, accent: string, cx: number, cy
 }
 
 /**
+ * Where a full photo (no cut-out) sits. It fills the card's height and covers the right of the
+ * card; the sliders move it the way they read, as they do a cut-out: Right moves the player
+ * right, Down moves them down, and zoom grows the photo about its middle. Right can take the
+ * photo's left edge well into the fade, so a player can stand as far right as the shot allows.
+ */
+function placePhoto(img: HTMLImageElement, fr: Framing): { left: number; top: number; dw: number; dh: number } {
+  const box: Box = { x: 440, y: 0, w: CARD_W - 440, h: CARD_H };
+  const scale = Math.max(box.w / img.naturalWidth, box.h / img.naturalHeight) * Math.max(1, fr.zoom);
+  const dw = img.naturalWidth * scale;
+  const dh = img.naturalHeight * scale;
+  // Furthest left: the photo's right edge on the card's. Furthest right: its left edge deep in the fade.
+  const minLeft = CARD_W - dw;
+  const maxLeft = Math.max(minLeft, 620);
+  const mid = Math.max(minLeft, Math.min(maxLeft, box.x + (box.w - dw) / 2));
+  const t = (fr.x - 50) / 50;
+  const left = t >= 0 ? mid + t * (maxLeft - mid) : mid + t * (mid - minLeft);
+  const top = box.y + (box.h - dh) * ((100 - fr.y) / 100);
+  return { left, top, dw, dh };
+}
+
+/**
  * Without a cut-out: the sharp game photo fills the right of the card, top to bottom, so the
  * player lands right of centre, and melts in from the middle. It reaches the top edge (the
  * marks sit on a soft darkening, not a band) and thins out at the foot, where the context line
- * and footer sit. What it melts into is the `look`: the same shot blurred and dimmed under the
- * whole card, or the dark ground with the accent drifting over the ladder's side as smoke.
+ * and footer sit. What it melts into is the `look`: the same shot blurred and dimmed in the very
+ * same place (so it never shows a second player), or the dark ground with the accent drifting
+ * over the ladder's side as smoke.
  */
 function drawPhotoFallback(ctx: CanvasRenderingContext2D, img: HTMLImageElement, fr: Framing, accent: string, look: PhotoLook) {
-  const box: Box = { x: 440, y: 0, w: CARD_W - 440, h: CARD_H };
-  const p = placeCover(img, box, fr);
+  const p = placePhoto(img, fr);
   const [sheet, s] = layer();
+  // Any left edge of the photo that comes into view feathers away instead of standing as a line.
+  const featherLeft = (c: CanvasRenderingContext2D) => {
+    if (p.left > 0) rampAlpha(c, [p.left, 0], [p.left + 220, 0], 0, 1);
+  };
 
   if (look === "blur") {
-    // The bed: the same shot grown about the player's spot until it covers the whole card, then
-    // blurred and dimmed, so the ladder's side is the photo's own light rather than a slab of black.
-    const ax = box.x + box.w / 2;
-    const ay = 600;
-    const k = Math.max(1, ax / (ax - p.left), (CARD_W - ax) / (p.left + p.dw - ax), ay / (ay - p.top), (CARD_H - ay) / (p.top + p.dh - ay));
-    const bed = { left: ax + (p.left - ax) * k, top: ay + (p.top - ay) * k, dw: p.dw * k, dh: p.dh * k };
-    s.save();
-    if (canBlur(s)) s.filter = "blur(30px)";
-    // Oversize so the blur's soft edge never shows the ground through it.
-    s.drawImage(img, bed.left - 60, bed.top - 60, bed.dw + 120, bed.dh + 120);
-    s.restore();
+    // The bed: the same shot, in the same place as the sharp one, blurred and dimmed, so where the
+    // sharp photo fades the picture goes soft rather than turning into another copy of it. Its
+    // left edge is smeared outwards first, so the blur reaches the ladder's side as the photo's
+    // own light rather than a slab of black.
+    // Built on a sheet wider than the card, so the photo carries on past the card's edges and
+    // the blur never pulls the ground in around the rim.
+    const pad = 90;
+    const bed = document.createElement("canvas");
+    bed.width = CARD_W + pad * 2;
+    bed.height = CARD_H + pad * 2;
+    const b = bed.getContext("2d")!;
+    const iw = img.naturalWidth;
+    const ih = img.naturalHeight;
+    const edge = Math.max(1, Math.round(iw * 0.01));
+    if (p.left > -pad) b.drawImage(img, 0, 0, edge, ih, 0, pad + p.top, pad + p.left + 4, p.dh);
+    b.drawImage(img, pad + p.left, pad + p.top, p.dw, p.dh);
+    const soft = document.createElement("canvas");
+    soft.width = bed.width;
+    soft.height = bed.height;
+    const so = soft.getContext("2d")!;
+    if (canBlur(so)) so.filter = "blur(30px)";
+    so.drawImage(bed, 0, 0);
+    s.drawImage(soft, -pad, -pad);
     s.fillStyle = "rgba(14,12,17,0.58)";
     s.fillRect(0, 0, CARD_W, CARD_H);
   } else {
@@ -340,7 +376,9 @@ function drawPhotoFallback(ctx: CanvasRenderingContext2D, img: HTMLImageElement,
   h.fillStyle = "rgba(14,12,17,0.2)";
   h.fillRect(0, 0, CARD_W, CARD_H);
   rampAlpha(h, [430, 0], [750, 0], 0, 1);
+  featherLeft(h);
   s.drawImage(sharp, 0, 0);
+  if (look !== "blur") featherLeft(s);
 
   // Into the ground at the top (the marks) and the foot (the context line, the footer).
   rampAlpha(s, [0, 0], [0, 250], 0.4, 1);
@@ -353,7 +391,7 @@ function drawPhotoFallback(ctx: CanvasRenderingContext2D, img: HTMLImageElement,
     ellipseGlow(ctx, CARD_W * 0.66, CARD_H * 0.4, CARD_W * 0.46, CARD_H * 0.42, [[0, "rgba(255,255,255,0.08)"], [0.7, "rgba(0,0,0,0)"]], "screen");
   } else {
     // The photo's edge smokes into the ground, as a cut-out's glow does.
-    ellipseGlow(ctx, 600, 640, 230, 640, [[0, withAlpha(accent, 0.2)], [1, "rgba(0,0,0,0)"]], "screen");
+    ellipseGlow(ctx, Math.max(600, p.left + 110), 640, 230, 640, [[0, withAlpha(accent, 0.2)], [1, "rgba(0,0,0,0)"]], "screen");
   }
 }
 
