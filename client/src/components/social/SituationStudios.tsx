@@ -99,7 +99,7 @@ function useCompetitions(): Competition[] {
       .eq("is_public", true)
       .not("slug", "is", null)
       .order("created_at", { ascending: false })
-      .limit(150)
+      .limit(1000)
       .then(({ data }) => {
         if (!cancelled && data) setCompetitions((data as Competition[]).filter((c) => c.slug && c.name && c.league_id));
       });

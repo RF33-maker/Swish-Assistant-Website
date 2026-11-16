@@ -95,7 +95,7 @@ export default function LineupsStudio() {
           .eq("is_public", true)
           .not("slug", "is", null)
           .order("created_at", { ascending: false })
-          .limit(120);
+          .limit(1000);
         list = (rows as CompetitionOption[] | null) ?? [];
       }
       if (!cancelled) setCompetitions(list.filter((c) => c.slug && c.name));

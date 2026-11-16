@@ -1,7 +1,17 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Download, ImagePlus, Loader2 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { supabase } from "@/lib/supabase";
 import { BTN_GHOST, BTN_PRIMARY, FIELD, Field, HINT, SELECT_MENU, TALL } from "@/components/layout/proUi";
 
 /**
@@ -109,6 +119,69 @@ export function rememberCompetition(key: string, slug: string) {
   }
 }
 
+/** Where a competition sits: its league (the brand above it) and its season. */
+type CompetitionPlace = { leagueId: string; leagueName: string; season: string; createdAt: number };
+type CompetitionDirectory = Map<string, CompetitionPlace>;
+
+const OTHER_LEAGUE = "other";
+let directoryRequest: Promise<CompetitionDirectory> | null = null;
+
+/**
+ * Every competition's league and season, keyed by slug. Loaded once and shared
+ * by all the studios. A competition with no league of its own takes its parent's.
+ */
+function loadCompetitionDirectory(): Promise<CompetitionDirectory> {
+  if (directoryRequest) return directoryRequest;
+  directoryRequest = (async () => {
+    const [{ data: leagueRows }, { data: competitionRows }] = await Promise.all([
+      supabase.from("leagues").select("id, name"),
+      supabase
+        .from("competitions")
+        .select("league_id, competition_id, parent_league_id, slug, season, created_at")
+        .limit(5000),
+    ]);
+    const leagueName = new Map((leagueRows || []).map((l) => [l.id as string, l.name as string]));
+    const byId = new Map((competitionRows || []).map((c) => [c.league_id as string, c]));
+    const leagueOf = (id: string, seen = new Set<string>()): string | null => {
+      const c = byId.get(id);
+      if (!c || seen.has(id)) return null;
+      seen.add(id);
+      if (c.competition_id && leagueName.has(c.competition_id)) return c.competition_id;
+      return c.parent_league_id ? leagueOf(c.parent_league_id, seen) : null;
+    };
+    const directory: CompetitionDirectory = new Map();
+    (competitionRows || []).forEach((c) => {
+      if (!c.slug) return;
+      const leagueId = leagueOf(c.league_id);
+      directory.set(c.slug, {
+        leagueId: leagueId ?? OTHER_LEAGUE,
+        leagueName: (leagueId && leagueName.get(leagueId)) || "Other competitions",
+        season: (c.season || "").trim(),
+        createdAt: c.created_at ? new Date(c.created_at).getTime() || 0 : 0,
+      });
+    });
+    return directory;
+  })().catch((error) => {
+    console.warn("[SwishSocial] Could not group competitions by league:", error);
+    directoryRequest = null;
+    return new Map();
+  });
+  return directoryRequest;
+}
+
+/** The year a season starts in, for newest-first order ("2025/26", "Season 2025/26", "2026"). */
+function seasonYear(season: string): number {
+  const match = season.match(/(19|20)\d{2}/);
+  if (match) return Number(match[0]);
+  const numbered = season.match(/\d+/);
+  return numbered ? Number(numbered[0]) : -1;
+}
+
+/**
+ * League first, then the competition within it grouped by season, newest first,
+ * the same way Top Performances narrows its list. The competitions offered are
+ * still the studio's own (some studios only offer those with play-by-play).
+ */
 export function CompetitionField({
   value,
   onChange,
@@ -118,22 +191,131 @@ export function CompetitionField({
   onChange: (slug: string) => void;
   competitions: CompetitionOption[];
 }) {
+  const [directory, setDirectory] = useState<CompetitionDirectory>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    void loadCompetitionDirectory().then((d) => !cancelled && setDirectory(d));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const placeOf = (slug: string): CompetitionPlace =>
+    directory.get(slug) ?? { leagueId: OTHER_LEAGUE, leagueName: "Other competitions", season: "", createdAt: 0 };
+
+  // Leagues A–Z, "Other" last.
+  const leagues = useMemo(() => {
+    const names = new Map<string, string>();
+    competitions.forEach((c) => {
+      const place = directory.get(c.slug);
+      names.set(place?.leagueId ?? OTHER_LEAGUE, place?.leagueName ?? "Other competitions");
+    });
+    return Array.from(names, ([id, name]) => ({ id, name })).sort((a, b) => {
+      if ((a.id === OTHER_LEAGUE) !== (b.id === OTHER_LEAGUE)) return a.id === OTHER_LEAGUE ? 1 : -1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [competitions, directory]);
+
+  // The league follows the competition picked, until another league is chosen.
+  const [chosenLeague, setChosenLeague] = useState<string | null>(null);
+  const valueLeague = directory.size ? placeOf(value).leagueId : null;
+  const league = chosenLeague ?? valueLeague;
+  useEffect(() => {
+    setChosenLeague(null);
+  }, [value]);
+
+  const seasons = useMemo(() => {
+    const groups = new Map<string, CompetitionOption[]>();
+    competitions.forEach((c) => {
+      const place = placeOf(c.slug);
+      if (place.leagueId !== league) return;
+      const group = groups.get(place.season) || [];
+      group.push(c);
+      groups.set(place.season, group);
+    });
+    return Array.from(groups, ([season, list]) => ({
+      season,
+      list: list.sort((a, b) => a.name.localeCompare(b.name)),
+    })).sort((a, b) => seasonYear(b.season) - seasonYear(a.season) || b.season.localeCompare(a.season));
+    // placeOf reads the directory, which is a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [competitions, directory, league]);
+
+  const known = competitions.some((c) => c.slug === value);
+  const inLeague = seasons.some((s) => s.list.some((c) => c.slug === value));
+
+  // Picking a league opens its newest competition, so the card is never left on another league's.
+  const chooseLeague = (id: string) => {
+    setChosenLeague(id);
+    const newest = competitions
+      .filter((c) => placeOf(c.slug).leagueId === id)
+      .sort((a, b) => {
+        const pa = placeOf(a.slug);
+        const pb = placeOf(b.slug);
+        return seasonYear(pb.season) - seasonYear(pa.season) || pb.createdAt - pa.createdAt;
+      })[0];
+    if (newest && newest.slug !== value) onChange(newest.slug);
+  };
+
+  // Until the leagues are known, the plain list keeps the studio usable.
+  if (!directory.size) {
+    return (
+      <Field label="Competition">
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className={FIELD} data-testid="select-competition">
+            <SelectValue placeholder="Choose a competition" />
+          </SelectTrigger>
+          <SelectContent className={SELECT_MENU}>
+            {!known && <SelectItem value={value}>{value}</SelectItem>}
+            {competitions.map((c) => (
+              <SelectItem key={c.slug} value={c.slug}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+    );
+  }
+
   return (
-    <Field label="Competition">
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className={FIELD} data-testid="select-competition">
-          <SelectValue placeholder="Choose a competition" />
-        </SelectTrigger>
-        <SelectContent className={SELECT_MENU}>
-          {!competitions.some((c) => c.slug === value) && <SelectItem value={value}>{value}</SelectItem>}
-          {competitions.map((c) => (
-            <SelectItem key={c.slug} value={c.slug}>
-              {c.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </Field>
+    <>
+      <Field label="League">
+        <Select value={league ?? undefined} onValueChange={chooseLeague}>
+          <SelectTrigger className={FIELD} data-testid="select-competition-league">
+            <SelectValue placeholder="Choose a league" />
+          </SelectTrigger>
+          <SelectContent className={SELECT_MENU}>
+            {leagues.map((l) => (
+              <SelectItem key={l.id} value={l.id}>
+                {l.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Competition">
+        <Select value={inLeague ? value : undefined} onValueChange={onChange}>
+          <SelectTrigger className={FIELD} data-testid="select-competition">
+            <SelectValue placeholder="Choose a competition" />
+          </SelectTrigger>
+          <SelectContent className={SELECT_MENU}>
+            {!known && league === valueLeague && <SelectItem value={value}>{value}</SelectItem>}
+            {seasons.map(({ season, list }, i) => (
+              <SelectGroup key={season || "none"}>
+                {i > 0 && <SelectSeparator />}
+                {seasons.length > 1 && <SelectLabel className="text-xs text-[color:var(--ch-muted)]">{season || "No season"}</SelectLabel>}
+                {list.map((c) => (
+                  <SelectItem key={c.slug} value={c.slug}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+    </>
   );
 }
 
