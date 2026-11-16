@@ -515,6 +515,54 @@ function drawCoverPhoto(ctx: CanvasRenderingContext2D, img: HTMLImageElement, bo
   ctx.drawImage(sheet, 0, 0);
 }
 
+/**
+ * Where the full photo behind a cut-out lands. At rest it is `rest`; as the sliders move and zoom
+ * the cut-out, the photo moves and grows with it (about the figure's feet), so the softened player
+ * behind keeps its place against the sharp one instead of sliding off as a second copy.
+ */
+function followCutout(rest: Placement, cut: HTMLImageElement, box: Box, fr: Framing): Placement {
+  const at = placeCutout(cut, box, fr).fig!;
+  const home = placeCutout(cut, box, { ...fr, zoom: 1, x: 50, y: fr.focusY }).fig!;
+  const k = at.w / Math.max(1, home.w);
+  const hx = home.x + home.w / 2;
+  const hy = home.y + home.h;
+  const ax = at.x + at.w / 2;
+  const ay = at.y + at.h;
+  const left = ax + (rest.left - hx) * k;
+  const top = ay + (rest.top - hy) * k;
+  const dw = rest.dw * k;
+  const dh = rest.dh * k;
+  // Pushed far, it would pull an edge into view: grow it about the same point just enough to cover the card.
+  const need = (a: number, edge: number, bound: number) => (a - edge !== 0 ? (a - bound) / (a - edge) : 1);
+  let g = 1;
+  if (left > 0 && ax > left) g = Math.max(g, need(ax, left, 0));
+  if (left + dw < CARD_W && ax < left + dw) g = Math.max(g, need(ax, left + dw, CARD_W));
+  if (top > 0 && ay > top) g = Math.max(g, need(ay, top, 0));
+  if (top + dh < CARD_H && ay < top + dh) g = Math.max(g, need(ay, top + dh, CARD_H));
+  return { left: ax + (left - ax) * g, top: ay + (top - ay) * g, dw: dw * g, dh: dh * g };
+}
+
+/** Draws a photo where it was placed, its edges smeared out to the card's, so a photo moved off an edge never leaves a gap. */
+function drawFilling(c: CanvasRenderingContext2D, img: HTMLImageElement, p: Placement) {
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  const ex = Math.max(1, Math.round(iw * 0.01));
+  const ey = Math.max(1, Math.round(ih * 0.01));
+  const L = p.left;
+  const T = p.top;
+  const R = L + p.dw;
+  const B = T + p.dh;
+  if (L > 0) c.drawImage(img, 0, 0, ex, ih, 0, T, L + 1, p.dh);
+  if (R < CARD_W) c.drawImage(img, iw - ex, 0, ex, ih, R - 1, T, CARD_W - R + 1, p.dh);
+  if (T > 0) c.drawImage(img, 0, 0, iw, ey, L, 0, p.dw, T + 1);
+  if (B < CARD_H) c.drawImage(img, 0, ih - ey, iw, ey, L, B - 1, p.dw, CARD_H - B + 1);
+  if (L > 0 && T > 0) c.drawImage(img, 0, 0, ex, ey, 0, 0, L + 1, T + 1);
+  if (R < CARD_W && T > 0) c.drawImage(img, iw - ex, 0, ex, ey, R - 1, 0, CARD_W - R + 1, T + 1);
+  if (L > 0 && B < CARD_H) c.drawImage(img, 0, ih - ey, ex, ey, 0, B - 1, L + 1, CARD_H - B + 1);
+  if (R < CARD_W && B < CARD_H) c.drawImage(img, iw - ex, ih - ey, ex, ey, R - 1, B - 1, CARD_W - R + 1, CARD_H - B + 1);
+  c.drawImage(img, L, T, p.dw, p.dh);
+}
+
 // ── the words and numbers ────────────────────────────────────────────────────
 
 type Stat = { label: string; long: string; value: string };
@@ -976,6 +1024,8 @@ function drawLabelBlock(ctx: CanvasRenderingContext2D, text: string, right: numb
   drawSpaced(ctx, text, right - w + 22, top + (h - capHeight(ctx, o)) / 2, 30 * 0.06, o);
 }
 
+const NUMBERS_CUT: Box = { x: 40, y: 300, w: 620, h: 850 };
+
 function drawNumbers(s: Scene) {
   const { ctx, data, accent, photo, fr } = s;
   const cutout = photo?.cutout ?? false;
@@ -988,8 +1038,8 @@ function drawNumbers(s: Scene) {
   } else if (s.raw) {
     // The full photo, softened, as depth behind the sharp cut-out.
     const [sheet, sc] = layer();
-    const p = placeCover(s.raw, full, { ...fr, zoom: 1.15, x: 50, y: fr.focusY });
-    sc.drawImage(s.raw, p.left, p.top, p.dw, p.dh);
+    const rest = placeCover(s.raw, full, { ...fr, zoom: 1.15, x: 50, y: fr.focusY });
+    drawFilling(sc, s.raw, photo?.cutout ? followCutout(rest, photo.img, NUMBERS_CUT, fr) : rest);
     tonePixels(sc, "mono", accent, full);
     ctx.save();
     if (typeof (ctx as { filter?: unknown }).filter === "string") ctx.filter = "blur(34px)";
@@ -1022,7 +1072,7 @@ function drawNumbers(s: Scene) {
   ctx.restore();
 
   if (photo && cutout) {
-    drawCutout(ctx, photo.img, { x: 40, y: 300, w: 620, h: 850 }, fr, {
+    drawCutout(ctx, photo.img, NUMBERS_CUT, fr, {
       tone: "natural", accent, fadeFrom: 0.86, shadow: { x: 0, y: 36, blur: 50, alpha: 0.6 },
     });
   }
@@ -1089,12 +1139,12 @@ function drawSoftBackdrop(
   img: HTMLImageElement,
   fr: Framing,
   accent: string,
-  o: { zoom: number; blur: number; alpha: number; tone?: Tone; dim?: number },
+  o: { zoom: number; blur: number; alpha: number; tone?: Tone; dim?: number; follow?: { cut: HTMLImageElement; box: Box } },
 ) {
   const full: Box = { x: 0, y: 0, w: CARD_W, h: CARD_H };
   const [sheet, sc] = layer();
-  const p = placeCover(img, full, { ...fr, zoom: o.zoom, x: 50, y: fr.focusY });
-  sc.drawImage(img, p.left, p.top, p.dw, p.dh);
+  const rest = placeCover(img, full, { ...fr, zoom: o.zoom, x: 50, y: fr.focusY });
+  drawFilling(sc, img, o.follow ? followCutout(rest, o.follow.cut, o.follow.box, fr) : rest);
   tonePixels(sc, o.tone ?? "mono", accent, full);
   if (o.dim) {
     sc.fillStyle = `rgba(0,0,0,${o.dim})`;
@@ -1208,6 +1258,8 @@ function lineTag(data: PlayerPerformanceV1Data): string {
   return tens >= 3 ? "TRIPLE-DOUBLE" : tens === 2 ? "DOUBLE-DOUBLE" : "TOP PERFORMANCE";
 }
 
+const PANEL_CUT: Box = { x: 300, y: 300, w: 800, h: 930 };
+
 function drawPanel(s: Scene) {
   const { ctx, data, accent, photo, fr } = s;
   const gamePhoto = photo && !photo.cutout ? photo.img : null;
@@ -1218,7 +1270,10 @@ function drawPanel(s: Scene) {
   if (gamePhoto) {
     drawCoverPhoto(ctx, gamePhoto, full, fr, "graded", accent);
   } else {
-    if (s.raw) drawSoftBackdrop(ctx, s.raw, fr, accent, { zoom: 1.2, blur: 30, alpha: 0.5 });
+    if (s.raw) {
+      const follow = photo?.cutout ? { cut: photo.img, box: PANEL_CUT } : undefined;
+      drawSoftBackdrop(ctx, s.raw, fr, accent, { zoom: 1.2, blur: 30, alpha: 0.5, follow });
+    }
     ellipseGlow(ctx, 760, 520, 560, 640, [[0, withAlpha(accent, 0.35)], [0.7, "rgba(0,0,0,0)"]], "screen");
   }
   // Quiet the edges so the panel, the credit and the footer sit on something dark.
@@ -1233,7 +1288,7 @@ function drawPanel(s: Scene) {
   if (gamePhoto) {
     ellipseGlow(ctx, 670, 486, 648, 675, [[0.45, "rgba(0,0,0,0)"], [1, "rgba(0,0,0,0.5)"]]);
   } else if (photo) {
-    drawCutout(ctx, photo.img, { x: 300, y: 300, w: 800, h: 930 }, fr, {
+    drawCutout(ctx, photo.img, PANEL_CUT, fr, {
       tone: "natural", accent, fadeFrom: 0.86, shadow: { x: 0, y: 36, blur: 50, alpha: 0.6 },
     });
   }
@@ -1461,6 +1516,8 @@ function drawRankList(ctx: CanvasRenderingContext2D, rank: PerformanceRank | und
   });
 }
 
+const RANKED_CUT: Box = { x: 400, y: 300, w: 700, h: 810 };
+
 function drawRanked(s: Scene) {
   const { ctx, data, accent, photo, fr } = s;
   const gamePhoto = photo && !photo.cutout ? photo.img : null;
@@ -1480,7 +1537,13 @@ function drawRanked(s: Scene) {
 
   if (!gamePhoto) {
     const full: Box = { x: 0, y: 0, w: CARD_W, h: CARD_H };
-    if (s.raw) drawCoverPhoto(ctx, s.raw, full, { ...fr, zoom: 1.3, x: 50, y: fr.focusY }, "duotone", accent);
+    if (s.raw) {
+      const rest = placeCover(s.raw, full, { ...fr, zoom: 1.3, x: 50, y: fr.focusY });
+      const [sheet, sc] = layer();
+      drawFilling(sc, s.raw, photo?.cutout ? followCutout(rest, photo.img, RANKED_CUT, fr) : rest);
+      tonePixels(sc, "duotone", accent, full);
+      ctx.drawImage(sheet, 0, 0);
+    }
     drawScanlines(ctx, full, 0.32);
     ctx.fillStyle = vertical(ctx, 0, CARD_H, [[0, "rgba(11,11,13,0.2)"], [0.25, "rgba(11,11,13,0)"], [0.55, "rgba(11,11,13,0)"], [1, "rgba(11,11,13,0.92)"]]);
     ctx.fillRect(0, 0, CARD_W, CARD_H);
@@ -1500,7 +1563,7 @@ function drawRanked(s: Scene) {
     const bigW = drawText(ctx, big, 50, 120, bigOpts);
     drawText(ctx, suffix, 50 + bigW + 14, 150, poster(190, { color: "#ffffff" }));
     if (photo) {
-      drawCutout(ctx, photo.img, { x: 400, y: 300, w: 700, h: 810 }, fr, {
+      drawCutout(ctx, photo.img, RANKED_CUT, fr, {
         tone: "natural", accent, fadeFrom: 0.84, shadow: { x: 0, y: 30, blur: 50, alpha: 0.6 },
       });
     }
@@ -1570,6 +1633,8 @@ function drawRanked(s: Scene) {
   drawGrain(ctx, 0.28);
 }
 
+const FRAME_CUT: Box = { x: 120, y: 330, w: 840, h: 850 };
+
 function drawFrame(s: Scene) {
   const { ctx, data, accent, photo, fr } = s;
   const gamePhoto = photo && !photo.cutout ? photo.img : null;
@@ -1579,12 +1644,16 @@ function drawFrame(s: Scene) {
 
   // The whole photo, blurred and dimmed, behind everything; on a cut-out the window shows the same crop sharp.
   const backdrop = gamePhoto ?? s.raw;
-  const place = backdrop
-    ? placeCover(backdrop, full, gamePhoto ? { ...fr, zoom: Math.max(1.08, fr.zoom) } : { ...fr, zoom: Math.max(1.06, fr.zoom), x: 50, y: fr.focusY })
-    : null;
+  const place = !backdrop
+    ? null
+    : gamePhoto
+      ? placeCover(backdrop, full, { ...fr, zoom: Math.max(1.08, fr.zoom) })
+      : photo?.cutout
+        ? followCutout(placeCover(backdrop, full, { ...fr, zoom: 1.06, x: 50, y: fr.focusY }), photo.img, FRAME_CUT, fr)
+        : placeCover(backdrop, full, { ...fr, zoom: Math.max(1.06, fr.zoom), x: 50, y: fr.focusY });
   if (backdrop && place) {
     const [sheet, sc] = layer();
-    sc.drawImage(backdrop, place.left, place.top, place.dw, place.dh);
+    drawFilling(sc, backdrop, place);
     tonePixels(sc, "graded", accent, full);
     sc.fillStyle = `rgba(0,0,0,${gamePhoto ? 0.58 : 0.5})`;
     sc.fillRect(0, 0, CARD_W, CARD_H);
@@ -1630,7 +1699,7 @@ function drawFrame(s: Scene) {
       sc.beginPath();
       sc.rect(inner.x, inner.y, inner.w, inner.h);
       sc.clip();
-      sc.drawImage(backdrop, place.left, place.top, place.dw, place.dh);
+      drawFilling(sc, backdrop, place);
       sc.restore();
       tonePixels(sc, "graded", accent, inner);
       ctx.drawImage(sheet, 0, 0);
@@ -1639,7 +1708,7 @@ function drawFrame(s: Scene) {
       ctx.fillRect(inner.x, inner.y, inner.w, inner.h);
     }
     if (photo) {
-      drawCutout(ctx, photo.img, { x: 120, y: 330, w: 840, h: 850 }, fr, {
+      drawCutout(ctx, photo.img, FRAME_CUT, fr, {
         tone: "natural", accent, fadeFrom: 0.86, shadow: { x: 0, y: 30, blur: 40, alpha: 0.55 },
       });
     }
