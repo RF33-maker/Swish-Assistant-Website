@@ -411,6 +411,7 @@ export function registerBillingRoutes(app: Express, depsOverride?: Partial<Billi
     if (!(await adminOf(req, res))) return;
     const { data: row, error } = await supabaseAdmin.from("coach_access").select("*").eq("id", req.params.id).maybeSingle();
     if (error || !row) return res.status(404).json({ error: "Not found" });
+    if (!row.user_id) return res.status(409).json({ error: "This coach's account was deleted; the row is kept only as a payment record." });
     try {
       if (row.plan === "monthly" && row.stripe_subscription_id && stripeConfigured()) {
         await getStripe().subscriptions.cancel(row.stripe_subscription_id).catch((e: any) => { if (e?.code !== "resource_missing") throw e; });
