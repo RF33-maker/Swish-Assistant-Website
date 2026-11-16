@@ -25,7 +25,7 @@ import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
 import { InstagramFeedSection } from "@/components/InstagramFeedSection";
-import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram, ListOrdered, BarChart3, Shield, CalendarDays, Crown, ArrowLeftRight, LayoutDashboard, GitBranch } from "lucide-react";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram, ListOrdered, BarChart3, Shield, CalendarDays, Crown, ArrowLeftRight, LayoutDashboard, GitBranch, History } from "lucide-react";
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -64,6 +64,7 @@ import { getImportedPlayerName, resolvePlayerDisplayName } from "@/lib/playerNam
 import { PlayerHeadshot } from "@/components/PlayerHeadshot";
 import { EXCLUDE_LIVE_GAMES, isGameInProgress } from "@/lib/gameResults";
 import { compactLogoUrl } from "@/lib/compactLogo";
+import { competitionNameWithoutSeason, competitionTypeOrder, splitCurrentSeason } from "@/lib/leagueSeasons";
 
 type CanonicalPlayerName = {
   name: string;
@@ -749,6 +750,8 @@ export default function LeaguePage() {
     is_public?: boolean | null;
   };
   const [siblingSeasons, setSiblingSeasons] = useState<SeasonCompetitionOption[]>([]);
+  // The league brand's slug, for the "Past seasons" link to its History tab.
+  const [brandSlug, setBrandSlug] = useState<string | null>(null);
 
   const getTeamLogoUrl = (teamName: string): string | undefined => {
     if (!teamName) return undefined;
@@ -826,15 +829,28 @@ export default function LeaguePage() {
     return `${seasonMatch[1]}/${seasonMatch[3]}`;
   };
 
+  // The season switcher only offers the season being viewed: past seasons live
+  // in the league's History tab (/league/:brand?tab=history), not in the picker.
+  const seasonSplit = useMemo(() => splitCurrentSeason(siblingSeasons), [siblingSeasons]);
+  const sameSeasonSiblings = useMemo(() => {
+    const group = seasonSplit.current.some((s) => s.slug === slug)
+      ? seasonSplit.current
+      : seasonSplit.past.find((g) => g.competitions.some((s) => s.slug === slug))?.competitions ?? [];
+    return [...group].sort(
+      (a, b) => competitionTypeOrder(a.name) - competitionTypeOrder(b.name) || a.name.localeCompare(b.name),
+    );
+  }, [seasonSplit, slug]);
+  const hasOtherSeasons = seasonSplit.past.length > 0;
+
   const britishChampionshipSeasons = useMemo(
     () => Array.from(
       new Set(
-        siblingSeasons
+        sameSeasonSiblings
           .map((competition) => getBritishChampionshipSeasonLabel(competition))
           .filter((season): season is string => !!season),
       ),
     ),
-    [siblingSeasons],
+    [sameSeasonSiblings],
   );
 
   const currentBritishChampionshipSeason = getBritishChampionshipSeasonLabel({
@@ -860,24 +876,6 @@ export default function LeaguePage() {
         return order.indexOf(getBritishChampionshipStageLabel(a)) - order.indexOf(getBritishChampionshipStageLabel(b));
       });
   }, [isBritishChampionship, currentBritishChampionshipSeason, siblingSeasons]);
-
-  const navigateToBritishChampionshipSeason = (season: string) => {
-    const currentStage = getBritishChampionshipStageLabel({
-      name: league?.name || '',
-      slug,
-      season: (league as any)?.season || null,
-      division: (league as any)?.division || null,
-    });
-    const candidates = siblingSeasons.filter(
-      (competition) => getBritishChampionshipSeasonLabel(competition) === season,
-    );
-    const destination =
-      candidates.find((competition) => getBritishChampionshipStageLabel(competition) === currentStage) ||
-      candidates.find((competition) => getBritishChampionshipStageLabel(competition) === 'Regular Season') ||
-      candidates[0];
-
-    if (destination) navigate(`/competition/${destination.slug}`);
-  };
 
   // Preferred sort order for gender labels so Men's always precedes Women's
   const GENDER_ORDER = ["Men's", "Women's", "Men", "Women", "Male", "Female", "Mixed"];
@@ -1892,6 +1890,7 @@ export default function LeaguePage() {
       const fetchUserAndLeague = async () => {
         // Reset sibling seasons so a competition without competition_id never shows stale options
         setSiblingSeasons([]);
+        setBrandSlug(null);
 
         const { data: { user } } = await supabase.auth.getUser();
         setCurrentUser(user);
@@ -1978,6 +1977,12 @@ export default function LeaguePage() {
           // Filter to same gender only — gender competitions (Men's/Women's) are not
           // "seasons" of each other; they should be selected from the brand page instead.
           if ((data as any).competition_id) {
+            supabase
+              .from('leagues')
+              .select('slug')
+              .eq('id', (data as any).competition_id)
+              .maybeSingle()
+              .then(({ data: brand }) => setBrandSlug((brand as any)?.slug ?? null));
             try {
               const res = await fetch(`/api/league/${(data as any).competition_id}/competitions`);
               if (res.ok) {
@@ -4135,34 +4140,31 @@ export default function LeaguePage() {
                   {(displayLeagueName || "League Name").replace(/\s*FIBA$/i, "")}
                 </h2>
                 <div className="flex items-center gap-2 flex-wrap mt-3">
-                {isBritishChampionship && britishChampionshipSeasons.length > 1 ? (
-                  <select
-                    value={currentBritishChampionshipSeason}
-                    onChange={(e) => navigateToBritishChampionshipSeason(e.target.value)}
-                    aria-label="Select British Championship Basketball season"
-                    className="h-8 text-xs font-semibold bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg px-3 cursor-pointer backdrop-blur transition-colors focus:outline-none focus:ring-2 focus:ring-white/40"
-                    style={{ WebkitAppearance: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center' }}
-                  >
-                    {britishChampionshipSeasons.map((season) => (
-                      <option key={season} value={season} style={{ background: '#1a1a2e', color: 'white' }}>
-                        {season}
-                      </option>
-                    ))}
-                  </select>
-                ) : (league as any)?.competition_id && siblingSeasons.length > 1 && siblingSeasons.some((s) => s.slug === slug) ? (
+                {/* BCB switches stage with the buttons below; other leagues use this dropdown. */}
+                {!(isBritishChampionship && britishChampionshipStages.length > 1) && (league as any)?.competition_id && sameSeasonSiblings.length > 1 && sameSeasonSiblings.some((s) => s.slug === slug) ? (
                   <select
                     value={slug}
                     onChange={(e) => navigate(`/competition/${e.target.value}`)}
+                    aria-label="Select competition"
                     className="h-8 text-xs font-semibold bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-lg px-3 cursor-pointer backdrop-blur transition-colors focus:outline-none focus:ring-2 focus:ring-white/40"
                     style={{ WebkitAppearance: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center' }}
                   >
-                    {siblingSeasons.map((s) => (
+                    {sameSeasonSiblings.map((s) => (
                       <option key={s.slug} value={s.slug} style={{ background: '#1a1a2e', color: 'white' }}>
-                        {s.division || s.season || s.name}
+                        {s.division || competitionNameWithoutSeason(s.name)}
                       </option>
                     ))}
                   </select>
                 ) : null}
+                {brandSlug && hasOtherSeasons && (
+                  <Link
+                    href={`/league/${brandSlug}?tab=history`}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur transition-colors"
+                  >
+                    <History className="h-3 w-3" />
+                    Past seasons
+                  </Link>
+                )}
                 {isBritishChampionship && britishChampionshipStages.length > 1 && (
                   <div className="flex items-center gap-1.5" data-testid="british-championship-stage-tabs">
                     {britishChampionshipStages.map((competition) => {

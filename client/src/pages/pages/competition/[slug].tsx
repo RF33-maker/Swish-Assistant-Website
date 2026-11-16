@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
-import { useRoute, useLocation } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { supabase } from "@/lib/supabase";
-import { Trophy, ArrowLeft, Users } from "lucide-react";
+import { Trophy, ArrowLeft, ArrowRight } from "lucide-react";
 import SiteHeader, { SITE_RAIL_OFFSET } from "@/components/layout/SiteHeader";
 import BCBLogo from "@/assets/BCB Logo.jpg";
 import LeagueDefaultImage from "@/assets/league-default.jpg";
 import { compactLogoUrl } from "@/lib/compactLogo";
 import AllTimeLeaders from "@/components/league/AllTimeLeaders";
+import { competitionNameWithoutSeason, competitionTypeOrder, splitCurrentSeason } from "@/lib/leagueSeasons";
+import { historyPageHref } from "@/lib/historyLeagues";
 
 interface League {
   id: string;
@@ -37,12 +39,6 @@ function genderSortIndex(gender: string): number {
   return index === -1 ? 99 : index;
 }
 
-function getSeasonLabel(competition: SeasonCompetition): string {
-  const raw = `${competition.season || ""} ${competition.name}`;
-  const match = raw.match(/\b(20\d{2})\s*[-/]\s*(20)?(\d{2})\b/);
-  return match ? `${match[1]}/${match[3]}` : competition.season || competition.name;
-}
-
 function getCompetitionLabel(competition: SeasonCompetition): string {
   // A plain ordinal season ("Season 2", REBA SL) says nothing about the stage,
   // unlike BCB's "Season 2025/26", so the competition keeps its own name.
@@ -53,6 +49,31 @@ function getCompetitionLabel(competition: SeasonCompetition): string {
   return competition.name;
 }
 
+type HubTab = "season" | "history";
+
+function readTab(): HubTab {
+  try {
+    return new URLSearchParams(window.location.search).get("tab") === "history" ? "history" : "season";
+  } catch {
+    return "season";
+  }
+}
+
+/** The league itself first, then the cup, trophy and play-offs. */
+function sortSameSeason(a: SeasonCompetition, b: SeasonCompetition): number {
+  const regular = (c: SeasonCompetition) => (getCompetitionLabel(c) === "Regular Season" ? 0 : 1);
+  return (
+    competitionTypeOrder(a.name) - competitionTypeOrder(b.name) ||
+    regular(a) - regular(b) ||
+    a.name.localeCompare(b.name)
+  );
+}
+
+/**
+ * /league/:slug, a league brand's hub. "This season" offers only the current
+ * season's competitions; every earlier season sits under "History" with the
+ * all-time boards and a link to /british-basketball-history.
+ */
 export default function CompetitionPage() {
   const [, params] = useRoute("/league/:slug");
   const [, setLocation] = useLocation();
@@ -61,7 +82,7 @@ export default function CompetitionPage() {
   const [league, setLeague] = useState<League | null>(null);
   const [seasons, setSeasons] = useState<SeasonCompetition[]>([]);
   const [selectedGender, setSelectedGender] = useState("");
-  const [selectedSeason, setSelectedSeason] = useState("");
+  const [tab, setTab] = useState<HubTab>(readTab);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -121,13 +142,7 @@ export default function CompetitionPage() {
       // season picker, same as before.
       const genders = Array.from(new Set(seasonList.map((c) => c.gender).filter((g): g is string => !!g)))
         .sort((a, b) => genderSortIndex(a) - genderSortIndex(b));
-      const initialGender = genders[0] || "";
-      setSelectedGender(initialGender);
-
-      const initialScope = initialGender
-        ? seasonList.filter((c) => c.gender === initialGender)
-        : seasonList;
-      setSelectedSeason(initialScope[0] ? getSeasonLabel(initialScope[0]) : "");
+      setSelectedGender(genders[0] || "");
       setLoading(false);
     };
 
@@ -156,28 +171,39 @@ export default function CompetitionPage() {
     [seasons, availableGenders, selectedGender],
   );
 
-  const seasonLabels = useMemo(
-    () => Array.from(new Set(genderScopedSeasons.map(getSeasonLabel))),
-    [genderScopedSeasons],
+  // Only the current season is a choice; earlier seasons go to the History tab.
+  const seasonSplit = useMemo(() => splitCurrentSeason(genderScopedSeasons), [genderScopedSeasons]);
+  const visibleCompetitions = useMemo(() => [...seasonSplit.current].sort(sortSameSeason), [seasonSplit]);
+  const pastSeasons = useMemo(
+    () => seasonSplit.past.map((group) => ({ ...group, competitions: [...group.competitions].sort(sortSameSeason) })),
+    [seasonSplit],
   );
 
-  const visibleCompetitions = useMemo(
-    () => genderScopedSeasons
-      .filter((competition) => getSeasonLabel(competition) === selectedSeason)
-      .sort((a, b) => {
-        const order = ["Regular Season", "Trophy"];
-        const aIndex = order.indexOf(getCompetitionLabel(a));
-        const bIndex = order.indexOf(getCompetitionLabel(b));
-        return (aIndex === -1 ? order.length : aIndex) - (bIndex === -1 ? order.length : bIndex);
-      }),
-    [genderScopedSeasons, selectedSeason],
-  );
+  // The tabs show once any gender has a season before the current one.
+  const hasHistory = useMemo(() => {
+    if (availableGenders.length === 0) return splitCurrentSeason(seasons).past.length > 0;
+    return availableGenders.some(
+      (gender) => splitCurrentSeason(seasons.filter((c) => !c.gender || c.gender === gender)).past.length > 0,
+    );
+  }, [seasons, availableGenders]);
+  const activeTab: HubTab = hasHistory ? tab : "season";
 
-  const handleSelectGender = (gender: string) => {
-    setSelectedGender(gender);
-    const scope = seasons.filter((c) => c.gender === gender);
-    setSelectedSeason(scope[0] ? getSeasonLabel(scope[0]) : "");
+  const pickTab = (next: HubTab) => {
+    setTab(next);
+    try {
+      const url = new URL(window.location.href);
+      if (next === "history") url.searchParams.set("tab", "history");
+      else url.searchParams.delete("tab");
+      window.history.replaceState(window.history.state, "", url.toString());
+    } catch {
+      /* the page still works without the URL */
+    }
   };
+
+  const handleSelectGender = (gender: string) => setSelectedGender(gender);
+
+  const genderForHistory = availableGenders.length > 0 ? selectedGender : "";
+  const historyHref = league ? historyPageHref(league.id, genderForHistory) : null;
 
   const brandingCompetition =
     visibleCompetitions.find((competition) => getCompetitionLabel(competition) === "Regular Season") ||
@@ -254,13 +280,40 @@ export default function CompetitionPage() {
           </div>
         </section>
 
+        {hasHistory && (
+          <div className="mt-4 md:mt-5 border-b border-[color:var(--ch-border)]">
+            <nav className="flex items-stretch gap-1 -mx-1" role="tablist" aria-label="League sections">
+              {([
+                { key: "season", label: "This season" },
+                { key: "history", label: "History" },
+              ] as { key: HubTab; label: string }[]).map((t) => {
+                const active = activeTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => pickTab(t.key)}
+                    className={`relative flex items-center h-12 px-3 text-[13.5px] font-medium whitespace-nowrap transition-colors ${
+                      active ? "text-[color:var(--ch-text)]" : "text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
+                    }`}
+                  >
+                    {t.label}
+                    <span
+                      className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full bg-[color:var(--ch-accent)] transition-opacity"
+                      style={{ opacity: active ? 1 : 0 }}
+                    />
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        )}
+
         {seasons.length > 0 && (
           <div className="mt-6 md:mt-8">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Choose a competition</div>
-
-            {/* Gender split — scopes the season picker and the competitions
-                below it, rather than jumping straight to one competition. */}
-            <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              {/* Gender split: scopes both tabs. */}
               {availableGenders.length > 0 ? (
                 <div className="ch-seg" role="tablist" aria-label="Competition gender">
                   {availableGenders.map((gender) => (
@@ -277,53 +330,92 @@ export default function CompetitionPage() {
                   ))}
                 </div>
               ) : <span />}
-              {genderScopedSeasons.length > 0 && seasonLabels.length > 1 && (
-                <label className="flex items-center gap-3">
-                  <span className="ch-eyebrow">Season</span>
-                  <select
-                    value={selectedSeason}
-                    onChange={(event) => setSelectedSeason(event.target.value)}
-                    aria-label="Select season"
-                    className="ch-input h-10 px-3.5 text-sm font-semibold w-40"
-                  >
-                    {seasonLabels.map((season) => (
-                      <option key={season} value={season}>{season}</option>
-                    ))}
-                  </select>
-                </label>
+              {activeTab === "season" && seasonSplit.currentLabel && (
+                <span className="text-sm font-semibold tabular-nums text-[color:var(--ch-text-2)]">
+                  {/^season\b/i.test(seasonSplit.currentLabel) ? seasonSplit.currentLabel : `${seasonSplit.currentLabel} season`}
+                </span>
+              )}
+              {activeTab === "history" && historyHref && (
+                <Link
+                  href={historyHref}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[color:var(--ch-text-2)] hover:text-[color:var(--ch-text)]"
+                >
+                  Season leaders and records <ArrowRight className="w-4 h-4" />
+                </Link>
               )}
             </div>
 
-            {genderScopedSeasons.length > 0 && (
-              <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {visibleCompetitions.map((competition) => (
-                  <button
-                    key={competition.slug}
-                    onClick={() => setLocation(`/competition/${competition.slug}`)}
-                    className="ch-card ch-hover group relative overflow-hidden min-h-[170px] text-left w-full bg-[#0b0e13]"
-                  >
-                    {(competition.banner_url || displayBannerUrl) && (
-                      <img
-                        src={competition.banner_url || displayBannerUrl || ""}
-                        alt=""
-                        className="absolute inset-0 w-full h-full object-cover opacity-45 group-hover:opacity-60 group-hover:scale-[1.03] transition-all duration-500"
-                      />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
-                    <div className="absolute inset-x-0 bottom-0 p-5 flex items-end justify-between gap-3">
-                      <div className="min-w-0">
-                        <span className="ch-display uppercase font-bold tracking-tight leading-none text-[1.7rem] text-white block">
-                          {getCompetitionLabel(competition)}
+            {activeTab === "season" && (
+              <>
+                <div className="mt-6 text-[11px] font-semibold uppercase tracking-[0.16em] text-[color:var(--ch-accent)]">Choose a competition</div>
+                {visibleCompetitions.length > 0 ? (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {visibleCompetitions.map((competition) => (
+                      <button
+                        key={competition.slug}
+                        onClick={() => setLocation(`/competition/${competition.slug}`)}
+                        className="ch-card ch-hover group relative overflow-hidden min-h-[170px] text-left w-full bg-[#0b0e13]"
+                      >
+                        {(competition.banner_url || displayBannerUrl) && (
+                          <img
+                            src={competition.banner_url || displayBannerUrl || ""}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover opacity-45 group-hover:opacity-60 group-hover:scale-[1.03] transition-all duration-500"
+                          />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+                        <div className="absolute inset-x-0 bottom-0 p-5 flex items-end justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="ch-display uppercase font-bold tracking-tight leading-none text-[1.7rem] text-white block">
+                              {getCompetitionLabel(competition)}
+                            </span>
+                            <span className="mt-1.5 text-xs text-white/65 block truncate">{competition.name}</span>
+                          </div>
+                          {competition.logo_url && (
+                            <img src={compactLogoUrl(competition.logo_url)} alt="" className="h-10 w-10 object-contain shrink-0" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-[color:var(--ch-text-2)]">No competitions this season yet.</p>
+                )}
+              </>
+            )}
+
+            {activeTab === "history" && (
+              <section className="mt-6" aria-labelledby="past-seasons-heading">
+                <h2 id="past-seasons-heading" className="ch-eyebrow pb-2 border-b border-[color:var(--ch-border-strong)]">Past seasons</h2>
+                {pastSeasons.length === 0 ? (
+                  <p className="py-5 text-sm text-[color:var(--ch-text-2)]">No earlier seasons on file{selectedGender ? ` for ${selectedGender}` : ""}.</p>
+                ) : (
+                  <ul>
+                    {pastSeasons.map((group) => (
+                      <li
+                        key={group.label}
+                        className="py-4 border-b border-[color:var(--ch-border)] grid grid-cols-[6rem_1fr] sm:grid-cols-[8rem_1fr] gap-x-4 sm:gap-x-6 items-baseline"
+                      >
+                        <span className="ch-display font-bold text-xl sm:text-2xl tabular-nums text-[color:var(--ch-text)]">{group.label}</span>
+                        <span className="flex flex-wrap gap-x-5 gap-y-2 min-w-0">
+                          {group.competitions.map((competition) => (
+                            <Link
+                              key={competition.slug}
+                              href={`/competition/${competition.slug}`}
+                              className="group inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--ch-text)] hover:underline"
+                            >
+                              {competition.logo_url && (
+                                <img src={compactLogoUrl(competition.logo_url)} alt="" className="h-5 w-5 object-contain shrink-0" />
+                              )}
+                              {competitionNameWithoutSeason(competition.name)}
+                            </Link>
+                          ))}
                         </span>
-                        <span className="mt-1.5 text-xs text-white/65 block truncate">{competition.name}</span>
-                      </div>
-                      {competition.logo_url && (
-                        <img src={compactLogoUrl(competition.logo_url)} alt="" className="h-10 w-10 object-contain shrink-0" />
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
             )}
           </div>
         )}
@@ -334,8 +426,9 @@ export default function CompetitionPage() {
           </div>
         )}
 
-        {seasons.length > 0 && (
-          <AllTimeLeaders brandId={league.id} gender={availableGenders.length > 0 ? selectedGender : ""} />
+        {/* All-time boards are history: they live only in the History tab, never beside the competition picker. */}
+        {hasHistory && activeTab === "history" && (
+          <AllTimeLeaders brandId={league.id} gender={genderForHistory} />
         )}
       </main>
     </div>
