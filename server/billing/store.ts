@@ -50,8 +50,10 @@ export const supabaseBillingStore: BillingStore = {
   async releaseEvent(id) {
     await supabaseAdmin.from("stripe_events").delete().eq("id", id);
   },
+  // Rows with no user_id are payment records kept after an account was deleted
+  // (server/accountData.ts): billing never acts on them again.
   async find(by, value) {
-    const { data, error } = await supabaseAdmin.from("coach_access").select("*").eq(by, value).limit(1).maybeSingle();
+    const { data, error } = await supabaseAdmin.from("coach_access").select("*").eq(by, value).not("user_id", "is", null).limit(1).maybeSingle();
     if (error) throw new Error(error.message);
     return (data as AccessRow | null) ?? null;
   },
@@ -78,7 +80,7 @@ export const supabaseBillingStore: BillingStore = {
     return (data as AccessRow | null) ?? null;
   },
   async listOpen() {
-    const { data, error } = await supabaseAdmin.from("coach_access").select("*").in("status", ["active", "past_due"]).limit(2000);
+    const { data, error } = await supabaseAdmin.from("coach_access").select("*").in("status", ["active", "past_due"]).not("user_id", "is", null).limit(2000);
     if (error) throw new Error(error.message);
     return (data || []) as AccessRow[];
   },

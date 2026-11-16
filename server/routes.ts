@@ -35,6 +35,31 @@ import { registerGameTimeReviewRoutes } from "./gameTimeReview";
 import { registerContactRequestRoutes } from "./contactRequests";
 import { registerSeoRoutes } from "./seoIndex";
 import { SITE_BASE } from "@shared/seo";
+import { compileAccountExport, liveAccountDataDeps, runAccountDeletion, type StepResult } from "./accountData";
+import { getStripe, stripeConfigured, stripeTestMode } from "./billing/stripeClient";
+
+/** Account export and deletion run against the service-role client and the payment provider. */
+function accountDataDeps() {
+  return liveAccountDataDeps(
+    supabaseAdmin,
+    stripeConfigured()
+      ? {
+          liveKey: !stripeTestMode(),
+          async cancelSubscription(id: string) {
+            const stripe = getStripe();
+            try {
+              // Already over: cancelling again would be refused, and there's nothing to stop.
+              const sub = await stripe.subscriptions.retrieve(id);
+              if (sub.status === "canceled" || sub.status === "incomplete_expired") return;
+              await stripe.subscriptions.cancel(id);
+            } catch (e: any) {
+              if (e?.code !== "resource_missing") throw e; // already gone
+            }
+          },
+        }
+      : null,
+  );
+}
 import multer from 'multer';
 import OpenAI from 'openai';
 import { XMLParser } from 'fast-xml-parser';
@@ -6357,35 +6382,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const userId = exportReq.user_id;
 
-    // Gather account data using service-role key.
-    // maybeSingle: an account made on Scorers Table has no profile row until it
-    // first saves one here, and that is a null profile, not a failed export.
-    const [profileRes, consentsRes, exportsRes] = await Promise.all([
-      supabaseAdmin.from("member_profiles").select("*").eq("id", userId).maybeSingle(),
-      supabaseAdmin.from("member_consents").select("*").eq("user_id", userId),
-      supabaseAdmin.from("data_export_requests").select("id, status, requested_at").eq("user_id", userId),
-    ]);
-
-    // A real lookup failure must not hand the member an export with the profile silently missing.
-    if (profileRes.error) {
-      console.error(`[fulfil-export] profile lookup failed for ${userId}:`, profileRes.error.message);
-      return res.status(500).json({ error: "Failed to compile the profile for this export" });
-    }
-
+    // Everything held about the account (server/accountData.ts lists every table).
+    // A failed lookup fails the export: never hand the member one with a section silently missing.
     const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
-
-    const exportPayload = {
-      exported_at: new Date().toISOString(),
-      account: {
-        id: userId,
-        email: authUser?.user?.email ?? null,
-        email_confirmed_at: authUser?.user?.email_confirmed_at ?? null,
-        created_at: authUser?.user?.created_at ?? null,
-      },
-      profile: profileRes.data ?? null,
-      consent_records: consentsRes.data ?? [],
-      export_requests: exportsRes.data ?? [],
-    };
+    const u = authUser?.user;
+    let exportPayload: Record<string, unknown>;
+    try {
+      exportPayload = await compileAccountExport(
+        accountDataDeps(),
+        { userId, email: u?.email ?? null },
+        u ? {
+          email: u.email ?? null,
+          email_confirmed_at: u.email_confirmed_at ?? null,
+          created_at: u.created_at ?? null,
+          last_sign_in_at: u.last_sign_in_at ?? null,
+          user_metadata: u.user_metadata ?? null,
+        } : null,
+      );
+    } catch (err: any) {
+      console.error(`[fulfil-export] compile failed for ${userId}:`, err?.message);
+      return res.status(500).json({ error: "Failed to compile this export: " + (err?.message ?? "unknown error") });
+    }
 
     // Mark export as ready (download_url stores a note about delivery method).
     await supabaseAdmin
@@ -6399,22 +6416,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // POST /api/admin/account/process-deletion/:requestId
   // Executes a scheduled deletion.  Irreversible.
+  // ?dryRun=true changes nothing and returns what each step would touch (any date).
   //
   // Deletion order:
   //   1. Enforce scheduled_for — refuse to process before the stated date so
   //      the privacy policy's 30-day grace period is honoured.
-  //   2. Nullify member_consents.user_id (SET NULL via FK + ON DELETE SET NULL
-  //      in the migration) BEFORE deleting the auth user so the audit rows are
-  //      retained as an anonymised compliance record.
-  //   3. Delete member_profiles (personal data).
-  //   4. Delete data_export_requests.
-  //   5. Delete the auth user — this also cascades deletion_requests (ON DELETE CASCADE).
+  //   2. runAccountDeletion (server/accountData.ts): cancel running
+  //      subscriptions, remove the details added to claimed player profiles,
+  //      close the creator profile and its files, delete coach notes, Ask
+  //      Swish usage and messages, unlink league data and club-shared reports,
+  //      keep the payment record without the person, keep the consent record
+  //      unlinked, delete the profile. Any failure stops here, before the auth
+  //      user goes, and every step is safe to run again.
+  //   3. Delete the auth user — the rest goes by foreign key (ON DELETE CASCADE),
+  //      including deletion_requests.
   app.post("/api/admin/account/process-deletion/:requestId", async (req: Request, res: Response) => {
     const adminId = await requireAdmin(req, res);
     if (!adminId) return;
 
     const { requestId } = req.params;
     const force = req.query.force === "true"; // admin escape-hatch: ?force=true
+    const dryRun = req.query.dryRun === "true";
 
     const { data: delReq, error: reqErr } = await supabaseAdmin
       .from("deletion_requests")
@@ -6428,9 +6450,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Enforce the scheduled date unless the admin overrides with ?force=true.
     const scheduledFor = new Date(delReq.scheduled_for);
-    if (!force && scheduledFor > new Date()) {
+    if (!dryRun && !force && scheduledFor > new Date()) {
       return res.status(409).json({
-        error: `Deletion is scheduled for ${scheduledFor.toISOString()}. Pass ?force=true to process early.`,
+        error: `Deletion is scheduled for ${scheduledFor.toISOString()}. Pass ?force=true to process early, or ?dryRun=true to see what it would do.`,
         scheduledFor: delReq.scheduled_for,
       });
     }
@@ -6438,33 +6460,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const userId = delReq.user_id;
     const now = new Date().toISOString();
 
-    // Step 1: Nullify member_consents.user_id BEFORE deleting the auth user.
-    // Because the FK is ON DELETE SET NULL, deleting auth.users would also NULL
-    // the column automatically — but doing it explicitly here is more reliable
-    // and makes the intent clear in the audit log.
-    const { error: nullifyErr } = await supabaseAdmin
-      .from("member_consents")
-      .update({ user_id: null })
-      .eq("user_id", userId);
-    if (nullifyErr) {
-      console.warn(`[process-deletion] Could not nullify consent user_id for ${userId}:`, nullifyErr.message);
+    // The email finds what was sent before signing in (contact forms, newsletter, creator applications).
+    const { data: authUser, error: authGetError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (authGetError && !/not found/i.test(authGetError.message)) {
+      return res.status(500).json({ error: "Could not load the account: " + authGetError.message });
+    }
+    const who = { userId, email: authUser?.user?.email ?? null };
+
+    let steps: StepResult[];
+    try {
+      steps = await runAccountDeletion(accountDataDeps(), who, { dryRun });
+    } catch (err: any) {
+      console.error(`[process-deletion] ${dryRun ? "Dry run" : "Clean-up"} failed for ${userId}:`, err?.message);
+      return res.status(500).json({
+        error: `Stopped before deleting the account: ${err?.message ?? "unknown error"}. Nothing after that step ran; fix it and run again.`,
+      });
     }
 
-    // Step 2: Delete member_profiles (personal data).
-    await supabaseAdmin.from("member_profiles").delete().eq("id", userId);
+    if (dryRun) return res.json({ dryRun: true, userId, scheduledFor: delReq.scheduled_for, steps });
 
-    // Step 3: Delete export requests.
-    await supabaseAdmin.from("data_export_requests").delete().eq("user_id", userId);
-
-    // Step 4: Delete the auth user (cascades deletion_requests via ON DELETE CASCADE).
-    const { error: authDelError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    if (authDelError) {
-      console.error(`[process-deletion] Failed to delete auth user ${userId}:`, authDelError.message);
-      return res.status(500).json({ error: "Failed to delete auth user: " + authDelError.message });
+    // The rest goes with the auth user by foreign key (cascades deletion_requests too).
+    if (authUser?.user) {
+      const { error: authDelError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (authDelError) {
+        console.error(`[process-deletion] Failed to delete auth user ${userId}:`, authDelError.message);
+        return res.status(500).json({ error: "Failed to delete auth user: " + authDelError.message, steps });
+      }
     }
 
-    console.log(`[process-deletion] Admin ${adminId} processed deletion ${requestId} for user ${userId} (forced=${force})`);
-    return res.json({ success: true, deletedUserId: userId, processedAt: now });
+    console.log(`[process-deletion] Admin ${adminId} processed deletion ${requestId} for user ${userId} (forced=${force})`, JSON.stringify(steps));
+    return res.json({ success: true, deletedUserId: userId, processedAt: now, steps });
   });
 
   const httpServer = createServer(app);
