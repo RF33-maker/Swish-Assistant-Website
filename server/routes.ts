@@ -5199,7 +5199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select("slug, name, is_public")
         .not("slug", "is", null)
         .order("created_at", { ascending: false })
-        .limit(300);
+        .limit(1000);
       if (!isAdmin) query = query.or(`is_public.eq.true,user_id.eq.${userId},created_by.eq.${userId}`);
       const { data, error } = await query;
       if (error) throw new Error(error.message);

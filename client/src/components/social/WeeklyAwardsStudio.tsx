@@ -208,7 +208,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       .eq("is_public", true)
       .not("slug", "is", null)
       .order("created_at", { ascending: false })
-      .limit(120)
+      .limit(1000)
       .then(({ data: rows }) => {
         if (!cancelled && rows) setCompetitions((rows as CompetitionOption[]).filter((c) => c.slug && c.name));
       });
