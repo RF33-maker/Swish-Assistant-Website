@@ -146,6 +146,8 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     return PHOTO_LOOKS.some((l) => l.id === stored) ? (stored as PhotoLook) : "blur";
   });
   const stacked = template === "stacked";
+  // Players drawn from their game photo although they have a cut-out (often their profile headshot).
+  const [gamePhotoFor, setGamePhotoFor] = useState<Record<string, boolean>>({});
 
   const [leagueLogoUrl, setLeagueLogoUrl] = useState<string | null>(null);
   const [logoColorHex, setLogoColorHex] = useState<string | null>(null);
@@ -243,6 +245,14 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     [data, selected],
   );
   const potw = data?.awards[0] || null;
+  // The stacked card draws the cut-out when there is one, unless the game photo was chosen instead.
+  const potwUsesCutout = !!potw?.cutoutUrl && !(potw.photoUrl && gamePhotoFor[potw.player_id]);
+  const chooseImage = (useGamePhoto: boolean) => {
+    if (!potw) return;
+    setGamePhotoFor((prev) => ({ ...prev, [potw.player_id]: useGamePhoto }));
+    // Framing set for the cut-out wouldn't suit the photo, or the other way round.
+    setFraming((prev) => ({ ...prev, [potw.player_id]: undefined }));
+  };
 
   // A photo added here or in another studio: redraw with it, keeping the week, the picks and the subtitle.
   usePlayerPhotoChange((change) => {
@@ -254,6 +264,8 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     setData((prev) => prev && { ...prev, awards: prev.awards.map((a) => (ids.has(a.player_id) ? { ...a, photoUrl: change.url } : a)) });
     // Framing set for the old photo wouldn't suit the new one.
     setFraming((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !ids.has(id))));
+    // A photo picked or added for the winner is meant to be seen, so the stacked card leaves the cut-out for it.
+    if (potw && ids.has(potw.player_id)) setGamePhotoFor((prev) => ({ ...prev, [potw.player_id]: true }));
   });
 
   // The player whose photo the framing sliders currently adjust.
@@ -371,16 +383,20 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
             return result.canvas;
           })
         : stacked
-          ? renderPotwStack(data?.awards || [], brand, {
+          ? renderPotwStack(
+              (data?.awards || []).map((a, i) => (i === 0 && !potwUsesCutout ? { ...a, cutoutUrl: null } : a)),
+              brand,
+              {
               reading,
               accent,
               weekLabel: weekStart ? fmtWeek(weekStart) : "",
               teamLogoUrl,
               framing: framing[potw!.player_id],
               showGameScore,
-              ring,
-              photoLook,
-            })
+                ring,
+                photoLook,
+              },
+            )
           : renderPlayerOfTheWeek(potw!, brand, {
               style,
               weekLabel: weekStart ? fmtWeek(weekStart) : "",
@@ -405,7 +421,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, chosen, potw, data, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName, style, clubLogos, weekStart, stacked, template, reading, accent, ring, photoLook]);
+  }, [kind, chosen, potw, data, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName, style, clubLogos, weekStart, stacked, template, reading, accent, ring, photoLook, potwUsesCutout]);
 
   const toggle = (id: string) =>
     setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 5 ? cur : [...cur, id]));
@@ -560,8 +576,44 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
           />
         )}
 
-        {stacked && kind === "player" && potw && !potw.cutoutUrl && (
-          <Field label="Photo backdrop" hint={`${PHOTO_LOOKS.find((l) => l.id === photoLook)?.hint}. With a cut-out the card has no backdrop to choose.`}>
+        {stacked && kind === "player" && potw?.cutoutUrl && (
+          <Field
+            label="Player image"
+            hint={
+              !potw.photoUrl
+                ? "Only a cut-out is on file. Add a game photo below to use that instead."
+                : potwUsesCutout
+                  ? "The cut-out stands in front of the card; the game photo fills the side instead."
+                  : "The game photo fills the side of the card. Pick or add another photo below."
+            }
+          >
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Player image">
+              {(
+                [
+                  [false, "Cut-out"],
+                  [true, "Game photo"],
+                ] as const
+              ).map(([gamePhoto, label]) => (
+                <button
+                  key={label}
+                  type="button"
+                  role="radio"
+                  aria-checked={potwUsesCutout !== gamePhoto}
+                  data-active={potwUsesCutout !== gamePhoto}
+                  disabled={gamePhoto && !potw.photoUrl}
+                  onClick={() => chooseImage(gamePhoto)}
+                  className="ch-chip px-3 py-2 text-sm disabled:opacity-50"
+                  data-testid={`player-image-${gamePhoto ? "photo" : "cutout"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        {stacked && kind === "player" && potw && !potwUsesCutout && (
+          <Field label="Photo backdrop" hint={`${PHOTO_LOOKS.find((l) => l.id === photoLook)?.hint}.`}>
             <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Photo backdrop">
               {PHOTO_LOOKS.map((l) => (
                 <button
@@ -785,13 +837,15 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
 
               {stacked && kind === "player" && (
                 <p className={HINT}>
-                  {target.cutoutUrl
-                    ? "The stacked card uses the player's cut-out photo."
-                    : "No cut-out for this player, so the game photo stands in. Add a background-removed photo above to get the figure."}
+                  {potwUsesCutout
+                    ? "The stacked card is using the player's cut-out. Switch Player image to Game photo to use a photo instead."
+                    : target.cutoutUrl
+                      ? "The stacked card is using the game photo. Switch Player image back to Cut-out for the figure."
+                      : "No cut-out for this player, so the game photo stands in. Add a background-removed photo above to get the figure."}
                 </p>
               )}
 
-              {!(target.photoUrl || (stacked && target.cutoutUrl)) ? (
+              {!(target.photoUrl || (stacked && kind === "player" && potwUsesCutout)) ? (
                 <p className={HINT}>Add a photo for {target.full_name} above and the framing controls appear here.</p>
               ) : (
                 <div className="grid gap-3 sm:grid-cols-3">
