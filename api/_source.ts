@@ -6,6 +6,7 @@ import { servePublicSeo, serveSpaShellFallback } from "../server/publicSeo";
 import { newsArticleBodyParser } from "../server/newsArticles";
 import { playbookBodyParser } from "../server/playbookRoutes";
 import { stripeWebhookBodyParser } from "../server/billing/billingRoutes";
+import { cdnCachePublicReads } from "../server/cdnCache";
 
 config();
 
@@ -19,6 +20,8 @@ app.use("/api/playbook", playbookBodyParser);
 app.use("/api/stripe/webhook", stripeWebhookBodyParser);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+// Public stats answers are kept on Vercel's CDN for a minute (see server/cdnCache.ts).
+app.use(cdnCachePublicReads);
 
 app.use((req, res, next) => {
   const p = req.path || "";
