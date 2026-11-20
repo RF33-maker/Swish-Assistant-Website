@@ -161,47 +161,71 @@ const later = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ?
 
 /**
  * What the index needs from the box scores, already summarised by the database
- * (supabase/migrations/20261114_seo_index_snapshot.sql). Downloading every
- * player_stats row to do this here stopped finishing inside a request once the
- * history seasons were imported, so the database keeps the summary in one row
- * and refreshes it every ten minutes.
+ * (supabase/migrations/20261120_seo_index_parts_one_pass.sql). Downloading
+ * every player_stats row to do this here stopped finishing inside a request
+ * once the history seasons were imported, so the database keeps the summary and
+ * refreshes it every fifteen minutes. It is stored in pieces of a few hundred KB
+ * because one multi-megabyte response is too much for the database server's API.
  */
 interface IndexSource {
   /** [league_id, team_name, rows, latest created_at, last game day] — one per spelling per competition. */
   teams: Array<[string, string, number, string | null, string | null]>;
-  /** [player_id, league_id, games, last game day, latest created_at, latest team_name] */
-  playerStats: Array<[string, string, number, string | null, string | null, string | null]>;
-  /** [game_key, league_id] for every game with a box score. */
-  statGames: Array<[string, string]>;
-  /** [game_key, league_id, matchtime, hometeam, awayteam] */
-  games: Array<[string, string, string | null, string | null, string | null]>;
-  /** [id, slug, full_name, date_of_birth] for players with a box score. */
-  players: Array<[string, string | null, string | null, string | null]>;
+  /**
+   * [game_key, league_id, matchtime, hometeam, awayteam, stats] — stats is 1 when the game's box score
+   * is filed under its own competition only, otherwise the competitions it is filed under (or 0 if none).
+   */
+  games: Array<[string, string, string | null, string | null, string | null, 1 | 0 | string[]]>;
+  /**
+   * [id, slug, full_name, date_of_birth, competitions] for players with a box score, where each
+   * competition is [league_id, games, last game day, latest created_at (epoch), latest team_name].
+   */
+  players: Array<[string, string | null, string | null, string | null, Array<[string, number, string | null, number | null, string | null]>]>;
 }
 
-/** Past this the scheduled refresh has stopped, so work the summary out directly. */
-const SNAPSHOT_STALE_MS = 2 * 60 * 60 * 1000;
+/** Pieces read at once: enough to be quick, few enough to stay light on the database. */
+const PARTS_AT_ONCE = 3;
+
+/** Pieces this server already holds, by name, so an unchanged piece isn't downloaded again. */
+const partCache = new Map<string, { hash: string; rows: unknown[] }>();
 
 async function loadIndexSource(): Promise<IndexSource> {
-  // Asked for as a list, not a single object: for one object the API re-parses
-  // the whole summary to unwrap it, which is slow on a busy database.
-  const { data: rows, error } = await supabaseAdmin
-    .from("seo_index_snapshot")
-    .select("data, built_at")
-    .eq("id", 1)
-    .limit(1);
-  // A read that failed means the database is struggling: summarising directly
-  // is far heavier than the read, so don't pile that on.
-  if (error) throw error;
-  const snapshot = rows?.[0];
-  const stored = (snapshot?.data || null) as IndexSource | null;
-  if (stored && Date.now() - new Date(snapshot!.built_at).getTime() < SNAPSHOT_STALE_MS) return stored;
+  // A rebuild can land while the pieces are being read; if it does, start again once.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data: parts, error } = await supabaseAdmin.from("seo_index_parts").select("part, data_hash").order("part");
+    if (error) throw error;
+    if (!parts?.length) throw new Error("SEO index summary has not been built yet");
 
-  console.warn(stored ? "SEO index snapshot is stale; summarising directly." : "SEO index snapshot missing; summarising directly.");
-  const live = await supabaseAdmin.rpc("seo_index_source");
-  if (!live.error && live.data) return live.data as IndexSource;
-  if (stored) return stored;
-  throw live.error || new Error("SEO index snapshot unavailable");
+    const missing = parts.filter((p) => partCache.get(p.part)?.hash !== p.data_hash);
+    let consistent = true;
+    for (let start = 0; start < missing.length && consistent; start += PARTS_AT_ONCE) {
+      const wanted = missing.slice(start, start + PARTS_AT_ONCE);
+      const batch = await Promise.all(
+        // Asked for as a list, not a single object: for one object the API re-parses the whole piece to unwrap it.
+        wanted.map((p) => supabaseAdmin.from("seo_index_parts").select("data, data_hash").eq("part", p.part).limit(1)),
+      );
+      batch.forEach(({ data, error: e }, i) => {
+        if (e) throw e;
+        const row = data?.[0];
+        // Changed since the list was read: a rebuild landed part-way through.
+        if (!row || row.data_hash !== wanted[i].data_hash) { consistent = false; return; }
+        partCache.set(wanted[i].part, { hash: row.data_hash, rows: row.data as unknown[] });
+      });
+    }
+    if (!consistent) continue;
+
+    // Every piece now matches the one list, so together they are one build.
+    const current = new Set(parts.map((p) => p.part));
+    for (const name of Array.from(partCache.keys())) if (!current.has(name)) partCache.delete(name);
+    const source: IndexSource = { teams: [], games: [], players: [] };
+    for (const p of parts) {
+      const kind = p.part.split("-")[0] as keyof IndexSource;
+      if (!(kind in source)) continue;
+      const rows = partCache.get(p.part)!.rows;
+      for (const row of rows) (source[kind] as unknown[]).push(row);
+    }
+    return source;
+  }
+  throw new Error("SEO index summary kept changing while it was being read");
 }
 
 /** League ids whose competitions can include under-18s (their own age, or a youth parent's). */
@@ -226,8 +250,8 @@ async function buildSeoIndex(): Promise<SeoIndex> {
     loadIndexSource(),
     supabaseAdmin.from("news_articles").select("id, slug, title, published_at").eq("is_published", true).then(({ data }) => data || []),
   ]);
-  const gameRows = source.games.map(([game_key, league_id, matchtime, hometeam, awayteam]) => ({ game_key, league_id, matchtime, hometeam, awayteam }));
-  const playerRows = source.players.map(([id, slug, full_name, date_of_birth]) => ({ id, slug, full_name, date_of_birth }));
+  const gameRows = source.games.map(([game_key, league_id, matchtime, hometeam, awayteam, stats]) => ({ game_key, league_id, matchtime, hometeam, awayteam, stats }));
+  const playerRows = source.players.map(([id, slug, full_name, date_of_birth, leagues]) => ({ id, slug, full_name, date_of_birth, leagues }));
 
   // Public competitions, and private children that display under a public parent.
   const byLeague = new Map<string, any>(competitionRows.map((c: any) => [c.league_id, c]));
@@ -250,9 +274,11 @@ async function buildSeoIndex(): Promise<SeoIndex> {
   const competitionNameBySlug = new Map<string, string>();
   for (const c of competitionRows as any[]) if (c.is_public && c.slug) competitionNameBySlug.set(c.slug, c.name || c.slug);
 
+  // A box score only counts when it is filed under a competition the public can see.
   const gamesWithStats = new Set<string>();
-  for (const [gameKey, leagueId] of source.statGames) {
-    if (publicSlugOf.has(leagueId)) gamesWithStats.add(gameKey);
+  for (const g of gameRows) {
+    const filedUnder = g.stats === 1 ? [g.league_id] : Array.isArray(g.stats) ? g.stats : [];
+    if (filedUnder.some((leagueId) => publicSlugOf.has(leagueId))) gamesWithStats.add(g.game_key);
   }
 
   // Teams and players come from the box scores, so every URL has games behind it.
@@ -270,19 +296,21 @@ async function buildSeoIndex(): Promise<SeoIndex> {
     teams.set(key, t);
   }
 
-  const playerStats = new Map<string, { games: number; lastmod: string | null; team: string | null; latestCreated: string; slug: string; slugs: Set<string>; youth: boolean }>();
-  for (const [playerId, leagueId, games, lastGame, latestCreated, latestTeam] of source.playerStats) {
-    const slug = publicSlugOf.get(leagueId);
-    if (!slug || !playerId) continue;
-    const p = playerStats.get(playerId) || { games: 0, lastmod: null, team: null, latestCreated: "", slug, slugs: new Set<string>(), youth: false };
-    p.games += games;
-    p.slugs.add(slug);
-    p.youth = p.youth || youthLeagues.has(leagueId);
-    p.lastmod = later(p.lastmod, day(lastGame));
-    // Their team and competition come from wherever they played most recently.
-    const created = String(latestCreated || "");
-    if (created >= p.latestCreated) { p.latestCreated = created; p.team = latestTeam || p.team; p.slug = slug; }
-    playerStats.set(playerId, p);
+  const playerStats = new Map<string, { games: number; lastmod: string | null; team: string | null; latestCreated: number; slug: string; slugs: Set<string>; youth: boolean }>();
+  for (const row of playerRows) {
+    for (const [leagueId, games, lastGame, latestCreated, latestTeam] of row.leagues || []) {
+      const slug = publicSlugOf.get(leagueId);
+      if (!slug || !row.id) continue;
+      const p = playerStats.get(row.id) || { games: 0, lastmod: null, team: null, latestCreated: -Infinity, slug, slugs: new Set<string>(), youth: false };
+      p.games += games;
+      p.slugs.add(slug);
+      p.youth = p.youth || youthLeagues.has(leagueId);
+      p.lastmod = later(p.lastmod, day(lastGame));
+      // Their team and competition come from wherever they played most recently.
+      const created = Number(latestCreated) || 0;
+      if (created >= p.latestCreated) { p.latestCreated = created; p.team = latestTeam || p.team; p.slug = slug; }
+      playerStats.set(row.id, p);
+    }
   }
 
   const teamList = Array.from(teams.values()).map(({ spellings, leagueId, ...t }) => {
