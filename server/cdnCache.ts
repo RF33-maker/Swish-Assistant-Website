@@ -10,13 +10,20 @@ import type { NextFunction, Request, Response } from "express";
  * function, and the account ran out of its monthly CPU allowance on
  * 2026-11-20.
  *
- * Only anonymous reads are shared: a request that carries a sign-in token can
- * see private competitions, so it is never stored and never served from the
- * shared copy (Vary: Authorization). Only 200s are stored, and a route that
- * says private or no-store keeps its word.
+ * Only anonymous 200s are stored: a request that carries a sign-in token is
+ * never stored, and a route that says private, no-store or no-cache keeps its
+ * word.
+ *
+ * Vercel's CDN does NOT honour Vary: Authorization (checked live on
+ * 2026-11-20): a signed-in request is served the stored anonymous copy. So a
+ * route under these prefixes must never answer an anonymous visitor with a
+ * 200 that differs from what a signed-in viewer should get. Owner-only routes
+ * are fine because they answer anonymous callers 401/404, which are never
+ * stored. A route that adds anything per viewer needs "private, no-store" or
+ * must be taken off this list.
  */
 
-/** Read-only routes that answer the same thing to every anonymous visitor. */
+/** Read-only routes whose anonymous 200 is right for every viewer (see above). */
 const PUBLIC_READ_PREFIXES = [
   "/api/public/",
   "/api/league/",
@@ -49,7 +56,8 @@ export function cdnCachePublicReads(req: Request, res: Response, next: NextFunct
   if (req.method !== "GET" && req.method !== "HEAD") return next();
   if (!isPublicRead(req.path)) return next();
 
-  // Signed-in readers can see private competitions: never share or store theirs.
+  // Signed-in readers can see private competitions: never store theirs. The
+  // Vary header is kept for browsers and other caches; Vercel's CDN ignores it.
   res.vary("Authorization");
   if (req.headers.authorization) return next();
 
