@@ -152,7 +152,9 @@ $$;
 revoke execute on function public.refresh_seo_index_snapshot() from public, anon, authenticated;
 grant execute on function public.refresh_seo_index_snapshot() to service_role;
 
--- Every fifteen minutes. cron.schedule replaces the job of the same name (and
--- re-enables it). Run `select public.refresh_seo_index_snapshot();` once by hand
--- first so the site has pieces to read straight away.
+-- Every fifteen minutes. cron.schedule updates the job of the same name but
+-- keeps it inactive if it was switched off, so switch it on explicitly.
+-- Run `select public.refresh_seo_index_snapshot();` once by hand first so the
+-- site has pieces to read straight away.
 select cron.schedule('seo-index-snapshot', '*/15 * * * *', $$select public.refresh_seo_index_snapshot()$$);
+select cron.alter_job(job_id := (select jobid from cron.job where jobname = 'seo-index-snapshot'), active := true);
