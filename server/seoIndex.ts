@@ -161,18 +161,18 @@ const later = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ?
 
 /**
  * What the index needs from the box scores, already summarised by the database
- * (supabase/migrations/20261115_seo_index_parts.sql). Downloading every
- * player_stats row to do this here stopped finishing inside a request once the
- * history seasons were imported, so the database keeps the summary and
- * refreshes it every fifteen minutes. It is stored in small pieces because one
- * multi-megabyte response is too much for the database server's API.
+ * (supabase/migrations/20261120_seo_index_parts_one_pass.sql). Downloading
+ * every player_stats row to do this here stopped finishing inside a request
+ * once the history seasons were imported, so the database keeps the summary and
+ * refreshes it every fifteen minutes. It is stored in pieces of a few hundred KB
+ * because one multi-megabyte response is too much for the database server's API.
  */
 interface IndexSource {
   /** [league_id, team_name, rows, latest created_at, last game day] — one per spelling per competition. */
   teams: Array<[string, string, number, string | null, string | null]>;
   /**
-   * [game_key, league_id, matchtime, hometeam, awayteam, stats] — stats is 1 when the game has a box
-   * score in its own competition, otherwise the other competitions its box score is filed under (or 0).
+   * [game_key, league_id, matchtime, hometeam, awayteam, stats] — stats is 1 when the game's box score
+   * is filed under its own competition only, otherwise the competitions it is filed under (or 0 if none).
    */
   games: Array<[string, string, string | null, string | null, string | null, 1 | 0 | string[]]>;
   /**
@@ -185,30 +185,45 @@ interface IndexSource {
 /** Pieces read at once: enough to be quick, few enough to stay light on the database. */
 const PARTS_AT_ONCE = 3;
 
+/** Pieces this server already holds, by name, so an unchanged piece isn't downloaded again. */
+const partCache = new Map<string, { hash: string; rows: unknown[] }>();
+
 async function loadIndexSource(): Promise<IndexSource> {
   // A rebuild can land while the pieces are being read; if it does, start again once.
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { data: parts, error } = await supabaseAdmin.from("seo_index_parts").select("part, built_at").order("part");
+    const { data: parts, error } = await supabaseAdmin.from("seo_index_parts").select("part, data_hash").order("part");
     if (error) throw error;
     if (!parts?.length) throw new Error("SEO index summary has not been built yet");
 
-    const source: IndexSource = { teams: [], games: [], players: [] };
+    const missing = parts.filter((p) => partCache.get(p.part)?.hash !== p.data_hash);
     let consistent = true;
-    for (let start = 0; start < parts.length && consistent; start += PARTS_AT_ONCE) {
-      const wanted = parts.slice(start, start + PARTS_AT_ONCE);
+    for (let start = 0; start < missing.length && consistent; start += PARTS_AT_ONCE) {
+      const wanted = missing.slice(start, start + PARTS_AT_ONCE);
       const batch = await Promise.all(
         // Asked for as a list, not a single object: for one object the API re-parses the whole piece to unwrap it.
-        wanted.map((p) => supabaseAdmin.from("seo_index_parts").select("data, built_at").eq("part", p.part).limit(1)),
+        wanted.map((p) => supabaseAdmin.from("seo_index_parts").select("data, data_hash").eq("part", p.part).limit(1)),
       );
       batch.forEach(({ data, error: e }, i) => {
         if (e) throw e;
         const row = data?.[0];
-        const kind = wanted[i].part.split("-")[0] as keyof IndexSource;
-        if (!row || row.built_at !== wanted[i].built_at || !(kind in source)) { consistent = false; return; }
-        (source[kind] as unknown[]).push(...(row.data as unknown[]));
+        // Changed since the list was read: a rebuild landed part-way through.
+        if (!row || row.data_hash !== wanted[i].data_hash) { consistent = false; return; }
+        partCache.set(wanted[i].part, { hash: row.data_hash, rows: row.data as unknown[] });
       });
     }
-    if (consistent) return source;
+    if (!consistent) continue;
+
+    // Every piece now matches the one list, so together they are one build.
+    const current = new Set(parts.map((p) => p.part));
+    for (const name of Array.from(partCache.keys())) if (!current.has(name)) partCache.delete(name);
+    const source: IndexSource = { teams: [], games: [], players: [] };
+    for (const p of parts) {
+      const kind = p.part.split("-")[0] as keyof IndexSource;
+      if (!(kind in source)) continue;
+      const rows = partCache.get(p.part)!.rows;
+      for (const row of rows) (source[kind] as unknown[]).push(row);
+    }
+    return source;
   }
   throw new Error("SEO index summary kept changing while it was being read");
 }
