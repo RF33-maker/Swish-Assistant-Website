@@ -51,6 +51,8 @@ type SeoPage = {
   robots?: string;
   breadcrumbs?: Crumb[];
   ogType?: string;
+  /** How long Vercel's CDN may keep this page, when it can be longer than CDN_DEFAULT_SEC. */
+  cdnMaxAge?: number;
 };
 
 function escapeHtml(value: unknown): string {
@@ -1010,7 +1012,11 @@ async function renderGame(gameKey: string, competitionSlug?: string): Promise<Se
   const recap = hasStats && homeScore != null && awayScore != null
     ? gameRecap({ home, away, homeScore, awayScore, competition: competition?.name, date: schedule?.matchtime, quarters, topHome: topFor(home), topAway: topFor(away) })
     : [];
+  // A finished game's page never changes, so the CDN can keep it for a week.
+  const playedAt = schedule?.matchtime ? new Date(schedule.matchtime).getTime() : NaN;
+  const settled = hasStats && Number.isFinite(playedAt) && Date.now() - playedAt > SETTLED_GAME_MS;
   return {
+    cdnMaxAge: settled ? CDN_WEEK_SEC : undefined,
     title: `${titleText}${scoreline} ${hasStats ? "Box Score" : "Preview"}${competition?.name ? ` | ${competition.name}` : ""} | ${SITE_NAME}`,
     description,
     canonicalPath,
@@ -1039,6 +1045,21 @@ async function renderGame(gameKey: string, competitionSlug?: string): Promise<Se
 // ── Routing ──────────────────────────────────────────────────────────────
 
 const CACHE_CONTROL = "public, max-age=300, s-maxage=600, stale-while-revalidate=86400";
+
+/*
+ * How long Vercel's CDN keeps each kind of page. The HTML is for crawlers and
+ * link previews: visitors' browsers redraw the page from live data straight
+ * away (createRoot, not hydrate), and every deployment starts the CDN afresh,
+ * so a long CDN life never shows anyone stale stats or old asset links.
+ * Most function CPU went on crawlers re-reading the same pages, which is what
+ * these save. Browsers still keep pages for only 5 minutes (CACHE_CONTROL).
+ */
+const CDN_DEFAULT_SEC = 600;
+const CDN_PROFILE_SEC = 6 * 60 * 60;
+const CDN_DAY_SEC = 24 * 60 * 60;
+const CDN_WEEK_SEC = 7 * CDN_DAY_SEC;
+/** A game this long after tip-off has its final box score. */
+const SETTLED_GAME_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
  * How long a visitor waits for the server-rendered page. Past this they get
@@ -1192,7 +1213,14 @@ async function renderPublicSeo(req: Request, res: Response, next: NextFunction) 
     }
     if (!page) return sendNotFound(res);
     const html = injectSeo(await loadShell(), page);
-    res.status(200).type("html").set("Cache-Control", CACHE_CONTROL).send(html);
+    const cdnMaxAge = page.cdnMaxAge
+      ?? (playerMatch || teamMatch || competitionMatch ? CDN_PROFILE_SEC
+        : legalMatch || swishScoreMatch || newsArticleMatch ? CDN_DAY_SEC
+        : CDN_DEFAULT_SEC);
+    res.status(200).type("html")
+      .set("Cache-Control", CACHE_CONTROL)
+      .set("Vercel-CDN-Cache-Control", `max-age=${cdnMaxAge}, stale-while-revalidate=${CDN_WEEK_SEC}`)
+      .send(html);
   } catch (error) {
     // This path matched a real client-side page, so a failure here should
     // still show the working React app rather than a bare error — which is
