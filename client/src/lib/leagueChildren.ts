@@ -46,3 +46,23 @@ export function clearLeagueChildrenCache(parentId?: string) {
   if (parentId) cache.delete(parentId);
   else cache.clear();
 }
+
+type GroupLabelSource = { name?: string | null; age_group?: string | null; gender?: string | null };
+
+// True when the children are split by gender (more than one gender among them).
+// Children that all share one gender (every REBA stop is "Men") are split by age instead.
+export function childrenSplitByGender(children: GroupLabelSource[]): boolean {
+  const genders = new Set(children.map((c) => (c.gender || "").trim()).filter(Boolean));
+  return genders.size > 1 && children.every((c) => !!(c.gender || "").trim());
+}
+
+// The pill label for a child competition: gender when the children differ by
+// gender, otherwise the age group, then gender, then the name minus the parent's.
+export function childGroupLabeller(children: GroupLabelSource[], parentName?: string | null) {
+  const byGender = childrenSplitByGender(children);
+  return (c: GroupLabelSource): string =>
+    (byGender && c.gender) ||
+    c.age_group ||
+    c.gender ||
+    (parentName ? (c.name || "").replace(parentName, "").trim() || c.name || "" : c.name || "");
+}

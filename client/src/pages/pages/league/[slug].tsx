@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
-import { fetchLeagueChildren, stopLabel } from "@/lib/leagueChildren";
+import { fetchLeagueChildren, stopLabel, childGroupLabeller, childrenSplitByGender } from "@/lib/leagueChildren";
 import { normalizeInstagramHandle } from "@/lib/instagram";
 import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
@@ -882,12 +882,12 @@ export default function LeaguePage() {
   // Preferred sort order for gender labels so Men's always precedes Women's
   const GENDER_ORDER = ["Men's", "Women's", "Men", "Women", "Male", "Female", "Mixed"];
 
-  // Derive the display label for a child competition:
-  // 1. Use gender column if set, 2. fall back to age_group, 3. strip parent name from competition name
-  const getChildLabel = (c: typeof childCompetitions[0]) =>
-    (c as any).gender ||
-    c.age_group ||
-    (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+  // Display label for a child competition: gender when the children differ by
+  // gender, otherwise the age group (see childGroupLabeller).
+  const getChildLabel = useMemo(
+    () => childGroupLabeller(childCompetitions, league?.name),
+    [childCompetitions, league?.name],
+  );
 
   const childLeagueMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -909,7 +909,7 @@ export default function LeaguePage() {
 
   // True when every child competition has a gender value set
   const isGenderLeague = useMemo(
-    () => childCompetitions.length > 0 && childCompetitions.every(c => !!(c as any).gender),
+    () => childrenSplitByGender(childCompetitions),
     [childCompetitions],
   );
 
@@ -2041,9 +2041,9 @@ export default function LeaguePage() {
           
           const childNameMap = new Map<string, string>();
           if (isParent) {
+            const labelFor = childGroupLabeller(fetchedChildCompetitions, data.name);
             fetchedChildCompetitions.forEach((c: any) => {
-              const label = c.gender || c.age_group || (data.name ? c.name.replace(data.name, '').trim() || c.name : c.name);
-              childNameMap.set(c.league_id, label);
+              childNameMap.set(c.league_id, labelFor(c));
             });
           }
 
