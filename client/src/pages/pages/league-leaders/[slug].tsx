@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
-import { fetchLeagueChildren } from "@/lib/leagueChildren";
+import { fetchLeagueChildren, childGroupLabeller, childrenSplitByGender } from "@/lib/leagueChildren";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import { ArrowLeft } from "lucide-react";
@@ -118,13 +118,14 @@ export default function LeagueLeadersPage() {
   const isParentLeague = childLeagues.length > 0;
 
   const GENDER_ORDER = ["Men's", "Women's", "Men", "Women", "Male", "Female", "Mixed"];
-  const isGenderLeague = childLeagues.length > 0 && childLeagues.every(c => !!c.gender);
+  const isGenderLeague = childrenSplitByGender(childLeagues);
 
   const ageGroupOptions = useMemo(() => {
     if (!isParentLeague || !league) return [];
     const groupMap = new Map<string, string[]>();
+    const labelFor = childGroupLabeller(childLeagues, league.name);
     childLeagues.forEach(c => {
-      const ag = c.gender || c.age_group || (league.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+      const ag = labelFor(c);
       if (!groupMap.has(ag)) groupMap.set(ag, []);
       groupMap.get(ag)!.push(c.league_id);
     });
