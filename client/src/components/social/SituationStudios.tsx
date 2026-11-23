@@ -37,6 +37,7 @@ import {
   type MilestoneData,
   type PreGameData,
 } from "@/lib/generateSituationCards";
+import { renderGroupPerformanceCard, type GroupPerformanceOptions } from "@/lib/generateGroupPerformanceCard";
 
 // ── shared ───────────────────────────────────────────────────────────────────
 
@@ -352,35 +353,16 @@ function statLine(s: GameStatRow): string {
   return [`${s.spoints ?? 0} PTS`, ...extras.map((e) => `${e.v} ${e.label}`)].join(" · ");
 }
 
-/** Final score: the winner's nickname giant across the top, the best performer breaking out of a white frame, the score in a black band. */
-export function FinalScoreStudio() {
-  const competitions = useCompetitions();
-  const [slug, chooseSlug] = useCompetitionSlug();
-  const competition = competitions.find((c) => c.slug === slug);
-  const leagueId = competition?.league_id;
-  const { primaryHex } = useCompetitionCardBrand(slug);
-
+/** A competition's finished games: two team_stats rows per game, newest first, live ones left out. */
+function useFinishedGames(leagueId: string | undefined): { games: FinishedGame[]; loading: boolean; error: string | null } {
   const [games, setGames] = useState<FinishedGame[]>([]);
-  const [gameKey, setGameKey] = useState("");
-  const [loadingGames, setLoadingGames] = useState(false);
-  const [stats, setStats] = useState<GameStatRow[]>([]);
-  const [players, setPlayers] = useState<Record<string, PlayerRow>>({});
-  const [playerId, setPlayerId] = useState("");
-  const [photo, setPhoto] = useState<PhotoFields>({});
-  const [framing, setFraming] = useState<Framing>(NO_SHIFT);
-  const [usePhoto, setUsePhoto] = useState(false);
-  const [headlineWord, setHeadlineWord] = useState("");
-  const [ticker, setTicker] = useState("");
-  const [accent, setAccent] = useStoredState<string>("situation:final:accent", DEFAULT_ACCENT);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Finished games: two team_stats rows per game, newest first, live ones left out.
   useEffect(() => {
     let cancelled = false;
     setGames([]);
-    setGameKey("");
     if (!leagueId) return;
-    setLoadingGames(true);
+    setLoading(true);
     setError(null);
     void (async () => {
       try {
@@ -413,20 +395,42 @@ export function FinalScoreStudio() {
           list.push({ game_key: key, home: line(ordered[0]), away: line(ordered[1]), date: s?.matchtime || pair[0].created_at || null, live: s?.status === "live" });
         });
         list.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-        if (cancelled) return;
-        const finished = list.filter((g) => !g.live);
-        setGames(finished);
-        setGameKey(finished[0]?.game_key || "");
+        if (!cancelled) setGames(list.filter((g) => !g.live));
       } catch (err: any) {
         if (!cancelled) setError(err?.message || "Couldn't load the games");
       } finally {
-        if (!cancelled) setLoadingGames(false);
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [leagueId]);
+  return { games, loading, error };
+}
+
+/** Final score: the winner's nickname giant across the top, the best performer breaking out of a white frame, the score in a black band. */
+export function FinalScoreStudio() {
+  const competitions = useCompetitions();
+  const [slug, chooseSlug] = useCompetitionSlug();
+  const competition = competitions.find((c) => c.slug === slug);
+  const leagueId = competition?.league_id;
+  const { primaryHex } = useCompetitionCardBrand(slug);
+
+  const { games, loading: loadingGames, error: gamesError } = useFinishedGames(leagueId);
+  const [gameKey, setGameKey] = useState("");
+  const [stats, setStats] = useState<GameStatRow[]>([]);
+  const [players, setPlayers] = useState<Record<string, PlayerRow>>({});
+  const [playerId, setPlayerId] = useState("");
+  const [photo, setPhoto] = useState<PhotoFields>({});
+  const [framing, setFraming] = useState<Framing>(NO_SHIFT);
+  const [usePhoto, setUsePhoto] = useState(false);
+  const [headlineWord, setHeadlineWord] = useState("");
+  const [ticker, setTicker] = useState("");
+  const [accent, setAccent] = useStoredState<string>("situation:final:accent", DEFAULT_ACCENT);
+
+  // Newest finished game first, whenever the list changes.
+  useEffect(() => setGameKey(games[0]?.game_key || ""), [games]);
 
   const game = games.find((g) => g.game_key === gameKey) || null;
   const homeWon = game ? game.home.score > game.away.score : true;
@@ -583,7 +587,7 @@ export function FinalScoreStudio() {
           <Toggle checked={usePhoto} onChange={setUsePhoto} label="Use the game photo instead of the cut-out" hint="The cut-out breaks out of the frame; the photo fills it." testId="toggle-final-photo" />
         )}
 
-        {error && <p className={ERROR}>{error}</p>}
+        {gamesError && <p className={ERROR}>{gamesError}</p>}
         {render.error && <p className={ERROR}>{render.error}</p>}
       </Panel>
 
@@ -595,6 +599,346 @@ export function FinalScoreStudio() {
           </div>
         )}
       </CardStage>
+    </div>
+  );
+}
+
+// ── duo / trio ───────────────────────────────────────────────────────────────
+
+const stripSeason = (name: string) => name.replace(/\s*\(?\d{4}\s*[-/–]\s*\d{2,4}\)?\s*$/, "").trim();
+
+function formatCardDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * Duo / trio: two or three teammates' lines from one game, a full-width band each. A player with
+ * a headshot cut-out stands on the club's colour; anyone without one (or everyone, with the
+ * toggle) is shown by their in-game photo. Either picture can be resized and moved, player by player.
+ */
+export function DuoTrioStudio() {
+  const competitions = useCompetitions();
+  const [slug, chooseSlug] = useCompetitionSlug();
+  const competition = competitions.find((c) => c.slug === slug);
+  const leagueId = competition?.league_id;
+
+  const { games, loading: loadingGames, error: gamesError } = useFinishedGames(leagueId);
+  const [gameKey, setGameKey] = useState("");
+  const [side, setSide] = useState<"home" | "away">("home");
+  const [stats, setStats] = useState<GameStatRow[]>([]);
+  const [players, setPlayers] = useState<Record<string, PlayerRow>>({});
+  const [picked, setPicked] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<Record<string, PhotoFields>>({});
+  const [framing, setFraming] = useState<Record<string, Framing>>({});
+  const [inGamePhotos, setInGamePhotos] = useState(false);
+
+  useEffect(() => setGameKey(games[0]?.game_key || ""), [games]);
+
+  const game = games.find((g) => g.game_key === gameKey) || null;
+  const team = game ? game[side] : null;
+  const opponent = game ? game[side === "home" ? "away" : "home"] : null;
+
+  // A new game starts on its winners.
+  useEffect(() => {
+    if (game) setSide(game.home.score >= game.away.score ? "home" : "away");
+  }, [game]);
+
+  // The game's box score and the photos on file for its players.
+  useEffect(() => {
+    let cancelled = false;
+    setStats([]);
+    setPlayers({});
+    if (!leagueId || !game) return;
+    void (async () => {
+      const { data: rows } = await supabase
+        .from("player_stats")
+        .select("player_id, full_name, team_name, spoints, sreboundstotal, sassists, ssteals, sblocks, shirtnumber")
+        .eq("league_id", leagueId)
+        .eq("game_key", game.game_key)
+        .order("spoints", { ascending: false })
+        .limit(40);
+      const list = ((rows || []) as GameStatRow[]).filter((r) => r.player_id && r.full_name);
+      const ids = Array.from(new Set(list.map((r) => r.player_id!)));
+      const { data: prow } = ids.length ? await supabase.from("players").select(PLAYER_COLUMNS).in("id", ids) : { data: [] as any[] };
+      if (cancelled) return;
+      const map: Record<string, PlayerRow> = {};
+      ((prow || []) as PlayerRow[]).forEach((p) => (map[p.id] = p));
+      setStats(list);
+      setPlayers(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueId, game]);
+
+  const roster = useMemo(() => stats.filter((r) => r.team_name === team?.name), [stats, team]);
+
+  // The club's top two scorers to begin with; a third is one tap away.
+  useEffect(() => {
+    setPicked(roster.slice(0, 2).map((r) => r.player_id!));
+    setFraming({});
+  }, [roster]);
+
+  // Photo fields for everyone picked.
+  useEffect(() => {
+    let cancelled = false;
+    const missing = picked.filter((id) => !photos[id]);
+    if (missing.length === 0) return;
+    void Promise.all(missing.map(async (id) => [id, await photoFieldsFor(players[id] || null)] as const)).then((found) => {
+      if (!cancelled) setPhotos((prev) => ({ ...prev, ...Object.fromEntries(found) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // `photos` is read only to skip players already looked up.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked, players]);
+
+  usePlayerPhotoChange((change) => {
+    const hit = picked.filter((id) => photoChangeReaches(change, id));
+    if (hit.length) setPhotos((prev) => ({ ...prev, ...Object.fromEntries(hit.map((id) => [id, { ...prev[id], photo_url: change.url }])) }));
+  });
+
+  const toggle = (id: string) =>
+    setPicked((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : prev.length >= 3 ? prev : [...prev, id]));
+
+  const teamLogo = useTeamLogo(leagueId, team?.name);
+  /** Whether a picked player is drawn from their in-game photo (they have no cut-out, or the toggle is on). */
+  const showsInGame = (id: string) => {
+    const f = photos[id];
+    return !!f?.photo_url && (inGamePhotos || !f.cutout_photo_url);
+  };
+
+  const data = useMemo<GroupPerformanceOptions | null>(() => {
+    if (!game || !team || !opponent || picked.length < 2) return null;
+    // Wait for every picked player's photos, so the card is not drawn twice.
+    if (picked.some((id) => !photos[id])) return null;
+    return {
+      team_name: team.name,
+      opponent_name: opponent.name,
+      team_score: team.score,
+      opponent_score: opponent.score,
+      game_date: formatCardDate(game.date),
+      league_name: competition ? stripSeason(competition.name) : undefined,
+      team_logo_url: teamLogo,
+      photo_mode: inGamePhotos ? "photo" : "auto",
+      players: picked.flatMap((id) => {
+        const r = stats.find((s) => s.player_id === id);
+        if (!r) return [];
+        const f = framing[id] ?? NO_SHIFT;
+        return [
+          {
+            player_name: r.full_name || "",
+            points: r.spoints ?? 0,
+            rebounds: r.sreboundstotal ?? 0,
+            assists: r.sassists ?? 0,
+            cutout_photo_url: photos[id]?.cutout_photo_url,
+            photo_url: photos[id]?.photo_url,
+            photo_zoom: f.zoom,
+            photo_shift_x: f.x,
+            photo_shift_y: f.y,
+          },
+        ];
+      }),
+    };
+  }, [game, team, opponent, picked, photos, framing, stats, competition, teamLogo, inGamePhotos]);
+
+  const render = useCardRender(data, renderGroupPerformanceCard, `${picked.length === 3 ? "trio" : "duo"}-${gameKey || "card"}.png`);
+  const anyCutout = picked.some((id) => photos[id]?.cutout_photo_url && photos[id]?.photo_url);
+
+  return (
+    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
+      <Panel
+        title="Duo / trio"
+        description="Two or three teammates' lines from one game, a band each: the player one side, their points, rebounds and assists the other."
+        className="order-2 lg:order-1"
+        bodyClassName="space-y-4"
+      >
+        <CompetitionField value={slug} onChange={chooseSlug} competitions={competitions} />
+
+        <Field label="Game">
+          <Select value={gameKey} onValueChange={setGameKey} disabled={games.length === 0}>
+            <SelectTrigger className={FIELD} data-testid="select-group-game">
+              <SelectValue placeholder={loadingGames ? "Loading games…" : games.length ? "Choose a game" : "No finished games yet"} />
+            </SelectTrigger>
+            <SelectContent className={SELECT_MENU}>
+              {games.map((g) => (
+                <SelectItem key={g.game_key} value={g.game_key}>
+                  {formatDay(g.date)} · {short(g.home.name)} {g.home.score}–{g.away.score} {short(g.away.name)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {game && (
+          <Field label="Team">
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Team">
+              {(["home", "away"] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  role="radio"
+                  aria-checked={side === s}
+                  data-active={side === s}
+                  onClick={() => setSide(s)}
+                  className="ch-chip truncate px-3 py-2 text-sm"
+                  title={short(game[s].name)}
+                  data-testid={`group-team-${s}`}
+                >
+                  {short(game[s].name)}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
+
+        {game && (
+          <Field
+            label={`Players (${picked.length} of 3)`}
+            hint="Pick two or three. They run down the card in the order you pick them; tap one again to take it off."
+          >
+            <div className="space-y-1.5">
+              {roster.length === 0 && <p className={HINT}>No box score for this team yet.</p>}
+              {roster.map((r) => {
+                const id = r.player_id!;
+                const at = picked.indexOf(id);
+                const on = at >= 0;
+                const full = !on && picked.length >= 3;
+                const p = players[id];
+                const note = p?.photo_path_bg_removed ? "" : p?.photo_path ? "in-game photo" : "no photo";
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={on}
+                    disabled={full}
+                    onClick={() => toggle(id)}
+                    className={`flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition disabled:opacity-40 ${
+                      on
+                        ? "border-[color:var(--ch-accent)] bg-[color:var(--ch-surface-2)]"
+                        : "border-[color:var(--ch-border)] bg-[color:var(--ch-surface)] hover:border-[color:var(--ch-border-strong)]"
+                    }`}
+                    data-testid={`group-player-${id}`}
+                  >
+                    <span
+                      className={`flex h-5 w-5 flex-none items-center justify-center rounded-full text-[11px] font-semibold ${
+                        on ? "bg-[color:var(--ch-accent)] text-black" : "border border-[color:var(--ch-border-strong)] text-transparent"
+                      }`}
+                    >
+                      {on ? at + 1 : "·"}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium text-[color:var(--ch-text)]">{r.full_name}</span>
+                      <span className="block text-[11px] text-[color:var(--ch-muted)]">
+                        {r.spoints ?? 0} PTS · {r.sreboundstotal ?? 0} REB · {r.sassists ?? 0} AST
+                        {note ? ` · ${note}` : ""}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+        )}
+
+        {anyCutout && (
+          <Toggle
+            checked={inGamePhotos}
+            onChange={(on) => {
+              // A headshot and an in-game photo are sized and placed differently, so each starts from rest.
+              setInGamePhotos(on);
+              setFraming({});
+            }}
+            label="Use in-game photos instead of headshots"
+            hint="Anyone without a headshot cut-out is shown by their in-game photo either way."
+            testId="toggle-group-photos"
+          />
+        )}
+
+        {gamesError && <p className={ERROR}>{gamesError}</p>}
+        {render.error && <p className={ERROR}>{render.error}</p>}
+      </Panel>
+
+      <CardStage
+        render={render}
+        loading={loadingGames}
+        empty={picked.length < 2 && game ? "Pick at least two players." : "Pick a competition with finished games."}
+      >
+        <div className="mx-auto mt-3 max-w-[640px] space-y-3">
+          {picked.some((id) => photos[id]?.cutout_photo_url || photos[id]?.photo_url) && (
+            <div className="ch-tile space-y-3 p-3" data-testid="group-framing">
+              <div>
+                <p className="text-[13px] font-semibold text-[color:var(--ch-text)]">Photo fit</p>
+                <p className={HINT}>
+                  For a picture that doesn't sit well: resize it, then move the player into place. An in-game photo has to fill its band, so zoom in
+                  first to give it room to move. Adjusts the card only.
+                </p>
+              </div>
+              {picked.map((id) => {
+                const r = stats.find((s) => s.player_id === id);
+                const f = photos[id];
+                if (!r || !f || (!f.cutout_photo_url && !f.photo_url)) return null;
+                return (
+                  <GroupFramingRow
+                    key={id}
+                    name={r.full_name || ""}
+                    inGame={showsInGame(id)}
+                    value={framing[id] ?? NO_SHIFT}
+                    onChange={(v) => setFraming((prev) => ({ ...prev, [id]: v }))}
+                  />
+                );
+              })}
+            </div>
+          )}
+          {/* A player with no photo at all gets the photo picker instead. */}
+          {picked.map((id) => {
+            const r = stats.find((s) => s.player_id === id);
+            const f = photos[id];
+            if (!r || !f || f.cutout_photo_url || f.photo_url) return null;
+            return <PlayerPhotoControl key={id} playerId={id} playerName={r.full_name || ""} photoUrl={null} />;
+          })}
+        </div>
+      </CardStage>
+    </div>
+  );
+}
+
+/**
+ * Size and position sliders for one player's picture, in a compact row. A headshot cut-out can
+ * shrink as well as grow; an in-game photo always fills its band, so its size starts at 100%.
+ */
+function GroupFramingRow({ name, inGame, value, onChange }: { name: string; inGame: boolean; value: Framing; onChange: (f: Framing) => void }) {
+  const changed = value.zoom !== 1 || value.x !== 0 || value.y !== 0;
+  const [min, max] = inGame ? [1, 3] : [0.6, 1.8];
+  const zoom = Math.max(min, Math.min(max, value.zoom));
+  return (
+    <div className="space-y-2 border-t border-[color:var(--ch-border)] pt-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 truncate text-[12px] font-semibold text-[color:var(--ch-text)]">
+          {name}
+          <span className="ml-2 font-normal text-[color:var(--ch-muted)]">{inGame ? "in-game photo" : "headshot"}</span>
+        </p>
+        <button
+          type="button"
+          onClick={() => onChange(NO_SHIFT)}
+          disabled={!changed}
+          title="Back to how it came"
+          aria-label={`Reset ${name}'s photo`}
+          className={`${BTN_GHOST} flex-none !px-2 !py-1 disabled:opacity-30`}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <RangeField label="Size" display={`${Math.round(zoom * 100)}%`} min={min} max={max} step={0.05} value={zoom} onChange={(z) => onChange({ ...value, zoom: z })} />
+        <RangeField label="Left ↔ Right" display={fmtShift(value.x)} min={-50} max={50} step={1} value={value.x} onChange={(x) => onChange({ ...value, x })} />
+        <RangeField label="Up ↔ Down" display={fmtShift(value.y)} min={-50} max={50} step={1} value={value.y} onChange={(y) => onChange({ ...value, y })} />
+      </div>
     </div>
   );
 }

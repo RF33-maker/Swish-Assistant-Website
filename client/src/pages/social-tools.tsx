@@ -11,14 +11,14 @@ import LandscapeStudio from "@/components/social/LandscapeStudio";
 import VennStudio from "@/components/social/VennStudio";
 import RankedBarsStudio from "@/components/social/RankedBarsStudio";
 import ScoresStudio from "@/components/social/ScoresStudio";
-import { FinalScoreStudio, MilestoneStudio, PreGameStudio } from "@/components/social/SituationStudios";
+import { DuoTrioStudio, FinalScoreStudio, MilestoneStudio, PreGameStudio } from "@/components/social/SituationStudios";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 import { FIELD, SELECT_MENU } from "@/components/social/studioUi";
 import { setSharedCardStyle, useCardStyle } from "@/components/social/CardStylePicker";
 import { isHalloweenSeason } from "@/lib/cardStyle";
 
-type SectionId = "performances" | "final-score" | "pre-game" | "milestone" | "d2-results" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "team-venn" | "ranked-bars" | "game-records" | "best-lineup" | "photos";
+type SectionId = "performances" | "duo-trio" | "final-score" | "pre-game" | "milestone" | "d2-results" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "team-landscape" | "team-venn" | "ranked-bars" | "game-records" | "best-lineup" | "photos";
 
 type Group = "Game cards" | "Weekly awards" | "League leaders" | "Lineups" | "Tools";
 
@@ -34,6 +34,7 @@ const GROUPS: Group[] = ["Game cards", "Weekly awards", "League leaders", "Lineu
 
 const SECTIONS: Section[] = [
   { id: "performances", group: "Game cards", label: "Top performances", icon: Trophy },
+  { id: "duo-trio", group: "Game cards", label: "Duo / trio", icon: Users },
   { id: "final-score", group: "Game cards", label: "Final score", icon: Flag },
   { id: "pre-game", group: "Game cards", label: "Pre-game", icon: CalendarClock },
   { id: "milestone", group: "Game cards", label: "Milestone", icon: Award },
@@ -188,6 +189,11 @@ export default function SocialToolsPage() {
         {visited.has("performances") && (
           <div className={show("performances")}>
             <TopPerformancesStudio />
+          </div>
+        )}
+        {visited.has("duo-trio") && (
+          <div className={show("duo-trio")}>
+            <DuoTrioStudio />
           </div>
         )}
         {visited.has("final-score") && (
