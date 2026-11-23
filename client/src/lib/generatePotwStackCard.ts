@@ -341,9 +341,7 @@ function drawPhotoFallback(ctx: CanvasRenderingContext2D, img: HTMLImageElement,
 
   if (look === "blur") {
     // The bed: the same shot, in the same place as the sharp one, blurred and dimmed, so where the
-    // sharp photo fades the picture goes soft rather than turning into another copy of it. Its
-    // left edge is smeared outwards first, so the blur reaches the ladder's side as the photo's
-    // own light rather than a slab of black.
+    // sharp photo fades the picture goes soft rather than turning into another copy of it.
     // Built on a sheet wider than the card, so the photo carries on past the card's edges and
     // the blur never pulls the ground in around the rim.
     const pad = 90;
@@ -354,17 +352,42 @@ function drawPhotoFallback(ctx: CanvasRenderingContext2D, img: HTMLImageElement,
     const iw = img.naturalWidth;
     const ih = img.naturalHeight;
     const edge = Math.max(1, Math.round(iw * 0.01));
-    if (p.left > -pad) b.drawImage(img, 0, 0, edge, ih, 0, pad + p.top, pad + p.left + 4, p.dh);
+    const soften = (radius: number) => {
+      const soft = document.createElement("canvas");
+      soft.width = bed.width;
+      soft.height = bed.height;
+      const so = soft.getContext("2d")!;
+      if (canBlur(so)) so.filter = `blur(${radius}px)`;
+      so.drawImage(bed, 0, 0);
+      return soft;
+    };
+    // Where the photo stops short of the ladder's side, the gap is filled with the photo's own
+    // light. Stretching its edge sideways leaves streaks, so the photo is mirrored about that
+    // edge instead (the colours carry on the way they were going) and that side is blurred far
+    // more heavily than the rest, until nothing in it can be made out.
+    const gap = p.left > -pad;
+    const mirror = gap && canBlur(b);
+    if (gap) b.drawImage(img, 0, 0, edge, ih, 0, pad + p.top, pad + p.left + 4, p.dh);
+    if (mirror) {
+      b.save();
+      b.translate(pad + p.left + 2, 0);
+      b.scale(-1, 1);
+      b.drawImage(img, 0, pad + p.top, p.dw, p.dh);
+      b.restore();
+    }
     b.drawImage(img, pad + p.left, pad + p.top, p.dw, p.dh);
-    const soft = document.createElement("canvas");
-    soft.width = bed.width;
-    soft.height = bed.height;
-    const so = soft.getContext("2d")!;
-    if (canBlur(so)) so.filter = "blur(30px)";
-    so.drawImage(bed, 0, 0);
-    s.drawImage(soft, -pad, -pad);
+    s.drawImage(soften(30), -pad, -pad);
+    if (mirror && p.left > 0) {
+      const [far, f] = layer();
+      f.drawImage(soften(120), -pad, -pad);
+      // The heavy blur owns the gap and eases off across the photo's edge, so there is no seam.
+      rampAlpha(f, [p.left - 60, 0], [p.left + 220, 0], 1, 0);
+      s.drawImage(far, 0, 0);
+    }
     s.fillStyle = "rgba(14,12,17,0.58)";
     s.fillRect(0, 0, CARD_W, CARD_H);
+    // ...and the whole bed thins out towards the card's left edge, into the ground.
+    if (p.left > 0) rampAlpha(s, [0, 0], [Math.min(p.left + 120, 600), 0], 0.45, 1);
   } else {
     drawSmoke(ctx, accent, 300, 720);
   }
